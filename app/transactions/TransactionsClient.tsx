@@ -258,14 +258,6 @@ function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () =
                     onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '')}
                   >
                     <td style={{ padding: '11px 12px', fontSize: '13px', color: '#94A3B8', whiteSpace: 'nowrap' }}>
-                      {isMax && (
-                        <span style={{
-                          fontSize: '10px', fontWeight: 700, padding: '1px 5px', borderRadius: '4px',
-                          backgroundColor: '#EF4444', color: '#FFFFFF', marginRight: '6px',
-                        }}>
-                          신고가
-                        </span>
-                      )}
                       {tx.date}
                     </td>
                     <td style={{ padding: '11px 12px', fontSize: '13px', color: '#94A3B8', whiteSpace: 'nowrap' }}>
@@ -279,6 +271,15 @@ function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () =
                       color: isMax ? '#EF4444' : '#FFFFFF',
                       fontFamily: 'Roboto Mono, monospace', whiteSpace: 'nowrap',
                     }}>
+                      {isMax && (
+                        <span style={{
+                          fontSize: '10px', fontWeight: 700, padding: '1px 5px', borderRadius: '4px',
+                          backgroundColor: '#EF4444', color: '#FFFFFF', marginRight: '5px',
+                          verticalAlign: 'middle',
+                        }}>
+                          신고가
+                        </span>
+                      )}
                       {fmtPrice(tx.price)}
                     </td>
                     <td style={{
