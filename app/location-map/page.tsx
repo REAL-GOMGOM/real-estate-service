@@ -14,6 +14,14 @@ export default function LocationMapPage() {
   const [selectedLocation, setSelectedLocation] = useState<LocationScore | null>(null);
   const [showToheoOnly, setShowToheoOnly] = useState(false);
   const [mapReady, setMapReady] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -55,45 +63,50 @@ export default function LocationMapPage() {
     }
   }, [selectedRegion]);
 
+  const mapArea = (
+    <div style={{ position: 'relative', flex: 1, height: isMobile ? '55vh' : 'calc(100vh - 64px)' }}>
+      {mapReady ? (
+        <KakaoMap
+          locations={filteredLocations}
+          onMarkerClick={setSelectedLocation}
+          selectedLocation={selectedLocation}
+          mapConfig={mapConfig}
+        />
+      ) : (
+        <div style={{
+          height: '100%',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backgroundColor: '#0A0E1A', color: '#475569', fontSize: '14px',
+        }}>
+          지도를 불러오는 중...
+        </div>
+      )}
+      {selectedLocation && (
+        <LocationDetailPanel
+          location={selectedLocation}
+          onClose={() => setSelectedLocation(null)}
+        />
+      )}
+    </div>
+  );
+
+  const sidebar = (
+    <LocationSidebar
+      allLocations={ALL_LOCATIONS}
+      filteredLocations={filteredLocations}
+      selectedRegion={selectedRegion}
+      showToheoOnly={showToheoOnly}
+      onRegionChange={setSelectedRegion}
+      onToheoToggle={setShowToheoOnly}
+      onLocationClick={setSelectedLocation}
+    />
+  );
+
   return (
     <>
       <Header />
-      <div style={{ display: 'flex', paddingTop: '64px' }}>
-        <LocationSidebar
-          allLocations={ALL_LOCATIONS}
-          filteredLocations={filteredLocations}
-          selectedRegion={selectedRegion}
-          showToheoOnly={showToheoOnly}
-          onRegionChange={setSelectedRegion}
-          onToheoToggle={setShowToheoOnly}
-          onLocationClick={setSelectedLocation}
-        />
-
-        <div style={{ position: 'relative', flex: 1 }}>
-          {mapReady ? (
-            <KakaoMap
-              locations={filteredLocations}
-              onMarkerClick={setSelectedLocation}
-              selectedLocation={selectedLocation}
-              mapConfig={mapConfig}
-            />
-          ) : (
-            <div style={{
-              height: 'calc(100vh - 64px)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              backgroundColor: '#0A0E1A', color: '#475569', fontSize: '14px',
-            }}>
-              지도를 불러오는 중...
-            </div>
-          )}
-
-          {selectedLocation && (
-            <LocationDetailPanel
-              location={selectedLocation}
-              onClose={() => setSelectedLocation(null)}
-            />
-          )}
-        </div>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', paddingTop: '64px' }}>
+        {isMobile ? <>{mapArea}{sidebar}</> : <>{sidebar}{mapArea}</>}
       </div>
     </>
   );
