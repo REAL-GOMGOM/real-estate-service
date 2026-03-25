@@ -45,8 +45,7 @@ function detectNewHigh(apt: AptGroup): boolean {
   const same   = apt.transactions.filter((t) => Math.abs(t.area - latest.area) <= 6);
   return same.length > 1 && latest.price >= Math.max(...same.map((t) => t.price));
 }
-function todayLabel() {
-  const d   = new Date();
+function todayLabel(d: Date) {
   const day = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
   return `${d.getMonth() + 1}.${d.getDate()}(${day})`;
 }
@@ -378,6 +377,8 @@ function AptCard({ apt, onClick }: { apt: AptGroup; onClick: () => void }) {
 
 // ── 메인 ──────────────────────────────────────────
 export default function TransactionsClient() {
+  const [today,      setToday]      = useState(new Date(0));
+  useEffect(() => { setToday(new Date()); }, []);
   const [district,   setDistrict]   = useState('강남구');
   const [months,     setMonths]     = useState(6);
   const [query,      setQuery]      = useState('');
@@ -422,7 +423,7 @@ export default function TransactionsClient() {
               padding: '4px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
               backgroundColor: '#0F1629', border: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8',
             }}>
-              {todayLabel()}
+              {today.getFullYear() > 2000 ? todayLabel(today) : '—'}
             </span>
           </div>
           <p style={{ fontSize: '12px', color: '#334155' }}>출처: 국토교통부 실거래공개시스템</p>
