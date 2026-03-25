@@ -1,0 +1,207 @@
+[
+  {
+    "id": "raemian-apgujeong",
+    "name": "래미안 압구정",
+    "district": "강남구",
+    "address": "서울시 강남구 압구정동 454",
+    "areas": [59, 84, 114, 145],
+    "transactions": [
+      { "id": "t001", "area": 84, "floor": 12, "price": 420000, "pricePerArea": 5000, "date": "2025-04", "dealType": "buy" },
+      { "id": "t002", "area": 84, "floor": 8,  "price": 415000, "pricePerArea": 4940, "date": "2025-05", "dealType": "buy" },
+      { "id": "t003", "area": 84, "floor": 15, "price": 425000, "pricePerArea": 5059, "date": "2025-06", "dealType": "buy" },
+      { "id": "t004", "area": 84, "floor": 10, "price": 430000, "pricePerArea": 5119, "date": "2025-07", "dealType": "buy" },
+      { "id": "t005", "area": 84, "floor": 5,  "price": 428000, "pricePerArea": 5095, "date": "2025-08", "dealType": "buy" },
+      { "id": "t006", "area": 84, "floor": 18, "price": 438000, "pricePerArea": 5214, "date": "2025-09", "dealType": "buy" },
+      { "id": "t007", "area": 84, "floor": 7,  "price": 440000, "pricePerArea": 5238, "date": "2025-10", "dealType": "buy" },
+      { "id": "t008", "area": 84, "floor": 14, "price": 445000, "pricePerArea": 5297, "date": "2025-11", "dealType": "buy" },
+      { "id": "t009", "area": 84, "floor": 9,  "price": 448000, "pricePerArea": 5333, "date": "2025-12", "dealType": "buy" },
+      { "id": "t010", "area": 84, "floor": 11, "price": 452000, "pricePerArea": 5380, "date": "2026-01", "dealType": "buy" },
+      { "id": "t011", "area": 84, "floor": 16, "price": 458000, "pricePerArea": 5452, "date": "2026-02", "dealType": "buy" },
+      { "id": "t012", "area": 84, "floor": 13, "price": 462000, "pricePerArea": 5500, "date": "2026-03", "dealType": "buy" },
+      { "id": "t013", "area": 59, "floor": 10, "price": 310000, "pricePerArea": 5254, "date": "2025-06", "dealType": "buy" },
+      { "id": "t014", "area": 59, "floor": 7,  "price": 315000, "pricePerArea": 5338, "date": "2025-09", "dealType": "buy" },
+      { "id": "t015", "area": 59, "floor": 12, "price": 322000, "pricePerArea": 5457, "date": "2025-12", "dealType": "buy" },
+      { "id": "t016", "area": 59, "floor": 8,  "price": 328000, "pricePerArea": 5559, "date": "2026-03", "dealType": "buy" },
+      { "id": "t017", "area": 114, "floor": 20, "price": 580000, "pricePerArea": 5087, "date": "2025-07", "dealType": "buy" },
+      { "id": "t018", "area": 114, "floor": 15, "price": 592000, "pricePerArea": 5192, "date": "2025-11", "dealType": "buy" },
+      { "id": "t019", "area": 114, "floor": 18, "price": 610000, "pricePerArea": 5350, "date": "2026-02", "dealType": "buy" }
+    ]
+  },
+  {
+    "id": "eunma",
+    "name": "은마아파트",
+    "district": "강남구",
+    "address": "서울시 강남구 대치동 316",
+    "areas": [76, 84],
+    "transactions": [
+      { "id": "e001", "area": 84, "floor": 5,  "price": 185000, "pricePerArea": 2202, "date": "2025-04", "dealType": "buy" },
+      { "id": "e002", "area": 84, "floor": 8,  "price": 188000, "pricePerArea": 2238, "date": "2025-05", "dealType": "buy" },
+      { "id": "e003", "area": 84, "floor": 12, "price": 192000, "pricePerArea": 2285, "date": "2025-06", "dealType": "buy" },
+      { "id": "e004", "area": 84, "floor": 3,  "price": 190000, "pricePerArea": 2261, "date": "2025-07", "dealType": "buy" },
+      { "id": "e005", "area": 84, "floor": 9,  "price": 195000, "pricePerArea": 2321, "date": "2025-08", "dealType": "buy" },
+      { "id": "e006", "area": 84, "floor": 11, "price": 198000, "pricePerArea": 2357, "date": "2025-09", "dealType": "buy" },
+      { "id": "e007", "area": 84, "floor": 7,  "price": 200000, "pricePerArea": 2380, "date": "2025-10", "dealType": "buy" },
+      { "id": "e008", "area": 84, "floor": 14, "price": 205000, "pricePerArea": 2440, "date": "2025-11", "dealType": "buy" },
+      { "id": "e009", "area": 84, "floor": 6,  "price": 208000, "pricePerArea": 2476, "date": "2025-12", "dealType": "buy" },
+      { "id": "e010", "area": 84, "floor": 10, "price": 212000, "pricePerArea": 2523, "date": "2026-01", "dealType": "buy" },
+      { "id": "e011", "area": 84, "floor": 13, "price": 215000, "pricePerArea": 2559, "date": "2026-02", "dealType": "buy" },
+      { "id": "e012", "area": 84, "floor": 8,  "price": 218000, "pricePerArea": 2595, "date": "2026-03", "dealType": "buy" }
+    ]
+  },
+  {
+    "id": "banpo-xi",
+    "name": "아크로리버파크",
+    "district": "서초구",
+    "address": "서울시 서초구 반포동 1-1",
+    "areas": [59, 84, 112],
+    "transactions": [
+      { "id": "b001", "area": 84, "floor": 20, "price": 380000, "pricePerArea": 4523, "date": "2025-04", "dealType": "buy" },
+      { "id": "b002", "area": 84, "floor": 15, "price": 385000, "pricePerArea": 4583, "date": "2025-05", "dealType": "buy" },
+      { "id": "b003", "area": 84, "floor": 22, "price": 392000, "pricePerArea": 4666, "date": "2025-06", "dealType": "buy" },
+      { "id": "b004", "area": 84, "floor": 18, "price": 395000, "pricePerArea": 4702, "date": "2025-07", "dealType": "buy" },
+      { "id": "b005", "area": 84, "floor": 12, "price": 398000, "pricePerArea": 4738, "date": "2025-08", "dealType": "buy" },
+      { "id": "b006", "area": 84, "floor": 25, "price": 408000, "pricePerArea": 4857, "date": "2025-09", "dealType": "buy" },
+      { "id": "b007", "area": 84, "floor": 17, "price": 412000, "pricePerArea": 4904, "date": "2025-10", "dealType": "buy" },
+      { "id": "b008", "area": 84, "floor": 21, "price": 418000, "pricePerArea": 4976, "date": "2025-11", "dealType": "buy" },
+      { "id": "b009", "area": 84, "floor": 14, "price": 422000, "pricePerArea": 5023, "date": "2025-12", "dealType": "buy" },
+      { "id": "b010", "area": 84, "floor": 19, "price": 428000, "pricePerArea": 5095, "date": "2026-01", "dealType": "buy" },
+      { "id": "b011", "area": 84, "floor": 23, "price": 435000, "pricePerArea": 5178, "date": "2026-02", "dealType": "buy" },
+      { "id": "b012", "area": 84, "floor": 16, "price": 440000, "pricePerArea": 5238, "date": "2026-03", "dealType": "buy" }
+    ]
+  },
+  {
+    "id": "jamsil-ricenz",
+    "name": "잠실 리센츠",
+    "district": "송파구",
+    "address": "서울시 송파구 잠실동 15",
+    "areas": [59, 84],
+    "transactions": [
+      { "id": "j001", "area": 84, "floor": 10, "price": 195000, "pricePerArea": 2321, "date": "2025-04", "dealType": "buy" },
+      { "id": "j002", "area": 84, "floor": 7,  "price": 198000, "pricePerArea": 2357, "date": "2025-05", "dealType": "buy" },
+      { "id": "j003", "area": 84, "floor": 14, "price": 202000, "pricePerArea": 2404, "date": "2025-06", "dealType": "buy" },
+      { "id": "j004", "area": 84, "floor": 5,  "price": 200000, "pricePerArea": 2380, "date": "2025-07", "dealType": "buy" },
+      { "id": "j005", "area": 84, "floor": 12, "price": 205000, "pricePerArea": 2440, "date": "2025-08", "dealType": "buy" },
+      { "id": "j006", "area": 84, "floor": 18, "price": 210000, "pricePerArea": 2500, "date": "2025-09", "dealType": "buy" },
+      { "id": "j007", "area": 84, "floor": 9,  "price": 212000, "pricePerArea": 2523, "date": "2025-10", "dealType": "buy" },
+      { "id": "j008", "area": 84, "floor": 16, "price": 218000, "pricePerArea": 2595, "date": "2025-11", "dealType": "buy" },
+      { "id": "j009", "area": 84, "floor": 11, "price": 220000, "pricePerArea": 2619, "date": "2025-12", "dealType": "buy" },
+      { "id": "j010", "area": 84, "floor": 15, "price": 225000, "pricePerArea": 2678, "date": "2026-01", "dealType": "buy" },
+      { "id": "j011", "area": 84, "floor": 8,  "price": 228000, "pricePerArea": 2714, "date": "2026-02", "dealType": "buy" },
+      { "id": "j012", "area": 84, "floor": 13, "price": 232000, "pricePerArea": 2761, "date": "2026-03", "dealType": "buy" }
+    ]
+  },
+  {
+    "id": "helios",
+    "name": "헬리오시티",
+    "district": "송파구",
+    "address": "서울시 송파구 가락동 100",
+    "areas": [59, 74, 84, 99],
+    "transactions": [
+      { "id": "h001", "area": 84, "floor": 15, "price": 175000, "pricePerArea": 2083, "date": "2025-04", "dealType": "buy" },
+      { "id": "h002", "area": 84, "floor": 22, "price": 178000, "pricePerArea": 2119, "date": "2025-05", "dealType": "buy" },
+      { "id": "h003", "area": 84, "floor": 8,  "price": 180000, "pricePerArea": 2142, "date": "2025-06", "dealType": "buy" },
+      { "id": "h004", "area": 84, "floor": 18, "price": 182000, "pricePerArea": 2166, "date": "2025-07", "dealType": "buy" },
+      { "id": "h005", "area": 84, "floor": 11, "price": 185000, "pricePerArea": 2202, "date": "2025-08", "dealType": "buy" },
+      { "id": "h006", "area": 84, "floor": 25, "price": 188000, "pricePerArea": 2238, "date": "2025-09", "dealType": "buy" },
+      { "id": "h007", "area": 84, "floor": 14, "price": 190000, "pricePerArea": 2261, "date": "2025-10", "dealType": "buy" },
+      { "id": "h008", "area": 84, "floor": 20, "price": 193000, "pricePerArea": 2297, "date": "2025-11", "dealType": "buy" },
+      { "id": "h009", "area": 84, "floor": 9,  "price": 195000, "pricePerArea": 2321, "date": "2025-12", "dealType": "buy" },
+      { "id": "h010", "area": 84, "floor": 17, "price": 198000, "pricePerArea": 2357, "date": "2026-01", "dealType": "buy" },
+      { "id": "h011", "area": 84, "floor": 12, "price": 200000, "pricePerArea": 2380, "date": "2026-02", "dealType": "buy" },
+      { "id": "h012", "area": 84, "floor": 16, "price": 203000, "pricePerArea": 2416, "date": "2026-03", "dealType": "buy" }
+    ]
+  },
+  {
+    "id": "hannam-thehill",
+    "name": "한남 더힐",
+    "district": "용산구",
+    "address": "서울시 용산구 한남동 810",
+    "areas": [84, 130, 200, 244],
+    "transactions": [
+      { "id": "hn001", "area": 130, "floor": 5,  "price": 450000, "pricePerArea": 3461, "date": "2025-05", "dealType": "buy" },
+      { "id": "hn002", "area": 130, "floor": 8,  "price": 462000, "pricePerArea": 3553, "date": "2025-07", "dealType": "buy" },
+      { "id": "hn003", "area": 130, "floor": 3,  "price": 458000, "pricePerArea": 3523, "date": "2025-09", "dealType": "buy" },
+      { "id": "hn004", "area": 130, "floor": 10, "price": 475000, "pricePerArea": 3653, "date": "2025-11", "dealType": "buy" },
+      { "id": "hn005", "area": 130, "floor": 6,  "price": 480000, "pricePerArea": 3692, "date": "2026-01", "dealType": "buy" },
+      { "id": "hn006", "area": 130, "floor": 9,  "price": 488000, "pricePerArea": 3753, "date": "2026-03", "dealType": "buy" }
+    ]
+  },
+  {
+    "id": "mapo-raemian",
+    "name": "마포 래미안 푸르지오",
+    "district": "마포구",
+    "address": "서울시 마포구 아현동 649",
+    "areas": [59, 84],
+    "transactions": [
+      { "id": "m001", "area": 84, "floor": 8,  "price": 125000, "pricePerArea": 1488, "date": "2025-04", "dealType": "buy" },
+      { "id": "m002", "area": 84, "floor": 12, "price": 127000, "pricePerArea": 1511, "date": "2025-05", "dealType": "buy" },
+      { "id": "m003", "area": 84, "floor": 6,  "price": 129000, "pricePerArea": 1535, "date": "2025-06", "dealType": "buy" },
+      { "id": "m004", "area": 84, "floor": 15, "price": 130000, "pricePerArea": 1547, "date": "2025-07", "dealType": "buy" },
+      { "id": "m005", "area": 84, "floor": 10, "price": 132000, "pricePerArea": 1571, "date": "2025-08", "dealType": "buy" },
+      { "id": "m006", "area": 84, "floor": 9,  "price": 134000, "pricePerArea": 1595, "date": "2025-09", "dealType": "buy" },
+      { "id": "m007", "area": 84, "floor": 14, "price": 136000, "pricePerArea": 1619, "date": "2025-10", "dealType": "buy" },
+      { "id": "m008", "area": 84, "floor": 7,  "price": 138000, "pricePerArea": 1642, "date": "2025-11", "dealType": "buy" },
+      { "id": "m009", "area": 84, "floor": 11, "price": 139000, "pricePerArea": 1654, "date": "2025-12", "dealType": "buy" },
+      { "id": "m010", "area": 84, "floor": 13, "price": 141000, "pricePerArea": 1678, "date": "2026-01", "dealType": "buy" },
+      { "id": "m011", "area": 84, "floor": 5,  "price": 143000, "pricePerArea": 1702, "date": "2026-02", "dealType": "buy" },
+      { "id": "m012", "area": 84, "floor": 10, "price": 145000, "pricePerArea": 1726, "date": "2026-03", "dealType": "buy" }
+    ]
+  },
+  {
+    "id": "seoulsup-riverview",
+    "name": "서울숲 리버뷰 자이",
+    "district": "성동구",
+    "address": "서울시 성동구 성수동1가 685",
+    "areas": [59, 84, 102],
+    "transactions": [
+      { "id": "s001", "area": 84, "floor": 18, "price": 155000, "pricePerArea": 1845, "date": "2025-04", "dealType": "buy" },
+      { "id": "s002", "area": 84, "floor": 22, "price": 158000, "pricePerArea": 1880, "date": "2025-05", "dealType": "buy" },
+      { "id": "s003", "area": 84, "floor": 15, "price": 161000, "pricePerArea": 1916, "date": "2025-06", "dealType": "buy" },
+      { "id": "s004", "area": 84, "floor": 20, "price": 163000, "pricePerArea": 1940, "date": "2025-07", "dealType": "buy" },
+      { "id": "s005", "area": 84, "floor": 12, "price": 166000, "pricePerArea": 1976, "date": "2025-08", "dealType": "buy" },
+      { "id": "s006", "area": 84, "floor": 25, "price": 170000, "pricePerArea": 2023, "date": "2025-09", "dealType": "buy" },
+      { "id": "s007", "area": 84, "floor": 17, "price": 172000, "pricePerArea": 2047, "date": "2025-10", "dealType": "buy" },
+      { "id": "s008", "area": 84, "floor": 21, "price": 175000, "pricePerArea": 2083, "date": "2025-11", "dealType": "buy" },
+      { "id": "s009", "area": 84, "floor": 14, "price": 178000, "pricePerArea": 2119, "date": "2025-12", "dealType": "buy" },
+      { "id": "s010", "area": 84, "floor": 19, "price": 180000, "pricePerArea": 2142, "date": "2026-01", "dealType": "buy" },
+      { "id": "s011", "area": 84, "floor": 23, "price": 183000, "pricePerArea": 2178, "date": "2026-02", "dealType": "buy" },
+      { "id": "s012", "area": 84, "floor": 16, "price": 186000, "pricePerArea": 2214, "date": "2026-03", "dealType": "buy" }
+    ]
+  },
+  {
+    "id": "banpo-xi2",
+    "name": "반포 자이",
+    "district": "서초구",
+    "address": "서울시 서초구 반포동 18-1",
+    "areas": [59, 84, 114],
+    "transactions": [
+      { "id": "bx001", "area": 84, "floor": 10, "price": 310000, "pricePerArea": 3690, "date": "2025-04", "dealType": "buy" },
+      { "id": "bx002", "area": 84, "floor": 14, "price": 315000, "pricePerArea": 3750, "date": "2025-05", "dealType": "buy" },
+      { "id": "bx003", "area": 84, "floor": 8,  "price": 318000, "pricePerArea": 3785, "date": "2025-06", "dealType": "buy" },
+      { "id": "bx004", "area": 84, "floor": 17, "price": 322000, "pricePerArea": 3833, "date": "2025-07", "dealType": "buy" },
+      { "id": "bx005", "area": 84, "floor": 12, "price": 325000, "pricePerArea": 3869, "date": "2025-08", "dealType": "buy" },
+      { "id": "bx006", "area": 84, "floor": 20, "price": 330000, "pricePerArea": 3928, "date": "2025-09", "dealType": "buy" },
+      { "id": "bx007", "area": 84, "floor": 9,  "price": 333000, "pricePerArea": 3964, "date": "2025-10", "dealType": "buy" },
+      { "id": "bx008", "area": 84, "floor": 15, "price": 338000, "pricePerArea": 4023, "date": "2025-11", "dealType": "buy" },
+      { "id": "bx009", "area": 84, "floor": 11, "price": 342000, "pricePerArea": 4071, "date": "2025-12", "dealType": "buy" },
+      { "id": "bx010", "area": 84, "floor": 18, "price": 346000, "pricePerArea": 4119, "date": "2026-01", "dealType": "buy" },
+      { "id": "bx011", "area": 84, "floor": 13, "price": 350000, "pricePerArea": 4166, "date": "2026-02", "dealType": "buy" },
+      { "id": "bx012", "area": 84, "floor": 16, "price": 355000, "pricePerArea": 4226, "date": "2026-03", "dealType": "buy" }
+    ]
+  },
+  {
+    "id": "gaepo-jugong",
+    "name": "개포 주공 1단지",
+    "district": "강남구",
+    "address": "서울시 강남구 개포동 12",
+    "areas": [42, 50],
+    "transactions": [
+      { "id": "g001", "area": 50, "floor": 3, "price": 195000, "pricePerArea": 3900, "date": "2025-04", "dealType": "buy" },
+      { "id": "g002", "area": 50, "floor": 5, "price": 198000, "pricePerArea": 3960, "date": "2025-06", "dealType": "buy" },
+      { "id": "g003", "area": 50, "floor": 2, "price": 200000, "pricePerArea": 4000, "date": "2025-08", "dealType": "buy" },
+      { "id": "g004", "area": 50, "floor": 4, "price": 205000, "pricePerArea": 4100, "date": "2025-10", "dealType": "buy" },
+      { "id": "g005", "area": 50, "floor": 3, "price": 208000, "pricePerArea": 4160, "date": "2025-12", "dealType": "buy" },
+      { "id": "g006", "area": 50, "floor": 5, "price": 212000, "pricePerArea": 4240, "date": "2026-02", "dealType": "buy" }
+    ]
+  }
+]
