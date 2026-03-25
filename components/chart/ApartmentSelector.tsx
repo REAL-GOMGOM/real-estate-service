@@ -18,6 +18,7 @@ interface Props {
   selectedArea: number | 'all';
   onSelect: (id: string) => void;
   onAreaChange: (area: number | 'all') => void;
+  isMobile?: boolean;
 }
 
 export default function ApartmentSelector({
@@ -26,15 +27,18 @@ export default function ApartmentSelector({
   selectedArea,
   onSelect,
   onAreaChange,
+  isMobile = false,
 }: Props) {
   const selectedApt = apartments.find((a) => a.id === selectedId);
 
   return (
     <aside style={{
-      width: '280px', flexShrink: 0,
-      height: 'calc(100vh - 64px)', overflowY: 'auto',
+      width: isMobile ? '100%' : '280px', flexShrink: 0,
+      height: isMobile ? 'auto' : 'calc(100vh - 64px)',
+      overflowY: isMobile ? 'visible' : 'auto',
       backgroundColor: '#0F1629',
-      borderRight: '1px solid rgba(255,255,255,0.08)',
+      borderRight: isMobile ? 'none' : '1px solid rgba(255,255,255,0.08)',
+      borderBottom: isMobile ? '1px solid rgba(255,255,255,0.08)' : 'none',
       display: 'flex', flexDirection: 'column',
     }}>
 
@@ -81,7 +85,7 @@ export default function ApartmentSelector({
       )}
 
       {/* 단지 목록 */}
-      <div style={{ padding: '14px 20px', flex: 1 }}>
+      <div style={{ padding: '14px 20px', flex: 1, maxHeight: isMobile ? '240px' : 'none', overflowY: isMobile ? 'auto' : 'visible' }}>
         <p style={{ fontSize: '11px', fontWeight: 600, color: '#94A3B8', marginBottom: '10px' }}>
           주요 단지 ({apartments.length}개)
         </p>

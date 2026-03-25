@@ -33,6 +33,14 @@ function ChartContent() {
   const [isLoading,      setIsLoading]      = useState(false);
   const [apiError,       setApiError]       = useState<string | null>(null);
   const [activeDistrict, setActiveDistrict] = useState<string>(districtParam ?? '강남구');
+  const [isMobile,       setIsMobile]       = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   const fetchApiData = useCallback(async (district: string, months: number) => {
     setIsLoading(true);
@@ -142,16 +150,17 @@ function ChartContent() {
   const fmt = (v: number) => `${(v / 10000).toFixed(1)}억`;
 
   return (
-    <div style={{ display: 'flex', paddingTop: '64px' }}>
+    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', paddingTop: '64px' }}>
       <ApartmentSelector
         apartments={apartments}
         selectedId={selectedId}
         selectedArea={selectedArea}
         onSelect={(id) => { setSelectedId(id); setSelectedArea('all'); }}
         onAreaChange={setSelectedArea}
+        isMobile={isMobile}
       />
 
-      <main style={{ flex: 1, overflowY: 'auto', height: 'calc(100vh - 64px)', backgroundColor: '#0A0E1A' }}>
+      <main style={{ flex: 1, overflowY: isMobile ? 'visible' : 'auto', height: isMobile ? 'auto' : 'calc(100vh - 64px)', backgroundColor: '#0A0E1A' }}>
         <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '32px 28px' }}>
 
           {/* 기간 필터 */}
