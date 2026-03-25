@@ -155,8 +155,10 @@ function ChartContent() {
         apartments={apartments}
         selectedId={selectedId}
         selectedArea={selectedArea}
+        activeDistrict={activeDistrict}
         onSelect={(id) => { setSelectedId(id); setSelectedArea('all'); }}
         onAreaChange={setSelectedArea}
+        onDistrictChange={(d) => { setActiveDistrict(d); fetchApiData(d, selectedPeriod); }}
         isMobile={isMobile}
       />
 
