@@ -30,7 +30,7 @@ function getDday(endDate: string, status: string, now: ReturnType<typeof dayjs>)
 }
 
 export default function SubscriptionTable({ items, onSelect }: Props) {
-  const [now, setNow] = useState(() => dayjs('2000-01-01')); // 빌드 시 중립값
+  const [now, setNow] = useState(() => dayjs('2000-01-01'));
   useEffect(() => { setNow(dayjs()); }, []);
 
   if (items.length === 0) {
@@ -57,98 +57,72 @@ export default function SubscriptionTable({ items, onSelect }: Props) {
             key={item.id}
             onClick={() => onSelect(item)}
             style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              gap: '16px',
-              padding: '20px 24px',
+              padding: '16px 20px',
               borderRadius: '16px',
               backgroundColor: '#0F1629',
               border: '1px solid rgba(255,255,255,0.08)',
-              transition: 'border-color 0.15s',
               cursor: 'pointer',
             }}
           >
-            {/* 상태 배지 */}
-            <div style={{ flexShrink: 0, width: '80px' }}>
+            {/* 1행: 상태 배지 + 단지명 + D-day */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
               <span style={{
-                display: 'inline-block',
-                padding: '5px 10px', borderRadius: '999px',
+                padding: '4px 10px', borderRadius: '999px', flexShrink: 0,
                 fontSize: '11px', fontWeight: 600,
                 backgroundColor: sc.bg, color: sc.color,
               }}>
                 {sc.label}
               </span>
-            </div>
-
-            {/* 단지명 + 주소 */}
-            <div style={{ flex: 2, minWidth: '180px' }}>
-              <p style={{ fontSize: '14px', fontWeight: 700, color: '#F1F5F9', marginBottom: '3px' }}>
+              <p style={{ flex: 1, fontSize: '14px', fontWeight: 700, color: '#F1F5F9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {item.name}
               </p>
-              <p style={{ fontSize: '12px', color: '#64748B' }}>{item.district} · {item.houseType}</p>
-            </div>
-
-            {/* 청약 기간 */}
-            <div style={{ flex: 1, minWidth: '140px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '3px' }}>
-                <Calendar size={12} style={{ color: '#475569' }} />
-                <span style={{ fontSize: '12px', color: '#94A3B8' }}>청약기간</span>
-              </div>
-              <p style={{ fontSize: '12px', color: '#F1F5F9' }}>
-                {item.startDate} ~ {item.endDate}
-              </p>
-            </div>
-
-            {/* 세대수 */}
-            <div style={{ flexShrink: 0, minWidth: '80px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '3px' }}>
-                <Home size={12} style={{ color: '#475569' }} />
-                <span style={{ fontSize: '12px', color: '#94A3B8' }}>세대수</span>
-              </div>
-              <p style={{ fontSize: '13px', fontWeight: 600, color: '#F1F5F9' }}>
-                {item.totalUnits.toLocaleString()}세대
-              </p>
-            </div>
-
-            {/* 경쟁률 */}
-            <div style={{ flexShrink: 0, minWidth: '80px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '3px' }}>
-                <Users size={12} style={{ color: '#475569' }} />
-                <span style={{ fontSize: '12px', color: '#94A3B8' }}>경쟁률</span>
-              </div>
-              {item.competitionRate !== null ? (
-                <p style={{ fontSize: '13px', fontWeight: 700, color: '#22C55E' }}>
-                  {item.competitionRate}:1
-                </p>
-              ) : (
-                <p style={{ fontSize: '12px', color: '#475569' }}>미발표</p>
-              )}
-            </div>
-
-            {/* 분양가 */}
-            <div style={{ flexShrink: 0, minWidth: '120px' }}>
-              <p style={{ fontSize: '11px', color: '#94A3B8', marginBottom: '3px' }}>분양가</p>
-              <p style={{
-                fontSize: '13px', fontWeight: 700,
-                fontFamily: 'Roboto Mono, monospace', color: '#F59E0B',
-              }}>
-                {formatPrice(item.minPrice)} ~ {formatPrice(item.maxPrice)}
-              </p>
-            </div>
-
-            {/* D-day */}
-            {item.status !== 'closed' && (
-              <div style={{ flexShrink: 0, minWidth: '50px', textAlign: 'right' }}>
+              {item.status !== 'closed' && (
                 <span style={{
-                  fontSize: '14px', fontWeight: 800,
+                  fontSize: '13px', fontWeight: 800, flexShrink: 0,
                   fontFamily: 'Roboto Mono, monospace',
                   color: item.status === 'ongoing' ? '#22C55E' : '#3B82F6',
                 }}>
                   {dday}
                 </span>
+              )}
+            </div>
+
+            {/* 2행: 주소 */}
+            <p style={{ fontSize: '12px', color: '#64748B', marginBottom: '10px' }}>
+              {item.district}{item.houseType ? ` · ${item.houseType}` : ''}
+            </p>
+
+            {/* 3행: 날짜 / 세대수 / 경쟁률 / 분양가 */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 20px', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <Calendar size={11} style={{ color: '#475569', flexShrink: 0 }} />
+                <span style={{ fontSize: '12px', color: '#94A3B8', whiteSpace: 'nowrap' }}>
+                  {item.startDate} ~ {item.endDate}
+                </span>
               </div>
-            )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <Home size={11} style={{ color: '#475569', flexShrink: 0 }} />
+                <span style={{ fontSize: '12px', color: '#94A3B8', whiteSpace: 'nowrap' }}>
+                  {item.totalUnits.toLocaleString()}세대
+                </span>
+              </div>
+              {item.competitionRate !== null ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <Users size={11} style={{ color: '#22C55E', flexShrink: 0 }} />
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#22C55E', whiteSpace: 'nowrap' }}>
+                    {item.competitionRate}:1
+                  </span>
+                </div>
+              ) : (
+                <span style={{ fontSize: '12px', color: '#475569' }}>경쟁률 미발표</span>
+              )}
+              <span style={{
+                fontSize: '13px', fontWeight: 700,
+                fontFamily: 'Roboto Mono, monospace', color: '#F59E0B', whiteSpace: 'nowrap',
+              }}>
+                {formatPrice(item.minPrice)} ~ {formatPrice(item.maxPrice)}
+              </span>
+            </div>
           </div>
         );
       })}
