@@ -44,7 +44,7 @@ export default function Header() {
           </Link>
 
           {/* 데스크탑 네비게이션 */}
-          <nav style={{ display: 'flex', alignItems: 'center', gap: '32px' }} className="hidden md:flex">
+          <nav style={{ alignItems: 'center', gap: '32px' }} className="hidden md:flex">
             {NAV_ITEMS.map((item) => {
               const active = pathname === item.href || pathname.startsWith(item.href + '/');
               return (
@@ -66,7 +66,7 @@ export default function Header() {
           </nav>
 
           {/* CTA 버튼 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }} className="hidden md:flex">
+          <div style={{ alignItems: 'center', gap: '12px' }} className="hidden md:flex">
             <button style={{ padding: '8px 18px', borderRadius: '10px', fontSize: '14px', fontWeight: 500, color: '#94A3B8', border: '1px solid rgba(255,255,255,0.12)', backgroundColor: 'transparent', cursor: 'pointer' }}>
               로그인
             </button>
