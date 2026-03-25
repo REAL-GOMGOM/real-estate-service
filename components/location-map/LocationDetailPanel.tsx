@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { X, TrendingUp, TrendingDown, Minus, MapPin, AlertTriangle, BarChart2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import type { LocationScore } from '@/lib/types';
 import { getScoreColor, getScoreBgColor } from './LocationSidebar';
 
@@ -14,11 +15,26 @@ export default function LocationDetailPanel({ location, onClose }: Props) {
   const scoreDiff = (location.score - location.prevScore).toFixed(1);
   const isUp   = location.trend === 'up';
   const isDown = location.trend === 'down';
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
+  const panelStyle: React.CSSProperties = isMobile ? {
+    position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 100,
+    borderRadius: '20px 20px 0 0',
+    maxHeight: '70vh', overflowY: 'auto',
+  } : {
+    position: 'absolute', bottom: '32px', right: '32px', zIndex: 100,
+    width: '280px', borderRadius: '20px',
+  };
 
   return (
     <div style={{
-      position: 'absolute', bottom: '32px', right: '32px', zIndex: 100,
-      width: '280px', borderRadius: '20px',
+      ...panelStyle,
       backgroundColor: 'rgba(15,22,41,0.97)',
       border: location.isToheo ? '1px solid rgba(249,115,22,0.4)' : '1px solid rgba(255,255,255,0.12)',
       backdropFilter: 'blur(16px)',
