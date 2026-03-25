@@ -8,25 +8,8 @@ export interface NewsItem {
   category: 'realestate' | 'general';
 }
 
-function parseItems(xml: string, category: NewsItem['category']): NewsItem[] {
-  const items = xml.match(/<item>([\s\S]*?)<\/item>/g) ?? [];
-  return items.map((item) => {
-    const get = (tag: string) =>
-      item.match(new RegExp('<' + tag + '[^>]*>([\\s\\S]*?)<\\/' + tag + '>'))?.[1]?.trim() ?? '';
-
-    const title = get('title')
-      .replace(/<!\[CDATA\[|\]\]>/g, '')
-      .replace(/&amp;/g, '&')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/ - [^-]+$/, ''); // 출처 suffix 제거
-
-    const link    = get('link') || (item.match(/<link\/>([\s\S]*?)<title>/)?.[1]?.trim() ?? '');
-    const pubDate = get('pubDate');
-    const source  = get('source').replace(/<!\[CDATA\[|\]\]>/g, '').trim() || '언론사';
-
-    return { title, link, pubDate, source, category };
-  }).filter((n) => n.title.length > 0);
+function stripHtml(str: string): string {
+  return str.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 }
 
 function formatDate(pubDate: string): string {
@@ -39,29 +22,48 @@ function formatDate(pubDate: string): string {
   return `${Math.floor(diff / 1440)}일 전`;
 }
 
+async function searchNews(query: string, display: number, category: NewsItem['category'], headers: Record<string, string>): Promise<(NewsItem & { pubDateTs: number; pubDateFormatted: string })[]> {
+  const url = `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(query)}&display=${display}&sort=date`;
+  const res  = await fetch(url, { headers, next: { revalidate: 1800 } });
+  const json = await res.json();
+
+  return (json.items ?? []).map((item: any) => ({
+    title:            stripHtml(item.title),
+    link:             item.originallink || item.link,
+    pubDate:          item.pubDate,
+    source:           new URL(item.originallink || item.link).hostname.replace('www.', '').split('.')[0],
+    category,
+    pubDateTs:        new Date(item.pubDate).getTime(),
+    pubDateFormatted: formatDate(item.pubDate),
+  }));
+}
+
 export async function GET() {
-  const RE_URL   = 'https://news.google.com/rss/search?q=부동산+아파트+매매&hl=ko&gl=KR&ceid=KR:ko';
-  const GEN_URL  = 'https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRFZxYUdjU0JXdHZMVWRSS0FBUAE?hl=ko&gl=KR&ceid=KR:ko';
+  const clientId     = process.env.NAVER_CLIENT_ID;
+  const clientSecret = process.env.NAVER_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    return NextResponse.json({ error: '네이버 API 키 미설정' }, { status: 500 });
+  }
+
+  const headers = {
+    'X-Naver-Client-Id':     clientId,
+    'X-Naver-Client-Secret': clientSecret,
+  };
 
   try {
-    const [reRes, genRes] = await Promise.all([
-      fetch(RE_URL,  { next: { revalidate: 1800 } }),
-      fetch(GEN_URL, { next: { revalidate: 1800 } }),
+    const [reItems, genItems] = await Promise.all([
+      searchNews('부동산 아파트 매매', 24, 'realestate', headers),
+      searchNews('경제 이슈 사회', 6, 'general', headers),
     ]);
 
-    const [reXml, genXml] = await Promise.all([reRes.text(), genRes.text()]);
-
-    const reItems  = parseItems(reXml,  'realestate').slice(0, 24);
-    const genItems = parseItems(genXml, 'general').slice(0, 6);
-
     const news = [...reItems, ...genItems]
-      .map((n) => ({ ...n, pubDateFormatted: formatDate(n.pubDate), pubDateTs: new Date(n.pubDate).getTime() }))
       .sort((a, b) => b.pubDateTs - a.pubDateTs)
       .slice(0, 30);
 
     return NextResponse.json({ news });
   } catch (e) {
-    console.error('뉴스 API 오류:', e);
+    console.error('네이버 뉴스 API 오류:', e);
     return NextResponse.json({ news: [] });
   }
 }
