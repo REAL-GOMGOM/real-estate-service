@@ -4,12 +4,49 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, TrendingUp, TrendingDown, ExternalLink } from 'lucide-react';
 
-// 서울 주요 구 목록 (홈 미리보기용)
-const SEOUL_DISTRICTS = [
-  '강남구', '서초구', '송파구', '마포구', '용산구',
-  '성동구', '영등포구', '양천구', '강동구', '강서구',
-  '광진구', '동작구', '관악구', '노원구', '도봉구',
-  '서대문구', '성북구', '은평구', '종로구', '중구',
+const REGIONS: { label: string; districts: string[] }[] = [
+  {
+    label: '서울',
+    districts: [
+      '강남구', '서초구', '송파구', '용산구', '마포구', '성동구',
+      '영등포구', '양천구', '강동구', '광진구', '동작구', '관악구',
+      '강서구', '구로구', '노원구', '도봉구', '동대문구', '서대문구',
+      '성북구', '은평구', '종로구', '중구', '중랑구', '강북구', '금천구',
+    ],
+  },
+  {
+    label: '경기',
+    districts: [
+      '성남시 분당구', '과천시', '하남시', '수원시 영통구', '수원시 팔달구',
+      '용인시 수지구', '용인시 기흥구', '용인시 처인구',
+      '고양시 일산동구', '고양시 일산서구', '고양시 덕양구',
+      '안양시 동안구', '안양시 만안구', '광명시', '의왕시', '부천시',
+      '구리시', '남양주시', '의정부시', '시흥시', '김포시', '화성시',
+      '평택시', '파주시', '군포시', '양주시', '광주시', '이천시',
+    ],
+  },
+  {
+    label: '인천',
+    districts: [
+      '인천 연수구', '인천 서구', '인천 부평구', '인천 남동구',
+      '인천 계양구', '인천 미추홀구', '인천 동구', '인천 중구',
+    ],
+  },
+  {
+    label: '부산',
+    districts: [
+      '부산 해운대구', '부산 수영구', '부산 동래구', '부산 연제구',
+      '부산 남구', '부산 부산진구', '부산 동구', '부산 중구',
+      '부산 서구', '부산 북구', '부산 금정구', '부산 사하구',
+    ],
+  },
+  {
+    label: '대구/울산',
+    districts: [
+      '대구 수성구', '대구 달서구', '대구 북구', '대구 동구', '대구 중구',
+      '울산 남구', '울산 동구', '울산 북구', '울산 중구',
+    ],
+  },
 ];
 
 interface AptSummary {
@@ -29,11 +66,12 @@ function fmt억(manwon: number) {
 
 export default function TransactionSearch() {
   const router = useRouter();
+  const [regionIdx, setRegionIdx] = useState(0);
   const [district, setDistrict]   = useState('강남구');
   const [aptQuery, setAptQuery]   = useState('');
   const [apts, setApts]           = useState<AptSummary[]>([]);
   const [loading, setLoading]     = useState(false);
-  const [fetched, setFetched]     = useState<string | null>(null); // 마지막으로 fetch한 구
+  const [fetched, setFetched]     = useState<string | null>(null);
 
   const loadDistrict = useCallback(async (d: string) => {
     if (fetched === d) return;
@@ -102,22 +140,47 @@ export default function TransactionSearch() {
           </p>
         </div>
 
+        {/* 권역 탭 */}
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>
+          {REGIONS.map((r, i) => (
+            <button
+              key={r.label}
+              type="button"
+              onClick={() => { setRegionIdx(i); setDistrict(REGIONS[i].districts[0]); }}
+              style={{
+                padding: '6px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
+                cursor: 'pointer', border: 'none',
+                backgroundColor: regionIdx === i ? '#3B82F6' : 'rgba(255,255,255,0.06)',
+                color: regionIdx === i ? '#fff' : '#64748B',
+              }}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+
+        {/* 구 선택 */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '20px' }}>
+          {REGIONS[regionIdx].districts.map((d) => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => setDistrict(d)}
+              style={{
+                padding: '5px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 500,
+                cursor: 'pointer',
+                border: district === d ? '1px solid rgba(59,130,246,0.5)' : '1px solid rgba(255,255,255,0.08)',
+                backgroundColor: district === d ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.04)',
+                color: district === d ? '#60A5FA' : '#94A3B8',
+              }}
+            >
+              {d.replace(/^(인천|부산|대구|울산)\s/, '')}
+            </button>
+          ))}
+        </div>
+
         {/* 검색 폼 */}
         <form onSubmit={handleSearch} style={{ display: 'flex', gap: '10px', marginBottom: '28px', flexWrap: 'wrap' }}>
-          <select
-            value={district}
-            onChange={(e) => setDistrict(e.target.value)}
-            style={{
-              padding: '12px 16px', borderRadius: '12px', fontSize: '14px', fontWeight: 500,
-              backgroundColor: '#0F1629', color: '#F1F5F9',
-              border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', outline: 'none',
-            }}
-          >
-            {SEOUL_DISTRICTS.map((d) => (
-              <option key={d} value={d}>{d}</option>
-            ))}
-          </select>
-
           <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
             <Search
               size={16}
