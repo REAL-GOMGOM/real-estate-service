@@ -44,7 +44,7 @@ export default function Header() {
           </Link>
 
           {/* 데스크탑 네비게이션 */}
-          <nav style={{ alignItems: 'center', gap: '32px' }} className="hidden md:flex">
+          <nav style={{ alignItems: 'center', gap: '20px' }} className="hidden lg:flex">
             {NAV_ITEMS.map((item) => {
               const active = pathname === item.href || pathname.startsWith(item.href + '/');
               return (
@@ -66,7 +66,7 @@ export default function Header() {
           </nav>
 
           {/* CTA 버튼 */}
-          <div style={{ alignItems: 'center', gap: '12px' }} className="hidden md:flex">
+          <div style={{ alignItems: 'center', gap: '12px' }} className="hidden lg:flex">
             <button style={{ padding: '8px 18px', borderRadius: '10px', fontSize: '14px', fontWeight: 500, color: '#94A3B8', border: '1px solid rgba(255,255,255,0.12)', backgroundColor: 'transparent', cursor: 'pointer' }}>
               로그인
             </button>
@@ -79,7 +79,7 @@ export default function Header() {
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             style={{ padding: '8px', color: '#94A3B8', background: 'none', border: 'none', cursor: 'pointer' }}
-            className="md:hidden"
+            className="lg:hidden"
           >
             {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
@@ -88,7 +88,7 @@ export default function Header() {
 
       {/* 모바일 드롭다운 메뉴 */}
       {isMenuOpen && (
-        <div style={{ backgroundColor: 'rgba(10, 14, 26, 0.98)', padding: '8px 24px 16px' }} className="md:hidden">
+        <div style={{ backgroundColor: 'rgba(10, 14, 26, 0.98)', padding: '8px 24px 16px' }} className="lg:hidden">
           {NAV_ITEMS.map((item) => {
             const active = pathname === item.href || pathname.startsWith(item.href + '/');
             return (
