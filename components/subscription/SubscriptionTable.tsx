@@ -1,6 +1,7 @@
 'use client';
 
 import { Calendar, Home, Users } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import type { SubscriptionItem } from '@/lib/types';
 import dayjs from 'dayjs';
 
@@ -20,15 +21,18 @@ function formatPrice(manwon: number | null): string {
   return `${(manwon / 10000).toFixed(0)}억`;
 }
 
-function getDday(endDate: string, status: string): string {
+function getDday(endDate: string, status: string, now: ReturnType<typeof dayjs>): string {
   if (status === 'closed') return '-';
-  const diff = dayjs(endDate).diff(dayjs(), 'day');
+  const diff = dayjs(endDate).diff(now, 'day');
   if (diff < 0) return '마감';
   if (diff === 0) return 'D-day';
   return `D-${diff}`;
 }
 
 export default function SubscriptionTable({ items, onSelect }: Props) {
+  const [now, setNow] = useState(() => dayjs('2000-01-01')); // 빌드 시 중립값
+  useEffect(() => { setNow(dayjs()); }, []);
+
   if (items.length === 0) {
     return (
       <div style={{
@@ -46,7 +50,7 @@ export default function SubscriptionTable({ items, onSelect }: Props) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
       {items.map((item) => {
         const sc = STATUS_CONFIG[item.status];
-        const dday = getDday(item.endDate, item.status);
+        const dday = getDday(item.endDate, item.status, now);
 
         return (
           <div
