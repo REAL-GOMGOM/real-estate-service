@@ -35,7 +35,6 @@ function ChartContent() {
   const [activeDistrict, setActiveDistrict] = useState<string>(districtParam ?? '강남구');
   const [isMobile,       setIsMobile]       = useState(false);
   const [listings,       setListings]       = useState<any | null>(null);
-  const [listingsLoading, setListingsLoading] = useState(false);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -112,12 +111,10 @@ function ChartContent() {
   useEffect(() => {
     if (!selectedApt) return;
     setListings(null);
-    setListingsLoading(true);
     fetch(`/api/naver-listings?aptName=${encodeURIComponent(selectedApt.name)}`)
       .then((r) => r.json())
       .then((j) => setListings(j.error ? null : j))
-      .catch(() => setListings(null))
-      .finally(() => setListingsLoading(false));
+      .catch(() => setListings(null));
   }, [selectedId]);
 
   // 마운트 + districtParam 변경 시 호출
@@ -271,11 +268,6 @@ function ChartContent() {
                     { label: '최고가',      value: fmt(stats.maxPrice), color: '#F59E0B' },
                     { label: '최저가',      value: fmt(stats.minPrice), color: '#94A3B8' },
                     { label: '총 거래',     value: `${stats.count}건`,  color: '#3B82F6' },
-                    {
-                      label: '현재 매물',
-                      value: listingsLoading ? '...' : listings ? `${listings.totalCount}개` : '-',
-                      color: '#A78BFA',
-                    },
                   ].map((s) => (
                     <div key={s.label} style={{
                       padding: '16px 18px', borderRadius: '14px',
