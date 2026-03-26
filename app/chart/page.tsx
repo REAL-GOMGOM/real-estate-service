@@ -34,6 +34,8 @@ function ChartContent() {
   const [apiError,       setApiError]       = useState<string | null>(null);
   const [activeDistrict, setActiveDistrict] = useState<string>(districtParam ?? '강남구');
   const [isMobile,       setIsMobile]       = useState(false);
+  const [listings,       setListings]       = useState<any | null>(null);
+  const [listingsLoading, setListingsLoading] = useState(false);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -105,6 +107,18 @@ function ChartContent() {
       setIsLoading(false);
     }
   }, []);
+
+  // 선택된 아파트 변경 시 네이버 매물 조회
+  useEffect(() => {
+    if (!selectedApt) return;
+    setListings(null);
+    setListingsLoading(true);
+    fetch(`/api/naver-listings?aptName=${encodeURIComponent(selectedApt.name)}`)
+      .then((r) => r.json())
+      .then((j) => setListings(j.error ? null : j))
+      .catch(() => setListings(null))
+      .finally(() => setListingsLoading(false));
+  }, [selectedId]);
 
   // 마운트 + districtParam 변경 시 호출
   useEffect(() => {
@@ -257,6 +271,11 @@ function ChartContent() {
                     { label: '최고가',      value: fmt(stats.maxPrice), color: '#F59E0B' },
                     { label: '최저가',      value: fmt(stats.minPrice), color: '#94A3B8' },
                     { label: '총 거래',     value: `${stats.count}건`,  color: '#3B82F6' },
+                    {
+                      label: '현재 매물',
+                      value: listingsLoading ? '...' : listings ? `${listings.totalCount}개` : '-',
+                      color: '#A78BFA',
+                    },
                   ].map((s) => (
                     <div key={s.label} style={{
                       padding: '16px 18px', borderRadius: '14px',
@@ -271,6 +290,28 @@ function ChartContent() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {listings && (
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
+              <span style={{ fontSize: '12px', color: '#A78BFA', fontWeight: 600 }}>
+                현재 매물 {listings.totalCount}개
+              </span>
+              {listings.minPrc && (
+                <span style={{ fontSize: '12px', color: '#94A3B8' }}>
+                  호가 {(listings.minPrc / 10000).toFixed(1)}억 ~ {(listings.maxPrc / 10000).toFixed(1)}억
+                  &nbsp;(평균 {(listings.avgPrc / 10000).toFixed(1)}억)
+                </span>
+              )}
+              <a
+                href={`https://new.land.naver.com/complexes/${listings.complexNo}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ fontSize: '11px', color: '#3B82F6', textDecoration: 'underline' }}
+              >
+                네이버 부동산 ↗
+              </a>
             </div>
           )}
 
