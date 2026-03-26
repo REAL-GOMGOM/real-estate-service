@@ -73,6 +73,39 @@ function ChartContent() {
     }
   }, []);
 
+  // 단지명 전국 검색 — 주요 서울/경기 구에 병렬 호출
+  const SEARCH_DISTRICTS = [
+    '강남구', '서초구', '송파구', '용산구', '마포구', '성동구',
+    '영등포구', '양천구', '강동구', '광진구', '동작구',
+    '성남시 분당구', '과천시', '하남시', '용인시 수지구',
+  ];
+
+  const searchByAptName = useCallback(async (aptName: string) => {
+    if (aptName.length < 2) return;
+    setIsLoading(true);
+    setApiError(null);
+    try {
+      const results = await Promise.all(
+        SEARCH_DISTRICTS.map((d) =>
+          fetch(`/api/transactions?district=${encodeURIComponent(d)}&months=12&aptName=${encodeURIComponent(aptName)}`)
+            .then((r) => r.json())
+            .then((j) => j.data ?? [])
+            .catch(() => [])
+        )
+      );
+      const merged = results.flat();
+      setApiData(merged.length > 0 ? merged : []);
+      if (merged.length > 0) {
+        setActiveDistrict(merged[0].district);
+        setSelectedId(merged[0].id);
+      }
+    } catch (e: any) {
+      setApiError(e.message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   // 마운트 + districtParam 변경 시 호출
   useEffect(() => {
     const district = districtParam ?? '강남구';
@@ -159,6 +192,7 @@ function ChartContent() {
         onSelect={(id) => { setSelectedId(id); setSelectedArea('all'); }}
         onAreaChange={setSelectedArea}
         onDistrictChange={(d) => { setActiveDistrict(d); fetchApiData(d, selectedPeriod); }}
+        onAptSearch={searchByAptName}
         isMobile={isMobile}
       />
 
