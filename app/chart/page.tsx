@@ -34,7 +34,6 @@ function ChartContent() {
   const [apiError,       setApiError]       = useState<string | null>(null);
   const [activeDistrict, setActiveDistrict] = useState<string>(districtParam ?? '강남구');
   const [isMobile,       setIsMobile]       = useState(false);
-  const [listings,       setListings]       = useState<any | null>(null);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -106,16 +105,6 @@ function ChartContent() {
       setIsLoading(false);
     }
   }, []);
-
-  // 선택된 아파트 변경 시 네이버 매물 조회
-  useEffect(() => {
-    if (!selectedApt) return;
-    setListings(null);
-    fetch(`/api/naver-listings?aptName=${encodeURIComponent(selectedApt.name)}`)
-      .then((r) => r.json())
-      .then((j) => setListings(j.error ? null : j))
-      .catch(() => setListings(null));
-  }, [selectedId]);
 
   // 마운트 + districtParam 변경 시 호출
   useEffect(() => {
@@ -285,24 +274,20 @@ function ChartContent() {
             </div>
           )}
 
-          {listings && (
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
-              <span style={{ fontSize: '12px', color: '#A78BFA', fontWeight: 600 }}>
-                현재 매물 {listings.totalCount}개
-              </span>
-              {listings.minPrc && (
-                <span style={{ fontSize: '12px', color: '#94A3B8' }}>
-                  호가 {(listings.minPrc / 10000).toFixed(1)}억 ~ {(listings.maxPrc / 10000).toFixed(1)}억
-                  &nbsp;(평균 {(listings.avgPrc / 10000).toFixed(1)}억)
-                </span>
-              )}
+          {selectedApt && (
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '12px' }}>
               <a
-                href={`https://new.land.naver.com/complexes/${listings.complexNo}`}
+                href={`https://new.land.naver.com/search?query=${encodeURIComponent(selectedApt.name)}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{ fontSize: '11px', color: '#3B82F6', textDecoration: 'underline' }}
+                style={{
+                  fontSize: '12px', color: '#3B82F6', textDecoration: 'none',
+                  padding: '4px 10px', borderRadius: '6px',
+                  border: '1px solid rgba(59,130,246,0.3)',
+                  backgroundColor: 'rgba(59,130,246,0.08)',
+                }}
               >
-                네이버 부동산 ↗
+                네이버 부동산에서 현재 매물 보기 ↗
               </a>
             </div>
           )}
