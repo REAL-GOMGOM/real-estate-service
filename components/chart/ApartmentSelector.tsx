@@ -21,6 +21,7 @@ interface Props {
   onSelect: (id: string) => void;
   onAreaChange: (area: number | 'all') => void;
   onDistrictChange: (district: string) => void;
+  onAptSearch: (aptName: string) => void;
   isMobile?: boolean;
 }
 
@@ -87,6 +88,7 @@ export default function ApartmentSelector({
   onSelect,
   onAreaChange,
   onDistrictChange,
+  onAptSearch,
   isMobile = false,
 }: Props) {
   const selectedApt = apartments.find((a) => a.id === selectedId);
@@ -247,9 +249,12 @@ export default function ApartmentSelector({
           <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#475569', pointerEvents: 'none' }} />
           <input
             type="text"
-            placeholder="단지명 검색"
+            placeholder="단지명 검색 (전국)"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              if (e.target.value.length >= 2) onAptSearch(e.target.value);
+            }}
             style={{
               width: '100%', padding: '7px 10px 7px 28px', borderRadius: '8px',
               fontSize: '12px', backgroundColor: 'rgba(255,255,255,0.05)', color: '#F1F5F9',
