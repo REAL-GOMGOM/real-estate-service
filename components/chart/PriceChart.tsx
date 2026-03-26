@@ -3,7 +3,7 @@
 import {
   ComposedChart, Bar, Line,
   XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend,
+  Tooltip, ResponsiveContainer,
 } from 'recharts';
 
 interface MonthlyData {
@@ -141,7 +141,7 @@ export default function PriceChart({ data }: Props) {
           <YAxis
             yAxisId="volume"
             orientation="left"
-            domain={[0, maxCount * 4]}
+            domain={[0, maxCount * 2]}
             tick={{ fill: '#64748B', fontSize: 11 }}
             axisLine={false}
             tickLine={false}
