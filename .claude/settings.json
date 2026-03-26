@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s \"https://new.land.naver.com/api/regions/complexes?cortarNo=1174010400&realEstateType=APT&order=\" -H \"Accept: application/json, text/plain, */*\" -H \"Accept-Language: ko-KR,ko;q=0.9\" -H \"Referer: https://new.land.naver.com/\" -H \"User-Agent: Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/120.0.0.0 Safari/537.36\" -b \"NNB=XXXXX\")",
+      "Bash(curl -s \"https://m.land.naver.com/complex/getComplexArticleList?hscpNo=106733&tradTpCd=A1&order=cost_desc&pageNo=1&sameAddr=N\" -H \"User-Agent: Mozilla/5.0 \\(iPhone; CPU iPhone OS 16_0 like Mac OS X\\) AppleWebKit/605.1.15 \\(KHTML, like Gecko\\) Mobile/15E148\" -H \"Referer: https://m.land.naver.com/\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d, indent=2, ensure_ascii=False\\)[:500]\\)\")",
+      "Bash(curl -s \"https://m.land.naver.com/complex/getComplexInfo?hscpNo=106733\" -H \"User-Agent: Mozilla/5.0 \\(iPhone; CPU iPhone OS 16_0 like Mac OS X\\) AppleWebKit/605.1.15 \\(KHTML, like Gecko\\) Mobile/15E148\" -H \"Referer: https://m.land.naver.com/\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d, indent=2, ensure_ascii=False\\)[:1000]\\)\")",
+      "Bash(curl -s \"https://new.land.naver.com/api/regions/complexes?cortarNo=1174010400&realEstateType=APT&order=\" -H \"User-Agent: Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/121.0.0.0 Safari/537.36\" -H \"Accept: application/json, text/plain, */*\" -H \"Accept-Language: ko-KR,ko;q=0.9\" -H \"Referer: https://new.land.naver.com/\")",
+      "Bash(curl -v \"https://new.land.naver.com/api/regions/complexes?cortarNo=1174010400&realEstateType=APT&order=\" -H \"User-Agent: Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/121.0.0.0 Safari/537.36\" -H \"Accept: application/json, text/plain, */*\" -H \"Accept-Language: ko-KR,ko;q=0.9\" -H \"Referer: https://new.land.naver.com/\")",
+      "WebFetch(domain:tech-archive.com)",
+      "Bash(curl -s \"https://new.land.naver.com/api/search?searchValue=%ED%97%AC%EB%A6%AC%EC%98%A4%EC%8B%9C%ED%8B%B0&addrType=COMPLEX&page=1\" -H \"User-Agent: Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/121.0.0.0 Safari/537.36\" -H \"Accept: application/json, text/plain, */*\" -H \"Accept-Language: ko-KR,ko;q=0.9\" -H \"Referer: https://new.land.naver.com/\")",
+      "WebFetch(domain:www.aptrank.com)",
+      "WebFetch(domain:zippoom.com)",
+      "WebFetch(domain:hogangnono.com)"
+    ]
+  }
+}
