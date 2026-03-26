@@ -34,6 +34,7 @@ function ChartContent() {
   const [apiError,       setApiError]       = useState<string | null>(null);
   const [activeDistrict, setActiveDistrict] = useState<string>(districtParam ?? '강남구');
   const [isMobile,       setIsMobile]       = useState(false);
+  const [complexNo,      setComplexNo]      = useState<string | null>(null);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -105,6 +106,16 @@ function ChartContent() {
       setIsLoading(false);
     }
   }, []);
+
+  // 아파트 선택 시 complexNo 조회 (네이버 직접 링크용)
+  useEffect(() => {
+    if (!selectedApt) return;
+    setComplexNo(null);
+    fetch(`/api/naver-listings?aptName=${encodeURIComponent(selectedApt.name)}`)
+      .then((r) => r.json())
+      .then((j) => setComplexNo(j.complexNo ?? null))
+      .catch(() => {});
+  }, [selectedId]);
 
   // 마운트 + districtParam 변경 시 호출
   useEffect(() => {
@@ -277,7 +288,11 @@ function ChartContent() {
           {selectedApt && (
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '12px' }}>
               <a
-                href={`https://new.land.naver.com/search?query=${encodeURIComponent(selectedApt.name)}`}
+                href={
+                  complexNo
+                    ? `https://new.land.naver.com/complexes/${complexNo}`
+                    : `https://new.land.naver.com/search?query=${encodeURIComponent(selectedApt.name)}`
+                }
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{
