@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { TrendingUp, TrendingDown, Building2, AlertTriangle } from 'lucide-react';
+import { TrendingUp, TrendingDown, Building2, AlertTriangle, Search } from 'lucide-react';
 
 interface ApartmentSummary {
   id: string;
@@ -94,6 +94,7 @@ export default function ApartmentSelector({
 
   const activeRegionIndex = REGIONS.findIndex((r) => r.districts.includes(activeDistrict));
   const [regionIdx, setRegionIdx] = useState(activeRegionIndex >= 0 ? activeRegionIndex : 0);
+  const [search, setSearch] = useState('');
 
   return (
     <aside style={{
@@ -216,11 +217,26 @@ export default function ApartmentSelector({
 
       {/* 단지 목록 */}
       <div style={{ padding: '14px 20px', flex: 1, maxHeight: isMobile ? '240px' : 'none', overflowY: isMobile ? 'auto' : 'visible' }}>
+        {/* 단지 검색 */}
+        <div style={{ position: 'relative', marginBottom: '10px' }}>
+          <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#475569', pointerEvents: 'none' }} />
+          <input
+            type="text"
+            placeholder="단지명 검색"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{
+              width: '100%', padding: '7px 10px 7px 28px', borderRadius: '8px',
+              fontSize: '12px', backgroundColor: 'rgba(255,255,255,0.05)', color: '#F1F5F9',
+              border: '1px solid rgba(255,255,255,0.08)', outline: 'none', boxSizing: 'border-box',
+            }}
+          />
+        </div>
         <p style={{ fontSize: '11px', fontWeight: 600, color: '#94A3B8', marginBottom: '10px' }}>
-          주요 단지 ({apartments.length}개)
+          주요 단지 ({apartments.filter(a => !search || a.name.includes(search)).length}개)
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          {apartments.map((apt) => (
+          {apartments.filter(a => !search || a.name.includes(search)).map((apt) => (
             <button
               key={apt.id}
               onClick={() => onSelect(apt.id)}
