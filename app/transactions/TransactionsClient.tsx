@@ -7,6 +7,7 @@ import {
   ResponsiveContainer, CartesianGrid, ReferenceLine,
 } from 'recharts';
 import { DISTRICT_CODE } from '@/lib/district-codes';
+import Header from '@/components/layout/Header';
 
 const DISTRICTS = Object.keys(DISTRICT_CODE);
 
@@ -411,6 +412,8 @@ export default function TransactionsClient() {
   const newHighCnt = filtered.filter(detectNewHigh).length;
 
   return (
+    <>
+    <Header />
     <main style={{ minHeight: '100vh', backgroundColor: '#0A0E1A', paddingTop: '64px' }}>
       <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '48px 24px' }}>
 
@@ -548,5 +551,6 @@ export default function TransactionsClient() {
         />
       )}
     </main>
+    </>
   );
 }
