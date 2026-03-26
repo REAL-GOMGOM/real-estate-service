@@ -93,8 +93,17 @@ export default function ApartmentSelector({
   const isToheo     = TOHEO_DISTRICTS.has(activeDistrict);
 
   const activeRegionIndex = REGIONS.findIndex((r) => r.districts.includes(activeDistrict));
-  const [regionIdx, setRegionIdx] = useState(activeRegionIndex >= 0 ? activeRegionIndex : 0);
+  // -1 = 전체
+  const [regionIdx, setRegionIdx] = useState<number>(-1);
+  const [districtSearch, setDistrictSearch] = useState('');
   const [search, setSearch] = useState('');
+
+  const ALL_DISTRICTS = REGIONS.flatMap((r) => r.districts);
+  const visibleDistricts = districtSearch.trim()
+    ? ALL_DISTRICTS.filter((d) => d.includes(districtSearch.trim()))
+    : regionIdx === -1
+      ? ALL_DISTRICTS
+      : REGIONS[regionIdx].districts;
 
   return (
     <aside style={{
@@ -127,27 +136,43 @@ export default function ApartmentSelector({
 
       {/* 지역 선택 */}
       <div style={{ padding: '14px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        {/* 구 검색 */}
+        <div style={{ position: 'relative', marginBottom: '8px' }}>
+          <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#475569', pointerEvents: 'none' }} />
+          <input
+            type="text"
+            placeholder="구/시 검색 (예: 강남, 분당)"
+            value={districtSearch}
+            onChange={(e) => { setDistrictSearch(e.target.value); setRegionIdx(-1); }}
+            style={{
+              width: '100%', padding: '6px 10px 6px 28px', borderRadius: '8px',
+              fontSize: '11px', backgroundColor: 'rgba(255,255,255,0.05)', color: '#F1F5F9',
+              border: '1px solid rgba(255,255,255,0.08)', outline: 'none', boxSizing: 'border-box',
+            }}
+          />
+        </div>
+
         {/* 권역 탭 */}
-        <div style={{ display: 'flex', gap: '4px', marginBottom: '10px', flexWrap: 'wrap' }}>
-          {REGIONS.map((r, i) => (
+        <div style={{ display: 'flex', gap: '4px', marginBottom: '8px', flexWrap: 'wrap' }}>
+          {[{ label: '전체', idx: -1 }, ...REGIONS.map((r, i) => ({ label: r.label, idx: i }))].map(({ label, idx }) => (
             <button
-              key={r.label}
-              onClick={() => setRegionIdx(i)}
+              key={label}
+              onClick={() => { setRegionIdx(idx); setDistrictSearch(''); }}
               style={{
                 padding: '4px 9px', borderRadius: '7px', fontSize: '11px', fontWeight: 600,
                 cursor: 'pointer', border: 'none',
-                backgroundColor: regionIdx === i ? '#3B82F6' : 'rgba(255,255,255,0.06)',
-                color: regionIdx === i ? '#fff' : '#64748B',
+                backgroundColor: regionIdx === idx && !districtSearch ? '#3B82F6' : 'rgba(255,255,255,0.06)',
+                color: regionIdx === idx && !districtSearch ? '#fff' : '#64748B',
               }}
             >
-              {r.label}
+              {label}
             </button>
           ))}
         </div>
 
         {/* 구 목록 */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', maxHeight: '110px', overflowY: 'auto' }}>
-          {REGIONS[regionIdx].districts.map((d) => {
+          {visibleDistricts.map((d) => {
             const active  = activeDistrict === d;
             const toheo   = TOHEO_DISTRICTS.has(d);
             return (
