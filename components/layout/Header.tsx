@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { label: '실질 가치 비교',    href: '/dollar' },
   { label: '입지 지도',         href: '/location-map' },
   { label: '청약 정보',         href: '/subscription' },
+  { label: '부동산 달력',        href: '/calendar' },
   { label: '뉴스',              href: '/news' },
 ];
 
