@@ -35,7 +35,7 @@ export default function LocationDetailPanel({ location, onClose }: Props) {
   return (
     <div style={{
       ...panelStyle,
-      backgroundColor: 'rgba(15,22,41,0.97)',
+      backgroundColor: 'var(--bg-card)',
       border: location.isToheo ? '1px solid rgba(249,115,22,0.4)' : '1px solid var(--border-hover)',
       backdropFilter: 'blur(16px)',
       boxShadow: location.isToheo ? '0 24px 64px rgba(249,115,22,0.15)' : '0 24px 64px rgba(0,0,0,0.5)',

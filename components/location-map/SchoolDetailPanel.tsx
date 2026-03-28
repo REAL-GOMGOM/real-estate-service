@@ -78,7 +78,7 @@ export default function SchoolDetailPanel({ school, nearbySchools, onClose }: Pr
   return (
     <div style={{
       ...panelStyle,
-      backgroundColor: 'rgba(15,22,41,0.97)',
+      backgroundColor: 'var(--bg-card)',
       border: `1px solid ${color}40`,
       backdropFilter: 'blur(16px)',
       boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
