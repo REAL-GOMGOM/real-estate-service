@@ -143,7 +143,7 @@ export default function NewsPage() {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         {/* 제목 */}
                         <p style={{
-                          fontSize: '14px', fontWeight: 600, color: '#E2E8F0',
+                          fontSize: '14px', fontWeight: 600, color: 'var(--text-secondary)',
                           lineHeight: 1.5, marginBottom: '8px',
                           overflow: 'hidden', display: '-webkit-box',
                           WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',

@@ -46,7 +46,7 @@ function Row({ icon, label, children }: { icon: React.ReactNode; label: string; 
       <div style={{ flexShrink: 0, marginTop: '2px', color: 'var(--text-dim)' }}>{icon}</div>
       <div style={{ flex: 1 }}>
         <p style={{ fontSize: '11px', color: 'var(--text-dim)', marginBottom: '4px' }}>{label}</p>
-        <div style={{ fontSize: '14px', color: '#E2E8F0' }}>{children}</div>
+        <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>{children}</div>
       </div>
     </div>
   );
