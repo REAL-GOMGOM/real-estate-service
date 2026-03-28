@@ -23,8 +23,8 @@ export default function EventDetailModal({ event, onClose }: EventDetailModalPro
     >
       <div
         style={{
-          backgroundColor: '#111827', borderRadius: '16px',
-          border: '1px solid rgba(255,255,255,0.1)',
+          backgroundColor: 'var(--bg-card)', borderRadius: '16px',
+          border: '1px solid var(--border)',
           padding: '28px', maxWidth: '440px', width: '100%',
           boxShadow: '0 24px 48px rgba(0,0,0,0.4)',
         }}
@@ -64,7 +64,7 @@ export default function EventDetailModal({ event, onClose }: EventDetailModalPro
             onClick={onClose}
             style={{
               width: '32px', height: '32px', borderRadius: '8px', border: 'none',
-              backgroundColor: 'rgba(255,255,255,0.06)', color: '#94A3B8',
+              backgroundColor: 'var(--border-light)', color: 'var(--text-muted)',
               cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
           >
@@ -73,22 +73,22 @@ export default function EventDetailModal({ event, onClose }: EventDetailModalPro
         </div>
 
         {/* 제목 */}
-        <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#F1F5F9', marginBottom: '8px' }}>
+        <h3 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '8px' }}>
           {event.title}
         </h3>
 
         {/* 날짜 */}
-        <p style={{ fontSize: '13px', color: '#64748B', marginBottom: '16px' }}>
+        <p style={{ fontSize: '13px', color: 'var(--text-dim)', marginBottom: '16px' }}>
           {event.event_date}
         </p>
 
         {/* 설명 */}
         {event.description && (
           <p style={{
-            fontSize: '14px', color: '#CBD5E1', lineHeight: '1.6',
+            fontSize: '14px', color: 'var(--text-secondary)', lineHeight: '1.6',
             padding: '14px', borderRadius: '10px',
-            backgroundColor: 'rgba(255,255,255,0.03)',
-            border: '1px solid rgba(255,255,255,0.06)',
+            backgroundColor: 'var(--border-light)',
+            border: '1px solid var(--border-light)',
             marginBottom: '16px',
           }}>
             {event.description}

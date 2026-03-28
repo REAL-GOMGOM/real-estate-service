@@ -86,10 +86,10 @@ function CalendarContent() {
             justifyContent: 'space-between', gap: '16px', marginBottom: '20px',
           }}>
             <div>
-              <h1 style={{ fontSize: 'clamp(20px, 3vw, 26px)', fontWeight: 800, color: '#F1F5F9', marginBottom: '4px' }}>
+              <h1 style={{ fontSize: 'clamp(20px, 3vw, 26px)', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '4px' }}>
                 부동산 달력
               </h1>
-              <p style={{ fontSize: '13px', color: '#64748B' }}>
+              <p style={{ fontSize: '13px', color: 'var(--text-dim)' }}>
                 청약·금리·입주·정책 일정을 한눈에
               </p>
             </div>
@@ -103,7 +103,7 @@ function CalendarContent() {
 
           {/* 로딩 */}
           {loading && (
-            <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748B', fontSize: '14px' }}>
+            <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-dim)', fontSize: '14px' }}>
               불러오는 중...
             </div>
           )}
@@ -173,7 +173,7 @@ function MobileListView({
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {Object.entries(grouped).map(([date, dayEvents]) => (
         <div key={date}>
-          <p style={{ fontSize: '13px', fontWeight: 700, color: '#94A3B8', marginBottom: '8px' }}>
+          <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '8px' }}>
             {date}
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -186,8 +186,8 @@ function MobileListView({
                   style={{
                     display: 'flex', alignItems: 'center', gap: '10px',
                     width: '100%', padding: '12px 14px', borderRadius: '12px',
-                    backgroundColor: 'rgba(255,255,255,0.03)',
-                    border: '1px solid rgba(255,255,255,0.06)',
+                    backgroundColor: 'var(--border-light)',
+                    border: '1px solid var(--border-light)',
                     cursor: 'pointer', textAlign: 'left',
                   }}
                 >
@@ -201,14 +201,14 @@ function MobileListView({
                   </span>
                   <div style={{ flex: 1, overflow: 'hidden' }}>
                     <p style={{
-                      fontSize: '14px', fontWeight: 600, color: '#F1F5F9',
+                      fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)',
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
                       {ev.title}
                     </p>
                     {ev.description && (
                       <p style={{
-                        fontSize: '12px', color: '#64748B', marginTop: '2px',
+                        fontSize: '12px', color: 'var(--text-dim)', marginTop: '2px',
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}>
                         {ev.description}

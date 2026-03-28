@@ -63,7 +63,7 @@ export default function ServiceCards() {
                 transition={{ duration: 0.5, delay: index * 0.1 }}
               >
                 <Link href={service.href} style={{ textDecoration: 'none', display: 'block', height: '100%' }}>
-                  <div style={{ height: '100%', padding: '36px', borderRadius: '20px', backgroundColor: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.08)', transition: 'transform 0.2s, border-color 0.2s' }}>
+                  <div style={{ height: '100%', padding: '36px', borderRadius: '20px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)', transition: 'transform 0.2s, border-color 0.2s' }}>
 
                     {/* 아이콘 */}
                     <div style={{ width: '56px', height: '56px', borderRadius: '16px', backgroundColor: `${service.color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '24px' }}>

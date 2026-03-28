@@ -54,7 +54,7 @@ function rateToColor(rate: number): string {
   if (rate <= -1.5) return '#1E40AF';
   if (rate <= -0.5) return '#60A5FA';
   if (rate <= -0.1) return '#93C5FD';
-  if (rate < 0.1)   return '#94A3B8';
+  if (rate < 0.1)   return 'var(--text-muted)';
   if (rate < 0.25)  return '#FCA5A5';
   if (rate < 0.5)   return '#F87171';
   return '#DC2626';
@@ -132,7 +132,7 @@ export default function KoreaMap({ regions, onRegionClick }: KoreaMapProps) {
 
   if (!geoData) {
     return (
-      <div style={{ width: '100%', maxWidth: '500px', height: '600px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}>
+      <div style={{ width: '100%', maxWidth: '500px', height: '600px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)' }}>
         지도 로딩 중...
       </div>
     );
@@ -163,7 +163,7 @@ export default function KoreaMap({ regions, onRegionClick }: KoreaMapProps) {
             <path
               d={pathD}
               fill={fill}
-              stroke={isHovered ? '#FFFFFF' : 'rgba(255,255,255,0.3)'}
+              stroke={isHovered ? '#FFFFFF' : 'var(--border-hover)'}
               strokeWidth={isHovered ? 2 : 0.8}
               style={{ transition: 'fill 0.2s' }}
             />

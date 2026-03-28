@@ -209,7 +209,7 @@ function ChartContent() {
                   style={{
                     padding: '8px 16px', borderRadius: '10px',
                     fontSize: '13px', fontWeight: 600, cursor: 'pointer', border: 'none',
-                    backgroundColor: selectedPeriod === opt.months ? '#3B82F6' : 'rgba(255,255,255,0.06)',
+                    backgroundColor: selectedPeriod === opt.months ? '#3B82F6' : 'var(--border-light)',
                     color: selectedPeriod === opt.months ? 'white' : 'var(--text-muted)',
                     transition: 'all 0.15s',
                   }}
@@ -228,9 +228,9 @@ function ChartContent() {
               )}
               <span style={{
                 padding: '4px 10px', borderRadius: '6px', fontSize: '11px',
-                backgroundColor: apiData ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.04)',
+                backgroundColor: apiData ? 'rgba(34,197,94,0.12)' : 'var(--border-light)',
                 color: apiData ? '#22C55E' : 'var(--text-dim)',
-                border: `1px solid ${apiData ? 'rgba(34,197,94,0.25)' : 'rgba(255,255,255,0.06)'}`,
+                border: `1px solid ${apiData ? 'rgba(34,197,94,0.25)' : 'var(--border-light)'}`,
               }}>
                 {apiData ? `${activeDistrict} 실거래가` : '목업 데이터'}
               </span>
@@ -261,7 +261,7 @@ function ChartContent() {
                     <div key={s.label} style={{
                       padding: '16px 18px', borderRadius: '14px',
                       backgroundColor: 'var(--bg-card)',
-                      border: '1px solid rgba(255,255,255,0.08)',
+                      border: '1px solid var(--border)',
                     }}>
                       <p style={{ fontSize: '11px', color: 'var(--text-dim)', marginBottom: '6px' }}>{s.label}</p>
                       <p style={{ fontSize: '18px', fontWeight: 700, fontFamily: 'Roboto Mono, monospace', color: s.color }}>

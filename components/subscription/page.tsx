@@ -69,7 +69,7 @@ export default function SubscriptionClientPage({ items }: Props) {
                 padding: '20px 24px',
                 borderRadius: '16px',
                 backgroundColor: 'var(--bg-card)',
-                border: '1px solid rgba(255,255,255,0.08)',
+                border: '1px solid var(--border)',
               }}
             >
               <p style={{ fontSize: '13px', color: 'var(--text-dim)', marginBottom: '8px' }}>{stat.label}</p>
@@ -115,7 +115,7 @@ export default function SubscriptionClientPage({ items }: Props) {
         {/* 면책 문구 */}
         <p style={{
           marginTop: '48px', padding: '16px 20px',
-          borderRadius: '12px', backgroundColor: 'rgba(255,255,255,0.03)',
+          borderRadius: '12px', backgroundColor: 'var(--border-light)',
           fontSize: '12px', color: 'var(--text-dim)', lineHeight: 1.8,
         }}>
           ※ 본 페이지의 청약 정보는 한국부동산원 청약홈 공공데이터를 기반으로 합니다. 실제 청약 신청은

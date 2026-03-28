@@ -33,7 +33,7 @@ function CustomTooltip({ active, payload, label }: any) {
   return (
     <div style={{
       backgroundColor: 'rgba(15,22,41,0.97)',
-      border: '1px solid rgba(255,255,255,0.12)',
+      border: '1px solid var(--border-hover)',
       borderRadius: '12px',
       padding: '12px 16px',
       backdropFilter: 'blur(12px)',
@@ -100,7 +100,7 @@ export default function PriceChart({ data }: Props) {
       <div style={{
         height: '420px', display: 'flex', alignItems: 'center', justifyContent: 'center',
         backgroundColor: 'var(--bg-card)', color: 'var(--text-dim)', fontSize: '14px',
-        borderRadius: '16px', border: '1px solid rgba(255,255,255,0.08)',
+        borderRadius: '16px', border: '1px solid var(--border)',
       }}>
         거래 데이터가 없습니다
       </div>
@@ -118,14 +118,14 @@ export default function PriceChart({ data }: Props) {
       padding: '20px 20px 8px',
       borderRadius: '16px',
       backgroundColor: 'var(--bg-card)',
-      border: '1px solid rgba(255,255,255,0.08)',
+      border: '1px solid var(--border)',
     }}>
       <CustomLegend />
       <ResponsiveContainer width="100%" height={400}>
         <ComposedChart data={data} margin={{ top: 8, right: 60, left: 10, bottom: 0 }}>
           <CartesianGrid
             strokeDasharray="3 3"
-            stroke="rgba(255,255,255,0.05)"
+            stroke="var(--border-light)"
             vertical={false}
           />
 
@@ -133,7 +133,7 @@ export default function PriceChart({ data }: Props) {
           <XAxis
             dataKey="date"
             tick={{ fill: 'var(--text-dim)', fontSize: 11 }}
-            axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
+            axisLine={{ stroke: 'var(--border)' }}
             tickLine={false}
           />
 
@@ -160,7 +160,7 @@ export default function PriceChart({ data }: Props) {
             width={55}
           />
 
-          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'var(--border-light)' }} />
 
           {/* 거래량 히스토그램 */}
           <Bar

@@ -36,7 +36,7 @@ interface Props {
 function TrendIcon({ trend }: { trend: LocationScore['trend'] }) {
   if (trend === 'up')   return <TrendingUp   size={12} style={{ color: '#22C55E' }} />;
   if (trend === 'down') return <TrendingDown size={12} style={{ color: '#EF4444' }} />;
-  return <Minus size={12} style={{ color: '#64748B' }} />;
+  return <Minus size={12} style={{ color: 'var(--text-dim)' }} />;
 }
 
 function RegionTabRow({
@@ -57,8 +57,8 @@ function RegionTabRow({
           style={{
             padding: '5px 10px', borderRadius: '8px',
             fontSize: '11px', fontWeight: 500, cursor: 'pointer', border: 'none',
-            backgroundColor: selectedRegion === r ? '#3B82F6' : 'rgba(255,255,255,0.06)',
-            color: selectedRegion === r ? 'white' : '#94A3B8',
+            backgroundColor: selectedRegion === r ? '#3B82F6' : 'var(--border-light)',
+            color: selectedRegion === r ? 'white' : 'var(--text-muted)',
             transition: 'background 0.15s', whiteSpace: 'nowrap',
           }}
         >
@@ -87,46 +87,46 @@ export default function LocationSidebar({
       width: '300px', flexShrink: 0,
       height: 'calc(100vh - 64px)', overflowY: 'auto',
       backgroundColor: 'var(--bg-card)',
-      borderRight: '1px solid rgba(255,255,255,0.08)',
+      borderRight: '1px solid var(--border)',
       display: 'flex', flexDirection: 'column',
     }}>
 
       {/* 헤더 */}
-      <div style={{ padding: '20px 20px 14px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <h2 style={{ fontSize: '15px', fontWeight: 700, color: '#F1F5F9', marginBottom: '3px' }}>
+      <div style={{ padding: '20px 20px 14px', borderBottom: '1px solid var(--border-light)' }}>
+        <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '3px' }}>
           전국 입지 점수 지도
         </h2>
         <p style={{ fontSize: '11px', color: 'var(--text-dim)' }}>2026년 3월 기준 · 점수 낮을수록 입지 우수</p>
       </div>
 
       {/* 권역 탭 */}
-      <div style={{ padding: '12px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border-light)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
         <RegionTabRow tabs={REGION_TABS_ROW1} selectedRegion={selectedRegion} onRegionChange={onRegionChange} />
         <RegionTabRow tabs={REGION_TABS_ROW2} selectedRegion={selectedRegion} onRegionChange={onRegionChange} />
         <RegionTabRow tabs={REGION_TABS_ROW3} selectedRegion={selectedRegion} onRegionChange={onRegionChange} />
       </div>
 
       {/* 토허제 토글 */}
-      <div style={{ padding: '12px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border-light)' }}>
         <button
           onClick={() => onToheoToggle(!showToheoOnly)}
           style={{
             width: '100%', padding: '9px 12px', borderRadius: '10px', cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            border: `1px solid ${showToheoOnly ? '#EF4444' : 'rgba(255,255,255,0.1)'}`,
-            backgroundColor: showToheoOnly ? 'rgba(239,68,68,0.1)' : 'rgba(255,255,255,0.04)',
+            border: `1px solid ${showToheoOnly ? '#EF4444' : 'var(--border)'}`,
+            backgroundColor: showToheoOnly ? 'rgba(239,68,68,0.1)' : 'var(--border-light)',
             transition: 'all 0.15s',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
             <div style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#EF4444', flexShrink: 0 }} />
-            <span style={{ fontSize: '12px', fontWeight: 600, color: '#F1F5F9' }}>토허제 지역만 보기</span>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>토허제 지역만 보기</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <span style={{ fontSize: '10px', color: '#64748B' }}>{toheoCount}개</span>
+            <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>{toheoCount}개</span>
             <div style={{
               width: '32px', height: '18px', borderRadius: '999px',
-              backgroundColor: showToheoOnly ? '#EF4444' : 'rgba(255,255,255,0.1)',
+              backgroundColor: showToheoOnly ? '#EF4444' : 'var(--border)',
               position: 'relative', transition: 'background 0.2s', flexShrink: 0,
             }}>
               <div style={{
@@ -142,14 +142,14 @@ export default function LocationSidebar({
 
       {/* 레이어 토글 */}
       {layerToggle && (
-        <div style={{ padding: '12px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border-light)' }}>
           {layerToggle}
         </div>
       )}
 
       {/* 점수 범례 */}
-      <div style={{ padding: '12px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <p style={{ fontSize: '11px', fontWeight: 600, color: '#94A3B8', marginBottom: '8px' }}>점수 범례</p>
+      <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border-light)' }}>
+        <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>점수 범례</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
           {[
             { color: '#EF4444', label: '1.0 ~ 1.9', desc: '최우수' },
@@ -159,13 +159,13 @@ export default function LocationSidebar({
           ].map((item) => (
             <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
               <span style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: item.color, flexShrink: 0 }} />
-              <span style={{ fontSize: '11px', color: '#64748B', minWidth: '65px' }}>{item.label}</span>
+              <span style={{ fontSize: '11px', color: 'var(--text-dim)', minWidth: '65px' }}>{item.label}</span>
               <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>{item.desc}</span>
             </div>
           ))}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginTop: '3px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginTop: '3px', paddingTop: '6px', borderTop: '1px solid var(--border-light)' }}>
             <div style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#EF4444', flexShrink: 0 }} />
-            <span style={{ fontSize: '11px', color: '#64748B', minWidth: '65px' }}>빨간 점</span>
+            <span style={{ fontSize: '11px', color: 'var(--text-dim)', minWidth: '65px' }}>빨간 점</span>
             <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>토지거래허가구역</span>
           </div>
         </div>
@@ -173,7 +173,7 @@ export default function LocationSidebar({
 
       {/* TOP 10 */}
       <div style={{ padding: '12px 20px', flex: 1 }}>
-        <p style={{ fontSize: '11px', fontWeight: 600, color: '#94A3B8', marginBottom: '10px' }}>
+        <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '10px' }}>
           TOP 10 입지 ({filteredLocations.length}개 지역)
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
@@ -184,8 +184,8 @@ export default function LocationSidebar({
               style={{
                 display: 'flex', alignItems: 'center', gap: '8px',
                 padding: '9px 10px', borderRadius: '10px', width: '100%',
-                backgroundColor: 'rgba(255,255,255,0.03)',
-                border: '1px solid rgba(255,255,255,0.06)',
+                backgroundColor: 'var(--border-light)',
+                border: '1px solid var(--border-light)',
                 cursor: 'pointer', textAlign: 'left',
               }}
             >
@@ -193,15 +193,15 @@ export default function LocationSidebar({
                 width: '20px', height: '20px', borderRadius: '6px', flexShrink: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: '10px', fontWeight: 700,
-                backgroundColor: index < 3 ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.05)',
-                color: index < 3 ? '#3B82F6' : '#64748B',
+                backgroundColor: index < 3 ? 'rgba(59,130,246,0.2)' : 'var(--border-light)',
+                color: index < 3 ? '#3B82F6' : 'var(--text-dim)',
               }}>
                 {index + 1}
               </span>
 
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <p style={{ fontSize: '12px', fontWeight: 600, color: '#F1F5F9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{loc.name}</p>
+                  <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{loc.name}</p>
                   {loc.isToheo && (
                     <div style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#EF4444', flexShrink: 0 }} />
                   )}

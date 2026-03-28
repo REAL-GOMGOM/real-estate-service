@@ -49,8 +49,8 @@ export default function CalendarGrid({ year, month, events, activeCategories, on
             style={{
               padding: '10px 0', textAlign: 'center',
               fontSize: '12px', fontWeight: 600,
-              color: i === 0 ? '#EF4444' : i === 6 ? '#3B82F6' : '#64748B',
-              backgroundColor: 'rgba(255,255,255,0.02)',
+              color: i === 0 ? '#EF4444' : i === 6 ? '#3B82F6' : 'var(--text-dim)',
+              backgroundColor: 'var(--bg-overlay)',
             }}
           >
             {d}
@@ -73,10 +73,10 @@ export default function CalendarGrid({ year, month, events, activeCategories, on
                 backgroundColor: cell.isToday
                   ? 'rgba(59,130,246,0.08)'
                   : cell.isCurrentMonth
-                    ? 'rgba(255,255,255,0.02)'
-                    : 'rgba(255,255,255,0.01)',
+                    ? 'var(--bg-overlay)'
+                    : 'var(--bg-overlay)',
                 borderRadius: '4px',
-                border: cell.isToday ? '1px solid rgba(59,130,246,0.3)' : '1px solid rgba(255,255,255,0.04)',
+                border: cell.isToday ? '1px solid rgba(59,130,246,0.3)' : '1px solid var(--border-light)',
                 opacity: cell.isCurrentMonth ? 1 : 0.4,
               }}
             >
@@ -89,7 +89,7 @@ export default function CalendarGrid({ year, month, events, activeCategories, on
                     ? '#EF4444'
                     : cell.dayOfWeek === 6
                       ? '#3B82F6'
-                      : '#CBD5E1',
+                      : 'var(--text-secondary)',
                 marginBottom: '4px',
               }}>
                 {cell.date}
@@ -102,7 +102,7 @@ export default function CalendarGrid({ year, month, events, activeCategories, on
                 ))}
                 {hasMore && (
                   <span style={{
-                    fontSize: '10px', color: '#64748B', paddingLeft: '4px', cursor: 'default',
+                    fontSize: '10px', color: 'var(--text-dim)', paddingLeft: '4px', cursor: 'default',
                   }}>
                     +{dayEvents.length - MAX_VISIBLE_EVENTS}건 더보기
                   </span>

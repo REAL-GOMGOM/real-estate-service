@@ -68,7 +68,7 @@ function AssetRow({ icon, label, accent, baseVal, compareVal, pct, baseYear, com
     <div style={{
       display: 'flex', alignItems: 'center', gap: '12px',
       padding: '14px 0',
-      borderBottom: '1px solid rgba(255,255,255,0.05)',
+      borderBottom: '1px solid var(--border-light)',
     }}>
       {/* 자산 레이블 */}
       <div style={{
@@ -83,15 +83,15 @@ function AssetRow({ icon, label, accent, baseVal, compareVal, pct, baseYear, com
         }}>
           {icon}
         </span>
-        <span style={{ fontSize: '12px', color: '#94A3B8', fontWeight: 500 }}>{label}</span>
+        <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 500 }}>{label}</span>
       </div>
 
       {/* 기준년 값 */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: '10px', color: '#64748B', marginBottom: '2px' }}>{baseYear}년</p>
+        <p style={{ fontSize: '10px', color: 'var(--text-dim)', marginBottom: '2px' }}>{baseYear}년</p>
         <p style={{
           fontSize: '15px', fontWeight: 700,
-          fontFamily: 'Roboto Mono, monospace', color: '#CBD5E1',
+          fontFamily: 'Roboto Mono, monospace', color: 'var(--text-secondary)',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
           {baseVal}
@@ -99,11 +99,11 @@ function AssetRow({ icon, label, accent, baseVal, compareVal, pct, baseYear, com
       </div>
 
       {/* 화살표 */}
-      <span style={{ color: '#334155', fontSize: '16px', flexShrink: 0 }}>→</span>
+      <span style={{ color: 'var(--text-dim)', fontSize: '16px', flexShrink: 0 }}>→</span>
 
       {/* 비교년 값 */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: '10px', color: '#64748B', marginBottom: '2px' }}>{compareYear}년</p>
+        <p style={{ fontSize: '10px', color: 'var(--text-dim)', marginBottom: '2px' }}>{compareYear}년</p>
         <p style={{
           fontSize: '15px', fontWeight: 700,
           fontFamily: 'Roboto Mono, monospace', color: accent,
@@ -128,7 +128,7 @@ function AssetRow({ icon, label, accent, baseVal, compareVal, pct, baseYear, com
 export default function ApartmentDollarTable({ entries, baseYear, compareYear, onRemove }: Props) {
   if (entries.length === 0) {
     return (
-      <div style={{ padding: '60px 24px', textAlign: 'center', color: '#64748B', fontSize: '14px' }}>
+      <div style={{ padding: '60px 24px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '14px' }}>
         단지를 추가해 주세요.
       </div>
     );
@@ -146,17 +146,17 @@ export default function ApartmentDollarTable({ entries, baseYear, compareYear, o
           return (
             <div key={entry.id} style={{
               padding: '24px', borderRadius: '18px',
-              backgroundColor: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.07)',
+              backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
                 <Loader2 size={16} style={{ animation: 'spin 1s linear infinite', color: '#3B82F6' }} />
-                <span style={{ fontWeight: 700, color: '#CBD5E1' }}>{entry.aptName}</span>
-                <span style={{ fontSize: '12px', color: '#64748B' }}>{entry.district}</span>
+                <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>{entry.aptName}</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>{entry.district}</span>
               </div>
               {[...Array(4)].map((_, i) => (
                 <div key={i} style={{
                   height: '56px', borderRadius: '8px', marginBottom: '8px',
-                  backgroundColor: 'rgba(255,255,255,0.03)',
+                  backgroundColor: 'var(--border-light)',
                   animation: 'pulse 1.5s ease-in-out infinite',
                 }} />
               ))}
@@ -170,11 +170,11 @@ export default function ApartmentDollarTable({ entries, baseYear, compareYear, o
           return (
             <div key={entry.id} style={{
               padding: '24px', borderRadius: '18px',
-              backgroundColor: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.07)',
+              backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}>
               <div>
-                <p style={{ fontWeight: 700, color: '#F1F5F9', marginBottom: '4px' }}>{entry.aptName}</p>
+                <p style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>{entry.aptName}</p>
                 <p style={{ fontSize: '13px', color: 'var(--text-dim)' }}>{entry.error ?? '데이터 없음'}</p>
               </div>
               <button onClick={() => onRemove(entry.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-dim)', padding: '4px' }}>
@@ -226,13 +226,13 @@ export default function ApartmentDollarTable({ entries, baseYear, compareYear, o
           <div key={entry.id} style={{
             padding: '22px 24px', borderRadius: '18px',
             backgroundColor: 'var(--bg-card)',
-            border: '1px solid rgba(255,255,255,0.08)',
+            border: '1px solid var(--border)',
           }}>
             {/* 카드 헤더 */}
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '4px' }}>
               <div>
                 <span style={{ fontSize: '16px', fontWeight: 800, color: '#FFFFFF' }}>{entry.aptName}</span>
-                <span style={{ fontSize: '12px', color: '#64748B', marginLeft: '8px' }}>{entry.district}</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-dim)', marginLeft: '8px' }}>{entry.district}</span>
                 <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
                   {dollarGain && (
                     <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(34,197,94,0.12)', color: '#22C55E' }}>
@@ -266,7 +266,7 @@ export default function ApartmentDollarTable({ entries, baseYear, compareYear, o
                   )}
                 </div>
               </div>
-              <button onClick={() => onRemove(entry.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#334155', padding: '4px', flexShrink: 0 }}>
+              <button onClick={() => onRemove(entry.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-dim)', padding: '4px', flexShrink: 0 }}>
                 <X size={15} />
               </button>
             </div>

@@ -17,14 +17,14 @@ export default function MonthNavigator({ year, month, onPrev, onNext, onToday }:
         onClick={onPrev}
         style={{
           width: '36px', height: '36px', borderRadius: '10px',
-          backgroundColor: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-          color: '#94A3B8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backgroundColor: 'var(--border-light)', border: '1px solid var(--border)',
+          color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}
       >
         <ChevronLeft size={18} />
       </button>
 
-      <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#F1F5F9', minWidth: '140px', textAlign: 'center' }}>
+      <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)', minWidth: '140px', textAlign: 'center' }}>
         {year}년 {month}월
       </h2>
 
@@ -32,8 +32,8 @@ export default function MonthNavigator({ year, month, onPrev, onNext, onToday }:
         onClick={onNext}
         style={{
           width: '36px', height: '36px', borderRadius: '10px',
-          backgroundColor: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-          color: '#94A3B8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backgroundColor: 'var(--border-light)', border: '1px solid var(--border)',
+          color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}
       >
         <ChevronRight size={18} />

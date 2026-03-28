@@ -29,8 +29,8 @@ export default function SchoolFilter({
                 style={{
                   padding: '6px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: 600,
                   cursor: 'pointer', border: 'none', transition: 'all 0.15s',
-                  backgroundColor: active ? info.color + '22' : 'rgba(255,255,255,0.04)',
-                  color: active ? info.color : '#64748B',
+                  backgroundColor: active ? info.color + '22' : 'var(--border-light)',
+                  color: active ? info.color : 'var(--text-dim)',
                   outline: active ? `1.5px solid ${info.color}55` : '1.5px solid transparent',
                 }}
               >
@@ -47,13 +47,13 @@ export default function SchoolFilter({
         onChange={(e) => onDistrictChange(e.target.value)}
         style={{
           padding: '8px 14px', borderRadius: '10px', fontSize: '13px', fontWeight: 500,
-          backgroundColor: 'rgba(255,255,255,0.06)', color: '#CBD5E1',
-          border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer',
+          backgroundColor: 'var(--border-light)', color: 'var(--text-secondary)',
+          border: '1px solid var(--border)', cursor: 'pointer',
           outline: 'none',
         }}
       >
         {DISTRICTS.map((d) => (
-          <option key={d} value={d} style={{ backgroundColor: '#1E293B' }}>{d}</option>
+          <option key={d} value={d} style={{ backgroundColor: 'var(--bg-tertiary)' }}>{d}</option>
         ))}
       </select>
     </div>

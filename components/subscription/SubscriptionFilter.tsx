@@ -37,7 +37,7 @@ export default function SubscriptionFilter({
       padding: '20px 24px',
       backgroundColor: 'var(--bg-card)',
       borderRadius: '16px',
-      border: '1px solid rgba(255,255,255,0.08)',
+      border: '1px solid var(--border)',
       marginBottom: '24px',
     }}>
 
@@ -54,7 +54,7 @@ export default function SubscriptionFilter({
               fontWeight: 500,
               cursor: 'pointer',
               border: 'none',
-              backgroundColor: selectedStatus === opt.value ? '#3B82F6' : 'rgba(255,255,255,0.06)',
+              backgroundColor: selectedStatus === opt.value ? '#3B82F6' : 'var(--border-light)',
               color: selectedStatus === opt.value ? 'white' : 'var(--text-muted)',
               transition: 'background 0.15s',
             }}
@@ -65,7 +65,7 @@ export default function SubscriptionFilter({
       </div>
 
       {/* 구분선 */}
-      <div style={{ width: '1px', height: '24px', backgroundColor: 'rgba(255,255,255,0.1)' }} />
+      <div style={{ width: '1px', height: '24px', backgroundColor: 'var(--border)' }} />
 
       {/* 지역 필터 */}
       <select
@@ -76,9 +76,9 @@ export default function SubscriptionFilter({
           borderRadius: '10px',
           fontSize: '13px',
           fontWeight: 500,
-          backgroundColor: 'rgba(255,255,255,0.06)',
+          backgroundColor: 'var(--border-light)',
           color: 'var(--text-muted)',
-          border: '1px solid rgba(255,255,255,0.1)',
+          border: '1px solid var(--border)',
           cursor: 'pointer',
           outline: 'none',
         }}
@@ -111,9 +111,9 @@ export default function SubscriptionFilter({
             padding: '8px 12px 8px 32px',
             borderRadius: '10px',
             fontSize: '13px',
-            backgroundColor: 'rgba(255,255,255,0.06)',
+            backgroundColor: 'var(--border-light)',
             color: 'var(--text-primary)',
-            border: '1px solid rgba(255,255,255,0.1)',
+            border: '1px solid var(--border)',
             outline: 'none',
           }}
         />

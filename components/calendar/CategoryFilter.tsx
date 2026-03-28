@@ -21,8 +21,8 @@ export default function CategoryFilter({ activeCategories, onToggle }: CategoryF
             style={{
               padding: '6px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 600,
               cursor: 'pointer', border: 'none', transition: 'all 0.15s',
-              backgroundColor: active ? cat.color + '22' : 'rgba(255,255,255,0.04)',
-              color: active ? cat.color : '#64748B',
+              backgroundColor: active ? cat.color + '22' : 'var(--border-light)',
+              color: active ? cat.color : 'var(--text-dim)',
               outline: active ? `1.5px solid ${cat.color}55` : '1.5px solid transparent',
             }}
           >

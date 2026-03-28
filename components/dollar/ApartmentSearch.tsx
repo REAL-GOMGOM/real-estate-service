@@ -34,7 +34,7 @@ export default function ApartmentSearch({ onAdd, loading }: Props) {
         padding: '16px 20px',
         borderRadius: '14px',
         backgroundColor: 'var(--bg-card)',
-        border: '1px solid rgba(255,255,255,0.08)',
+        border: '1px solid var(--border)',
         marginBottom: '24px',
       }}
     >
@@ -46,8 +46,8 @@ export default function ApartmentSearch({ onAdd, loading }: Props) {
         onChange={(e) => setDistrict(e.target.value)}
         style={{
           padding: '8px 12px', borderRadius: '10px', fontSize: '13px',
-          backgroundColor: 'rgba(255,255,255,0.06)', color: 'var(--text-primary)',
-          border: '1px solid rgba(255,255,255,0.1)', outline: 'none', cursor: 'pointer',
+          backgroundColor: 'var(--border-light)', color: 'var(--text-primary)',
+          border: '1px solid var(--border)', outline: 'none', cursor: 'pointer',
         }}
       >
         {SEOUL_DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
@@ -63,8 +63,8 @@ export default function ApartmentSearch({ onAdd, loading }: Props) {
           onChange={(e) => setAptName(e.target.value)}
           style={{
             width: '100%', padding: '8px 12px 8px 30px', borderRadius: '10px', fontSize: '13px',
-            backgroundColor: 'rgba(255,255,255,0.06)', color: 'var(--text-primary)',
-            border: '1px solid rgba(255,255,255,0.1)', outline: 'none',
+            backgroundColor: 'var(--border-light)', color: 'var(--text-primary)',
+            border: '1px solid var(--border)', outline: 'none',
           }}
         />
       </div>
@@ -75,7 +75,7 @@ export default function ApartmentSearch({ onAdd, loading }: Props) {
         style={{
           display: 'flex', alignItems: 'center', gap: '6px',
           padding: '8px 16px', borderRadius: '10px', fontSize: '13px', fontWeight: 600,
-          backgroundColor: aptName.trim() ? '#3B82F6' : 'rgba(255,255,255,0.06)',
+          backgroundColor: aptName.trim() ? '#3B82F6' : 'var(--border-light)',
           color: aptName.trim() ? 'white' : 'var(--text-dim)',
           border: 'none', cursor: aptName.trim() ? 'pointer' : 'default',
           transition: 'background 0.15s',

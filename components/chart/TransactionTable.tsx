@@ -25,7 +25,7 @@ export default function TransactionTable({ transactions }: Props) {
     <div style={{
       borderRadius: '16px',
       backgroundColor: 'var(--bg-card)',
-      border: '1px solid rgba(255,255,255,0.08)',
+      border: '1px solid var(--border)',
       overflow: 'hidden',
     }}>
       {/* 헤더 */}
@@ -33,8 +33,8 @@ export default function TransactionTable({ transactions }: Props) {
         display: 'grid',
         gridTemplateColumns: '1fr 80px 60px 100px 100px',
         padding: '12px 20px',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
-        backgroundColor: 'rgba(255,255,255,0.02)',
+        borderBottom: '1px solid var(--border-light)',
+        backgroundColor: 'var(--bg-overlay)',
       }}>
         {['거래일', '면적', '층', '거래가', '㎡당'].map((h) => (
           <span key={h} style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-dim)' }}>{h}</span>
@@ -50,7 +50,7 @@ export default function TransactionTable({ transactions }: Props) {
               display: 'grid',
               gridTemplateColumns: '1fr 80px 60px 100px 100px',
               padding: '12px 20px',
-              borderBottom: idx < sorted.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+              borderBottom: idx < sorted.length - 1 ? '1px solid var(--border-light)' : 'none',
             }}
           >
             <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{tx.date}</span>
