@@ -60,7 +60,7 @@ export default function SubscriptionTable({ items, onSelect }: Props) {
               padding: '16px 20px',
               borderRadius: '16px',
               backgroundColor: 'var(--bg-card)',
-              border: '1px solid rgba(255,255,255,0.08)',
+              border: '1px solid var(--border)',
               cursor: 'pointer',
             }}
           >

@@ -42,7 +42,7 @@ function getDday(endDate: string, status: string): string | null {
 
 function Row({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', padding: '14px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+    <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', padding: '14px 0', borderBottom: '1px solid var(--border-light)' }}>
       <div style={{ flexShrink: 0, marginTop: '2px', color: 'var(--text-dim)' }}>{icon}</div>
       <div style={{ flex: 1 }}>
         <p style={{ fontSize: '11px', color: 'var(--text-dim)', marginBottom: '4px' }}>{label}</p>
@@ -97,7 +97,7 @@ export default function SubscriptionDetailModal({ item, onClose }: Props) {
           maxHeight: 'calc(100vh - 64px)',
           overflowY: 'auto',
           backgroundColor: 'var(--bg-card)',
-          border: '1px solid rgba(255,255,255,0.1)',
+          border: '1px solid var(--border)',
           borderRadius: '20px',
           zIndex: 51,
           padding: '28px',
@@ -175,7 +175,7 @@ export default function SubscriptionDetailModal({ item, onClose }: Props) {
                   gap: '8px',
                   padding: '6px 10px',
                   borderRadius: '8px 8px 0 0',
-                  backgroundColor: 'rgba(255,255,255,0.05)',
+                  backgroundColor: 'var(--border-light)',
                   fontSize: '11px',
                   color: 'var(--text-dim)',
                   fontWeight: 600,
@@ -195,9 +195,9 @@ export default function SubscriptionDetailModal({ item, onClose }: Props) {
                       gap: '8px',
                       padding: '8px 10px',
                       borderBottom: i < item.competitionRates.length - 1
-                        ? '1px solid rgba(255,255,255,0.04)'
+                        ? '1px solid var(--border-light)'
                         : 'none',
-                      backgroundColor: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
+                      backgroundColor: i % 2 === 0 ? 'transparent' : 'var(--bg-overlay)',
                       fontSize: '13px',
                     }}
                   >

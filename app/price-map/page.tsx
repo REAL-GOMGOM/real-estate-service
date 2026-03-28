@@ -65,10 +65,10 @@ function PriceMapContent() {
           justifyContent: 'space-between', gap: '16px', marginBottom: '24px',
         }}>
           <div>
-            <h1 style={{ fontSize: 'clamp(20px, 3vw, 26px)', fontWeight: 800, color: '#F1F5F9', marginBottom: '4px' }}>
+            <h1 style={{ fontSize: 'clamp(20px, 3vw, 26px)', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '4px' }}>
               매매/전세 변동률 지도
             </h1>
-            <p style={{ fontSize: '13px', color: '#64748B' }}>
+            <p style={{ fontSize: '13px', color: 'var(--text-dim)' }}>
               시도별 아파트 가격 변동률 현황
             </p>
           </div>
@@ -89,7 +89,7 @@ function PriceMapContent() {
         )}
 
         {loading && (
-          <div style={{ textAlign: 'center', padding: '60px 0', color: '#64748B', fontSize: '14px' }}>
+          <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-dim)', fontSize: '14px' }}>
             불러오는 중...
           </div>
         )}
@@ -116,9 +116,9 @@ function PriceMapContent() {
                   backgroundColor: 'rgba(59,130,246,0.08)',
                   border: '1px solid rgba(59,130,246,0.2)',
                 }}>
-                  <p style={{ fontSize: '12px', color: '#64748B', marginBottom: '4px' }}>선택 지역</p>
+                  <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '4px' }}>선택 지역</p>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
-                    <span style={{ fontSize: '18px', fontWeight: 700, color: '#F1F5F9' }}>
+                    <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>
                       {selectedRegion.name}
                     </span>
                     <span style={{
@@ -135,16 +135,16 @@ function PriceMapContent() {
               {/* 랭킹 테이블 */}
               <div style={{
                 borderRadius: '14px', overflow: 'hidden',
-                border: '1px solid rgba(255,255,255,0.06)',
+                border: '1px solid var(--border-light)',
               }}>
                 <div style={{
                   display: 'grid', gridTemplateColumns: '50px 1fr 100px',
-                  padding: '10px 16px', backgroundColor: 'rgba(255,255,255,0.03)',
-                  borderBottom: '1px solid rgba(255,255,255,0.06)',
+                  padding: '10px 16px', backgroundColor: 'var(--border-light)',
+                  borderBottom: '1px solid var(--border-light)',
                 }}>
-                  <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748B' }}>순위</span>
-                  <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748B' }}>시도</span>
-                  <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', textAlign: 'right' }}>변동률</span>
+                  <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-dim)' }}>순위</span>
+                  <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-dim)' }}>시도</span>
+                  <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-dim)', textAlign: 'right' }}>변동률</span>
                 </div>
                 {sortedRegions.map((r, i) => (
                   <div
@@ -156,14 +156,14 @@ function PriceMapContent() {
                       backgroundColor: selectedRegion?.code === r.code
                         ? 'rgba(59,130,246,0.08)'
                         : i % 2 === 0
-                          ? 'rgba(255,255,255,0.01)'
+                          ? 'var(--bg-overlay)'
                           : 'transparent',
                       cursor: 'pointer',
-                      borderBottom: '1px solid rgba(255,255,255,0.03)',
+                      borderBottom: '1px solid var(--border-light)',
                     }}
                   >
-                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#94A3B8' }}>{i + 1}</span>
-                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#F1F5F9' }}>{r.name}</span>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>{i + 1}</span>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{r.name}</span>
                     <span style={{
                       fontSize: '13px', fontWeight: 700, textAlign: 'right',
                       fontFamily: 'Roboto Mono, monospace',

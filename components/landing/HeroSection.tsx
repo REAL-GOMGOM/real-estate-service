@@ -75,7 +75,7 @@ export default function HeroSection() {
           </Link>
           <Link
             href="/market"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '16px 32px', borderRadius: '14px', fontSize: '16px', fontWeight: 600, backgroundColor: 'rgba(255,255,255,0.06)', color: 'var(--text-primary)', textDecoration: 'none', border: '1px solid rgba(255,255,255,0.12)' }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '16px 32px', borderRadius: '14px', fontSize: '16px', fontWeight: 600, backgroundColor: 'var(--border-light)', color: 'var(--text-primary)', textDecoration: 'none', border: '1px solid var(--border-hover)' }}
           >
             <BarChart3 size={20} />
             시세 분석 보기
@@ -90,7 +90,7 @@ export default function HeroSection() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.5 + index * 0.1 }}
-              style={{ padding: '20px 28px', borderRadius: '20px', backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(12px)', textAlign: 'left' }}
+              style={{ padding: '20px 28px', borderRadius: '20px', backgroundColor: 'var(--border-light)', border: '1px solid var(--border)', backdropFilter: 'blur(12px)', textAlign: 'left' }}
             >
               <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' }}>{stat.label}</p>
               <p style={{ fontSize: '22px', fontWeight: 700, fontFamily: 'Roboto Mono, monospace', color: 'var(--text-primary)', marginBottom: '4px' }}>{stat.value}</p>

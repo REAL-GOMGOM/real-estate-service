@@ -150,7 +150,7 @@ export default function TransactionSearch() {
               style={{
                 padding: '6px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
                 cursor: 'pointer', border: 'none',
-                backgroundColor: regionIdx === i ? '#3B82F6' : 'rgba(255,255,255,0.06)',
+                backgroundColor: regionIdx === i ? '#3B82F6' : 'var(--border-light)',
                 color: regionIdx === i ? '#fff' : 'var(--text-dim)',
               }}
             >
@@ -169,8 +169,8 @@ export default function TransactionSearch() {
               style={{
                 padding: '5px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 500,
                 cursor: 'pointer',
-                border: district === d ? '1px solid rgba(59,130,246,0.5)' : '1px solid rgba(255,255,255,0.08)',
-                backgroundColor: district === d ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.04)',
+                border: district === d ? '1px solid rgba(59,130,246,0.5)' : '1px solid var(--border)',
+                backgroundColor: district === d ? 'rgba(59,130,246,0.15)' : 'var(--border-light)',
                 color: district === d ? '#60A5FA' : 'var(--text-muted)',
               }}
             >
@@ -194,7 +194,7 @@ export default function TransactionSearch() {
               style={{
                 width: '100%', padding: '12px 16px 12px 40px', borderRadius: '12px',
                 fontSize: '14px', backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)',
-                border: '1px solid rgba(255,255,255,0.1)', outline: 'none', boxSizing: 'border-box',
+                border: '1px solid var(--border)', outline: 'none', boxSizing: 'border-box',
               }}
             />
           </div>
@@ -231,11 +231,11 @@ export default function TransactionSearch() {
                   style={{
                     padding: '18px 20px', borderRadius: '14px', cursor: 'pointer',
                     backgroundColor: 'var(--bg-card)',
-                    border: '1px solid rgba(255,255,255,0.07)',
+                    border: '1px solid var(--border)',
                     transition: 'border-color 0.15s',
                   }}
                   onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(59,130,246,0.4)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
                     <div>
@@ -272,7 +272,7 @@ export default function TransactionSearch() {
             style={{
               padding: '10px 24px', borderRadius: '10px', fontSize: '13px', fontWeight: 500,
               backgroundColor: 'transparent', color: 'var(--text-dim)',
-              border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer',
+              border: '1px solid var(--border)', cursor: 'pointer',
             }}
           >
             {district} 전체 차트 보기 →

@@ -16,9 +16,9 @@ const SELECT_STYLE: React.CSSProperties = {
   borderRadius: '10px',
   fontSize: '14px',
   fontWeight: 600,
-  backgroundColor: 'rgba(255,255,255,0.07)',
+  backgroundColor: 'var(--border)',
   color: 'var(--text-primary)',
-  border: '1px solid rgba(255,255,255,0.12)',
+  border: '1px solid var(--border-hover)',
   cursor: 'pointer',
   outline: 'none',
 };
@@ -33,7 +33,7 @@ export default function ExchangeRateBanner({
       padding: '20px 24px',
       borderRadius: '16px',
       backgroundColor: 'var(--bg-card)',
-      border: '1px solid rgba(255,255,255,0.08)',
+      border: '1px solid var(--border)',
       marginBottom: '24px',
     }}>
       {/* 기준년도 */}

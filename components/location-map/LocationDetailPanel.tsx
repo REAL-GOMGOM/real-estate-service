@@ -36,7 +36,7 @@ export default function LocationDetailPanel({ location, onClose }: Props) {
     <div style={{
       ...panelStyle,
       backgroundColor: 'rgba(15,22,41,0.97)',
-      border: location.isToheo ? '1px solid rgba(249,115,22,0.4)' : '1px solid rgba(255,255,255,0.12)',
+      border: location.isToheo ? '1px solid rgba(249,115,22,0.4)' : '1px solid var(--border-hover)',
       backdropFilter: 'blur(16px)',
       boxShadow: location.isToheo ? '0 24px 64px rgba(249,115,22,0.15)' : '0 24px 64px rgba(0,0,0,0.5)',
       padding: '24px',
@@ -47,7 +47,7 @@ export default function LocationDetailPanel({ location, onClose }: Props) {
         onClick={onClose}
         style={{
           position: 'absolute', top: '16px', right: '16px',
-          background: 'rgba(255,255,255,0.08)', border: 'none',
+          background: 'var(--border)', border: 'none',
           borderRadius: '8px', width: '28px', height: '28px',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           cursor: 'pointer', color: 'var(--text-muted)',

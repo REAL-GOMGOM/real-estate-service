@@ -18,7 +18,7 @@ const MARKER_COLORS: Record<string, string> = {
 };
 
 function createMarkerIcon(type: string): L.DivIcon {
-  const color = MARKER_COLORS[type] || '#94A3B8';
+  const color = MARKER_COLORS[type] || 'var(--text-muted)';
   return L.divIcon({
     className: '',
     iconSize: [24, 24],
@@ -101,7 +101,7 @@ export default function SchoolMapView({ schools, onSchoolClick }: SchoolMapViewP
       ref={mapRef}
       style={{
         width: '100%', height: '600px', borderRadius: '14px',
-        border: '1px solid rgba(255,255,255,0.08)',
+        border: '1px solid var(--border)',
         overflow: 'hidden',
       }}
     />

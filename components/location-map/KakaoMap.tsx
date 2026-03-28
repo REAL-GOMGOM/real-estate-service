@@ -41,7 +41,7 @@ const SCHOOL_LABELS: Record<string, string> = {
 function createMarkerElement(loc: LocationScore, onClick: () => void): HTMLDivElement {
   const color      = getScoreColor(loc.score);
   const trendIcon  = loc.trend === 'up' ? '▲' : loc.trend === 'down' ? '▼' : '—';
-  const trendColor = loc.trend === 'up' ? '#22C55E' : loc.trend === 'down' ? '#EF4444' : '#64748B';
+  const trendColor = loc.trend === 'up' ? '#22C55E' : loc.trend === 'down' ? '#EF4444' : 'var(--text-dim)';
 
   const wrapper = document.createElement('div');
   wrapper.style.cssText = 'display:inline-flex;flex-direction:column;align-items:center;cursor:pointer;';

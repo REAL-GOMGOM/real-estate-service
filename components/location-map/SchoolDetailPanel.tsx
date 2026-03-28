@@ -49,7 +49,7 @@ function gradeColor(grade: string | null): string {
     case '3': return '#F59E0B';
     case '4': return '#FB923C';
     case '5': return '#EF4444';
-    default: return '#64748B';
+    default: return 'var(--text-dim)';
   }
 }
 
@@ -89,10 +89,10 @@ export default function SchoolDetailPanel({ school, nearbySchools, onClose }: Pr
         onClick={onClose}
         style={{
           position: 'absolute', top: '16px', right: '16px',
-          background: 'rgba(255,255,255,0.08)', border: 'none',
+          background: 'var(--border)', border: 'none',
           borderRadius: '8px', width: '28px', height: '28px',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          cursor: 'pointer', color: '#94A3B8',
+          cursor: 'pointer', color: 'var(--text-muted)',
         }}
       >
         <X size={14} />
@@ -116,12 +116,12 @@ export default function SchoolDetailPanel({ school, nearbySchools, onClose }: Pr
               {LEVEL_LABELS[school.school_level]}
             </span>
             {school.establish_type && (
-              <span style={{ fontSize: '11px', color: '#64748B' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
                 {school.establish_type}
               </span>
             )}
           </div>
-          <p style={{ fontSize: '17px', fontWeight: 700, color: '#F1F5F9', marginTop: '2px' }}>
+          <p style={{ fontSize: '17px', fontWeight: 700, color: 'var(--text-primary)', marginTop: '2px' }}>
             {school.name}
           </p>
         </div>
@@ -145,8 +145,8 @@ export default function SchoolDetailPanel({ school, nearbySchools, onClose }: Pr
             <span style={{
               padding: '6px 12px', borderRadius: '10px',
               fontSize: '12px', fontWeight: 600,
-              backgroundColor: 'rgba(255,255,255,0.06)',
-              color: '#CBD5E1',
+              backgroundColor: 'var(--border-light)',
+              color: 'var(--text-secondary)',
             }}>
               전국상위 {school.nationwide_pct}%
             </span>
@@ -155,8 +155,8 @@ export default function SchoolDetailPanel({ school, nearbySchools, onClose }: Pr
             <span style={{
               padding: '6px 12px', borderRadius: '10px',
               fontSize: '12px', fontWeight: 600,
-              backgroundColor: 'rgba(255,255,255,0.06)',
-              color: '#CBD5E1',
+              backgroundColor: 'var(--border-light)',
+              color: 'var(--text-secondary)',
             }}>
               서울상위 {school.region_pct}%
             </span>
@@ -167,22 +167,22 @@ export default function SchoolDetailPanel({ school, nearbySchools, onClose }: Pr
       {/* 기본 정보 */}
       <div style={{
         padding: '14px', borderRadius: '12px',
-        backgroundColor: 'rgba(255,255,255,0.03)',
-        border: '1px solid rgba(255,255,255,0.06)',
+        backgroundColor: 'var(--border-light)',
+        border: '1px solid var(--border-light)',
         marginBottom: '16px',
       }}>
-        <p style={{ fontSize: '12px', color: '#94A3B8', marginBottom: '8px' }}>{school.address}</p>
+        <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>{school.address}</p>
         <div style={{ display: 'flex', gap: '16px' }}>
           {school.student_count != null && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Users size={13} style={{ color: '#64748B' }} />
-              <span style={{ fontSize: '12px', color: '#CBD5E1' }}>
+              <Users size={13} style={{ color: 'var(--text-dim)' }} />
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                 {school.student_count.toLocaleString()}명
               </span>
             </div>
           )}
           {school.coedu_type && (
-            <span style={{ fontSize: '12px', color: '#64748B' }}>{school.coedu_type}</span>
+            <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>{school.coedu_type}</span>
           )}
         </div>
       </div>
@@ -192,13 +192,13 @@ export default function SchoolDetailPanel({ school, nearbySchools, onClose }: Pr
         <div style={{ marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
             <Award size={14} style={{ color: '#F59E0B' }} />
-            <p style={{ fontSize: '13px', fontWeight: 700, color: '#F1F5F9' }}>
+            <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
               특목·자사고 진학률
             </p>
           </div>
           <div style={{
             borderRadius: '12px', overflow: 'hidden',
-            border: '1px solid rgba(255,255,255,0.06)',
+            border: '1px solid var(--border-light)',
           }}>
             {[
               { label: '자사고', rate: school.autonomous_high_rate, icon: '🏫' },
@@ -209,16 +209,16 @@ export default function SchoolDetailPanel({ school, nearbySchools, onClose }: Pr
               <div key={item.label} style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 padding: '10px 14px',
-                backgroundColor: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-                borderBottom: '1px solid rgba(255,255,255,0.04)',
+                backgroundColor: i % 2 === 0 ? 'var(--bg-overlay)' : 'transparent',
+                borderBottom: '1px solid var(--border-light)',
               }}>
-                <span style={{ fontSize: '13px', color: '#CBD5E1' }}>
+                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
                   {item.icon} {item.label}
                 </span>
                 <span style={{
                   fontSize: '14px', fontWeight: 700,
                   fontFamily: 'Roboto Mono, monospace',
-                  color: (item.rate ?? 0) > 0 ? '#F59E0B' : '#64748B',
+                  color: (item.rate ?? 0) > 0 ? '#F59E0B' : 'var(--text-dim)',
                 }}>
                   {item.rate != null ? `${item.rate}%` : '-'}
                 </span>
@@ -231,37 +231,37 @@ export default function SchoolDetailPanel({ school, nearbySchools, onClose }: Pr
       {/* 주변 중학교 (초등학교 선택 시) */}
       {school.school_level === 'elementary' && nearbyMiddle.length > 0 && (
         <div>
-          <p style={{ fontSize: '13px', fontWeight: 700, color: '#F1F5F9', marginBottom: '10px' }}>
+          <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '10px' }}>
             📍 주변중학교
           </p>
           <div style={{
             borderRadius: '12px', overflow: 'hidden',
-            border: '1px solid rgba(255,255,255,0.06)',
+            border: '1px solid var(--border-light)',
           }}>
             {/* 헤더 */}
             <div style={{
               display: 'grid', gridTemplateColumns: '1fr 1fr 60px',
-              padding: '8px 14px', backgroundColor: 'rgba(255,255,255,0.03)',
-              borderBottom: '1px solid rgba(255,255,255,0.06)',
+              padding: '8px 14px', backgroundColor: 'var(--border-light)',
+              borderBottom: '1px solid var(--border-light)',
             }}>
-              <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748B' }}>주변중학교</span>
-              <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748B' }}>특목·자사고 진학률</span>
-              <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', textAlign: 'right' }}>등급</span>
+              <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-dim)' }}>주변중학교</span>
+              <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-dim)' }}>특목·자사고 진학률</span>
+              <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-dim)', textAlign: 'right' }}>등급</span>
             </div>
             {nearbyMiddle.slice(0, 5).map((s, i) => (
               <div key={s.id} style={{
                 display: 'grid', gridTemplateColumns: '1fr 1fr 60px',
                 padding: '10px 14px',
-                backgroundColor: i % 2 === 0 ? 'rgba(255,255,255,0.01)' : 'transparent',
-                borderBottom: '1px solid rgba(255,255,255,0.03)',
+                backgroundColor: i % 2 === 0 ? 'var(--bg-overlay)' : 'transparent',
+                borderBottom: '1px solid var(--border-light)',
               }}>
                 <div>
                   <p style={{ fontSize: '13px', fontWeight: 600, color: '#3B82F6' }}>{s.name}</p>
-                  <p style={{ fontSize: '10px', color: '#64748B' }}>
+                  <p style={{ fontSize: '10px', color: 'var(--text-dim)' }}>
                     {s.establish_type} {s.coedu_type}
                   </p>
                 </div>
-                <div style={{ fontSize: '11px', color: '#CBD5E1', lineHeight: '1.6' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
                   {s.autonomous_high_rate != null && <div>🏫 자사고 {s.autonomous_high_rate}%</div>}
                   {s.science_high_rate != null && <div>🔬 과학고 {s.science_high_rate}%</div>}
                   {s.foreign_high_rate != null && <div>🌏 외고 {s.foreign_high_rate}%</div>}

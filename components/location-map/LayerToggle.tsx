@@ -35,7 +35,7 @@ export default function LayerToggle({ activeLayers, onToggle }: LayerToggleProps
     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
       {/* 학군 레이어 */}
       <div>
-        <p style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '6px' }}>
+        <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-dim)', marginBottom: '6px' }}>
           🏫 학군
         </p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
@@ -49,8 +49,8 @@ export default function LayerToggle({ activeLayers, onToggle }: LayerToggleProps
                   padding: '6px 14px', borderRadius: '8px',
                   fontSize: '13px', fontWeight: 700, cursor: 'pointer',
                   border: 'none', transition: 'all 0.15s',
-                  backgroundColor: active ? layer.color : 'rgba(255,255,255,0.06)',
-                  color: active ? 'white' : '#94A3B8',
+                  backgroundColor: active ? layer.color : 'var(--border-light)',
+                  color: active ? 'white' : 'var(--text-muted)',
                   boxShadow: active ? `0 2px 8px ${layer.color}40` : 'none',
                 }}
               >
@@ -63,7 +63,7 @@ export default function LayerToggle({ activeLayers, onToggle }: LayerToggleProps
 
       {/* 인프라 레이어 (향후 활성화)
       <div>
-        <p style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', marginBottom: '6px' }}>
+        <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-dim)', marginBottom: '6px' }}>
           🏙️ 인프라
         </p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>

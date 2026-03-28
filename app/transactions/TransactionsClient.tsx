@@ -56,8 +56,8 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
   return (
     <div style={{
       padding: '14px 16px', borderRadius: '12px',
-      backgroundColor: 'rgba(255,255,255,0.04)',
-      border: '1px solid rgba(255,255,255,0.07)',
+      backgroundColor: 'var(--border-light)',
+      border: '1px solid var(--border)',
     }}>
       <p style={{ fontSize: '11px', color: 'var(--text-dim)', marginBottom: '6px' }}>{label}</p>
       <p style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>{value}</p>
@@ -73,7 +73,7 @@ function ChartTooltip({ active, payload }: any) {
   return (
     <div style={{
       padding: '8px 12px', borderRadius: '8px',
-      backgroundColor: '#1E2A45', border: '1px solid rgba(255,255,255,0.12)',
+      backgroundColor: '#1E2A45', border: '1px solid var(--border-hover)',
       fontSize: '12px',
     }}>
       <p style={{ color: 'var(--text-muted)', marginBottom: '2px' }}>{d.date} · {d.area}㎡</p>
@@ -121,7 +121,7 @@ function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () =
           width: '100%', maxWidth: '700px', maxHeight: '90vh',
           backgroundColor: '#0B1120',
           borderRadius: '20px',
-          border: '1px solid rgba(255,255,255,0.1)',
+          border: '1px solid var(--border)',
           overflowY: 'auto',
           boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
         }}
@@ -159,7 +159,7 @@ function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () =
             onClick={() => setSelArea(null)}
             style={{
               padding: '6px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: 600,
-              backgroundColor: selArea === null ? '#3B82F6' : 'rgba(255,255,255,0.06)',
+              backgroundColor: selArea === null ? '#3B82F6' : 'var(--border-light)',
               color:           selArea === null ? 'var(--text-primary)'  : 'var(--text-muted)',
               border: 'none', cursor: 'pointer',
             }}
@@ -172,7 +172,7 @@ function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () =
               onClick={() => setSelArea(selArea === area ? null : area)}
               style={{
                 padding: '6px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: 600,
-                backgroundColor: selArea === area ? '#3B82F6' : 'rgba(255,255,255,0.06)',
+                backgroundColor: selArea === area ? '#3B82F6' : 'var(--border-light)',
                 color:           selArea === area ? 'var(--text-primary)'  : 'var(--text-muted)',
                 border: 'none', cursor: 'pointer',
               }}
@@ -194,12 +194,12 @@ function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () =
           <div style={{ padding: '0 24px 20px' }}>
             <div style={{
               borderRadius: '12px', padding: '16px 8px 8px',
-              backgroundColor: 'rgba(255,255,255,0.02)',
-              border: '1px solid rgba(255,255,255,0.06)',
+              backgroundColor: 'var(--bg-overlay)',
+              border: '1px solid var(--border-light)',
             }}>
               <ResponsiveContainer width="100%" height={160}>
                 <ScatterChart margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" />
                   <XAxis dataKey="x" hide />
                   <YAxis
                     dataKey="price"
@@ -225,7 +225,7 @@ function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () =
         )}
 
         {/* 거래 내역 테이블 */}
-        <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+        <div style={{ borderTop: '1px solid var(--border)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
             <colgroup>
               <col style={{ width: '22%' }} />
@@ -254,7 +254,7 @@ function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () =
                 return (
                   <tr
                     key={i}
-                    style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}
+                    style={{ borderTop: '1px solid var(--border-light)' }}
                     onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(59,130,246,0.06)')}
                     onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '')}
                   >
@@ -320,11 +320,11 @@ function AptCard({ apt, onClick }: { apt: AptGroup; onClick: () => void }) {
       style={{
         padding: '20px', borderRadius: '16px',
         backgroundColor: 'var(--bg-card)',
-        border: '1px solid rgba(255,255,255,0.07)',
+        border: '1px solid var(--border)',
         cursor: 'pointer', transition: 'border-color 0.15s',
       }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(59,130,246,0.35)')}
-      onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)')}
+      onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
     >
       {/* 단지명 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
@@ -357,7 +357,7 @@ function AptCard({ apt, onClick }: { apt: AptGroup; onClick: () => void }) {
       {(avg59 || avg84) && (
         <div style={{
           display: 'flex', gap: '14px',
-          paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.05)',
+          paddingTop: '12px', borderTop: '1px solid var(--border-light)',
         }}>
           {avg59 && (
             <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
@@ -425,7 +425,7 @@ export default function TransactionsClient() {
             </h1>
             <span style={{
               padding: '4px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
-              backgroundColor: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-muted)',
+              backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-muted)',
             }}>
               {today.getFullYear() > 2000 ? todayLabel(today) : '—'}
             </span>
@@ -434,7 +434,7 @@ export default function TransactionsClient() {
         </div>
 
         {/* 매매 탭 */}
-        <div style={{ borderBottom: '1px solid rgba(255,255,255,0.07)', marginBottom: '20px', display: 'flex' }}>
+        <div style={{ borderBottom: '1px solid var(--border)', marginBottom: '20px', display: 'flex' }}>
           <button style={{
             padding: '12px 4px', marginRight: '24px', fontSize: '15px', fontWeight: 700,
             color: 'var(--text-primary)', background: 'none', border: 'none', cursor: 'default',
@@ -467,7 +467,7 @@ export default function TransactionsClient() {
             style={{
               padding: '10px 14px', borderRadius: '10px', fontSize: '14px', fontWeight: 500,
               backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)',
-              border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', outline: 'none',
+              border: '1px solid var(--border)', cursor: 'pointer', outline: 'none',
             }}
           >
             {DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
@@ -487,7 +487,7 @@ export default function TransactionsClient() {
                 padding: '10px 18px', borderRadius: '10px', fontSize: '13px', fontWeight: 600,
                 backgroundColor: months === value ? '#3B82F6' : 'var(--bg-card)',
                 color:           months === value ? 'var(--text-primary)'  : 'var(--text-dim)',
-                border: `1px solid ${months === value ? '#3B82F6' : 'rgba(255,255,255,0.08)'}`,
+                border: `1px solid ${months === value ? '#3B82F6' : 'var(--border)'}`,
                 cursor: 'pointer',
               }}
             >
@@ -505,7 +505,7 @@ export default function TransactionsClient() {
               style={{
                 width: '100%', padding: '10px 14px 10px 36px', borderRadius: '10px',
                 fontSize: '13px', backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)',
-                border: '1px solid rgba(255,255,255,0.1)', outline: 'none', boxSizing: 'border-box',
+                border: '1px solid var(--border)', outline: 'none', boxSizing: 'border-box',
               }}
             />
           </div>
@@ -518,7 +518,7 @@ export default function TransactionsClient() {
               {[...Array(8)].map((_, i) => (
                 <div key={i} style={{
                   height: '156px', borderRadius: '16px',
-                  backgroundColor: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.06)',
+                  backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-light)',
                   animation: 'pulse 1.5s ease-in-out infinite',
                 }} />
               ))}

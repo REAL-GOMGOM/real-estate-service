@@ -100,7 +100,7 @@ export default function MarketPreview() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: index * 0.1 }}
-              style={{ padding: '28px', borderRadius: '20px', backgroundColor: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.08)' }}
+              style={{ padding: '28px', borderRadius: '20px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)' }}
             >
               {/* 지역 + 변동률 */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>

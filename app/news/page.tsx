@@ -60,8 +60,8 @@ export default function NewsPage() {
               style={{
                 display: 'flex', alignItems: 'center', gap: '6px',
                 padding: '8px 14px', borderRadius: '10px',
-                backgroundColor: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(255,255,255,0.1)',
+                backgroundColor: 'var(--border-light)',
+                border: '1px solid var(--border)',
                 color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer',
                 opacity: loading ? 0.5 : 1,
               }}
@@ -82,7 +82,7 @@ export default function NewsPage() {
                   style={{
                     padding: '7px 16px', borderRadius: '999px', fontSize: '13px', fontWeight: 600,
                     cursor: 'pointer', border: 'none',
-                    backgroundColor: active ? '#3B82F6' : 'rgba(255,255,255,0.06)',
+                    backgroundColor: active ? '#3B82F6' : 'var(--border-light)',
                     color: active ? '#fff' : 'var(--text-dim)',
                   }}
                 >
@@ -120,11 +120,11 @@ export default function NewsPage() {
                       display: 'block', textDecoration: 'none',
                       padding: '16px 18px', borderRadius: '14px',
                       backgroundColor: 'var(--bg-card)',
-                      border: '1px solid rgba(255,255,255,0.07)',
+                      border: '1px solid var(--border)',
                       transition: 'border-color 0.15s',
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)')}
+                    onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--border-hover)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
                   >
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                       {/* 카테고리 아이콘 */}

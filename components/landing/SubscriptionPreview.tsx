@@ -63,7 +63,7 @@ export default function SubscriptionPreview({ items }: Props) {
                   viewport={{ once: true }}
                   transition={{ duration: 0.5, delay: index * 0.1 }}
                   onClick={() => setSelectedItem(item)}
-                  style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '16px', padding: '24px', borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', cursor: 'pointer' }}
+                  style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '16px', padding: '24px', borderRadius: '16px', backgroundColor: 'var(--border-light)', border: '1px solid var(--border)', cursor: 'pointer' }}
                 >
                   {/* 상태 */}
                   <span style={{ padding: '5px 12px', borderRadius: '999px', fontSize: '12px', fontWeight: 600, flexShrink: 0, backgroundColor: sc.bg, color: sc.color }}>

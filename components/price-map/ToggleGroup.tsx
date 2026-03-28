@@ -10,7 +10,7 @@ export default function ToggleGroup<T extends string>({ options, selected, onCha
   return (
     <div style={{
       display: 'inline-flex', borderRadius: '10px', overflow: 'hidden',
-      border: '1px solid rgba(255,255,255,0.1)',
+      border: '1px solid var(--border)',
     }}>
       {options.map((opt) => (
         <button
@@ -19,8 +19,8 @@ export default function ToggleGroup<T extends string>({ options, selected, onCha
           style={{
             padding: '8px 18px', fontSize: '13px', fontWeight: 600,
             border: 'none', cursor: 'pointer', transition: 'all 0.15s',
-            backgroundColor: selected === opt.value ? '#3B82F6' : 'rgba(255,255,255,0.04)',
-            color: selected === opt.value ? 'white' : '#94A3B8',
+            backgroundColor: selected === opt.value ? '#3B82F6' : 'var(--border-light)',
+            color: selected === opt.value ? 'white' : 'var(--text-muted)',
           }}
         >
           {opt.label}

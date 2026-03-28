@@ -17,7 +17,7 @@ const FOOTER_LINKS = {
 
 export default function Footer() {
   return (
-    <footer style={{ backgroundColor: 'var(--bg-primary)', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+    <footer style={{ backgroundColor: 'var(--bg-primary)', borderTop: '1px solid var(--border)' }}>
       <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '64px 24px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '48px' }}>
 
@@ -56,7 +56,7 @@ export default function Footer() {
         </div>
 
         {/* 하단 구분선 */}
-        <div style={{ marginTop: '48px', paddingTop: '32px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+        <div style={{ marginTop: '48px', paddingTop: '32px', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
           <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>© 2026 부동산 인사이트. All rights reserved.</p>
           <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>데이터 기준: 국토교통부 실거래가 공개시스템</p>
         </div>

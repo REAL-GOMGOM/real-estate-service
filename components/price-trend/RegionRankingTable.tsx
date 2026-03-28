@@ -23,16 +23,16 @@ export default function RegionRankingTable({ data, regions }: RegionRankingTable
   return (
     <div style={{
       borderRadius: '14px', overflow: 'hidden',
-      border: '1px solid rgba(255,255,255,0.06)',
+      border: '1px solid var(--border-light)',
     }}>
       <div style={{
         display: 'grid', gridTemplateColumns: '50px 1fr 100px',
-        padding: '10px 16px', backgroundColor: 'rgba(255,255,255,0.03)',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        padding: '10px 16px', backgroundColor: 'var(--border-light)',
+        borderBottom: '1px solid var(--border-light)',
       }}>
-        <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748B' }}>순위</span>
-        <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748B' }}>지역</span>
-        <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', textAlign: 'right' }}>변동률</span>
+        <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-dim)' }}>순위</span>
+        <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-dim)' }}>지역</span>
+        <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-dim)', textAlign: 'right' }}>변동률</span>
       </div>
       {ranking.map((r, i) => (
         <div
@@ -40,17 +40,17 @@ export default function RegionRankingTable({ data, regions }: RegionRankingTable
           style={{
             display: 'grid', gridTemplateColumns: '50px 1fr 100px',
             padding: '10px 16px',
-            backgroundColor: i % 2 === 0 ? 'rgba(255,255,255,0.01)' : 'transparent',
-            borderBottom: '1px solid rgba(255,255,255,0.03)',
+            backgroundColor: i % 2 === 0 ? 'var(--bg-overlay)' : 'transparent',
+            borderBottom: '1px solid var(--border-light)',
           }}
         >
-          <span style={{ fontSize: '13px', fontWeight: 600, color: '#94A3B8' }}>{i + 1}</span>
+          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>{i + 1}</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{
               width: '8px', height: '8px', borderRadius: '50%',
-              backgroundColor: REGION_COLORS[r.name] || '#94A3B8',
+              backgroundColor: REGION_COLORS[r.name] || 'var(--text-muted)',
             }} />
-            <span style={{ fontSize: '13px', fontWeight: 600, color: '#F1F5F9' }}>{r.name}</span>
+            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{r.name}</span>
           </div>
           <span style={{
             fontSize: '13px', fontWeight: 700, textAlign: 'right',

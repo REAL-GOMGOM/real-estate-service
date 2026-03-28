@@ -86,10 +86,10 @@ export default function LocationMapPreview() {
                   whileInView={{ opacity: 1, x: 0 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.4, delay: 0.2 + index * 0.08 }}
-                  style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '16px', borderRadius: '14px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '16px', borderRadius: '14px', backgroundColor: 'var(--border-light)', border: '1px solid var(--border)' }}
                 >
                   {/* 순위 */}
-                  <span style={{ width: '28px', height: '28px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, flexShrink: 0, backgroundColor: index === 0 ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.07)', color: index === 0 ? '#3B82F6' : 'var(--text-muted)' }}>
+                  <span style={{ width: '28px', height: '28px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, flexShrink: 0, backgroundColor: index === 0 ? 'rgba(59,130,246,0.2)' : 'var(--border)', color: index === 0 ? '#3B82F6' : 'var(--text-muted)' }}>
                     {index + 1}
                   </span>
 
@@ -111,7 +111,7 @@ export default function LocationMapPreview() {
             </div>
 
             {/* 점수 범례 */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginTop: '20px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginTop: '20px', paddingTop: '20px', borderTop: '1px solid var(--border-light)' }}>
               {[
                 { color: '#22C55E', label: '4.0 이상' },
                 { color: '#86EFAC', label: '3.0~3.9' },

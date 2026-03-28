@@ -17,7 +17,7 @@ export default function RegionSelector({ selected, onToggle }: RegionSelectorPro
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
       {ALL_REGIONS.map((region) => {
         const active = selected.has(region);
-        const color = REGION_COLORS[region] || '#94A3B8';
+        const color = REGION_COLORS[region] || 'var(--text-muted)';
         return (
           <button
             key={region}
@@ -25,8 +25,8 @@ export default function RegionSelector({ selected, onToggle }: RegionSelectorPro
             style={{
               padding: '5px 12px', borderRadius: '16px', fontSize: '12px', fontWeight: 600,
               cursor: 'pointer', border: 'none', transition: 'all 0.15s',
-              backgroundColor: active ? color + '22' : 'rgba(255,255,255,0.04)',
-              color: active ? color : '#64748B',
+              backgroundColor: active ? color + '22' : 'var(--border-light)',
+              color: active ? color : 'var(--text-dim)',
               outline: active ? `1.5px solid ${color}55` : '1.5px solid transparent',
             }}
           >
