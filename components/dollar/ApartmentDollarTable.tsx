@@ -137,7 +137,7 @@ export default function ApartmentDollarTable({ entries, baseYear, compareYear, o
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fill, minmax(460px, 1fr))',
+      gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 460px), 1fr))',
       gap: '16px',
     }}>
       {entries.map((entry) => {

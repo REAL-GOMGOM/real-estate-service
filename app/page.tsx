@@ -6,6 +6,7 @@ import LocationMapPreview from '@/components/landing/LocationMapPreview';
 import MarketPreview from '@/components/landing/MarketPreview';
 import SubscriptionPreview from '@/components/landing/SubscriptionPreview';
 import TransactionSearch from '@/components/landing/TransactionSearch';
+import VisitorCounter from '@/components/landing/VisitorCounter';
 import { fetchSubscriptions } from '@/lib/subscription-api';
 
 export default async function HomePage() {
@@ -19,6 +20,9 @@ export default async function HomePage() {
     <main>
       <Header />
       <HeroSection />
+      <div style={{ display: 'flex', justifyContent: 'center', marginTop: '-20px', marginBottom: '20px' }}>
+        <VisitorCounter />
+      </div>
       <ServiceCards />
       <TransactionSearch />
       <LocationMapPreview />

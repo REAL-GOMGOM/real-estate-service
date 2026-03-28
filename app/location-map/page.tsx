@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import Header from '@/components/layout/Header';
 import KakaoMap from '@/components/location-map/KakaoMap';
 import LocationSidebar from '@/components/location-map/LocationSidebar';
 import LocationDetailPanel from '@/components/location-map/LocationDetailPanel';
+import LayerToggle from '@/components/location-map/LayerToggle';
+import SchoolDetailPanel, { type SchoolData } from '@/components/location-map/SchoolDetailPanel';
 import type { LocationScore } from '@/lib/types';
 
 const ALL_LOCATIONS: LocationScore[] = require('@/data/location-scores.json');
@@ -15,6 +17,11 @@ export default function LocationMapPage() {
   const [showToheoOnly, setShowToheoOnly] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+
+  // 학교 관련 상태
+  const [activeLayers, setActiveLayers] = useState<Set<string>>(() => new Set());
+  const [schools, setSchools] = useState<SchoolData[]>([]);
+  const [selectedSchool, setSelectedSchool] = useState<SchoolData | null>(null);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -63,14 +70,63 @@ export default function LocationMapPage() {
     }
   }, [selectedRegion]);
 
+  // 학교 데이터 fetch
+  const fetchSchools = useCallback(async () => {
+    if (activeLayers.size === 0) {
+      setSchools([]);
+      return;
+    }
+    try {
+      // 선택된 권역에 맞는 지역으로 쿼리
+      const district = selectedRegion === '전체' ? '' : selectedRegion;
+      const res = await fetch(`/api/map/schools${district ? `?district=${encodeURIComponent(district)}` : ''}`);
+      const json = await res.json();
+      setSchools(json.schools || []);
+    } catch {
+      // 기존 데이터 유지
+    }
+  }, [activeLayers.size, selectedRegion]);
+
+  useEffect(() => {
+    fetchSchools();
+  }, [fetchSchools]);
+
+  const toggleLayer = (key: string) => {
+    setActiveLayers((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const handleSchoolClick = (school: SchoolData) => {
+    setSelectedSchool(school);
+    setSelectedLocation(null); // 입지 패널 닫기
+  };
+
+  const handleLocationClick = (loc: LocationScore) => {
+    setSelectedLocation(loc);
+    setSelectedSchool(null); // 학교 패널 닫기
+  };
+
+  // 선택된 학교 주변 학교들
+  const nearbySchools = useMemo(() => {
+    if (!selectedSchool) return [];
+    return schools.filter((s) => s.district === selectedSchool.district && s.id !== selectedSchool.id);
+  }, [selectedSchool, schools]);
+
   const mapArea = (
     <div style={{ position: 'relative', flex: 1, height: isMobile ? '55vh' : 'calc(100vh - 64px)' }}>
       {mapReady ? (
         <KakaoMap
           locations={filteredLocations}
-          onMarkerClick={setSelectedLocation}
+          onMarkerClick={handleLocationClick}
           selectedLocation={selectedLocation}
           mapConfig={mapConfig}
+          schools={schools}
+          activeLayers={activeLayers}
+          onSchoolClick={handleSchoolClick}
         />
       ) : (
         <div style={{
@@ -87,6 +143,13 @@ export default function LocationMapPage() {
           onClose={() => setSelectedLocation(null)}
         />
       )}
+      {selectedSchool && (
+        <SchoolDetailPanel
+          school={selectedSchool}
+          nearbySchools={nearbySchools}
+          onClose={() => setSelectedSchool(null)}
+        />
+      )}
     </div>
   );
 
@@ -98,7 +161,10 @@ export default function LocationMapPage() {
       showToheoOnly={showToheoOnly}
       onRegionChange={setSelectedRegion}
       onToheoToggle={setShowToheoOnly}
-      onLocationClick={setSelectedLocation}
+      onLocationClick={handleLocationClick}
+      layerToggle={
+        <LayerToggle activeLayers={activeLayers} onToggle={toggleLayer} />
+      }
     />
   );
 
