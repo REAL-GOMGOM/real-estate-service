@@ -132,15 +132,15 @@ export default function DollarPageClient() {
   const isAnyLoading = entries.some((e) => e.loading);
 
   return (
-    <main style={{ minHeight: '100vh', backgroundColor: '#0A0E1A', paddingTop: '64px' }}>
+    <main style={{ minHeight: '100vh', backgroundColor: 'var(--bg-primary)', paddingTop: '64px' }}>
       <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '48px 24px' }}>
 
         {/* 페이지 헤더 */}
         <div style={{ marginBottom: '36px' }}>
-          <h1 style={{ fontSize: 'clamp(22px, 4vw, 34px)', fontWeight: 800, color: '#F1F5F9', marginBottom: '8px' }}>
+          <h1 style={{ fontSize: 'clamp(22px, 4vw, 34px)', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '8px' }}>
             실질 가치 비교
           </h1>
-          <p style={{ fontSize: '14px', color: '#CBD5E1' }}>
+          <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
             달러 · 비트코인 · 금 기준으로 아파트 실질 가치가 어떻게 변했는지 확인합니다
           </p>
         </div>
@@ -170,7 +170,7 @@ export default function DollarPageClient() {
 
         {/* 범례 */}
         <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <span style={{ fontSize: '11px', color: '#475569', marginRight: '4px' }}>변동 뱃지:</span>
+          <span style={{ fontSize: '11px', color: 'var(--text-dim)', marginRight: '4px' }}>변동 뱃지:</span>
           {/* 달러 */}
           <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(34,197,94,0.12)', color: '#22C55E' }}>달러 환산 이익</span>
           <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(248,113,113,0.12)', color: '#F87171' }}>달러 환산 손실</span>
@@ -194,7 +194,7 @@ export default function DollarPageClient() {
 
         {/* 데이터 출처 */}
         <p style={{
-          marginTop: '32px', fontSize: '11px', color: '#334155', lineHeight: 1.8,
+          marginTop: '32px', fontSize: '11px', color: 'var(--text-dim)', lineHeight: 1.8,
         }}>
           ※ 아파트 가격: 국토교통부 실거래가 공개시스템 Q4(10~12월) 평균가 기준 &nbsp;|&nbsp;
           환율: {rateEntry ? '한국은행 ECOS' : '정적 연간 평균 (한국은행 키 미설정)'} &nbsp;|&nbsp;

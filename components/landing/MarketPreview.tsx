@@ -71,7 +71,7 @@ function Sparkline({ data, isUp }: { data: number[]; isUp: boolean }) {
 
 export default function MarketPreview() {
   return (
-    <section style={{ padding: '96px 0', backgroundColor: '#0A0E1A' }}>
+    <section style={{ padding: '96px 0', backgroundColor: 'var(--bg-primary)' }}>
       <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px' }}>
 
         {/* 섹션 헤더 */}
@@ -83,8 +83,8 @@ export default function MarketPreview() {
           style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: '16px', marginBottom: '48px' }}
         >
           <div>
-            <h2 style={{ fontSize: 'clamp(26px, 4vw, 38px)', fontWeight: 800, color: '#F1F5F9', marginBottom: '8px' }}>주요 지역 시세</h2>
-            <p style={{ fontSize: '15px', color: '#CBD5E1' }}>최근 8개월 실거래가 기준 · 단위: 억원</p>
+            <h2 style={{ fontSize: 'clamp(26px, 4vw, 38px)', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '8px' }}>주요 지역 시세</h2>
+            <p style={{ fontSize: '15px', color: 'var(--text-secondary)' }}>최근 8개월 실거래가 기준 · 단위: 억원</p>
           </div>
           <Link href="/market" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '14px', fontWeight: 600, color: '#3B82F6', textDecoration: 'none' }}>
             전체 차트 보기 <ArrowRight size={16} />
@@ -100,13 +100,13 @@ export default function MarketPreview() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: index * 0.1 }}
-              style={{ padding: '28px', borderRadius: '20px', backgroundColor: '#0F1629', border: '1px solid rgba(255,255,255,0.08)' }}
+              style={{ padding: '28px', borderRadius: '20px', backgroundColor: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.08)' }}
             >
               {/* 지역 + 변동률 */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
                 <div>
-                  <p style={{ fontSize: '13px', color: '#CBD5E1', marginBottom: '6px' }}>{item.region}</p>
-                  <p style={{ fontSize: '26px', fontWeight: 700, fontFamily: 'Roboto Mono, monospace', color: '#F1F5F9' }}>
+                  <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '6px' }}>{item.region}</p>
+                  <p style={{ fontSize: '26px', fontWeight: 700, fontFamily: 'Roboto Mono, monospace', color: 'var(--text-primary)' }}>
                     {item.currentPrice}억
                   </p>
                 </div>

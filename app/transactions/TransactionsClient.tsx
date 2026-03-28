@@ -59,9 +59,9 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
       backgroundColor: 'rgba(255,255,255,0.04)',
       border: '1px solid rgba(255,255,255,0.07)',
     }}>
-      <p style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>{label}</p>
-      <p style={{ fontSize: '18px', fontWeight: 800, color: '#F1F5F9', fontFamily: 'Roboto Mono, monospace' }}>{value}</p>
-      {sub && <p style={{ fontSize: '11px', color: '#475569', marginTop: '3px' }}>{sub}</p>}
+      <p style={{ fontSize: '11px', color: 'var(--text-dim)', marginBottom: '6px' }}>{label}</p>
+      <p style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>{value}</p>
+      {sub && <p style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '3px' }}>{sub}</p>}
     </div>
   );
 }
@@ -76,8 +76,8 @@ function ChartTooltip({ active, payload }: any) {
       backgroundColor: '#1E2A45', border: '1px solid rgba(255,255,255,0.12)',
       fontSize: '12px',
     }}>
-      <p style={{ color: '#94A3B8', marginBottom: '2px' }}>{d.date} · {d.area}㎡</p>
-      <p style={{ color: '#FFFFFF', fontWeight: 700 }}>{fmtPrice(d.price)}</p>
+      <p style={{ color: 'var(--text-muted)', marginBottom: '2px' }}>{d.date} · {d.area}㎡</p>
+      <p style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{fmtPrice(d.price)}</p>
     </div>
   );
 }
@@ -133,21 +133,21 @@ function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () =
         }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-              <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#F1F5F9' }}>{apt.name}</h2>
+              <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)' }}>{apt.name}</h2>
               {newHigh && (
                 <span style={{
                   fontSize: '11px', fontWeight: 700, padding: '3px 9px', borderRadius: '6px',
-                  backgroundColor: '#EF4444', color: '#FFFFFF',
+                  backgroundColor: '#EF4444', color: 'var(--text-primary)',
                 }}>
                   신고가
                 </span>
               )}
             </div>
-            <p style={{ fontSize: '13px', color: '#64748B' }}>{apt.district}</p>
+            <p style={{ fontSize: '13px', color: 'var(--text-dim)' }}>{apt.district}</p>
           </div>
           <button
             onClick={onClose}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475569', padding: '4px' }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-dim)', padding: '4px' }}
           >
             <X size={20} />
           </button>
@@ -160,7 +160,7 @@ function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () =
             style={{
               padding: '6px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: 600,
               backgroundColor: selArea === null ? '#3B82F6' : 'rgba(255,255,255,0.06)',
-              color:           selArea === null ? '#FFFFFF'  : '#94A3B8',
+              color:           selArea === null ? 'var(--text-primary)'  : 'var(--text-muted)',
               border: 'none', cursor: 'pointer',
             }}
           >
@@ -173,7 +173,7 @@ function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () =
               style={{
                 padding: '6px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: 600,
                 backgroundColor: selArea === area ? '#3B82F6' : 'rgba(255,255,255,0.06)',
-                color:           selArea === area ? '#FFFFFF'  : '#94A3B8',
+                color:           selArea === area ? 'var(--text-primary)'  : 'var(--text-muted)',
                 border: 'none', cursor: 'pointer',
               }}
             >
@@ -204,7 +204,7 @@ function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () =
                   <YAxis
                     dataKey="price"
                     tickFormatter={(v) => fmtPrice(v)}
-                    tick={{ fontSize: 11, fill: '#475569' }}
+                    tick={{ fontSize: 11, fill: 'var(--text-dim)' }}
                     width={52}
                     axisLine={false}
                     tickLine={false}
@@ -240,7 +240,7 @@ function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () =
                 {['계약일', '면적', '층', '거래가', '고점대비', '평당가'].map((h) => (
                   <th key={h} style={{
                     padding: '10px 12px', fontSize: '11px', fontWeight: 600,
-                    color: '#475569', textAlign: 'left', whiteSpace: 'nowrap',
+                    color: 'var(--text-dim)', textAlign: 'left', whiteSpace: 'nowrap',
                   }}>
                     {h}
                   </th>
@@ -258,24 +258,24 @@ function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () =
                     onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(59,130,246,0.06)')}
                     onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '')}
                   >
-                    <td style={{ padding: '11px 12px', fontSize: '13px', color: '#94A3B8', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '11px 12px', fontSize: '13px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                       {tx.date}
                     </td>
-                    <td style={{ padding: '11px 12px', fontSize: '13px', color: '#94A3B8', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '11px 12px', fontSize: '13px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                       {tx.area}㎡
                     </td>
-                    <td style={{ padding: '11px 12px', fontSize: '13px', color: '#64748B', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '11px 12px', fontSize: '13px', color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>
                       {tx.floor}층
                     </td>
                     <td style={{
                       padding: '11px 12px', fontSize: '14px', fontWeight: 700,
-                      color: isMax ? '#EF4444' : '#FFFFFF',
+                      color: isMax ? '#EF4444' : 'var(--text-primary)',
                       fontFamily: 'Roboto Mono, monospace', whiteSpace: 'nowrap',
                     }}>
                       {isMax && (
                         <span style={{
                           fontSize: '10px', fontWeight: 700, padding: '1px 5px', borderRadius: '4px',
-                          backgroundColor: '#EF4444', color: '#FFFFFF', marginRight: '5px',
+                          backgroundColor: '#EF4444', color: 'var(--text-primary)', marginRight: '5px',
                           verticalAlign: 'middle',
                         }}>
                           신고가
@@ -285,12 +285,12 @@ function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () =
                     </td>
                     <td style={{
                       padding: '11px 12px', fontSize: '12px', whiteSpace: 'nowrap',
-                      color: ratio !== null ? (ratio >= 100 ? '#EF4444' : ratio >= 90 ? '#F59E0B' : '#64748B') : '#475569',
+                      color: ratio !== null ? (ratio >= 100 ? '#EF4444' : ratio >= 90 ? '#F59E0B' : 'var(--text-dim)') : 'var(--text-dim)',
                     }}>
                       {ratio !== null ? `${ratio.toFixed(1)}%` : '—'}
                     </td>
                     <td style={{
-                      padding: '11px 12px', fontSize: '12px', color: '#64748B',
+                      padding: '11px 12px', fontSize: '12px', color: 'var(--text-dim)',
                       fontFamily: 'Roboto Mono, monospace', whiteSpace: 'nowrap',
                     }}>
                       {fmtPrice(tx.pricePerArea)}/평
@@ -319,7 +319,7 @@ function AptCard({ apt, onClick }: { apt: AptGroup; onClick: () => void }) {
       onClick={onClick}
       style={{
         padding: '20px', borderRadius: '16px',
-        backgroundColor: '#0F1629',
+        backgroundColor: 'var(--bg-card)',
         border: '1px solid rgba(255,255,255,0.07)',
         cursor: 'pointer', transition: 'border-color 0.15s',
       }}
@@ -329,8 +329,8 @@ function AptCard({ apt, onClick }: { apt: AptGroup; onClick: () => void }) {
       {/* 단지명 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
         <div>
-          <p style={{ fontSize: '15px', fontWeight: 700, color: '#F1F5F9', marginBottom: '3px' }}>{apt.name}</p>
-          <p style={{ fontSize: '11px', color: '#64748B' }}>{apt.district} · {apt.transactions.length}건</p>
+          <p style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '3px' }}>{apt.name}</p>
+          <p style={{ fontSize: '11px', color: 'var(--text-dim)' }}>{apt.district} · {apt.transactions.length}건</p>
         </div>
         {newHigh && (
           <span style={{
@@ -344,12 +344,12 @@ function AptCard({ apt, onClick }: { apt: AptGroup; onClick: () => void }) {
 
       {/* 최근 거래가 */}
       <p style={{
-        fontSize: '26px', fontWeight: 800, color: '#FFFFFF',
+        fontSize: '26px', fontWeight: 800, color: 'var(--text-primary)',
         fontFamily: 'Roboto Mono, monospace', marginBottom: '4px', lineHeight: 1,
       }}>
         {fmtPrice(latest.price)}
       </p>
-      <p style={{ fontSize: '12px', color: '#64748B', marginBottom: '14px' }}>
+      <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '14px' }}>
         {latest.area}㎡ · {latest.floor}층 · {latest.date}
       </p>
 
@@ -360,15 +360,15 @@ function AptCard({ apt, onClick }: { apt: AptGroup; onClick: () => void }) {
           paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.05)',
         }}>
           {avg59 && (
-            <span style={{ fontSize: '12px', color: '#64748B' }}>
+            <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
               59㎡&nbsp;
-              <strong style={{ color: '#CBD5E1', fontFamily: 'Roboto Mono, monospace' }}>{fmtPrice(avg59)}</strong>
+              <strong style={{ color: 'var(--text-secondary)', fontFamily: 'Roboto Mono, monospace' }}>{fmtPrice(avg59)}</strong>
             </span>
           )}
           {avg84 && (
-            <span style={{ fontSize: '12px', color: '#64748B' }}>
+            <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
               84㎡&nbsp;
-              <strong style={{ color: '#CBD5E1', fontFamily: 'Roboto Mono, monospace' }}>{fmtPrice(avg84)}</strong>
+              <strong style={{ color: 'var(--text-secondary)', fontFamily: 'Roboto Mono, monospace' }}>{fmtPrice(avg84)}</strong>
             </span>
           )}
         </div>
@@ -414,30 +414,30 @@ export default function TransactionsClient() {
   return (
     <>
     <Header />
-    <main style={{ minHeight: '100vh', backgroundColor: '#0A0E1A', paddingTop: '64px' }}>
+    <main style={{ minHeight: '100vh', backgroundColor: 'var(--bg-primary)', paddingTop: '64px' }}>
       <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '48px 24px' }}>
 
         {/* 헤더 */}
         <div style={{ marginBottom: '6px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
-            <h1 style={{ fontSize: 'clamp(20px, 3vw, 30px)', fontWeight: 800, color: '#F1F5F9' }}>
+            <h1 style={{ fontSize: 'clamp(20px, 3vw, 30px)', fontWeight: 800, color: 'var(--text-primary)' }}>
               최신 실거래
             </h1>
             <span style={{
               padding: '4px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
-              backgroundColor: '#0F1629', border: '1px solid rgba(255,255,255,0.1)', color: '#94A3B8',
+              backgroundColor: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-muted)',
             }}>
               {today.getFullYear() > 2000 ? todayLabel(today) : '—'}
             </span>
           </div>
-          <p style={{ fontSize: '12px', color: '#334155' }}>출처: 국토교통부 실거래공개시스템</p>
+          <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>출처: 국토교통부 실거래공개시스템</p>
         </div>
 
         {/* 매매 탭 */}
         <div style={{ borderBottom: '1px solid rgba(255,255,255,0.07)', marginBottom: '20px', display: 'flex' }}>
           <button style={{
             padding: '12px 4px', marginRight: '24px', fontSize: '15px', fontWeight: 700,
-            color: '#FFFFFF', background: 'none', border: 'none', cursor: 'default',
+            color: 'var(--text-primary)', background: 'none', border: 'none', cursor: 'default',
             borderBottom: '2px solid #3B82F6', marginBottom: '-1px',
           }}>
             매매
@@ -447,13 +447,13 @@ export default function TransactionsClient() {
         {/* 통계 바 */}
         {!loading && filtered.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
-            <span style={{ fontSize: '15px', color: '#94A3B8' }}>
-              총&nbsp;<strong style={{ color: '#F1F5F9', fontFamily: 'Roboto Mono, monospace' }}>{totalTx.toLocaleString()}</strong>건
+            <span style={{ fontSize: '15px', color: 'var(--text-muted)' }}>
+              총&nbsp;<strong style={{ color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>{totalTx.toLocaleString()}</strong>건
             </span>
             {newHighCnt > 0 && (
-              <span style={{ fontSize: '14px', color: '#64748B' }}>
+              <span style={{ fontSize: '14px', color: 'var(--text-dim)' }}>
                 신고가&nbsp;<strong style={{ color: '#EF4444' }}>{newHighCnt}</strong>건
-                <span style={{ fontSize: '11px', color: '#334155', marginLeft: '4px' }}>(조회 기간 내)</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-dim)', marginLeft: '4px' }}>(조회 기간 내)</span>
               </span>
             )}
           </div>
@@ -466,7 +466,7 @@ export default function TransactionsClient() {
             onChange={(e) => { setDistrict(e.target.value); setFetched(''); }}
             style={{
               padding: '10px 14px', borderRadius: '10px', fontSize: '14px', fontWeight: 500,
-              backgroundColor: '#0F1629', color: '#F1F5F9',
+              backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)',
               border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', outline: 'none',
             }}
           >
@@ -485,8 +485,8 @@ export default function TransactionsClient() {
               onClick={() => { setMonths(value); setFetched(''); }}
               style={{
                 padding: '10px 18px', borderRadius: '10px', fontSize: '13px', fontWeight: 600,
-                backgroundColor: months === value ? '#3B82F6' : '#0F1629',
-                color:           months === value ? '#FFFFFF'  : '#64748B',
+                backgroundColor: months === value ? '#3B82F6' : 'var(--bg-card)',
+                color:           months === value ? 'var(--text-primary)'  : 'var(--text-dim)',
                 border: `1px solid ${months === value ? '#3B82F6' : 'rgba(255,255,255,0.08)'}`,
                 cursor: 'pointer',
               }}
@@ -496,7 +496,7 @@ export default function TransactionsClient() {
           ))}
 
           <div style={{ position: 'relative', flex: 1, minWidth: '180px' }}>
-            <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#475569', pointerEvents: 'none' }} />
+            <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', pointerEvents: 'none' }} />
             <input
               type="text"
               placeholder="단지명 검색"
@@ -504,7 +504,7 @@ export default function TransactionsClient() {
               onChange={(e) => setQuery(e.target.value)}
               style={{
                 width: '100%', padding: '10px 14px 10px 36px', borderRadius: '10px',
-                fontSize: '13px', backgroundColor: '#0F1629', color: '#F1F5F9',
+                fontSize: '13px', backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)',
                 border: '1px solid rgba(255,255,255,0.1)', outline: 'none', boxSizing: 'border-box',
               }}
             />
@@ -518,7 +518,7 @@ export default function TransactionsClient() {
               {[...Array(8)].map((_, i) => (
                 <div key={i} style={{
                   height: '156px', borderRadius: '16px',
-                  backgroundColor: '#0F1629', border: '1px solid rgba(255,255,255,0.06)',
+                  backgroundColor: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.06)',
                   animation: 'pulse 1.5s ease-in-out infinite',
                 }} />
               ))}
@@ -526,7 +526,7 @@ export default function TransactionsClient() {
             <style>{`@keyframes pulse{0%,100%{opacity:.3}50%{opacity:.6}}`}</style>
           </>
         ) : filtered.length === 0 ? (
-          <div style={{ padding: '80px', textAlign: 'center', color: '#475569', fontSize: '14px' }}>
+          <div style={{ padding: '80px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '14px' }}>
             {query ? `"${query}" 검색 결과 없음` : '거래 데이터 없음'}
           </div>
         ) : (
@@ -537,7 +537,7 @@ export default function TransactionsClient() {
           </div>
         )}
 
-        <p style={{ marginTop: '24px', fontSize: '11px', color: '#334155', lineHeight: 1.8 }}>
+        <p style={{ marginTop: '24px', fontSize: '11px', color: 'var(--text-dim)', lineHeight: 1.8 }}>
           ※ 매매 계약일 기준 · 신고가는 조회 기간 내 동일 면적 최고가 기준
         </p>
       </div>

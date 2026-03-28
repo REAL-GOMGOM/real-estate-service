@@ -12,7 +12,27 @@
       "Bash(curl -s \"https://new.land.naver.com/api/search?searchValue=%ED%97%AC%EB%A6%AC%EC%98%A4%EC%8B%9C%ED%8B%B0&addrType=COMPLEX&page=1\" -H \"User-Agent: Mozilla/5.0 \\(Macintosh; Intel Mac OS X 10_15_7\\) AppleWebKit/537.36 \\(KHTML, like Gecko\\) Chrome/121.0.0.0 Safari/537.36\" -H \"Accept: application/json, text/plain, */*\" -H \"Accept-Language: ko-KR,ko;q=0.9\" -H \"Referer: https://new.land.naver.com/\")",
       "WebFetch(domain:www.aptrank.com)",
       "WebFetch(domain:zippoom.com)",
-      "WebFetch(domain:hogangnono.com)"
+      "WebFetch(domain:hogangnono.com)",
+      "Bash(curl -sv \"https://www.federalreserve.gov/json/ne-fomccalendars.json\")",
+      "Bash(git revert:*)",
+      "Bash(npx next:*)",
+      "Bash(npm install:*)",
+      "Bash(gh api:*)",
+      "Bash(python3 -c \"import json,sys; [print\\(f[''''name''''], f[''''size'''']\\) for f in json.load\\(sys.stdin\\)]\")",
+      "Bash(python3 -c \":*)",
+      "Bash(cp /tmp/korea-kostat-geo-simple.json /Users/bangjoohan/real-estate-service/public/korea-provinces-geo.json)",
+      "Bash(cp /tmp/korea-kostat-topo-simple.json /Users/bangjoohan/real-estate-service/public/korea-provinces-topo.json)",
+      "Bash(ls -lh /Users/bangjoohan/real-estate-service/public/korea-provinces-*.json)",
+      "Bash(python3 scripts/fetch_calendar_events.py)",
+      "Bash(curl -s 'http://apis.data.go.kr/1613000/AptBasisInfoService1/getLargeAreaAptPriceChangeRate?serviceKey=61ddf49417a9f8e1764f6af70841e598b5f8683b815d59029b254d0ee249c578&numOfRows=5&pageNo=1&_type=json')",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -s 'https://dapi.kakao.com/v2/local/search/address.json?query=서울특별시+강남구+영동대로+101' -H 'Authorization: KakaoAK a76c75ef2ac332d1a68a13c2de31bcb7')",
+      "Bash(curl -v 'https://dapi.kakao.com/v2/local/search/address.json?query=%EC%84%9C%EC%9A%B8%ED%8A%B9%EB%B3%84%EC%8B%9C%20%EA%B0%95%EB%82%A8%EA%B5%AC' -H 'Authorization: KakaoAK a76c75ef2ac332d1a68a13c2de31bcb7')",
+      "Bash(python3 scripts/geocode_schools.py)",
+      "WebFetch(domain:www.reb.or.kr)",
+      "Bash(python3 scripts/test_rone.py)",
+      "Bash(python3 scripts/api_sync/sync_rone_index.py)",
+      "Read(//dev/**)"
     ]
   }
 }

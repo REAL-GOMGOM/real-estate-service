@@ -17,7 +17,7 @@ const SELECT_STYLE: React.CSSProperties = {
   fontSize: '14px',
   fontWeight: 600,
   backgroundColor: 'rgba(255,255,255,0.07)',
-  color: '#F1F5F9',
+  color: 'var(--text-primary)',
   border: '1px solid rgba(255,255,255,0.12)',
   cursor: 'pointer',
   outline: 'none',
@@ -32,13 +32,13 @@ export default function ExchangeRateBanner({
       display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'center',
       padding: '20px 24px',
       borderRadius: '16px',
-      backgroundColor: '#0F1629',
+      backgroundColor: 'var(--bg-card)',
       border: '1px solid rgba(255,255,255,0.08)',
       marginBottom: '24px',
     }}>
       {/* 기준년도 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <span style={{ fontSize: '13px', color: '#94A3B8' }}>기준</span>
+        <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>기준</span>
         <select value={baseYear} onChange={(e) => onBaseYearChange(Number(e.target.value))} style={SELECT_STYLE}>
           {AVAILABLE_YEARS.filter((y) => y < compareYear).map((y) => (
             <option key={y} value={y}>{y}년</option>
@@ -49,11 +49,11 @@ export default function ExchangeRateBanner({
         </span>
       </div>
 
-      <span style={{ color: '#64748B', fontSize: '18px' }}>→</span>
+      <span style={{ color: 'var(--text-dim)', fontSize: '18px' }}>→</span>
 
       {/* 비교년도 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <span style={{ fontSize: '13px', color: '#94A3B8' }}>비교</span>
+        <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>비교</span>
         <select value={compareYear} onChange={(e) => onCompareYearChange(Number(e.target.value))} style={SELECT_STYLE}>
           {AVAILABLE_YEARS.filter((y) => y > baseYear).map((y) => (
             <option key={y} value={y}>{y}년</option>
@@ -66,10 +66,10 @@ export default function ExchangeRateBanner({
 
       {/* 비교 기간 요약 */}
       <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-        <p style={{ fontSize: '11px', color: '#94A3B8', marginBottom: '2px' }}>비교 기간</p>
-        <p style={{ fontSize: '13px', fontWeight: 700, color: '#F1F5F9' }}>
+        <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px' }}>비교 기간</p>
+        <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
           {baseYear}년 → {compareYear}년&nbsp;
-          <span style={{ fontWeight: 400, fontSize: '12px', color: '#94A3B8' }}>
+          <span style={{ fontWeight: 400, fontSize: '12px', color: 'var(--text-muted)' }}>
             ({compareYear - baseYear}년간)
           </span>
         </p>

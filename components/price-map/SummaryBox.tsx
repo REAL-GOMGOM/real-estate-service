@@ -17,7 +17,7 @@ export default function SummaryBox({ period, nationwide, capitalArea, nonCapital
   return (
     <div style={{
       padding: '16px 20px', borderRadius: '14px',
-      backgroundColor: '#0F1629',
+      backgroundColor: 'var(--bg-card)',
       border: '1px solid rgba(255,255,255,0.08)',
       marginBottom: '20px',
     }}>

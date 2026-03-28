@@ -132,7 +132,7 @@ export default function LocationMapPage() {
         <div style={{
           height: '100%',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          backgroundColor: '#0A0E1A', color: '#475569', fontSize: '14px',
+          backgroundColor: 'var(--bg-primary)', color: 'var(--text-dim)', fontSize: '14px',
         }}>
           지도를 불러오는 중...
         </div>

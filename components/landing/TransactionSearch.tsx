@@ -132,10 +132,10 @@ export default function TransactionSearch() {
           <p style={{ fontSize: '12px', fontWeight: 600, color: '#3B82F6', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '8px' }}>
             실거래가 조회
           </p>
-          <h2 style={{ fontSize: 'clamp(22px, 4vw, 32px)', fontWeight: 800, color: '#F1F5F9', marginBottom: '8px' }}>
+          <h2 style={{ fontSize: 'clamp(22px, 4vw, 32px)', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '8px' }}>
             최근 3개월 실거래 현황
           </h2>
-          <p style={{ fontSize: '14px', color: '#CBD5E1' }}>
+          <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
             국토교통부 실거래가 공개시스템 기반 · 구 단위로 단지를 검색하세요
           </p>
         </div>
@@ -151,7 +151,7 @@ export default function TransactionSearch() {
                 padding: '6px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
                 cursor: 'pointer', border: 'none',
                 backgroundColor: regionIdx === i ? '#3B82F6' : 'rgba(255,255,255,0.06)',
-                color: regionIdx === i ? '#fff' : '#64748B',
+                color: regionIdx === i ? '#fff' : 'var(--text-dim)',
               }}
             >
               {r.label}
@@ -171,7 +171,7 @@ export default function TransactionSearch() {
                 cursor: 'pointer',
                 border: district === d ? '1px solid rgba(59,130,246,0.5)' : '1px solid rgba(255,255,255,0.08)',
                 backgroundColor: district === d ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.04)',
-                color: district === d ? '#60A5FA' : '#94A3B8',
+                color: district === d ? '#60A5FA' : 'var(--text-muted)',
               }}
             >
               {d.replace(/^(인천|부산|대구|울산)\s/, '')}
@@ -184,7 +184,7 @@ export default function TransactionSearch() {
           <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
             <Search
               size={16}
-              style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#475569', pointerEvents: 'none' }}
+              style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', pointerEvents: 'none' }}
             />
             <input
               type="text"
@@ -193,7 +193,7 @@ export default function TransactionSearch() {
               onChange={(e) => setAptQuery(e.target.value)}
               style={{
                 width: '100%', padding: '12px 16px 12px 40px', borderRadius: '12px',
-                fontSize: '14px', backgroundColor: '#0F1629', color: '#F1F5F9',
+                fontSize: '14px', backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)',
                 border: '1px solid rgba(255,255,255,0.1)', outline: 'none', boxSizing: 'border-box',
               }}
             />
@@ -213,11 +213,11 @@ export default function TransactionSearch() {
 
         {/* 결과 목록 */}
         {loading ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#475569', fontSize: '14px' }}>
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '14px' }}>
             데이터 불러오는 중...
           </div>
         ) : filtered.length === 0 ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#475569', fontSize: '14px' }}>
+          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '14px' }}>
             {aptQuery ? `"${aptQuery}" 검색 결과 없음` : '거래 데이터 없음'}
           </div>
         ) : (
@@ -230,7 +230,7 @@ export default function TransactionSearch() {
                   onClick={() => goToChart(apt.district)}
                   style={{
                     padding: '18px 20px', borderRadius: '14px', cursor: 'pointer',
-                    backgroundColor: '#0F1629',
+                    backgroundColor: 'var(--bg-card)',
                     border: '1px solid rgba(255,255,255,0.07)',
                     transition: 'border-color 0.15s',
                   }}
@@ -239,15 +239,15 @@ export default function TransactionSearch() {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
                     <div>
-                      <p style={{ fontSize: '14px', fontWeight: 700, color: '#F1F5F9', marginBottom: '2px' }}>{apt.name}</p>
-                      <p style={{ fontSize: '11px', color: '#94A3B8' }}>{apt.district} · {apt.txCount}건</p>
+                      <p style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '2px' }}>{apt.name}</p>
+                      <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{apt.district} · {apt.txCount}건</p>
                     </div>
                     <ExternalLink size={13} color="#334155" style={{ flexShrink: 0, marginTop: '2px' }} />
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                     <div>
-                      <p style={{ fontSize: '11px', color: '#94A3B8', marginBottom: '2px' }}>최근 거래가</p>
-                      <p style={{ fontSize: '17px', fontWeight: 700, color: '#F1F5F9', fontFamily: 'Roboto Mono, monospace' }}>
+                      <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px' }}>최근 거래가</p>
+                      <p style={{ fontSize: '17px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>
                         {fmt억(apt.latestPrice)}
                       </p>
                     </div>
@@ -258,7 +258,7 @@ export default function TransactionSearch() {
                       </span>
                     </div>
                   </div>
-                  <p style={{ fontSize: '10px', color: '#64748B', marginTop: '6px' }}>{apt.latestDate} 기준</p>
+                  <p style={{ fontSize: '10px', color: 'var(--text-dim)', marginTop: '6px' }}>{apt.latestDate} 기준</p>
                 </div>
               );
             })}
@@ -271,7 +271,7 @@ export default function TransactionSearch() {
             onClick={() => goToChart(district)}
             style={{
               padding: '10px 24px', borderRadius: '10px', fontSize: '13px', fontWeight: 500,
-              backgroundColor: 'transparent', color: '#64748B',
+              backgroundColor: 'transparent', color: 'var(--text-dim)',
               border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer',
             }}
           >

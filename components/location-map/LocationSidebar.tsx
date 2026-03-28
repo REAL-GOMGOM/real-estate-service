@@ -86,7 +86,7 @@ export default function LocationSidebar({
     <aside style={{
       width: '300px', flexShrink: 0,
       height: 'calc(100vh - 64px)', overflowY: 'auto',
-      backgroundColor: '#0F1629',
+      backgroundColor: 'var(--bg-card)',
       borderRight: '1px solid rgba(255,255,255,0.08)',
       display: 'flex', flexDirection: 'column',
     }}>
@@ -96,7 +96,7 @@ export default function LocationSidebar({
         <h2 style={{ fontSize: '15px', fontWeight: 700, color: '#F1F5F9', marginBottom: '3px' }}>
           전국 입지 점수 지도
         </h2>
-        <p style={{ fontSize: '11px', color: '#475569' }}>2026년 3월 기준 · 점수 낮을수록 입지 우수</p>
+        <p style={{ fontSize: '11px', color: 'var(--text-dim)' }}>2026년 3월 기준 · 점수 낮을수록 입지 우수</p>
       </div>
 
       {/* 권역 탭 */}
@@ -160,13 +160,13 @@ export default function LocationSidebar({
             <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
               <span style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: item.color, flexShrink: 0 }} />
               <span style={{ fontSize: '11px', color: '#64748B', minWidth: '65px' }}>{item.label}</span>
-              <span style={{ fontSize: '10px', color: '#475569' }}>{item.desc}</span>
+              <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>{item.desc}</span>
             </div>
           ))}
           <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginTop: '3px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
             <div style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#EF4444', flexShrink: 0 }} />
             <span style={{ fontSize: '11px', color: '#64748B', minWidth: '65px' }}>빨간 점</span>
-            <span style={{ fontSize: '10px', color: '#475569' }}>토지거래허가구역</span>
+            <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>토지거래허가구역</span>
           </div>
         </div>
       </div>
@@ -206,7 +206,7 @@ export default function LocationSidebar({
                     <div style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#EF4444', flexShrink: 0 }} />
                   )}
                 </div>
-                <p style={{ fontSize: '10px', color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{loc.district}</p>
+                <p style={{ fontSize: '10px', color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{loc.district}</p>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>

@@ -24,7 +24,7 @@ export default function TransactionTable({ transactions }: Props) {
   return (
     <div style={{
       borderRadius: '16px',
-      backgroundColor: '#0F1629',
+      backgroundColor: 'var(--bg-card)',
       border: '1px solid rgba(255,255,255,0.08)',
       overflow: 'hidden',
     }}>
@@ -37,7 +37,7 @@ export default function TransactionTable({ transactions }: Props) {
         backgroundColor: 'rgba(255,255,255,0.02)',
       }}>
         {['거래일', '면적', '층', '거래가', '㎡당'].map((h) => (
-          <span key={h} style={{ fontSize: '11px', fontWeight: 600, color: '#64748B' }}>{h}</span>
+          <span key={h} style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-dim)' }}>{h}</span>
         ))}
       </div>
 
@@ -53,15 +53,15 @@ export default function TransactionTable({ transactions }: Props) {
               borderBottom: idx < sorted.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
             }}
           >
-            <span style={{ fontSize: '13px', color: '#94A3B8' }}>{tx.date}</span>
-            <span style={{ fontSize: '13px', color: '#94A3B8' }}>
+            <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{tx.date}</span>
+            <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
               {Math.floor(tx.area * 0.3025)}평/{tx.area}㎡
             </span>
-            <span style={{ fontSize: '13px', color: '#94A3B8' }}>{tx.floor}층</span>
-            <span style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'Roboto Mono, monospace', color: '#F1F5F9' }}>
+            <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{tx.floor}층</span>
+            <span style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'Roboto Mono, monospace', color: 'var(--text-primary)' }}>
               {formatPrice(tx.price)}
             </span>
-            <span style={{ fontSize: '12px', fontFamily: 'Roboto Mono, monospace', color: '#64748B' }}>
+            <span style={{ fontSize: '12px', fontFamily: 'Roboto Mono, monospace', color: 'var(--text-dim)' }}>
               {tx.pricePerArea.toLocaleString()}만
             </span>
           </div>

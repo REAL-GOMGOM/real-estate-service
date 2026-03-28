@@ -13,7 +13,7 @@ interface Props {
 const STATUS_CONFIG = {
   upcoming: { label: '청약 예정', color: '#3B82F6', bg: 'rgba(59,130,246,0.12)' },
   ongoing:  { label: '청약 중',   color: '#22C55E', bg: 'rgba(34,197,94,0.12)'  },
-  closed:   { label: '청약 마감', color: '#64748B', bg: 'rgba(100,116,139,0.12)'},
+  closed:   { label: '청약 마감', color: 'var(--text-dim)', bg: 'rgba(100,116,139,0.12)'},
 };
 
 function formatPrice(manwon: number | null): string {
@@ -38,7 +38,7 @@ export default function SubscriptionTable({ items, onSelect }: Props) {
       <div style={{
         padding: '80px 24px',
         textAlign: 'center',
-        color: '#475569',
+        color: 'var(--text-dim)',
         fontSize: '14px',
       }}>
         조건에 맞는 청약 정보가 없습니다.
@@ -59,7 +59,7 @@ export default function SubscriptionTable({ items, onSelect }: Props) {
             style={{
               padding: '16px 20px',
               borderRadius: '16px',
-              backgroundColor: '#0F1629',
+              backgroundColor: 'var(--bg-card)',
               border: '1px solid rgba(255,255,255,0.08)',
               cursor: 'pointer',
             }}
@@ -73,7 +73,7 @@ export default function SubscriptionTable({ items, onSelect }: Props) {
               }}>
                 {sc.label}
               </span>
-              <p style={{ flex: 1, fontSize: '14px', fontWeight: 700, color: '#F1F5F9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <p style={{ flex: 1, fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {item.name}
               </p>
               {item.status !== 'closed' && (
@@ -88,21 +88,21 @@ export default function SubscriptionTable({ items, onSelect }: Props) {
             </div>
 
             {/* 2행: 주소 */}
-            <p style={{ fontSize: '12px', color: '#64748B', marginBottom: '10px' }}>
+            <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '10px' }}>
               {item.district}{item.houseType ? ` · ${item.houseType}` : ''}
             </p>
 
             {/* 3행: 날짜 / 세대수 / 경쟁률 / 분양가 */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 20px', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <Calendar size={11} style={{ color: '#475569', flexShrink: 0 }} />
-                <span style={{ fontSize: '12px', color: '#94A3B8', whiteSpace: 'nowrap' }}>
+                <Calendar size={11} style={{ color: 'var(--text-dim)', flexShrink: 0 }} />
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                   {item.startDate} ~ {item.endDate}
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <Home size={11} style={{ color: '#475569', flexShrink: 0 }} />
-                <span style={{ fontSize: '12px', color: '#94A3B8', whiteSpace: 'nowrap' }}>
+                <Home size={11} style={{ color: 'var(--text-dim)', flexShrink: 0 }} />
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                   {item.totalUnits.toLocaleString()}세대
                 </span>
               </div>
@@ -114,7 +114,7 @@ export default function SubscriptionTable({ items, onSelect }: Props) {
                   </span>
                 </div>
               ) : (
-                <span style={{ fontSize: '12px', color: '#475569' }}>경쟁률 미발표</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>경쟁률 미발표</span>
               )}
               <span style={{
                 fontSize: '13px', fontWeight: 700,

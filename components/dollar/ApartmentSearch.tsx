@@ -33,12 +33,12 @@ export default function ApartmentSearch({ onAdd, loading }: Props) {
         display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center',
         padding: '16px 20px',
         borderRadius: '14px',
-        backgroundColor: '#0F1629',
+        backgroundColor: 'var(--bg-card)',
         border: '1px solid rgba(255,255,255,0.08)',
         marginBottom: '24px',
       }}
     >
-      <span style={{ fontSize: '13px', color: '#64748B', flexShrink: 0 }}>단지 추가</span>
+      <span style={{ fontSize: '13px', color: 'var(--text-dim)', flexShrink: 0 }}>단지 추가</span>
 
       {/* 구 선택 */}
       <select
@@ -46,7 +46,7 @@ export default function ApartmentSearch({ onAdd, loading }: Props) {
         onChange={(e) => setDistrict(e.target.value)}
         style={{
           padding: '8px 12px', borderRadius: '10px', fontSize: '13px',
-          backgroundColor: 'rgba(255,255,255,0.06)', color: '#F1F5F9',
+          backgroundColor: 'rgba(255,255,255,0.06)', color: 'var(--text-primary)',
           border: '1px solid rgba(255,255,255,0.1)', outline: 'none', cursor: 'pointer',
         }}
       >
@@ -55,7 +55,7 @@ export default function ApartmentSearch({ onAdd, loading }: Props) {
 
       {/* 단지명 입력 */}
       <div style={{ position: 'relative', flex: 1, minWidth: '180px' }}>
-        <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#475569' }} />
+        <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
         <input
           type="text"
           placeholder="단지명 입력 (예: 은마아파트)"
@@ -63,7 +63,7 @@ export default function ApartmentSearch({ onAdd, loading }: Props) {
           onChange={(e) => setAptName(e.target.value)}
           style={{
             width: '100%', padding: '8px 12px 8px 30px', borderRadius: '10px', fontSize: '13px',
-            backgroundColor: 'rgba(255,255,255,0.06)', color: '#F1F5F9',
+            backgroundColor: 'rgba(255,255,255,0.06)', color: 'var(--text-primary)',
             border: '1px solid rgba(255,255,255,0.1)', outline: 'none',
           }}
         />
@@ -76,7 +76,7 @@ export default function ApartmentSearch({ onAdd, loading }: Props) {
           display: 'flex', alignItems: 'center', gap: '6px',
           padding: '8px 16px', borderRadius: '10px', fontSize: '13px', fontWeight: 600,
           backgroundColor: aptName.trim() ? '#3B82F6' : 'rgba(255,255,255,0.06)',
-          color: aptName.trim() ? 'white' : '#475569',
+          color: aptName.trim() ? 'white' : 'var(--text-dim)',
           border: 'none', cursor: aptName.trim() ? 'pointer' : 'default',
           transition: 'background 0.15s',
         }}

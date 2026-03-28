@@ -196,7 +196,7 @@ function ChartContent() {
         isMobile={isMobile}
       />
 
-      <main style={{ flex: 1, overflowY: isMobile ? 'visible' : 'auto', height: isMobile ? 'auto' : 'calc(100vh - 64px)', backgroundColor: '#0A0E1A' }}>
+      <main style={{ flex: 1, overflowY: isMobile ? 'visible' : 'auto', height: isMobile ? 'auto' : 'calc(100vh - 64px)', backgroundColor: 'var(--bg-primary)' }}>
         <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '32px 28px' }}>
 
           {/* 기간 필터 */}
@@ -210,7 +210,7 @@ function ChartContent() {
                     padding: '8px 16px', borderRadius: '10px',
                     fontSize: '13px', fontWeight: 600, cursor: 'pointer', border: 'none',
                     backgroundColor: selectedPeriod === opt.months ? '#3B82F6' : 'rgba(255,255,255,0.06)',
-                    color: selectedPeriod === opt.months ? 'white' : '#94A3B8',
+                    color: selectedPeriod === opt.months ? 'white' : 'var(--text-muted)',
                     transition: 'all 0.15s',
                   }}
                 >
@@ -221,7 +221,7 @@ function ChartContent() {
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               {isLoading && (
-                <span style={{ fontSize: '12px', color: '#64748B' }}>데이터 불러오는 중...</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>데이터 불러오는 중...</span>
               )}
               {apiError && (
                 <span style={{ fontSize: '12px', color: '#EF4444' }}>API 오류: {apiError}</span>
@@ -229,7 +229,7 @@ function ChartContent() {
               <span style={{
                 padding: '4px 10px', borderRadius: '6px', fontSize: '11px',
                 backgroundColor: apiData ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.04)',
-                color: apiData ? '#22C55E' : '#475569',
+                color: apiData ? '#22C55E' : 'var(--text-dim)',
                 border: `1px solid ${apiData ? 'rgba(34,197,94,0.25)' : 'rgba(255,255,255,0.06)'}`,
               }}>
                 {apiData ? `${activeDistrict} 실거래가` : '목업 데이터'}
@@ -241,10 +241,10 @@ function ChartContent() {
           {selectedApt && (
             <div style={{ marginBottom: '28px' }}>
               <div style={{ marginBottom: '20px' }}>
-                <h1 style={{ fontSize: 'clamp(20px, 3vw, 28px)', fontWeight: 800, color: '#F1F5F9', marginBottom: '4px' }}>
+                <h1 style={{ fontSize: 'clamp(20px, 3vw, 28px)', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '4px' }}>
                   {selectedApt.name}
                 </h1>
-                <p style={{ fontSize: '13px', color: '#64748B' }}>
+                <p style={{ fontSize: '13px', color: 'var(--text-dim)' }}>
                   {selectedApt.address ?? selectedApt.district}
                 </p>
               </div>
@@ -252,18 +252,18 @@ function ChartContent() {
               {stats && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', marginBottom: '24px' }}>
                   {[
-                    { label: '최근 거래가', value: fmt(stats.latest),   color: '#F1F5F9' },
+                    { label: '최근 거래가', value: fmt(stats.latest),   color: 'var(--text-primary)' },
                     { label: '전월 대비',   value: `${stats.change >= 0 ? '+' : ''}${stats.change.toFixed(1)}%`, color: stats.change >= 0 ? '#22C55E' : '#EF4444' },
                     { label: '최고가',      value: fmt(stats.maxPrice), color: '#F59E0B' },
-                    { label: '최저가',      value: fmt(stats.minPrice), color: '#94A3B8' },
+                    { label: '최저가',      value: fmt(stats.minPrice), color: 'var(--text-muted)' },
                     { label: '총 거래',     value: `${stats.count}건`,  color: '#3B82F6' },
                   ].map((s) => (
                     <div key={s.label} style={{
                       padding: '16px 18px', borderRadius: '14px',
-                      backgroundColor: '#0F1629',
+                      backgroundColor: 'var(--bg-card)',
                       border: '1px solid rgba(255,255,255,0.08)',
                     }}>
-                      <p style={{ fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>{s.label}</p>
+                      <p style={{ fontSize: '11px', color: 'var(--text-dim)', marginBottom: '6px' }}>{s.label}</p>
                       <p style={{ fontSize: '18px', fontWeight: 700, fontFamily: 'Roboto Mono, monospace', color: s.color }}>
                         {s.value}
                       </p>
@@ -280,7 +280,7 @@ function ChartContent() {
 
           {filteredTx.length > 0 && (
             <div style={{ marginBottom: '32px' }}>
-              <p style={{ fontSize: '13px', fontWeight: 600, color: '#94A3B8', marginBottom: '12px' }}>
+              <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '12px' }}>
                 거래 내역 ({filteredTx.length}건)
               </p>
               <TransactionTable transactions={filteredTx} />
@@ -297,7 +297,7 @@ export default function ChartPage() {
     <>
       <Header />
       <Suspense fallback={
-        <div style={{ height: 'calc(100vh - 64px)', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#0A0E1A', color: '#475569' }}>
+        <div style={{ height: 'calc(100vh - 64px)', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-primary)', color: 'var(--text-dim)' }}>
           로딩 중...
         </div>
       }>

@@ -156,7 +156,7 @@ export default function CryptoTicker({
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
               <span style={{ color: c.color }}>{c.icon}</span>
-              <span style={{ fontSize: '11px', color: '#64748B', letterSpacing: '0.03em' }}>{c.label}</span>
+              <span style={{ fontSize: '11px', color: 'var(--text-dim)', letterSpacing: '0.03em' }}>{c.label}</span>
             </div>
             <p style={{
               fontSize: 'clamp(17px, 2vw, 24px)',
@@ -168,14 +168,14 @@ export default function CryptoTicker({
             }}>
               {loading && c.live ? <span style={{ opacity: 0.4 }}>···</span> : c.value}
             </p>
-            <p style={{ fontSize: '10px', color: '#475569' }}>{c.sub}</p>
+            <p style={{ fontSize: '10px', color: 'var(--text-dim)' }}>{c.sub}</p>
           </div>
         ))}
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end' }}>
         {data?.updatedAt && (
-          <span style={{ fontSize: '10px', color: '#334155' }}>
+          <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>
             {fmtTime(data.updatedAt)} 기준 · PAX Gold(PAXG) 추적
           </span>
         )}
@@ -184,7 +184,7 @@ export default function CryptoTicker({
           disabled={loading}
           style={{
             display: 'flex', alignItems: 'center', gap: '4px',
-            fontSize: '10px', color: '#475569', background: 'none', border: 'none',
+            fontSize: '10px', color: 'var(--text-dim)', background: 'none', border: 'none',
             cursor: 'pointer', opacity: loading ? 0.4 : 1,
           }}
         >

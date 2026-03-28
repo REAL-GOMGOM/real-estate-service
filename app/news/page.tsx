@@ -43,15 +43,15 @@ export default function NewsPage() {
   return (
     <>
       <Header />
-      <main style={{ minHeight: '100vh', backgroundColor: '#0A0E1A', paddingTop: '64px' }}>
+      <main style={{ minHeight: '100vh', backgroundColor: 'var(--bg-primary)', paddingTop: '64px' }}>
         <div style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 20px' }}>
 
           {/* 헤더 */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
             <div>
-              <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#F1F5F9', marginBottom: '4px' }}>뉴스</h1>
+              <h1 style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '4px' }}>뉴스</h1>
               {lastFetched && (
-                <p style={{ fontSize: '12px', color: '#475569' }}>마지막 업데이트 {lastFetched}</p>
+                <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>마지막 업데이트 {lastFetched}</p>
               )}
             </div>
             <button
@@ -62,7 +62,7 @@ export default function NewsPage() {
                 padding: '8px 14px', borderRadius: '10px',
                 backgroundColor: 'rgba(255,255,255,0.06)',
                 border: '1px solid rgba(255,255,255,0.1)',
-                color: '#94A3B8', fontSize: '13px', cursor: 'pointer',
+                color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer',
                 opacity: loading ? 0.5 : 1,
               }}
             >
@@ -83,7 +83,7 @@ export default function NewsPage() {
                     padding: '7px 16px', borderRadius: '999px', fontSize: '13px', fontWeight: 600,
                     cursor: 'pointer', border: 'none',
                     backgroundColor: active ? '#3B82F6' : 'rgba(255,255,255,0.06)',
-                    color: active ? '#fff' : '#64748B',
+                    color: active ? '#fff' : 'var(--text-dim)',
                   }}
                 >
                   {f.label}
@@ -99,11 +99,11 @@ export default function NewsPage() {
 
           {/* 뉴스 목록 */}
           {loading ? (
-            <div style={{ padding: '80px 0', textAlign: 'center', color: '#475569', fontSize: '14px' }}>
+            <div style={{ padding: '80px 0', textAlign: 'center', color: 'var(--text-dim)', fontSize: '14px' }}>
               뉴스를 불러오는 중...
             </div>
           ) : filtered.length === 0 ? (
-            <div style={{ padding: '80px 0', textAlign: 'center', color: '#475569', fontSize: '14px' }}>
+            <div style={{ padding: '80px 0', textAlign: 'center', color: 'var(--text-dim)', fontSize: '14px' }}>
               뉴스가 없습니다.
             </div>
           ) : (
@@ -119,7 +119,7 @@ export default function NewsPage() {
                     style={{
                       display: 'block', textDecoration: 'none',
                       padding: '16px 18px', borderRadius: '14px',
-                      backgroundColor: '#0F1629',
+                      backgroundColor: 'var(--bg-card)',
                       border: '1px solid rgba(255,255,255,0.07)',
                       transition: 'border-color 0.15s',
                     }}
@@ -159,10 +159,10 @@ export default function NewsPage() {
                           }}>
                             {cc.label}
                           </span>
-                          <span style={{ fontSize: '12px', color: '#475569' }}>{item.source}</span>
-                          <span style={{ fontSize: '12px', color: '#334155' }}>·</span>
-                          <span style={{ fontSize: '12px', color: '#475569' }}>{item.pubDateFormatted}</span>
-                          <ExternalLink size={11} style={{ color: '#334155', marginLeft: 'auto', flexShrink: 0 }} />
+                          <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>{item.source}</span>
+                          <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>·</span>
+                          <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>{item.pubDateFormatted}</span>
+                          <ExternalLink size={11} style={{ color: 'var(--text-dim)', marginLeft: 'auto', flexShrink: 0 }} />
                         </div>
                       </div>
                     </div>

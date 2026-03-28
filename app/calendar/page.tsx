@@ -77,7 +77,7 @@ function CalendarContent() {
 
   return (
     <>
-      <main style={{ paddingTop: '64px', backgroundColor: '#0A0E1A', minHeight: '100vh' }}>
+      <main style={{ paddingTop: '64px', backgroundColor: 'var(--bg-primary)', minHeight: '100vh' }}>
         <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '28px 20px' }}>
 
           {/* 상단: 타이틀 + 네비게이터 */}
@@ -138,7 +138,7 @@ export default function CalendarPage() {
     <>
       <Header />
       <Suspense fallback={
-        <div style={{ height: 'calc(100vh - 64px)', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#0A0E1A', color: '#475569', paddingTop: '64px' }}>
+        <div style={{ height: 'calc(100vh - 64px)', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-primary)', color: 'var(--text-dim)', paddingTop: '64px' }}>
           로딩 중...
         </div>
       }>
@@ -158,7 +158,7 @@ function MobileListView({
 }) {
   if (events.length === 0) {
     return (
-      <div style={{ textAlign: 'center', padding: '40px 0', color: '#475569', fontSize: '14px' }}>
+      <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-dim)', fontSize: '14px' }}>
         이벤트가 없습니다
       </div>
     );

@@ -14,7 +14,7 @@ interface Props {
 const STATUS_CONFIG = {
   upcoming: { label: '청약 예정', color: '#3B82F6', bg: 'rgba(59,130,246,0.12)' },
   ongoing:  { label: '청약 중',   color: '#22C55E', bg: 'rgba(34,197,94,0.12)'  },
-  closed:   { label: '청약 마감', color: '#64748B', bg: 'rgba(100,116,139,0.12)'},
+  closed:   { label: '청약 마감', color: 'var(--text-dim)', bg: 'rgba(100,116,139,0.12)'},
 };
 
 function formatPrice(manwon: number | null): string {
@@ -26,7 +26,7 @@ export default function SubscriptionPreview({ items }: Props) {
   const [selectedItem, setSelectedItem] = useState<SubscriptionItem | null>(null);
 
   return (
-    <section style={{ padding: '96px 0', backgroundColor: '#0F1629' }}>
+    <section style={{ padding: '96px 0', backgroundColor: 'var(--bg-card)' }}>
       <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px' }}>
 
         {/* 섹션 헤더 */}
@@ -38,8 +38,8 @@ export default function SubscriptionPreview({ items }: Props) {
           style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: '16px', marginBottom: '48px' }}
         >
           <div>
-            <h2 style={{ fontSize: 'clamp(26px, 4vw, 38px)', fontWeight: 800, color: '#F1F5F9', marginBottom: '8px' }}>청약 정보</h2>
-            <p style={{ fontSize: '15px', color: '#CBD5E1' }}>수도권 주요 청약 일정</p>
+            <h2 style={{ fontSize: 'clamp(26px, 4vw, 38px)', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '8px' }}>청약 정보</h2>
+            <p style={{ fontSize: '15px', color: 'var(--text-secondary)' }}>수도권 주요 청약 일정</p>
           </div>
           <Link href="/subscription" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '14px', fontWeight: 600, color: '#3B82F6', textDecoration: 'none' }}>
             전체 일정 보기 <ArrowRight size={16} />
@@ -48,7 +48,7 @@ export default function SubscriptionPreview({ items }: Props) {
 
         {/* 청약 카드 리스트 */}
         {items.length === 0 ? (
-          <p style={{ fontSize: '14px', color: '#475569', textAlign: 'center', padding: '40px 0' }}>
+          <p style={{ fontSize: '14px', color: 'var(--text-dim)', textAlign: 'center', padding: '40px 0' }}>
             현재 표시할 청약 정보가 없습니다.
           </p>
         ) : (
@@ -72,19 +72,19 @@ export default function SubscriptionPreview({ items }: Props) {
 
                   {/* 단지명 */}
                   <div style={{ flex: 1, minWidth: '180px' }}>
-                    <p style={{ fontWeight: 600, fontSize: '15px', color: '#F1F5F9', marginBottom: '4px' }}>{item.name}</p>
-                    <p style={{ fontSize: '13px', color: '#94A3B8' }}>{item.address}</p>
+                    <p style={{ fontWeight: 600, fontSize: '15px', color: 'var(--text-primary)', marginBottom: '4px' }}>{item.name}</p>
+                    <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{item.address}</p>
                   </div>
 
                   {/* 메타 정보 */}
                   <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '20px', flexShrink: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Calendar size={13} style={{ color: '#475569' }} />
-                      <span style={{ fontSize: '13px', color: '#CBD5E1' }}>{item.startDate} ~ {item.endDate}</span>
+                      <Calendar size={13} style={{ color: 'var(--text-dim)' }} />
+                      <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{item.startDate} ~ {item.endDate}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Home size={13} style={{ color: '#64748B' }} />
-                      <span style={{ fontSize: '13px', color: '#CBD5E1' }}>{item.totalUnits.toLocaleString()}세대{item.houseType ? ` · ${item.houseType}` : ''}</span>
+                      <Home size={13} style={{ color: 'var(--text-dim)' }} />
+                      <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{item.totalUnits.toLocaleString()}세대{item.houseType ? ` · ${item.houseType}` : ''}</span>
                     </div>
                     {item.competitionRate !== null ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -92,7 +92,7 @@ export default function SubscriptionPreview({ items }: Props) {
                         <span style={{ fontSize: '13px', fontWeight: 700, color: '#22C55E' }}>{item.competitionRate}:1</span>
                       </div>
                     ) : (
-                      <span style={{ fontSize: '13px', color: '#94A3B8' }}>경쟁률 미발표</span>
+                      <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>경쟁률 미발표</span>
                     )}
                     <span style={{ fontSize: '14px', fontWeight: 700, fontFamily: 'Roboto Mono, monospace', color: '#F59E0B' }}>
                       {formatPrice(item.minPrice)} ~ {formatPrice(item.maxPrice)}
