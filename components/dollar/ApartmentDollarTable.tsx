@@ -116,8 +116,8 @@ function AssetRow({ icon, label, accent, baseVal, compareVal, pct, baseYear, com
       {/* 변동률 */}
       <div style={{ flexShrink: 0, minWidth: '80px', textAlign: 'right' }}>
         {unavailable
-          ? <span style={{ fontSize: '10px', color: '#475569', fontStyle: 'italic' }}>해당 없음</span>
-          : pct !== null ? <ChangeBadge pct={pct} /> : <span style={{ color: '#475569', fontSize: '12px' }}>—</span>
+          ? <span style={{ fontSize: '10px', color: 'var(--text-dim)', fontStyle: 'italic' }}>해당 없음</span>
+          : pct !== null ? <ChangeBadge pct={pct} /> : <span style={{ color: 'var(--text-dim)', fontSize: '12px' }}>—</span>
         }
       </div>
     </div>
@@ -146,7 +146,7 @@ export default function ApartmentDollarTable({ entries, baseYear, compareYear, o
           return (
             <div key={entry.id} style={{
               padding: '24px', borderRadius: '18px',
-              backgroundColor: '#0F1629', border: '1px solid rgba(255,255,255,0.07)',
+              backgroundColor: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.07)',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
                 <Loader2 size={16} style={{ animation: 'spin 1s linear infinite', color: '#3B82F6' }} />
@@ -170,14 +170,14 @@ export default function ApartmentDollarTable({ entries, baseYear, compareYear, o
           return (
             <div key={entry.id} style={{
               padding: '24px', borderRadius: '18px',
-              backgroundColor: '#0F1629', border: '1px solid rgba(255,255,255,0.07)',
+              backgroundColor: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.07)',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}>
               <div>
                 <p style={{ fontWeight: 700, color: '#F1F5F9', marginBottom: '4px' }}>{entry.aptName}</p>
-                <p style={{ fontSize: '13px', color: '#475569' }}>{entry.error ?? '데이터 없음'}</p>
+                <p style={{ fontSize: '13px', color: 'var(--text-dim)' }}>{entry.error ?? '데이터 없음'}</p>
               </div>
-              <button onClick={() => onRemove(entry.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475569', padding: '4px' }}>
+              <button onClick={() => onRemove(entry.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-dim)', padding: '4px' }}>
                 <X size={16} />
               </button>
             </div>
@@ -225,7 +225,7 @@ export default function ApartmentDollarTable({ entries, baseYear, compareYear, o
         return (
           <div key={entry.id} style={{
             padding: '22px 24px', borderRadius: '18px',
-            backgroundColor: '#0F1629',
+            backgroundColor: 'var(--bg-card)',
             border: '1px solid rgba(255,255,255,0.08)',
           }}>
             {/* 카드 헤더 */}

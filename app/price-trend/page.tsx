@@ -10,7 +10,7 @@ import { PERIOD_OPTIONS, type TrendPeriod, type PriceTrendData } from '@/types/p
 
 const TrendChart = dynamic(
   () => import('@/components/price-trend/TrendChart'),
-  { ssr: false, loading: () => <div style={{ height: '440px', borderRadius: '14px', backgroundColor: '#0F1629', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569' }}>차트 로딩 중...</div> },
+  { ssr: false, loading: () => <div style={{ height: '440px', borderRadius: '14px', backgroundColor: 'var(--bg-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)' }}>차트 로딩 중...</div> },
 );
 
 const PERIOD_TOGGLE = PERIOD_OPTIONS.map((o) => ({ label: o.label, value: o.value }));
@@ -62,7 +62,7 @@ function PriceTrendContent() {
   const regionArray = Array.from(selectedRegions);
 
   return (
-    <main style={{ paddingTop: '64px', backgroundColor: '#0A0E1A', minHeight: '100vh' }}>
+    <main style={{ paddingTop: '64px', backgroundColor: 'var(--bg-primary)', minHeight: '100vh' }}>
       <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '28px 20px' }}>
 
         {/* 헤더 */}
@@ -71,10 +71,10 @@ function PriceTrendContent() {
           justifyContent: 'space-between', gap: '16px', marginBottom: '20px',
         }}>
           <div>
-            <h1 style={{ fontSize: 'clamp(20px, 3vw, 26px)', fontWeight: 800, color: '#F1F5F9', marginBottom: '4px' }}>
+            <h1 style={{ fontSize: 'clamp(20px, 3vw, 26px)', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '4px' }}>
               상승률 대시보드
             </h1>
-            <p style={{ fontSize: '13px', color: '#64748B' }}>
+            <p style={{ fontSize: '13px', color: 'var(--text-dim)' }}>
               시도별 아파트 가격 변동률 추이
             </p>
           </div>
@@ -83,20 +83,20 @@ function PriceTrendContent() {
 
         {/* 지역 선택 */}
         <div style={{ marginBottom: '20px' }}>
-          <p style={{ fontSize: '12px', color: '#64748B', marginBottom: '8px' }}>
+          <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '8px' }}>
             비교 지역 선택 (다중 선택)
           </p>
           <RegionSelector selected={selectedRegions} onToggle={toggleRegion} />
         </div>
 
         {selectedRegions.size === 0 && (
-          <div style={{ textAlign: 'center', padding: '60px 0', color: '#475569', fontSize: '14px' }}>
+          <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-dim)', fontSize: '14px' }}>
             비교할 지역을 1개 이상 선택해주세요
           </div>
         )}
 
         {loading && (
-          <div style={{ textAlign: 'center', padding: '60px 0', color: '#64748B', fontSize: '14px' }}>
+          <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-dim)', fontSize: '14px' }}>
             불러오는 중...
           </div>
         )}
@@ -122,7 +122,7 @@ export default function PriceTrendPage() {
     <>
       <Header />
       <Suspense fallback={
-        <div style={{ height: 'calc(100vh - 64px)', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#0A0E1A', color: '#475569', paddingTop: '64px' }}>
+        <div style={{ height: 'calc(100vh - 64px)', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-primary)', color: 'var(--text-dim)', paddingTop: '64px' }}>
           로딩 중...
         </div>
       }>

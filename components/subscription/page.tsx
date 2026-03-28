@@ -24,10 +24,10 @@ export default function SubscriptionClientPage({ items }: Props) {
   );
 
   const stats = useMemo(() => [
-    { label: '전체',     value: items.length,                                         color: '#F1F5F9' },
+    { label: '전체',     value: items.length,                                         color: 'var(--text-primary)' },
     { label: '청약 중',  value: items.filter((i) => i.status === 'ongoing').length,   color: '#22C55E' },
     { label: '청약 예정', value: items.filter((i) => i.status === 'upcoming').length, color: '#3B82F6' },
-    { label: '청약 마감', value: items.filter((i) => i.status === 'closed').length,   color: '#64748B' },
+    { label: '청약 마감', value: items.filter((i) => i.status === 'closed').length,   color: 'var(--text-dim)' },
   ], [items]);
 
   const filteredItems = useMemo(() => {
@@ -42,15 +42,15 @@ export default function SubscriptionClientPage({ items }: Props) {
   }, [items, selectedStatus, selectedDistrict, searchQuery]);
 
   return (
-    <main style={{ minHeight: '100vh', backgroundColor: '#0A0E1A', paddingTop: '64px' }}>
+    <main style={{ minHeight: '100vh', backgroundColor: 'var(--bg-primary)', paddingTop: '64px' }}>
       <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '48px 24px' }}>
 
         {/* 페이지 헤더 */}
         <div style={{ marginBottom: '40px' }}>
-          <h1 style={{ fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 800, color: '#F1F5F9', marginBottom: '8px' }}>
+          <h1 style={{ fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '8px' }}>
             청약 정보
           </h1>
-          <p style={{ fontSize: '15px', color: '#94A3B8' }}>
+          <p style={{ fontSize: '15px', color: 'var(--text-muted)' }}>
             수도권 주요 청약 일정 · 경쟁률 · 분양가 정보
           </p>
         </div>
@@ -68,18 +68,18 @@ export default function SubscriptionClientPage({ items }: Props) {
               style={{
                 padding: '20px 24px',
                 borderRadius: '16px',
-                backgroundColor: '#0F1629',
+                backgroundColor: 'var(--bg-card)',
                 border: '1px solid rgba(255,255,255,0.08)',
               }}
             >
-              <p style={{ fontSize: '13px', color: '#64748B', marginBottom: '8px' }}>{stat.label}</p>
+              <p style={{ fontSize: '13px', color: 'var(--text-dim)', marginBottom: '8px' }}>{stat.label}</p>
               <p style={{
                 fontSize: '28px', fontWeight: 800,
                 fontFamily: 'Roboto Mono, monospace',
                 color: stat.color,
               }}>
                 {stat.value}
-                <span style={{ fontSize: '14px', fontWeight: 500, color: '#64748B', marginLeft: '4px' }}>건</span>
+                <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-dim)', marginLeft: '4px' }}>건</span>
               </p>
             </div>
           ))}
@@ -97,8 +97,8 @@ export default function SubscriptionClientPage({ items }: Props) {
         />
 
         {/* 결과 카운트 */}
-        <p style={{ fontSize: '13px', color: '#64748B', marginBottom: '16px' }}>
-          총 <span style={{ color: '#F1F5F9', fontWeight: 600 }}>{filteredItems.length}</span>건
+        <p style={{ fontSize: '13px', color: 'var(--text-dim)', marginBottom: '16px' }}>
+          총 <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{filteredItems.length}</span>건
         </p>
 
         {/* 청약 목록 */}
@@ -116,7 +116,7 @@ export default function SubscriptionClientPage({ items }: Props) {
         <p style={{
           marginTop: '48px', padding: '16px 20px',
           borderRadius: '12px', backgroundColor: 'rgba(255,255,255,0.03)',
-          fontSize: '12px', color: '#475569', lineHeight: 1.8,
+          fontSize: '12px', color: 'var(--text-dim)', lineHeight: 1.8,
         }}>
           ※ 본 페이지의 청약 정보는 한국부동산원 청약홈 공공데이터를 기반으로 합니다. 실제 청약 신청은
           <a

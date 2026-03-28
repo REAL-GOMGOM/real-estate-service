@@ -12,7 +12,7 @@ const FLOATING_STATS = [
 
 export default function HeroSection() {
   return (
-    <section style={{ position: 'relative', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', paddingTop: '64px', backgroundColor: '#0A0E1A' }}>
+    <section style={{ position: 'relative', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', paddingTop: '64px', backgroundColor: 'var(--bg-primary)' }}>
 
       {/* 배경 블러 효과 */}
       <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
@@ -40,7 +40,7 @@ export default function HeroSection() {
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.1 }}
-          style={{ fontSize: 'clamp(40px, 7vw, 80px)', fontWeight: 800, lineHeight: 1.15, color: '#F1F5F9', marginBottom: '24px', letterSpacing: '-0.02em' }}
+          style={{ fontSize: 'clamp(40px, 7vw, 80px)', fontWeight: 800, lineHeight: 1.15, color: 'var(--text-primary)', marginBottom: '24px', letterSpacing: '-0.02em' }}
         >
           부동산 투자의<br />
           <span style={{ color: '#3B82F6' }}>모든 데이터</span>를<br />
@@ -52,7 +52,7 @@ export default function HeroSection() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.2 }}
-          style={{ fontSize: '18px', color: '#CBD5E1', lineHeight: 1.8, maxWidth: '560px', margin: '0 auto 48px' }}
+          style={{ fontSize: '18px', color: 'var(--text-secondary)', lineHeight: 1.8, maxWidth: '560px', margin: '0 auto 48px' }}
         >
           시세 차트 분석부터 입지 점수 지도, 청약 정보까지.<br />
           데이터 기반으로 더 스마트한 부동산 결정을 내리세요.
@@ -75,7 +75,7 @@ export default function HeroSection() {
           </Link>
           <Link
             href="/market"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '16px 32px', borderRadius: '14px', fontSize: '16px', fontWeight: 600, backgroundColor: 'rgba(255,255,255,0.06)', color: '#F1F5F9', textDecoration: 'none', border: '1px solid rgba(255,255,255,0.12)' }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '16px 32px', borderRadius: '14px', fontSize: '16px', fontWeight: 600, backgroundColor: 'rgba(255,255,255,0.06)', color: 'var(--text-primary)', textDecoration: 'none', border: '1px solid rgba(255,255,255,0.12)' }}
           >
             <BarChart3 size={20} />
             시세 분석 보기
@@ -92,8 +92,8 @@ export default function HeroSection() {
               transition={{ duration: 0.5, delay: 0.5 + index * 0.1 }}
               style={{ padding: '20px 28px', borderRadius: '20px', backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(12px)', textAlign: 'left' }}
             >
-              <p style={{ fontSize: '12px', color: '#94A3B8', marginBottom: '6px' }}>{stat.label}</p>
-              <p style={{ fontSize: '22px', fontWeight: 700, fontFamily: 'Roboto Mono, monospace', color: '#F1F5F9', marginBottom: '4px' }}>{stat.value}</p>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' }}>{stat.label}</p>
+              <p style={{ fontSize: '22px', fontWeight: 700, fontFamily: 'Roboto Mono, monospace', color: 'var(--text-primary)', marginBottom: '4px' }}>{stat.value}</p>
               <p style={{ fontSize: '12px', fontWeight: 600, color: '#22C55E', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <TrendingUp size={12} />
                 {stat.change}
@@ -110,7 +110,7 @@ export default function HeroSection() {
         transition={{ delay: 1.2 }}
         style={{ position: 'absolute', bottom: '32px', left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}
       >
-        <span style={{ fontSize: '11px', color: '#475569' }}>스크롤</span>
+        <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>스크롤</span>
         <div style={{ width: '1px', height: '48px', background: 'linear-gradient(to bottom, rgba(59,130,246,0.6), transparent)' }} />
       </motion.div>
     </section>

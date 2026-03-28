@@ -13,7 +13,7 @@ interface Props {
 const STATUS_CONFIG = {
   upcoming: { label: '청약 예정', color: '#3B82F6', bg: 'rgba(59,130,246,0.12)' },
   ongoing:  { label: '청약 중',   color: '#22C55E', bg: 'rgba(34,197,94,0.12)'  },
-  closed:   { label: '청약 마감', color: '#64748B', bg: 'rgba(100,116,139,0.12)'},
+  closed:   { label: '청약 마감', color: 'var(--text-dim)', bg: 'rgba(100,116,139,0.12)'},
 };
 
 function formatPrice(manwon: number | null): string {
@@ -43,9 +43,9 @@ function getDday(endDate: string, status: string): string | null {
 function Row({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', padding: '14px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-      <div style={{ flexShrink: 0, marginTop: '2px', color: '#475569' }}>{icon}</div>
+      <div style={{ flexShrink: 0, marginTop: '2px', color: 'var(--text-dim)' }}>{icon}</div>
       <div style={{ flex: 1 }}>
-        <p style={{ fontSize: '11px', color: '#64748B', marginBottom: '4px' }}>{label}</p>
+        <p style={{ fontSize: '11px', color: 'var(--text-dim)', marginBottom: '4px' }}>{label}</p>
         <div style={{ fontSize: '14px', color: '#E2E8F0' }}>{children}</div>
       </div>
     </div>
@@ -96,7 +96,7 @@ export default function SubscriptionDetailModal({ item, onClose }: Props) {
           width: 'min(520px, calc(100vw - 32px))',
           maxHeight: 'calc(100vh - 64px)',
           overflowY: 'auto',
-          backgroundColor: '#0F1629',
+          backgroundColor: 'var(--bg-card)',
           border: '1px solid rgba(255,255,255,0.1)',
           borderRadius: '20px',
           zIndex: 51,
@@ -118,17 +118,17 @@ export default function SubscriptionDetailModal({ item, onClose }: Props) {
           <button
             onClick={onClose}
             aria-label="닫기"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475569', padding: '4px', flexShrink: 0 }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-dim)', padding: '4px', flexShrink: 0 }}
           >
             <X size={20} />
           </button>
         </div>
 
         {/* 단지명 */}
-        <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#F1F5F9', marginBottom: '4px', lineHeight: 1.3 }}>
+        <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '4px', lineHeight: 1.3 }}>
           {item.name}
         </h2>
-        <p style={{ fontSize: '13px', color: '#64748B', marginBottom: '24px' }}>{item.district}</p>
+        <p style={{ fontSize: '13px', color: 'var(--text-dim)', marginBottom: '24px' }}>{item.district}</p>
 
         {/* 상세 정보 rows */}
         <div>
@@ -161,7 +161,7 @@ export default function SubscriptionDetailModal({ item, onClose }: Props) {
                 {formatPrice(item.minPrice)} ~ {formatPrice(item.maxPrice)}
               </span>
             ) : (
-              <span style={{ color: '#475569' }}>미정</span>
+              <span style={{ color: 'var(--text-dim)' }}>미정</span>
             )}
           </Row>
 
@@ -177,7 +177,7 @@ export default function SubscriptionDetailModal({ item, onClose }: Props) {
                   borderRadius: '8px 8px 0 0',
                   backgroundColor: 'rgba(255,255,255,0.05)',
                   fontSize: '11px',
-                  color: '#64748B',
+                  color: 'var(--text-dim)',
                   fontWeight: 600,
                 }}>
                   <span>주택형</span>
@@ -201,10 +201,10 @@ export default function SubscriptionDetailModal({ item, onClose }: Props) {
                       fontSize: '13px',
                     }}
                   >
-                    <span style={{ color: '#CBD5E1', fontFamily: 'Roboto Mono, monospace' }}>
+                    <span style={{ color: 'var(--text-secondary)', fontFamily: 'Roboto Mono, monospace' }}>
                       {entry.houseType}
                       {pyeong && (
-                        <span style={{ color: '#475569', fontSize: '11px', marginLeft: '5px' }}>
+                        <span style={{ color: 'var(--text-dim)', fontSize: '11px', marginLeft: '5px' }}>
                           ({pyeong})
                         </span>
                       )}
@@ -213,18 +213,18 @@ export default function SubscriptionDetailModal({ item, onClose }: Props) {
                       textAlign: 'right',
                       fontWeight: 700,
                       fontFamily: 'Roboto Mono, monospace',
-                      color: entry.rate >= 10 ? '#22C55E' : entry.rate >= 1 ? '#F59E0B' : '#64748B',
+                      color: entry.rate >= 10 ? '#22C55E' : entry.rate >= 1 ? '#F59E0B' : 'var(--text-dim)',
                     }}>
                       {entry.rate.toFixed(1)}:1
                     </span>
-                    <span style={{ textAlign: 'right', color: '#94A3B8', fontSize: '12px' }}>
+                    <span style={{ textAlign: 'right', color: 'var(--text-muted)', fontSize: '12px' }}>
                       {entry.reqCount !== null ? entry.reqCount.toLocaleString() : '—'}
                     </span>
                   </div>;
                 })}
               </div>
             ) : (
-              <span style={{ color: '#475569' }}>미발표</span>
+              <span style={{ color: 'var(--text-dim)' }}>미발표</span>
             )}
           </Row>
         </div>

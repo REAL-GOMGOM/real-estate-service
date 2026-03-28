@@ -20,7 +20,7 @@ export default function TrendChart({ data, regions }: TrendChartProps) {
   return (
     <div style={{
       padding: '20px', borderRadius: '14px',
-      backgroundColor: '#0F1629',
+      backgroundColor: 'var(--bg-card)',
       border: '1px solid rgba(255,255,255,0.08)',
     }}>
       <ResponsiveContainer width="100%" height={400}>

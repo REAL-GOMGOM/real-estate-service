@@ -33,7 +33,7 @@ const SERVICES = [
 
 export default function ServiceCards() {
   return (
-    <section style={{ padding: '96px 0', backgroundColor: '#0A0E1A' }}>
+    <section style={{ padding: '96px 0', backgroundColor: 'var(--bg-primary)' }}>
       <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px' }}>
 
         {/* 섹션 헤더 */}
@@ -44,10 +44,10 @@ export default function ServiceCards() {
           transition={{ duration: 0.6 }}
           style={{ textAlign: 'center', marginBottom: '64px' }}
         >
-          <h2 style={{ fontSize: 'clamp(28px, 4vw, 40px)', fontWeight: 800, color: '#F1F5F9', marginBottom: '16px' }}>
+          <h2 style={{ fontSize: 'clamp(28px, 4vw, 40px)', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '16px' }}>
             토탈 부동산 서비스
           </h2>
-          <p style={{ fontSize: '17px', color: '#CBD5E1' }}>투자 결정에 필요한 모든 데이터를 제공합니다</p>
+          <p style={{ fontSize: '17px', color: 'var(--text-secondary)' }}>투자 결정에 필요한 모든 데이터를 제공합니다</p>
         </motion.div>
 
         {/* 카드 그리드 */}
@@ -63,7 +63,7 @@ export default function ServiceCards() {
                 transition={{ duration: 0.5, delay: index * 0.1 }}
               >
                 <Link href={service.href} style={{ textDecoration: 'none', display: 'block', height: '100%' }}>
-                  <div style={{ height: '100%', padding: '36px', borderRadius: '20px', backgroundColor: '#0F1629', border: '1px solid rgba(255,255,255,0.08)', transition: 'transform 0.2s, border-color 0.2s' }}>
+                  <div style={{ height: '100%', padding: '36px', borderRadius: '20px', backgroundColor: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.08)', transition: 'transform 0.2s, border-color 0.2s' }}>
 
                     {/* 아이콘 */}
                     <div style={{ width: '56px', height: '56px', borderRadius: '16px', backgroundColor: `${service.color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '24px' }}>
@@ -76,12 +76,12 @@ export default function ServiceCards() {
                     </span>
 
                     {/* 제목 */}
-                    <h3 style={{ fontSize: '20px', fontWeight: 700, color: '#F1F5F9', marginBottom: '12px' }}>
+                    <h3 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '12px' }}>
                       {service.title}
                     </h3>
 
                     {/* 설명 */}
-                    <p style={{ fontSize: '14px', color: '#94A3B8', lineHeight: 1.8, marginBottom: '28px' }}>
+                    <p style={{ fontSize: '14px', color: 'var(--text-muted)', lineHeight: 1.8, marginBottom: '28px' }}>
                       {service.description}
                     </p>
 

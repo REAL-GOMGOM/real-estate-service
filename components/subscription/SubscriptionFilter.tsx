@@ -35,7 +35,7 @@ export default function SubscriptionFilter({
       alignItems: 'center',
       gap: '12px',
       padding: '20px 24px',
-      backgroundColor: '#0F1629',
+      backgroundColor: 'var(--bg-card)',
       borderRadius: '16px',
       border: '1px solid rgba(255,255,255,0.08)',
       marginBottom: '24px',
@@ -55,7 +55,7 @@ export default function SubscriptionFilter({
               cursor: 'pointer',
               border: 'none',
               backgroundColor: selectedStatus === opt.value ? '#3B82F6' : 'rgba(255,255,255,0.06)',
-              color: selectedStatus === opt.value ? 'white' : '#94A3B8',
+              color: selectedStatus === opt.value ? 'white' : 'var(--text-muted)',
               transition: 'background 0.15s',
             }}
           >
@@ -77,7 +77,7 @@ export default function SubscriptionFilter({
           fontSize: '13px',
           fontWeight: 500,
           backgroundColor: 'rgba(255,255,255,0.06)',
-          color: '#94A3B8',
+          color: 'var(--text-muted)',
           border: '1px solid rgba(255,255,255,0.1)',
           cursor: 'pointer',
           outline: 'none',
@@ -98,7 +98,7 @@ export default function SubscriptionFilter({
             left: '12px',
             top: '50%',
             transform: 'translateY(-50%)',
-            color: '#475569',
+            color: 'var(--text-dim)',
           }}
         />
         <input
@@ -112,7 +112,7 @@ export default function SubscriptionFilter({
             borderRadius: '10px',
             fontSize: '13px',
             backgroundColor: 'rgba(255,255,255,0.06)',
-            color: '#F1F5F9',
+            color: 'var(--text-primary)',
             border: '1px solid rgba(255,255,255,0.1)',
             outline: 'none',
           }}

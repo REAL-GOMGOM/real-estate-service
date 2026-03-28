@@ -1,6 +1,6 @@
 export default function Loading() {
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#0A0E1A', paddingTop: '64px' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg-primary)', paddingTop: '64px' }}>
       <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '48px 24px' }}>
         {/* 헤더 스켈레톤 */}
         <div style={{ marginBottom: '36px' }}>

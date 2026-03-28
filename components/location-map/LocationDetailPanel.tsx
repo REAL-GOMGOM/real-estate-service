@@ -50,7 +50,7 @@ export default function LocationDetailPanel({ location, onClose }: Props) {
           background: 'rgba(255,255,255,0.08)', border: 'none',
           borderRadius: '8px', width: '28px', height: '28px',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          cursor: 'pointer', color: '#94A3B8',
+          cursor: 'pointer', color: 'var(--text-muted)',
         }}
       >
         <X size={14} />
@@ -84,7 +84,7 @@ export default function LocationDetailPanel({ location, onClose }: Props) {
           <AlertTriangle size={14} style={{ color: '#F97316', flexShrink: 0 }} />
           <div>
             <p style={{ fontSize: '11px', fontWeight: 700, color: '#F97316' }}>토지거래허가구역</p>
-            <p style={{ fontSize: '10px', color: '#94A3B8' }}>적용기간 ~{location.toheoUntil}</p>
+            <p style={{ fontSize: '10px', color: 'var(--text-muted)' }}>적용기간 ~{location.toheoUntil}</p>
           </div>
         </div>
       )}
@@ -99,8 +99,8 @@ export default function LocationDetailPanel({ location, onClose }: Props) {
           <MapPin size={18} style={{ color: getScoreColor(location.score) }} />
         </div>
         <div>
-          <p style={{ fontSize: '17px', fontWeight: 700, color: '#F1F5F9' }}>{location.name}</p>
-          <p style={{ fontSize: '12px', color: '#64748B' }}>{location.district}</p>
+          <p style={{ fontSize: '17px', fontWeight: 700, color: 'var(--text-primary)' }}>{location.name}</p>
+          <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>{location.district}</p>
         </div>
       </div>
 
@@ -112,7 +112,7 @@ export default function LocationDetailPanel({ location, onClose }: Props) {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         <div>
-          <p style={{ fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>입지 점수</p>
+          <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>입지 점수</p>
           <p style={{
             fontSize: '36px', fontWeight: 800,
             fontFamily: 'Roboto Mono, monospace',
@@ -122,15 +122,15 @@ export default function LocationDetailPanel({ location, onClose }: Props) {
           </p>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <p style={{ fontSize: '11px', color: '#94A3B8', marginBottom: '4px' }}>전월 대비</p>
+          <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>전월 대비</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}>
             {isUp   && <TrendingUp   size={16} style={{ color: '#22C55E' }} />}
             {isDown && <TrendingDown size={16} style={{ color: '#EF4444' }} />}
-            {!isUp && !isDown && <Minus size={16} style={{ color: '#64748B' }} />}
+            {!isUp && !isDown && <Minus size={16} style={{ color: 'var(--text-dim)' }} />}
             <span style={{
               fontSize: '16px', fontWeight: 700,
               fontFamily: 'Roboto Mono, monospace',
-              color: isUp ? '#22C55E' : isDown ? '#EF4444' : '#64748B',
+              color: isUp ? '#22C55E' : isDown ? '#EF4444' : 'var(--text-dim)',
             }}>
               {isUp ? '+' : ''}{scoreDiff}
             </span>
@@ -146,15 +146,15 @@ export default function LocationDetailPanel({ location, onClose }: Props) {
           {
             label: '트렌드',
             value: location.trend === 'up' ? '상승 ▲' : location.trend === 'down' ? '하락 ▼' : '보합 —',
-            color: location.trend === 'up' ? '#22C55E' : location.trend === 'down' ? '#EF4444' : '#64748B',
+            color: location.trend === 'up' ? '#22C55E' : location.trend === 'down' ? '#EF4444' : 'var(--text-dim)',
           },
           ...(location.region ? [{ label: '권역', value: location.region }] : []),
         ].map((item) => (
           <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '13px', color: '#64748B' }}>{item.label}</span>
+            <span style={{ fontSize: '13px', color: 'var(--text-dim)' }}>{item.label}</span>
             <span style={{
               fontSize: '13px', fontWeight: 600,
-              color: item.color ?? '#F1F5F9',
+              color: item.color ?? 'var(--text-primary)',
               fontFamily: item.mono ? 'Roboto Mono, monospace' : 'inherit',
             }}>
               {item.value}

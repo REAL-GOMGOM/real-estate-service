@@ -39,11 +39,11 @@ function CustomTooltip({ active, payload, label }: any) {
       backdropFilter: 'blur(12px)',
       minWidth: '160px',
     }}>
-      <p style={{ fontSize: '12px', color: '#64748B', marginBottom: '8px' }}>{label}</p>
+      <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '8px' }}>{label}</p>
       {count && (
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', marginBottom: '4px' }}>
           <span style={{ fontSize: '12px', color: '#8B5CF6' }}>매매물량</span>
-          <span style={{ fontSize: '12px', fontWeight: 700, color: '#F1F5F9', fontFamily: 'Roboto Mono, monospace' }}>
+          <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>
             {count.value}개
           </span>
         </div>
@@ -51,7 +51,7 @@ function CustomTooltip({ active, payload, label }: any) {
       {avgPrice && (
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', marginBottom: '4px' }}>
           <span style={{ fontSize: '12px', color: '#F97316' }}>매호가(평균)</span>
-          <span style={{ fontSize: '12px', fontWeight: 700, color: '#F1F5F9', fontFamily: 'Roboto Mono, monospace' }}>
+          <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>
             {toEok(avgPrice.value)}
           </span>
         </div>
@@ -59,7 +59,7 @@ function CustomTooltip({ active, payload, label }: any) {
       {minPrice && (
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px' }}>
           <span style={{ fontSize: '12px', color: '#EF4444' }}>매호가(저)</span>
-          <span style={{ fontSize: '12px', fontWeight: 700, color: '#F1F5F9', fontFamily: 'Roboto Mono, monospace' }}>
+          <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>
             {toEok(minPrice.value)}
           </span>
         </div>
@@ -87,7 +87,7 @@ function CustomLegend() {
               borderTop: item.dashed ? `2px dashed ${item.color}` : undefined,
             }} />
           )}
-          <span style={{ fontSize: '11px', color: '#94A3B8' }}>{item.label}</span>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{item.label}</span>
         </div>
       ))}
     </div>
@@ -99,7 +99,7 @@ export default function PriceChart({ data }: Props) {
     return (
       <div style={{
         height: '420px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        backgroundColor: '#0F1629', color: '#475569', fontSize: '14px',
+        backgroundColor: 'var(--bg-card)', color: 'var(--text-dim)', fontSize: '14px',
         borderRadius: '16px', border: '1px solid rgba(255,255,255,0.08)',
       }}>
         거래 데이터가 없습니다
@@ -117,7 +117,7 @@ export default function PriceChart({ data }: Props) {
     <div style={{
       padding: '20px 20px 8px',
       borderRadius: '16px',
-      backgroundColor: '#0F1629',
+      backgroundColor: 'var(--bg-card)',
       border: '1px solid rgba(255,255,255,0.08)',
     }}>
       <CustomLegend />
@@ -132,7 +132,7 @@ export default function PriceChart({ data }: Props) {
           {/* X축 */}
           <XAxis
             dataKey="date"
-            tick={{ fill: '#64748B', fontSize: 11 }}
+            tick={{ fill: 'var(--text-dim)', fontSize: 11 }}
             axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
             tickLine={false}
           />
@@ -142,7 +142,7 @@ export default function PriceChart({ data }: Props) {
             yAxisId="volume"
             orientation="left"
             domain={[0, maxCount * 2]}
-            tick={{ fill: '#64748B', fontSize: 11 }}
+            tick={{ fill: 'var(--text-dim)', fontSize: 11 }}
             axisLine={false}
             tickLine={false}
             tickFormatter={(v) => `${v}개`}
@@ -153,7 +153,7 @@ export default function PriceChart({ data }: Props) {
             yAxisId="price"
             orientation="right"
             domain={[minY, maxY]}
-            tick={{ fill: '#64748B', fontSize: 11 }}
+            tick={{ fill: 'var(--text-dim)', fontSize: 11 }}
             axisLine={false}
             tickLine={false}
             tickFormatter={(v) => `${(v / 10000).toFixed(0)}억`}

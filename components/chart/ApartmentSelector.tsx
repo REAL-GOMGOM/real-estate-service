@@ -112,7 +112,7 @@ export default function ApartmentSelector({
       width: isMobile ? '100%' : '280px', flexShrink: 0,
       height: isMobile ? 'auto' : 'calc(100vh - 64px)',
       overflowY: isMobile ? 'visible' : 'auto',
-      backgroundColor: '#0F1629',
+      backgroundColor: 'var(--bg-card)',
       borderRight: isMobile ? 'none' : '1px solid rgba(255,255,255,0.08)',
       borderBottom: isMobile ? '1px solid rgba(255,255,255,0.08)' : 'none',
       display: 'flex', flexDirection: 'column',
@@ -121,7 +121,7 @@ export default function ApartmentSelector({
       {/* 헤더 */}
       <div style={{ padding: '20px 20px 14px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
-          <h2 style={{ fontSize: '15px', fontWeight: 700, color: '#F1F5F9' }}>아파트 차트</h2>
+          <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>아파트 차트</h2>
           {isToheo && (
             <span style={{
               display: 'flex', alignItems: 'center', gap: '3px',
@@ -133,14 +133,14 @@ export default function ApartmentSelector({
             </span>
           )}
         </div>
-        <p style={{ fontSize: '11px', color: '#475569' }}>단지 선택 후 실거래가 차트 확인</p>
+        <p style={{ fontSize: '11px', color: 'var(--text-dim)' }}>단지 선택 후 실거래가 차트 확인</p>
       </div>
 
       {/* 지역 선택 */}
       <div style={{ padding: '14px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         {/* 구 검색 */}
         <div style={{ position: 'relative', marginBottom: '8px' }}>
-          <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#475569', pointerEvents: 'none' }} />
+          <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', pointerEvents: 'none' }} />
           <input
             type="text"
             placeholder="구/시 검색 (예: 강남, 분당)"
@@ -148,7 +148,7 @@ export default function ApartmentSelector({
             onChange={(e) => { setDistrictSearch(e.target.value); setRegionIdx(-1); }}
             style={{
               width: '100%', padding: '6px 10px 6px 28px', borderRadius: '8px',
-              fontSize: '11px', backgroundColor: 'rgba(255,255,255,0.05)', color: '#F1F5F9',
+              fontSize: '11px', backgroundColor: 'rgba(255,255,255,0.05)', color: 'var(--text-primary)',
               border: '1px solid rgba(255,255,255,0.08)', outline: 'none', boxSizing: 'border-box',
             }}
           />
@@ -164,7 +164,7 @@ export default function ApartmentSelector({
                 padding: '4px 9px', borderRadius: '7px', fontSize: '11px', fontWeight: 600,
                 cursor: 'pointer', border: 'none',
                 backgroundColor: regionIdx === idx && !districtSearch ? '#3B82F6' : 'rgba(255,255,255,0.06)',
-                color: regionIdx === idx && !districtSearch ? '#fff' : '#64748B',
+                color: regionIdx === idx && !districtSearch ? '#fff' : 'var(--text-dim)',
               }}
             >
               {label}
@@ -186,7 +186,7 @@ export default function ApartmentSelector({
                   cursor: 'pointer',
                   border: active ? '1px solid rgba(59,130,246,0.5)' : toheo ? '1px solid rgba(249,115,22,0.25)' : '1px solid rgba(255,255,255,0.07)',
                   backgroundColor: active ? 'rgba(59,130,246,0.18)' : toheo ? 'rgba(249,115,22,0.07)' : 'rgba(255,255,255,0.04)',
-                  color: active ? '#60A5FA' : toheo ? '#FB923C' : '#94A3B8',
+                  color: active ? '#60A5FA' : toheo ? '#FB923C' : 'var(--text-muted)',
                 }}
               >
                 {d.replace(/^(서울|경기|인천|부산|대구|울산)\s/, '')}
@@ -199,11 +199,11 @@ export default function ApartmentSelector({
         <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             <div style={{ width: '8px', height: '8px', borderRadius: '2px', backgroundColor: 'rgba(249,115,22,0.4)', border: '1px solid rgba(249,115,22,0.5)' }} />
-            <span style={{ fontSize: '10px', color: '#64748B' }}>토허제</span>
+            <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>토허제</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             <div style={{ width: '8px', height: '8px', borderRadius: '2px', backgroundColor: 'rgba(59,130,246,0.4)', border: '1px solid rgba(59,130,246,0.5)' }} />
-            <span style={{ fontSize: '10px', color: '#64748B' }}>선택 중</span>
+            <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>선택 중</span>
           </div>
         </div>
       </div>
@@ -211,7 +211,7 @@ export default function ApartmentSelector({
       {/* 평형 필터 */}
       {selectedApt && (
         <div style={{ padding: '14px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-          <p style={{ fontSize: '11px', fontWeight: 600, color: '#94A3B8', marginBottom: '8px' }}>평형 선택</p>
+          <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>평형 선택</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
             <button
               onClick={() => onAreaChange('all')}
@@ -219,7 +219,7 @@ export default function ApartmentSelector({
                 padding: '5px 10px', borderRadius: '8px',
                 fontSize: '11px', fontWeight: 500, cursor: 'pointer', border: 'none',
                 backgroundColor: selectedArea === 'all' ? '#3B82F6' : 'rgba(255,255,255,0.06)',
-                color: selectedArea === 'all' ? 'white' : '#94A3B8',
+                color: selectedArea === 'all' ? 'white' : 'var(--text-muted)',
               }}
             >
               전체
@@ -232,7 +232,7 @@ export default function ApartmentSelector({
                   padding: '5px 10px', borderRadius: '8px',
                   fontSize: '11px', fontWeight: 500, cursor: 'pointer', border: 'none',
                   backgroundColor: selectedArea === area ? '#3B82F6' : 'rgba(255,255,255,0.06)',
-                  color: selectedArea === area ? 'white' : '#94A3B8',
+                  color: selectedArea === area ? 'white' : 'var(--text-muted)',
                 }}
               >
                 {Math.floor(area * 0.3025)}평 ({area}㎡)
@@ -246,7 +246,7 @@ export default function ApartmentSelector({
       <div style={{ padding: '14px 20px', flex: 1, maxHeight: isMobile ? '240px' : 'none', overflowY: isMobile ? 'auto' : 'visible' }}>
         {/* 단지 검색 */}
         <div style={{ position: 'relative', marginBottom: '10px' }}>
-          <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#475569', pointerEvents: 'none' }} />
+          <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', pointerEvents: 'none' }} />
           <input
             type="text"
             placeholder="단지명 검색 (전국)"
@@ -257,12 +257,12 @@ export default function ApartmentSelector({
             }}
             style={{
               width: '100%', padding: '7px 10px 7px 28px', borderRadius: '8px',
-              fontSize: '12px', backgroundColor: 'rgba(255,255,255,0.05)', color: '#F1F5F9',
+              fontSize: '12px', backgroundColor: 'rgba(255,255,255,0.05)', color: 'var(--text-primary)',
               border: '1px solid rgba(255,255,255,0.08)', outline: 'none', boxSizing: 'border-box',
             }}
           />
         </div>
-        <p style={{ fontSize: '11px', fontWeight: 600, color: '#94A3B8', marginBottom: '10px' }}>
+        <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '10px' }}>
           주요 단지 ({apartments.filter(a => !search || a.name.includes(search)).length}개)
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -283,22 +283,22 @@ export default function ApartmentSelector({
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 backgroundColor: selectedId === apt.id ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.06)',
               }}>
-                <Building2 size={16} style={{ color: selectedId === apt.id ? '#3B82F6' : '#64748B' }} />
+                <Building2 size={16} style={{ color: selectedId === apt.id ? '#3B82F6' : 'var(--text-dim)' }} />
               </div>
 
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{
-                  fontSize: '13px', fontWeight: 600, color: '#F1F5F9',
+                  fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)',
                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   marginBottom: '2px',
                 }}>
                   {apt.name}
                 </p>
-                <p style={{ fontSize: '11px', color: '#475569' }}>{apt.district}</p>
+                <p style={{ fontSize: '11px', color: 'var(--text-dim)' }}>{apt.district}</p>
               </div>
 
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <p style={{ fontSize: '12px', fontWeight: 700, fontFamily: 'Roboto Mono, monospace', color: '#F1F5F9', marginBottom: '2px' }}>
+                <p style={{ fontSize: '12px', fontWeight: 700, fontFamily: 'Roboto Mono, monospace', color: 'var(--text-primary)', marginBottom: '2px' }}>
                   {(apt.latestPrice / 10000).toFixed(0)}억
                 </p>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '2px', justifyContent: 'flex-end' }}>
