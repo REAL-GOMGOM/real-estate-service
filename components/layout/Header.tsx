@@ -7,16 +7,14 @@ import { Menu, X, TrendingUp, Sun, Moon } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 
 const NAV_ITEMS = [
-  { label: '시세 분석',         href: '/market' },
-  { label: '아파트 차트',       href: '/chart' },
-  { label: '실거래 내역',       href: '/transactions' },
-  { label: '실질 가치 비교',    href: '/dollar' },
-  { label: '부동산 지도',       href: '/location-map' },
-  { label: '청약 정보',         href: '/subscription' },
-  { label: '부동산 달력',       href: '/calendar' },
-  { label: '변동률 지도',       href: '/price-map' },
-  { label: '상승률',            href: '/price-trend' },
-  { label: '뉴스',              href: '/news' },
+  { label: '아파트 차트',    href: '/chart' },
+  { label: '실거래',         href: '/transactions' },
+  { label: '실질 가치',      href: '/dollar' },
+  { label: '부동산 지도',    href: '/location-map' },
+  { label: '청약',           href: '/subscription' },
+  { label: '달력',           href: '/calendar' },
+  { label: '변동률',         href: '/price-map' },
+  { label: '뉴스',           href: '/news' },
 ];
 
 export default function Header() {
