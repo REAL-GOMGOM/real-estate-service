@@ -50,7 +50,7 @@ function createMarkerElement(loc: LocationScore, onClick: () => void): HTMLDivEl
   box.style.cssText = `
     padding: 5px 9px;
     border-radius: 8px;
-    background: rgba(15,22,41,0.95);
+    background: var(--bg-card);
     border: 1.5px solid ${color};
     backdrop-filter: blur(8px);
     white-space: nowrap;
@@ -69,7 +69,7 @@ function createMarkerElement(loc: LocationScore, onClick: () => void): HTMLDivEl
       position: absolute; top: -3px; right: -3px;
       width: 7px; height: 7px; border-radius: 50%;
       background: #EF4444;
-      border: 1.5px solid rgba(15,22,41,0.95);
+      border: 1.5px solid var(--bg-card);
     `;
     box.appendChild(dot);
   }

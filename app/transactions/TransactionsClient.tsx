@@ -73,7 +73,7 @@ function ChartTooltip({ active, payload }: any) {
   return (
     <div style={{
       padding: '8px 12px', borderRadius: '8px',
-      backgroundColor: '#1E2A45', border: '1px solid var(--border-hover)',
+      backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-hover)',
       fontSize: '12px',
     }}>
       <p style={{ color: 'var(--text-muted)', marginBottom: '2px' }}>{d.date} · {d.area}㎡</p>
@@ -119,7 +119,7 @@ function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () =
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%', maxWidth: '700px', maxHeight: '90vh',
-          backgroundColor: '#0B1120',
+          backgroundColor: 'var(--bg-primary)',
           borderRadius: '20px',
           border: '1px solid var(--border)',
           overflowY: 'auto',

@@ -32,7 +32,7 @@ function CustomTooltip({ active, payload, label }: any) {
 
   return (
     <div style={{
-      backgroundColor: 'rgba(15,22,41,0.97)',
+      backgroundColor: 'var(--bg-card)',
       border: '1px solid var(--border-hover)',
       borderRadius: '12px',
       padding: '12px 16px',
