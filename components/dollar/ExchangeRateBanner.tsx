@@ -44,7 +44,7 @@ export default function ExchangeRateBanner({
             <option key={y} value={y}>{y}년</option>
           ))}
         </select>
-        <span style={{ fontSize: '13px', fontFamily: 'Roboto Mono, monospace', color: '#E2E8F0' }}>
+        <span style={{ fontSize: '13px', fontFamily: 'Roboto Mono, monospace', color: 'var(--text-secondary)' }}>
           ₩{baseRate.toLocaleString()} / $1
         </span>
       </div>
@@ -59,7 +59,7 @@ export default function ExchangeRateBanner({
             <option key={y} value={y}>{y}년</option>
           ))}
         </select>
-        <span style={{ fontSize: '13px', fontFamily: 'Roboto Mono, monospace', color: '#E2E8F0' }}>
+        <span style={{ fontSize: '13px', fontFamily: 'Roboto Mono, monospace', color: 'var(--text-secondary)' }}>
           ₩{compareRate.toLocaleString()} / $1
         </span>
       </div>
