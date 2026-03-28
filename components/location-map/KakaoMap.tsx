@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import type { LocationScore, KakaoMap as KakaoMapType } from '@/lib/types';
 import { getScoreColor } from './LocationSidebar';
+import type { SchoolData } from './SchoolDetailPanel';
 
 interface MapConfig {
   lat: number;
@@ -15,10 +16,27 @@ interface Props {
   onMarkerClick: (location: LocationScore) => void;
   selectedLocation: LocationScore | null;
   mapConfig: MapConfig;
+  schools?: SchoolData[];
+  activeLayers?: Set<string>;
+  onSchoolClick?: (school: SchoolData) => void;
 }
 
 // 이 레벨 이상이면 시 단위 표시
 const CITY_LEVEL_THRESHOLD = 10;
+// 학교 마커는 이 줌 레벨 이하에서만 표시 (충분히 줌인했을 때)
+const SCHOOL_ZOOM_THRESHOLD = 7;
+
+const SCHOOL_COLORS: Record<string, string> = {
+  elementary: '#22C55E',
+  middle: '#3B82F6',
+  high: '#F97316',
+};
+
+const SCHOOL_LABELS: Record<string, string> = {
+  elementary: '초',
+  middle: '중',
+  high: '고',
+};
 
 function createMarkerElement(loc: LocationScore, onClick: () => void): HTMLDivElement {
   const color      = getScoreColor(loc.score);
@@ -45,7 +63,6 @@ function createMarkerElement(loc: LocationScore, onClick: () => void): HTMLDivEl
     position: relative;
   `;
 
-  // 토허제 빨간 점
   if (loc.isToheo) {
     const dot = document.createElement('div');
     dot.style.cssText = `
@@ -86,13 +103,68 @@ function createMarkerElement(loc: LocationScore, onClick: () => void): HTMLDivEl
   return wrapper;
 }
 
+function createSchoolMarkerElement(school: SchoolData, onClick: () => void): HTMLDivElement {
+  const color = SCHOOL_COLORS[school.school_level] || '#3B82F6';
+  const label = SCHOOL_LABELS[school.school_level] || '학';
+  const gradeText = school.grade ? `${school.grade}등급` : '';
+
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText = 'display:inline-flex;flex-direction:column;align-items:center;cursor:pointer;';
+
+  const box = document.createElement('div');
+  box.style.cssText = `
+    padding: 3px 7px;
+    border-radius: 6px;
+    background: ${color};
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  `;
+
+  const iconEl = document.createElement('span');
+  iconEl.style.cssText = 'font-size:11px;font-weight:800;color:white;font-family:Pretendard,sans-serif;';
+  iconEl.textContent = `🏫 ${label}`;
+  box.appendChild(iconEl);
+
+  if (gradeText) {
+    const gradeEl = document.createElement('span');
+    gradeEl.style.cssText = `
+      font-size:10px;font-weight:800;color:white;
+      background:rgba(0,0,0,0.25);padding:1px 5px;border-radius:4px;
+      font-family:'Roboto Mono',monospace;
+    `;
+    gradeEl.textContent = gradeText;
+    box.appendChild(gradeEl);
+  }
+
+  // 학교명 (줌인 시에만 보이므로 간략 표시)
+  const nameEl = document.createElement('div');
+  nameEl.style.cssText = 'font-size:9px;font-weight:600;color:white;text-align:center;margin-top:1px;text-shadow:0 1px 3px rgba(0,0,0,0.5);';
+  nameEl.textContent = school.name.replace(/서울|학교$/g, '').trim();
+
+  const tail = document.createElement('div');
+  tail.style.cssText = `width:0;height:0;border-left:3px solid transparent;border-right:3px solid transparent;border-top:4px solid ${color};`;
+
+  wrapper.appendChild(box);
+  wrapper.appendChild(nameEl);
+  wrapper.appendChild(tail);
+  wrapper.addEventListener('click', onClick);
+  return wrapper;
+}
+
 type OverlayRef = { setMap: (m: KakaoMapType | null) => void };
 
-export default function KakaoMap({ locations, onMarkerClick, selectedLocation, mapConfig }: Props) {
+export default function KakaoMap({
+  locations, onMarkerClick, selectedLocation, mapConfig,
+  schools = [], activeLayers, onSchoolClick,
+}: Props) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef          = useRef<KakaoMapType | null>(null);
   const cityOverlaysRef     = useRef<OverlayRef[]>([]);
   const districtOverlaysRef = useRef<OverlayRef[]>([]);
+  const schoolOverlaysRef   = useRef<OverlayRef[]>([]);
   const zoomHandlerRef      = useRef<(() => void) | null>(null);
   const prevMapConfigRef    = useRef<MapConfig | null>(null);
 
@@ -119,6 +191,10 @@ export default function KakaoMap({ locations, onMarkerClick, selectedLocation, m
     const showCity  = zoomLevel >= CITY_LEVEL_THRESHOLD;
     cityOverlaysRef.current.forEach((o) => o.setMap(showCity ? map : null));
     districtOverlaysRef.current.forEach((o) => o.setMap(showCity ? null : map));
+
+    // 학교 마커: 충분히 줌인했을 때만 표시
+    const showSchools = zoomLevel <= SCHOOL_ZOOM_THRESHOLD;
+    schoolOverlaysRef.current.forEach((o) => o.setMap(showSchools ? map : null));
   }, []);
 
   const renderMarkers = useCallback(() => {
@@ -133,6 +209,30 @@ export default function KakaoMap({ locations, onMarkerClick, selectedLocation, m
     districtOverlaysRef.current = createOverlays(districtLocations, map, !showCity);
   }, [cityLocations, districtLocations, createOverlays]);
 
+  // 학교 마커 렌더링
+  const renderSchoolMarkers = useCallback(() => {
+    if (!mapRef.current || !window.kakao?.maps) return;
+    const map = mapRef.current;
+
+    // 기존 학교 마커 제거
+    schoolOverlaysRef.current.forEach((o) => o.setMap(null));
+    schoolOverlaysRef.current = [];
+
+    if (!activeLayers || activeLayers.size === 0) return;
+
+    const filtered = schools.filter((s) => activeLayers.has(s.school_level));
+    const showSchools = map.getLevel() <= SCHOOL_ZOOM_THRESHOLD;
+
+    schoolOverlaysRef.current = filtered.map((school) => {
+      const position = new window.kakao.maps.LatLng(school.latitude, school.longitude);
+      const content = createSchoolMarkerElement(school, () => onSchoolClick?.(school));
+      return new window.kakao.maps.CustomOverlay({
+        position, content, yAnchor: 1.2, zIndex: 5,
+        map: showSchools ? map : null,
+      });
+    });
+  }, [schools, activeLayers, onSchoolClick]);
+
   // 최초 초기화
   useEffect(() => {
     if (!mapContainerRef.current || !window.kakao?.maps) return;
@@ -145,6 +245,7 @@ export default function KakaoMap({ locations, onMarkerClick, selectedLocation, m
     prevMapConfigRef.current = mapConfig;
 
     renderMarkers();
+    renderSchoolMarkers();
 
     const handler = () => { if (mapRef.current) applyZoomLevel(mapRef.current); };
     zoomHandlerRef.current = handler;
@@ -155,6 +256,11 @@ export default function KakaoMap({ locations, onMarkerClick, selectedLocation, m
   useEffect(() => {
     if (mapRef.current) renderMarkers();
   }, [renderMarkers]);
+
+  // 학교 데이터/레이어 변경 시 학교 마커 재생성
+  useEffect(() => {
+    if (mapRef.current) renderSchoolMarkers();
+  }, [renderSchoolMarkers]);
 
   // 권역 변경 시 지도 중심·레벨 이동
   useEffect(() => {
@@ -179,6 +285,7 @@ export default function KakaoMap({ locations, onMarkerClick, selectedLocation, m
     return () => {
       cityOverlaysRef.current.forEach((o) => o.setMap(null));
       districtOverlaysRef.current.forEach((o) => o.setMap(null));
+      schoolOverlaysRef.current.forEach((o) => o.setMap(null));
       if (mapRef.current && zoomHandlerRef.current) {
         window.kakao.maps.event.removeListener(mapRef.current, 'zoom_changed', zoomHandlerRef.current);
       }

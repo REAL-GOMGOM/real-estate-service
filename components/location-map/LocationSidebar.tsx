@@ -30,6 +30,7 @@ interface Props {
   onRegionChange: (region: string) => void;
   onToheoToggle: (val: boolean) => void;
   onLocationClick: (location: LocationScore) => void;
+  layerToggle?: React.ReactNode;
 }
 
 function TrendIcon({ trend }: { trend: LocationScore['trend'] }) {
@@ -76,6 +77,7 @@ export default function LocationSidebar({
   onRegionChange,
   onToheoToggle,
   onLocationClick,
+  layerToggle,
 }: Props) {
   const top10 = [...filteredLocations].sort((a, b) => a.score - b.score).slice(0, 10);
   const toheoCount = allLocations.filter((l) => l.isToheo).length;
@@ -137,6 +139,13 @@ export default function LocationSidebar({
           </div>
         </button>
       </div>
+
+      {/* 레이어 토글 */}
+      {layerToggle && (
+        <div style={{ padding: '12px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          {layerToggle}
+        </div>
+      )}
 
       {/* 점수 범례 */}
       <div style={{ padding: '12px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
