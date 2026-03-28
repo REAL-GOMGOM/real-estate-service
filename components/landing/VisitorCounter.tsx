@@ -9,7 +9,9 @@ export default function VisitorCounter() {
   useEffect(() => {
     fetch('/api/visitors')
       .then((r) => r.json())
-      .then(setData)
+      .then((json) => {
+        if (json.today !== undefined) setData(json);
+      })
       .catch(() => {});
   }, []);
 
