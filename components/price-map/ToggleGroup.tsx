@@ -19,7 +19,7 @@ export default function ToggleGroup<T extends string>({ options, selected, onCha
           style={{
             padding: '8px 18px', fontSize: '13px', fontWeight: 600,
             border: 'none', cursor: 'pointer', transition: 'all 0.15s',
-            backgroundColor: selected === opt.value ? '#3B82F6' : 'var(--border-light)',
+            backgroundColor: selected === opt.value ? 'var(--accent)' : 'var(--border-light)',
             color: selected === opt.value ? 'white' : 'var(--text-muted)',
           }}
         >

@@ -2,7 +2,7 @@
 
 const LEGEND_ITEMS = [
   { label: '-1.5%↓', color: '#1E40AF' },
-  { label: '-0.5%',  color: '#60A5FA' },
+  { label: '-0.5%',  color: 'var(--accent)' },
   { label: '-0.1%',  color: '#93C5FD' },
   { label: '보합',   color: 'var(--text-muted)' },
   { label: '+0.1%',  color: '#FCA5A5' },

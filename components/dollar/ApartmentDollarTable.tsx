@@ -149,7 +149,7 @@ export default function ApartmentDollarTable({ entries, baseYear, compareYear, o
               backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-                <Loader2 size={16} style={{ animation: 'spin 1s linear infinite', color: '#3B82F6' }} />
+                <Loader2 size={16} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent)' }} />
                 <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>{entry.aptName}</span>
                 <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>{entry.district}</span>
               </div>

@@ -39,7 +39,7 @@ const LEVEL_LABELS: Record<string, string> = {
 
 const LEVEL_COLORS: Record<string, string> = {
   elementary: '#22C55E',
-  middle: '#3B82F6',
+  middle: 'var(--accent)',
   high: '#F97316',
 };
 
@@ -63,7 +63,7 @@ export default function SchoolDetailPanel({ school, nearbySchools, onClose, embe
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  const color = LEVEL_COLORS[school.school_level] || '#3B82F6';
+  const color = LEVEL_COLORS[school.school_level] || 'var(--accent)';
   const nearbyMiddle = nearbySchools.filter((s) => s.school_level === 'middle' && s.id !== school.id);
 
   const panelStyle: React.CSSProperties = embedded ? {} : isMobile ? {
@@ -257,7 +257,7 @@ export default function SchoolDetailPanel({ school, nearbySchools, onClose, embe
                 borderBottom: '1px solid var(--border-light)',
               }}>
                 <div>
-                  <p style={{ fontSize: '13px', fontWeight: 600, color: '#3B82F6' }}>{s.name}</p>
+                  <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--accent)' }}>{s.name}</p>
                   <p style={{ fontSize: '10px', color: 'var(--text-dim)' }}>
                     {s.establish_type} {s.coedu_type}
                   </p>

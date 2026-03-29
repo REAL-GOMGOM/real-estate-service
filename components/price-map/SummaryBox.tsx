@@ -29,7 +29,7 @@ export default function SummaryBox({ period, nationwide, capitalArea, nonCapital
             <p style={{
               fontSize: '20px', fontWeight: 700,
               fontFamily: 'Roboto Mono, monospace',
-              color: item.value >= 0 ? '#F87171' : '#60A5FA',
+              color: item.value >= 0 ? '#F87171' : 'var(--accent)',
             }}>
               {item.value >= 0 ? '+' : ''}{item.value.toFixed(2)}%
             </p>

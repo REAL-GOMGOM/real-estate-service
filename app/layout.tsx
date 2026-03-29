@@ -3,14 +3,23 @@ import './globals.css';
 import ThemeProvider from '@/components/ThemeProvider';
 
 export const metadata: Metadata = {
-  title: '부동산 인사이트 | 시세·입지·청약 토탈 서비스',
-  description: '서울 및 수도권 부동산 시세 분석, 입지 점수 지도, 청약 정보를 한 곳에서 확인하세요.',
-  keywords: ['부동산', '시세', '청약', '입지분석', '아파트'],
+  title: '내집(Naezip) | 실거래가·투자분석·건축정보 — 부동산 통합 플랫폼',
+  description: '집값이 궁금할 때, 투자 고민될 때, 우리 동네 뭐가 생기는지 알고 싶을 때 — 부동산의 모든 답을 내집에서 한번에.',
+  keywords: ['내집', 'Naezip', '실거래가', '아파트시세', '부동산투자', '청약정보', '입지분석'],
   openGraph: {
-    title: '부동산 인사이트',
-    description: '서울 및 수도권 부동산 토탈 서비스',
+    title: '내집(Naezip) | 부동산의 모든 답, 한곳에',
+    description: '실거래가·투자분석·입지점수·청약정보를 한곳에 압축.',
     type: 'website',
+    url: 'https://www.naezipkorea.com',
+    siteName: '내집(Naezip)',
+    locale: 'ko_KR',
   },
+  twitter: {
+    card: 'summary_large_image',
+    title: '내집(Naezip) | 부동산의 모든 답, 한곳에',
+    description: '실거래가·투자분석·입지점수·청약정보를 한곳에 압축.',
+  },
+  other: { 'theme-color': '#C4654A' },
 };
 
 export default function RootLayout({

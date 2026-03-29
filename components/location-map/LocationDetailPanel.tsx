@@ -63,9 +63,9 @@ export default function LocationDetailPanel({ location, onClose, embedded }: Pro
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
           padding: '10px', borderRadius: '12px', marginBottom: '14px',
-          backgroundColor: 'rgba(59,130,246,0.12)',
-          border: '1px solid rgba(59,130,246,0.25)',
-          color: '#3B82F6', textDecoration: 'none',
+          backgroundColor: 'var(--accent-bg)',
+          border: '1px solid var(--accent-border)',
+          color: 'var(--accent)', textDecoration: 'none',
           fontSize: '13px', fontWeight: 600,
         }}
       >

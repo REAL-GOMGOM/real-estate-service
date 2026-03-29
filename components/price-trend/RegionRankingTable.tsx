@@ -55,7 +55,7 @@ export default function RegionRankingTable({ data, regions }: RegionRankingTable
           <span style={{
             fontSize: '13px', fontWeight: 700, textAlign: 'right',
             fontFamily: 'Roboto Mono, monospace',
-            color: r.value >= 0 ? '#F87171' : '#60A5FA',
+            color: r.value >= 0 ? '#F87171' : 'var(--accent)',
           }}>
             {r.value >= 0 ? '+' : ''}{r.value.toFixed(3)}%
           </span>

@@ -57,7 +57,7 @@ function RegionTabRow({
           style={{
             padding: '5px 10px', borderRadius: '8px',
             fontSize: '11px', fontWeight: 500, cursor: 'pointer', border: 'none',
-            backgroundColor: selectedRegion === r ? '#3B82F6' : 'var(--border-light)',
+            backgroundColor: selectedRegion === r ? 'var(--accent)' : 'var(--border-light)',
             color: selectedRegion === r ? 'white' : 'var(--text-muted)',
             transition: 'background 0.15s', whiteSpace: 'nowrap',
           }}
@@ -193,8 +193,8 @@ export default function LocationSidebar({
                 width: '20px', height: '20px', borderRadius: '6px', flexShrink: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: '10px', fontWeight: 700,
-                backgroundColor: index < 3 ? 'rgba(59,130,246,0.2)' : 'var(--border-light)',
-                color: index < 3 ? '#3B82F6' : 'var(--text-dim)',
+                backgroundColor: index < 3 ? 'var(--accent-border)' : 'var(--border-light)',
+                color: index < 3 ? 'var(--accent)' : 'var(--text-dim)',
               }}>
                 {index + 1}
               </span>

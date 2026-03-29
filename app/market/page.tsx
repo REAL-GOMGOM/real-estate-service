@@ -10,9 +10,9 @@ export default function MarketPage() {
           <div style={{
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             width: '72px', height: '72px', borderRadius: '20px',
-            backgroundColor: 'rgba(59,130,246,0.12)', marginBottom: '24px',
+            backgroundColor: 'var(--accent-bg)', marginBottom: '24px',
           }}>
-            <BarChart2 size={36} color="#3B82F6" />
+            <BarChart2 size={36} color="var(--accent)" />
           </div>
           <h1 style={{ fontSize: '28px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '12px' }}>
             시세 분석

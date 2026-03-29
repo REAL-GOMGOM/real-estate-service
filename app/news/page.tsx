@@ -8,7 +8,7 @@ import type { NewsItem } from '@/app/api/news/route';
 type NewsWithMeta = NewsItem & { pubDateFormatted: string; pubDateTs: number };
 
 const CATEGORY_CONFIG = {
-  realestate: { label: '부동산', color: '#3B82F6', bg: 'rgba(59,130,246,0.12)' },
+  realestate: { label: '부동산', color: 'var(--accent)', bg: 'var(--accent-bg)' },
   general:    { label: '이슈',   color: '#A855F7', bg: 'rgba(168,85,247,0.12)'  },
 };
 
@@ -82,7 +82,7 @@ export default function NewsPage() {
                   style={{
                     padding: '7px 16px', borderRadius: '999px', fontSize: '13px', fontWeight: 600,
                     cursor: 'pointer', border: 'none',
-                    backgroundColor: active ? '#3B82F6' : 'var(--border-light)',
+                    backgroundColor: active ? 'var(--accent)' : 'var(--border-light)',
                     color: active ? '#fff' : 'var(--text-dim)',
                   }}
                 >

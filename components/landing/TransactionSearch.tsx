@@ -129,7 +129,7 @@ export default function TransactionSearch() {
 
         {/* 섹션 헤더 */}
         <div style={{ marginBottom: '32px' }}>
-          <p style={{ fontSize: '12px', fontWeight: 600, color: '#3B82F6', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '8px' }}>
+          <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--accent)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '8px' }}>
             실거래가 조회
           </p>
           <h2 style={{ fontSize: 'clamp(22px, 4vw, 32px)', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '8px' }}>
@@ -150,7 +150,7 @@ export default function TransactionSearch() {
               style={{
                 padding: '6px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
                 cursor: 'pointer', border: 'none',
-                backgroundColor: regionIdx === i ? '#3B82F6' : 'var(--border-light)',
+                backgroundColor: regionIdx === i ? 'var(--accent)' : 'var(--border-light)',
                 color: regionIdx === i ? '#fff' : 'var(--text-dim)',
               }}
             >
@@ -169,9 +169,9 @@ export default function TransactionSearch() {
               style={{
                 padding: '5px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 500,
                 cursor: 'pointer',
-                border: district === d ? '1px solid rgba(59,130,246,0.5)' : '1px solid var(--border)',
+                border: district === d ? '1px solid var(--accent-border)' : '1px solid var(--border)',
                 backgroundColor: district === d ? 'rgba(59,130,246,0.15)' : 'var(--border-light)',
-                color: district === d ? '#60A5FA' : 'var(--text-muted)',
+                color: district === d ? 'var(--accent)' : 'var(--text-muted)',
               }}
             >
               {d.replace(/^(인천|부산|대구|울산)\s/, '')}
@@ -203,7 +203,7 @@ export default function TransactionSearch() {
             type="submit"
             style={{
               padding: '12px 24px', borderRadius: '12px', fontSize: '14px', fontWeight: 600,
-              backgroundColor: '#3B82F6', color: 'white', border: 'none', cursor: 'pointer',
+              backgroundColor: 'var(--accent)', color: 'white', border: 'none', cursor: 'pointer',
               whiteSpace: 'nowrap',
             }}
           >
@@ -234,7 +234,7 @@ export default function TransactionSearch() {
                     border: '1px solid var(--border)',
                     transition: 'border-color 0.15s',
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(59,130,246,0.4)')}
+                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent-border)')}
                   onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>

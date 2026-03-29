@@ -113,8 +113,8 @@ function PriceMapContent() {
               {selectedRegion && (
                 <div style={{
                   padding: '16px', borderRadius: '12px', marginBottom: '16px',
-                  backgroundColor: 'rgba(59,130,246,0.08)',
-                  border: '1px solid rgba(59,130,246,0.2)',
+                  backgroundColor: 'var(--accent-bg)',
+                  border: '1px solid var(--accent-border)',
                 }}>
                   <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '4px' }}>선택 지역</p>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
@@ -124,7 +124,7 @@ function PriceMapContent() {
                     <span style={{
                       fontSize: '20px', fontWeight: 700,
                       fontFamily: 'Roboto Mono, monospace',
-                      color: selectedRegion.change_rate >= 0 ? '#F87171' : '#60A5FA',
+                      color: selectedRegion.change_rate >= 0 ? '#F87171' : 'var(--accent)',
                     }}>
                       {selectedRegion.change_rate >= 0 ? '+' : ''}{selectedRegion.change_rate.toFixed(2)}%
                     </span>
@@ -154,7 +154,7 @@ function PriceMapContent() {
                       display: 'grid', gridTemplateColumns: '50px 1fr 100px',
                       padding: '10px 16px',
                       backgroundColor: selectedRegion?.code === r.code
-                        ? 'rgba(59,130,246,0.08)'
+                        ? 'var(--accent-bg)'
                         : i % 2 === 0
                           ? 'var(--bg-overlay)'
                           : 'transparent',
@@ -167,7 +167,7 @@ function PriceMapContent() {
                     <span style={{
                       fontSize: '13px', fontWeight: 700, textAlign: 'right',
                       fontFamily: 'Roboto Mono, monospace',
-                      color: r.change_rate >= 0 ? '#F87171' : '#60A5FA',
+                      color: r.change_rate >= 0 ? '#F87171' : 'var(--accent)',
                     }}>
                       {r.change_rate >= 0 ? '▲' : '▼'} {Math.abs(r.change_rate).toFixed(2)}%
                     </span>

@@ -52,7 +52,7 @@ const SHORT_NAMES: Record<string, string> = {
 
 function rateToColor(rate: number): string {
   if (rate <= -1.5) return '#1E40AF';
-  if (rate <= -0.5) return '#60A5FA';
+  if (rate <= -0.5) return 'var(--accent)';
   if (rate <= -0.1) return '#93C5FD';
   if (rate < 0.1)   return 'var(--text-muted)';
   if (rate < 0.25)  return '#FCA5A5';

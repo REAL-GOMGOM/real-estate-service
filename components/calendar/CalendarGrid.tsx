@@ -49,7 +49,7 @@ export default function CalendarGrid({ year, month, events, activeCategories, on
             style={{
               padding: '10px 0', textAlign: 'center',
               fontSize: '12px', fontWeight: 600,
-              color: i === 0 ? '#EF4444' : i === 6 ? '#3B82F6' : 'var(--text-dim)',
+              color: i === 0 ? '#EF4444' : i === 6 ? 'var(--accent)' : 'var(--text-dim)',
               backgroundColor: 'var(--bg-overlay)',
             }}
           >
@@ -71,12 +71,12 @@ export default function CalendarGrid({ year, month, events, activeCategories, on
                 minHeight: '100px',
                 padding: '6px',
                 backgroundColor: cell.isToday
-                  ? 'rgba(59,130,246,0.08)'
+                  ? 'var(--accent-bg)'
                   : cell.isCurrentMonth
                     ? 'var(--bg-overlay)'
                     : 'var(--bg-overlay)',
                 borderRadius: '4px',
-                border: cell.isToday ? '1px solid rgba(59,130,246,0.3)' : '1px solid var(--border-light)',
+                border: cell.isToday ? '1px solid var(--accent-border)' : '1px solid var(--border-light)',
                 opacity: cell.isCurrentMonth ? 1 : 0.4,
               }}
             >
@@ -84,11 +84,11 @@ export default function CalendarGrid({ year, month, events, activeCategories, on
               <div style={{
                 fontSize: '13px', fontWeight: cell.isToday ? 700 : 500,
                 color: cell.isToday
-                  ? '#3B82F6'
+                  ? 'var(--accent)'
                   : cell.dayOfWeek === 0
                     ? '#EF4444'
                     : cell.dayOfWeek === 6
-                      ? '#3B82F6'
+                      ? 'var(--accent)'
                       : 'var(--text-secondary)',
                 marginBottom: '4px',
               }}>

@@ -43,8 +43,8 @@ export default function MonthNavigator({ year, month, onPrev, onNext, onToday }:
         onClick={onToday}
         style={{
           padding: '6px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: 500,
-          backgroundColor: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.25)',
-          color: '#3B82F6', cursor: 'pointer',
+          backgroundColor: 'var(--accent-bg)', border: '1px solid var(--accent-border)',
+          color: 'var(--accent)', cursor: 'pointer',
         }}
       >
         오늘

@@ -86,7 +86,7 @@ export default function MarketPreview() {
             <h2 style={{ fontSize: 'clamp(26px, 4vw, 38px)', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '8px' }}>주요 지역 시세</h2>
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)' }}>최근 8개월 실거래가 기준 · 단위: 억원</p>
           </div>
-          <Link href="/market" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '14px', fontWeight: 600, color: '#3B82F6', textDecoration: 'none' }}>
+          <Link href="/market" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '14px', fontWeight: 600, color: 'var(--accent)', textDecoration: 'none' }}>
             전체 차트 보기 <ArrowRight size={16} />
           </Link>
         </motion.div>

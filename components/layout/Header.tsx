@@ -44,7 +44,7 @@ export default function Header() {
             <div style={{ width: '34px', height: '34px', borderRadius: '10px', backgroundColor: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <TrendingUp size={18} color="white" />
             </div>
-            <span style={{ fontWeight: 700, fontSize: '17px', color: 'var(--text-primary)' }}>부동산 인사이트</span>
+            <span style={{ fontWeight: 700, fontSize: '17px', color: 'var(--text-primary)' }}>내집</span>
           </Link>
 
           {/* 데스크탑 네비게이션 */}
