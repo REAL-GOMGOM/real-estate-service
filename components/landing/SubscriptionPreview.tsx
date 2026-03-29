@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { ArrowRight, Calendar, Home, Users } from 'lucide-react';
+import { ArrowRight, Calendar, Home } from 'lucide-react';
 import type { SubscriptionItem } from '@/lib/types';
 import SubscriptionDetailModal from '@/components/subscription/SubscriptionDetailModal';
 
@@ -77,24 +77,19 @@ export default function SubscriptionPreview({ items }: Props) {
                   </div>
 
                   {/* 메타 정보 */}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '20px', flexShrink: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Calendar size={13} style={{ color: 'var(--text-dim)' }} />
-                      <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{item.startDate} ~ {item.endDate}</span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 16px', width: '100%', overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Calendar size={12} style={{ color: 'var(--text-dim)', flexShrink: 0 }} />
+                      <span style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{item.startDate} ~ {item.endDate}</span>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Home size={13} style={{ color: 'var(--text-dim)' }} />
-                      <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{item.totalUnits.toLocaleString()}세대{item.houseType ? ` · ${item.houseType}` : ''}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Home size={12} style={{ color: 'var(--text-dim)', flexShrink: 0 }} />
+                      <span style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{item.totalUnits.toLocaleString()}세대</span>
                     </div>
-                    {item.competitionRate !== null ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <Users size={13} style={{ color: '#22C55E' }} />
-                        <span style={{ fontSize: '13px', fontWeight: 700, color: '#22C55E' }}>{item.competitionRate}:1</span>
-                      </div>
-                    ) : (
-                      <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>경쟁률 미발표</span>
-                    )}
-                    <span style={{ fontSize: '14px', fontWeight: 700, fontFamily: 'Roboto Mono, monospace', color: '#F59E0B' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                      {item.competitionRate !== null ? `경쟁률 ${item.competitionRate}:1` : '경쟁률 미발표'}
+                    </span>
+                    <span style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'Roboto Mono, monospace', color: '#F59E0B', whiteSpace: 'nowrap' }}>
                       {formatPrice(item.minPrice)} ~ {formatPrice(item.maxPrice)}
                     </span>
                   </div>
