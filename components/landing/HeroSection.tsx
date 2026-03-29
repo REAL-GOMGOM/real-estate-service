@@ -29,7 +29,7 @@ export default function HeroSection() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 18px', borderRadius: '999px', fontSize: '13px', fontWeight: 500, backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#FFFFFF', marginBottom: '36px' }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 18px', borderRadius: '999px', fontSize: '13px', fontWeight: 500, backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#FFFFFF', marginTop: '24px', marginBottom: '28px' }}
         >
           <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#FFFFFF', animation: 'pulse 2s infinite' }} />
           2026년 3월 실거래 데이터 업데이트 완료
@@ -85,20 +85,20 @@ export default function HeroSection() {
           </Link>
         </motion.div>
 
-        {/* 플로팅 통계 카드 */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '12px', marginBottom: '20px' }}>
+        {/* 통계 카드 — 가로 3열 고정, 흰색 배경 */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', maxWidth: '480px', margin: '0 auto 20px' }}>
           {FLOATING_STATS.map((stat, index) => (
             <motion.div
               key={stat.label}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.5 + index * 0.1 }}
-              style={{ padding: '14px 20px', borderRadius: '14px', backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)', backdropFilter: 'blur(12px)', textAlign: 'left', minWidth: '130px' }}
+              style={{ padding: '12px 10px', borderRadius: '12px', backgroundColor: '#FFFFFF', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
             >
-              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)', marginBottom: '4px' }}>{stat.label}</p>
-              <p style={{ fontSize: '20px', fontWeight: 700, fontFamily: 'Roboto Mono, monospace', color: '#FFFFFF', marginBottom: '2px' }}>{stat.value}</p>
-              <p style={{ fontSize: '11px', fontWeight: 600, color: '#FFF3D6', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                <TrendingUp size={11} />
+              <p style={{ fontSize: '10px', color: '#8C8279', marginBottom: '4px' }}>{stat.label}</p>
+              <p style={{ fontSize: '18px', fontWeight: 800, fontFamily: 'Roboto Mono, monospace', color: '#1A1714', marginBottom: '2px' }}>{stat.value}</p>
+              <p style={{ fontSize: '10px', fontWeight: 600, color: '#3D6B44', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                <TrendingUp size={10} />
                 {stat.change}
               </p>
             </motion.div>
