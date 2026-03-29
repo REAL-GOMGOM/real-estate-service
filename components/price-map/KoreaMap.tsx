@@ -91,17 +91,25 @@ function getCentroid(geometry: GeoFeature['geometry']): [number, number] {
   return [sumLng / coords.length, sumLat / coords.length];
 }
 
+function getAllCoords(geometry: GeoFeature['geometry']): number[][] {
+  if (geometry.type === 'Polygon') {
+    return (geometry.coordinates as number[][][]).flat();
+  }
+  return (geometry.coordinates as number[][][][]).flat(2);
+}
+
 function getBounds(features: GeoFeature[]): number[] {
   let minLng = 180, minLat = 90, maxLng = -180, maxLat = -90;
   for (const f of features) {
-    const [cLng, cLat] = getCentroid(f.geometry);
-    if (cLng < minLng) minLng = cLng;
-    if (cLng > maxLng) maxLng = cLng;
-    if (cLat < minLat) minLat = cLat;
-    if (cLat > maxLat) maxLat = cLat;
+    for (const pt of getAllCoords(f.geometry)) {
+      if (pt[0] < minLng) minLng = pt[0];
+      if (pt[0] > maxLng) maxLng = pt[0];
+      if (pt[1] < minLat) minLat = pt[1];
+      if (pt[1] > maxLat) maxLat = pt[1];
+    }
   }
-  const padLng = (maxLng - minLng) * 0.15;
-  const padLat = (maxLat - minLat) * 0.15;
+  const padLng = (maxLng - minLng) * 0.1;
+  const padLat = (maxLat - minLat) * 0.1;
   return [minLng - padLng, minLat - padLat, maxLng + padLng, maxLat + padLat];
 }
 
@@ -121,8 +129,7 @@ export default function KoreaMap({ regions, onRegionClick, tradeType = 'sale' }:
   const [districtData, setDistrictData] = useState<DistrictData[]>([]);
   const [loadingDistricts, setLoadingDistricts] = useState(false);
 
-  const svgWidth = 500;
-  const svgHeight = 600;
+  const svgBaseWidth = 500;
 
   // GeoJSON 로드
   useEffect(() => {
@@ -176,6 +183,15 @@ export default function KoreaMap({ regions, onRegionClick, tradeType = 'sale' }:
     if (currentFeatures.length === 0) return [124.5, 33, 132, 39];
     return getBounds(currentFeatures);
   }, [currentFeatures]);
+
+  // 실제 좌표 비율에 맞는 SVG 크기
+  const lngRange = bounds[2] - bounds[0];
+  const latRange = bounds[3] - bounds[1];
+  // 위도 보정 (한국 위도 ~37도에서 경도 1도 ≈ 위도 0.8도)
+  const correctedLng = lngRange * Math.cos((bounds[1] + bounds[3]) / 2 * Math.PI / 180);
+  const aspect = correctedLng / latRange;
+  const svgWidth = svgBaseWidth;
+  const svgHeight = Math.round(svgBaseWidth / Math.max(aspect, 0.5));
 
   // 구 단위 변동률 매핑
   const districtRateMap = useMemo(() => {
