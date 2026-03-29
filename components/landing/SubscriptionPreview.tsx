@@ -71,7 +71,7 @@ export default function SubscriptionPreview({ items }: Props) {
                   </span>
 
                   {/* 단지명 */}
-                  <div style={{ flex: 1, minWidth: '180px' }}>
+                  <div style={{ flex: 1, minWidth: '0' }}>
                     <p style={{ fontWeight: 600, fontSize: '15px', color: 'var(--text-primary)', marginBottom: '4px' }}>{item.name}</p>
                     <p style={{ fontSize: '13px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.address}</p>
                   </div>
