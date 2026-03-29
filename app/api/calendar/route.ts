@@ -75,8 +75,13 @@ export async function GET(request: NextRequest) {
     // 2) 확정 정기 이벤트
     const fixedEvents = getCalendarEvents(year, month);
 
-    // 3) 청약 이벤트
-    const subEvents = await fetchSubscriptionEvents(year, month);
+    // 3) 청약 이벤트 (타임아웃 3초, 실패해도 정기 이벤트는 반환)
+    let subEvents: CalendarEvent[] = [];
+    try {
+      const subPromise = fetchSubscriptionEvents(year, month);
+      const timeout = new Promise<CalendarEvent[]>((resolve) => setTimeout(() => resolve([]), 3000));
+      subEvents = await Promise.race([subPromise, timeout]);
+    } catch { /* 실패 무시 */ }
 
     // 합치기 (DB > 정기 > 청약, 중복 제거)
     const allEvents = [...(dbEvents || fixedEvents), ...subEvents];

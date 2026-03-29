@@ -99,13 +99,15 @@ export async function GET(request: NextRequest) {
     let thisData: Record<string, number> = {};
     let lastData: Record<string, number> = {};
 
-    for (let offset = 0; offset >= -3; offset--) {
-      thisData = await fetchRoneIndex(apiKey, statblId, getMonthStr(offset));
-      if (Object.keys(thisData).length > 0) {
-        lastData = await fetchRoneIndex(apiKey, statblId, getMonthStr(offset - 1));
-        break;
-      }
-    }
+    // 병렬로 최근 3개월 시도 (하나라도 데이터 있으면 사용)
+    const [m0, m1, m2] = await Promise.all([
+      fetchRoneIndex(apiKey, statblId, getMonthStr(-1)),
+      fetchRoneIndex(apiKey, statblId, getMonthStr(-2)),
+      fetchRoneIndex(apiKey, statblId, getMonthStr(0)),
+    ]);
+    if (Object.keys(m2).length > 0) { thisData = m2; lastData = m0; }
+    else if (Object.keys(m0).length > 0) { thisData = m0; lastData = m1; }
+    else { thisData = m1; lastData = {}; }
 
     const regions: RegionChange[] = [];
     for (const [name, code] of Object.entries(REGION_MAP)) {
@@ -132,7 +134,7 @@ export async function GET(request: NextRequest) {
       regions,
     };
 
-    return NextResponse.json(data);
+    return NextResponse.json(data, { headers: { "Cache-Control": "s-maxage=3600, stale-while-revalidate=86400" } });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : '서버 오류';
     return NextResponse.json({ error: message }, { status: 500 });
