@@ -77,7 +77,7 @@ export default function HeroSection() {
             <ArrowRight size={18} />
           </Link>
           <Link
-            href="/market"
+            href="/transactions"
             style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '16px 32px', borderRadius: '14px', fontSize: '16px', fontWeight: 600, backgroundColor: 'transparent', color: '#FFFFFF', textDecoration: 'none', border: '2px solid rgba(255,255,255,0.5)' }}
           >
             <BarChart3 size={20} />
