@@ -34,10 +34,10 @@ export default function TransactionTable({ transactions }: Props) {
         gridTemplateColumns: '1fr 80px 60px 100px 100px',
         padding: '12px 20px',
         borderBottom: '1px solid var(--border-light)',
-        backgroundColor: '#F0EBE5',
+        backgroundColor: 'var(--bg-tertiary)',
       }}>
         {['거래일', '면적', '층', '거래가', '㎡당'].map((h) => (
-          <span key={h} style={{ fontSize: '11px', fontWeight: 700, color: '#1A1714' }}>{h}</span>
+          <span key={h} style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-strong)' }}>{h}</span>
         ))}
       </div>
 

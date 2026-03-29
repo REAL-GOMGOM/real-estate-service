@@ -130,9 +130,14 @@ function GapContent() {
         <h1 style={{ fontSize: 'clamp(22px, 3vw, 28px)', fontWeight: 800, color: 'var(--text-strong)', marginBottom: '4px' }}>
           갭 분석
         </h1>
-        <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '24px' }}>
-          두 단지의 실거래가 갭을 비교하여 저평가/고평가를 판단합니다
-        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
+          <p style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
+            두 단지의 실거래가 갭을 비교하여 저평가/고평가를 판단합니다
+          </p>
+          <a href="/gap-guide" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--accent)', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+            📖 갭투자 가이드 →
+          </a>
+        </div>
 
         {/* 단지 선택 */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 350px), 1fr))', gap: '16px', marginBottom: '20px' }}>
