@@ -32,7 +32,8 @@
       "WebFetch(domain:www.reb.or.kr)",
       "Bash(python3 scripts/test_rone.py)",
       "Bash(python3 scripts/api_sync/sync_rone_index.py)",
-      "Read(//dev/**)"
+      "Read(//dev/**)",
+      "Read(//Users/bangjoohan/Downloads/**)"
     ]
   }
 }

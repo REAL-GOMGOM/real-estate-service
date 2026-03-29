@@ -23,8 +23,8 @@ export default function Footer() {
           {/* 브랜드 */}
           <div style={{ gridColumn: 'span 2' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-              <span style={{ fontWeight: 800, fontSize: '20px', color: '#FFFFFF' }}>내집</span>
-              <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)' }}>Naezip</span>
+              <img src="/logo.png" alt="내집" width={40} height={40} style={{ objectFit: 'contain' }} />
+              <span style={{ fontWeight: 800, fontSize: '18px', color: '#FFFFFF' }}>내집 <span style={{ fontWeight: 400, fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>My.ZIP</span></span>
             </div>
             <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)', lineHeight: '1.8' }}>
               모든 부동산 고민의 답을 한곳에 압축하여,<br />

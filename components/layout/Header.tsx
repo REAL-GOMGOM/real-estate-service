@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Menu, X, TrendingUp, Sun, Moon } from 'lucide-react';
+import Image from 'next/image';
+import { Menu, X, Sun, Moon } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 
 const NAV_ITEMS = [
@@ -40,11 +41,8 @@ export default function Header() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '64px' }}>
 
           {/* 로고 */}
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
-            <div style={{ width: '34px', height: '34px', borderRadius: '10px', backgroundColor: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <TrendingUp size={18} color="white" />
-            </div>
-            <span style={{ fontWeight: 700, fontSize: '17px', color: 'var(--text-primary)' }}>내집</span>
+          <Link href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
+            <Image src="/logo.png" alt="내집(My.ZIP)" width={44} height={44} style={{ objectFit: 'contain' }} priority />
           </Link>
 
           {/* 데스크탑 네비게이션 */}
