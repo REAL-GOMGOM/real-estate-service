@@ -103,7 +103,7 @@ export default function EventDetailModal({ event, onClose }: EventDetailModalPro
             rel="noopener noreferrer"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: '6px',
-              fontSize: '13px', color: '#3B82F6', textDecoration: 'none',
+              fontSize: '13px', color: 'var(--accent)', textDecoration: 'none',
             }}
           >
             <ExternalLink size={14} />

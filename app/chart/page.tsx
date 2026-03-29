@@ -209,7 +209,7 @@ function ChartContent() {
                   style={{
                     padding: '8px 16px', borderRadius: '10px',
                     fontSize: '13px', fontWeight: 600, cursor: 'pointer', border: 'none',
-                    backgroundColor: selectedPeriod === opt.months ? '#3B82F6' : 'var(--border-light)',
+                    backgroundColor: selectedPeriod === opt.months ? 'var(--accent)' : 'var(--border-light)',
                     color: selectedPeriod === opt.months ? 'white' : 'var(--text-muted)',
                     transition: 'all 0.15s',
                   }}
@@ -256,7 +256,7 @@ function ChartContent() {
                     { label: '전월 대비',   value: `${stats.change >= 0 ? '+' : ''}${stats.change.toFixed(1)}%`, color: stats.change >= 0 ? '#22C55E' : '#EF4444' },
                     { label: '최고가',      value: fmt(stats.maxPrice), color: '#F59E0B' },
                     { label: '최저가',      value: fmt(stats.minPrice), color: 'var(--text-muted)' },
-                    { label: '총 거래',     value: `${stats.count}건`,  color: '#3B82F6' },
+                    { label: '총 거래',     value: `${stats.count}건`,  color: 'var(--accent)' },
                   ].map((s) => (
                     <div key={s.label} style={{
                       padding: '16px 18px', borderRadius: '14px',

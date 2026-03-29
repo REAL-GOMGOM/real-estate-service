@@ -28,7 +28,7 @@ const SCHOOL_ZOOM_THRESHOLD = 7;
 
 const SCHOOL_COLORS: Record<string, string> = {
   elementary: '#22C55E',
-  middle: '#3B82F6',
+  middle: 'var(--accent)',
   high: '#F97316',
 };
 
@@ -104,7 +104,7 @@ function createMarkerElement(loc: LocationScore, onClick: () => void): HTMLDivEl
 }
 
 function createSchoolMarkerElement(school: SchoolData, onClick: () => void): HTMLDivElement {
-  const color = SCHOOL_COLORS[school.school_level] || '#3B82F6';
+  const color = SCHOOL_COLORS[school.school_level] || 'var(--accent)';
   const label = SCHOOL_LABELS[school.school_level] || '학';
   const gradeText = school.grade ? `${school.grade}등급` : '';
 

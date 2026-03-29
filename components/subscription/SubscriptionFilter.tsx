@@ -54,7 +54,7 @@ export default function SubscriptionFilter({
               fontWeight: 500,
               cursor: 'pointer',
               border: 'none',
-              backgroundColor: selectedStatus === opt.value ? '#3B82F6' : 'var(--border-light)',
+              backgroundColor: selectedStatus === opt.value ? 'var(--accent)' : 'var(--border-light)',
               color: selectedStatus === opt.value ? 'white' : 'var(--text-muted)',
               transition: 'background 0.15s',
             }}

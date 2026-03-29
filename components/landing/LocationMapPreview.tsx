@@ -89,7 +89,7 @@ export default function LocationMapPreview() {
                   style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '16px', borderRadius: '14px', backgroundColor: 'var(--border-light)', border: '1px solid var(--border)' }}
                 >
                   {/* 순위 */}
-                  <span style={{ width: '28px', height: '28px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, flexShrink: 0, backgroundColor: index === 0 ? 'rgba(59,130,246,0.2)' : 'var(--border)', color: index === 0 ? '#3B82F6' : 'var(--text-muted)' }}>
+                  <span style={{ width: '28px', height: '28px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, flexShrink: 0, backgroundColor: index === 0 ? 'var(--accent-border)' : 'var(--border)', color: index === 0 ? 'var(--accent)' : 'var(--text-muted)' }}>
                     {index + 1}
                   </span>
 

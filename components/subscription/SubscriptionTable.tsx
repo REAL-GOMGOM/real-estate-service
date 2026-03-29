@@ -11,7 +11,7 @@ interface Props {
 }
 
 const STATUS_CONFIG = {
-  upcoming: { label: '청약 예정', color: '#3B82F6', bg: 'rgba(59,130,246,0.12)' },
+  upcoming: { label: '청약 예정', color: 'var(--accent)', bg: 'var(--accent-bg)' },
   ongoing:  { label: '청약 중',   color: '#22C55E', bg: 'rgba(34,197,94,0.12)'  },
   closed:   { label: '청약 마감', color: 'var(--text-dim)', bg: 'rgba(100,116,139,0.12)'},
 };
@@ -80,7 +80,7 @@ export default function SubscriptionTable({ items, onSelect }: Props) {
                 <span style={{
                   fontSize: '13px', fontWeight: 800, flexShrink: 0,
                   fontFamily: 'Roboto Mono, monospace',
-                  color: item.status === 'ongoing' ? '#22C55E' : '#3B82F6',
+                  color: item.status === 'ongoing' ? '#22C55E' : 'var(--accent)',
                 }}>
                   {dday}
                 </span>

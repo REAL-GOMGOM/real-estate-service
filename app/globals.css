@@ -1,107 +1,149 @@
-@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css');
 @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
-/* ── 라이트 테마 (기본) ── */
+/* ══════════════════════════════════════
+   내집(NAEZIP) 디자인 시스템
+   가독성 최우선 · WCAG AA 대비 검증
+   ══════════════════════════════════════ */
+
 :root {
-  --bg-primary: #FFFFFF;
-  --bg-secondary: #F8FAFC;
-  --bg-tertiary: #F1F5F9;
+  /* ── 메인 브랜드 (테라코타) ── */
+  --accent: #C4654A;
+  --accent-hover: #A8503A;
+  --accent-text: #9E4A35;
+  --accent-bg: #FDF3EF;
+  --accent-border: rgba(196,101,74,0.25);
+  --accent-light: #F5DDD5;
+
+  /* ── 보조 (세이지 그린) ── */
+  --success: #6B8F71;
+  --success-text: #3D6B44;
+  --success-bg: #E8F0E9;
+
+  /* ── 포인트 (골드) ── */
+  --warning: #D4A853;
+  --warning-text: #8B6914;
+  --warning-bg: #FFF3D6;
+
+  /* ── 하락/위험 ── */
+  --danger: #D4574A;
+  --danger-text: #B93E32;
+  --danger-bg: #FDE8E6;
+
+  /* ── 배경 ── */
+  --bg-primary: #FAFAFA;
+  --bg-secondary: #FAF6F1;
+  --bg-tertiary: #F5F0EB;
   --bg-card: #FFFFFF;
-  --bg-card-hover: #F8FAFC;
-  --bg-overlay: rgba(0,0,0,0.04);
+  --bg-card-hover: #FAF6F1;
+  --bg-overlay: rgba(0,0,0,0.03);
   --bg-header: rgba(255,255,255,0.95);
 
-  --text-primary: #111827;
-  --text-secondary: #1F2937;
-  --text-muted: #374151;
-  --text-dim: #4B5563;
+  /* ── 텍스트 (가독성 핵심) ── */
+  --text-primary: #1A1714;
+  --text-strong: #0D0B09;
+  --text-secondary: #1A1714;
+  --text-muted: #5C534A;
+  --text-dim: #8C8279;
 
-  --border: rgba(0,0,0,0.12);
-  --border-light: rgba(0,0,0,0.08);
-  --border-hover: rgba(0,0,0,0.18);
+  /* ── 보더 ── */
+  --border: #E8E3DD;
+  --border-light: #F0EBE5;
+  --border-hover: #D4CFC8;
 
-  --accent: #2563EB;
-  --accent-bg: rgba(37,99,235,0.06);
-  --accent-border: rgba(37,99,235,0.2);
-  --success: #16A34A;
-  --success-text: #15803D;
-  --danger: #DC2626;
-  --danger-text: #B91C1C;
-  --warning: #D97706;
+  /* ── 버튼 ── */
+  --btn-bg: #F5F0EB;
+  --btn-bg-hover: #EBE5DE;
+  --btn-border: #E8E3DD;
+  --btn-text: #5C534A;
 
-  --btn-bg: #F3F4F6;
-  --btn-bg-hover: #E5E7EB;
-  --btn-border: rgba(0,0,0,0.15);
-  --btn-text: #374151;
+  /* ── 그림자 ── */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.08);
+  --shadow-lg: 0 4px 20px rgba(0,0,0,0.12);
 
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
-  --shadow-md: 0 4px 6px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.04);
-  --shadow-lg: 0 10px 25px rgba(0,0,0,0.08), 0 4px 10px rgba(0,0,0,0.04);
+  /* ── 스크롤바 ── */
+  --scrollbar-track: #F5F0EB;
+  --scrollbar-thumb: #D4CFC8;
+  --scrollbar-hover: #8C8279;
 
-  --scrollbar-track: #F1F5F9;
-  --scrollbar-thumb: #CBD5E1;
-  --scrollbar-hover: #94A3B8;
+  /* ── 상승/하락 ── */
+  --up-color: #3D6B44;
+  --down-color: #B93E32;
+  --up-bg: #E8F0E9;
+  --down-bg: #FDE8E6;
 
+  /* ── 그라데이션 ── */
+  --gradient-main: linear-gradient(135deg, #C4654A 0%, #A8503A 100%);
+  --gradient-dark: linear-gradient(135deg, #3D3530 0%, #1A1714 100%);
+
+  /* ── 차트 ── */
   --chart-grid: rgba(0,0,0,0.06);
   --chart-tooltip-bg: #FFFFFF;
-  --chart-tooltip-border: rgba(0,0,0,0.1);
-
-  --up-color: #DC2626;
-  --down-color: #2563EB;
-  --up-bg: rgba(220,38,38,0.08);
-  --down-bg: rgba(37,99,235,0.08);
+  --chart-tooltip-border: #E8E3DD;
 }
 
 /* ── 다크 테마 ── */
 [data-theme="dark"] {
-  --bg-primary: #0A0E1A;
-  --bg-secondary: #0F1629;
-  --bg-tertiary: #1E293B;
-  --bg-card: #111827;
-  --bg-card-hover: #1E293B;
-  --bg-overlay: rgba(255,255,255,0.04);
-  --bg-header: rgba(10,14,26,0.92);
+  --accent: #D4795F;
+  --accent-hover: #C4654A;
+  --accent-text: #E8A08A;
+  --accent-bg: rgba(196,101,74,0.12);
+  --accent-border: rgba(196,101,74,0.3);
+  --accent-light: rgba(196,101,74,0.2);
 
-  --text-primary: #F1F5F9;
-  --text-secondary: #CBD5E1;
-  --text-muted: #94A3B8;
-  --text-dim: #64748B;
+  --success: #7DA882;
+  --success-text: #8FBF94;
+  --success-bg: rgba(107,143,113,0.15);
+
+  --warning: #D4A853;
+  --warning-text: #E0BE6E;
+  --warning-bg: rgba(212,168,83,0.15);
+
+  --danger: #E06B5E;
+  --danger-text: #F08A7E;
+  --danger-bg: rgba(212,87,74,0.15);
+
+  --bg-primary: #1A1714;
+  --bg-secondary: #221F1B;
+  --bg-tertiary: #2E2A25;
+  --bg-card: #221F1B;
+  --bg-card-hover: #2E2A25;
+  --bg-overlay: rgba(255,255,255,0.04);
+  --bg-header: rgba(26,23,20,0.95);
+
+  --text-primary: #F0EBE5;
+  --text-strong: #FAF6F1;
+  --text-secondary: #D4CFC8;
+  --text-muted: #A69E95;
+  --text-dim: #7A726A;
 
   --border: rgba(255,255,255,0.1);
   --border-light: rgba(255,255,255,0.06);
   --border-hover: rgba(255,255,255,0.15);
 
-  --accent: #3B82F6;
-  --accent-bg: rgba(59,130,246,0.12);
-  --accent-border: rgba(59,130,246,0.25);
-  --success: #22C55E;
-  --success-text: #4ADE80;
-  --danger: #EF4444;
-  --danger-text: #F87171;
-  --warning: #F59E0B;
-
   --btn-bg: rgba(255,255,255,0.06);
   --btn-bg-hover: rgba(255,255,255,0.1);
   --btn-border: rgba(255,255,255,0.12);
-  --btn-text: #CBD5E1;
+  --btn-text: #D4CFC8;
 
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
-  --shadow-lg: 0 12px 32px rgba(0,0,0,0.5);
+  --shadow-md: 0 2px 8px rgba(0,0,0,0.4);
+  --shadow-lg: 0 4px 20px rgba(0,0,0,0.5);
 
-  --scrollbar-track: #0A0E1A;
-  --scrollbar-thumb: #1E293B;
-  --scrollbar-hover: #334155;
+  --scrollbar-track: #1A1714;
+  --scrollbar-thumb: #3D3530;
+  --scrollbar-hover: #5C534A;
+
+  --up-color: #8FBF94;
+  --down-color: #F08A7E;
+  --up-bg: rgba(107,143,113,0.15);
+  --down-bg: rgba(212,87,74,0.15);
 
   --chart-grid: rgba(255,255,255,0.06);
-  --chart-tooltip-bg: #1E293B;
+  --chart-tooltip-bg: #2E2A25;
   --chart-tooltip-border: rgba(255,255,255,0.1);
-
-  --up-color: #F87171;
-  --down-color: #60A5FA;
-  --up-bg: rgba(248,113,113,0.12);
-  --down-bg: rgba(96,165,250,0.12);
 }
 
 *, *::before, *::after {
@@ -117,13 +159,22 @@ html {
 body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  line-height: 1.6;
   transition: background-color 0.3s, color 0.3s;
 }
 
-/* 커스텀 스크롤바 */
+h1, h2, h3 { color: var(--text-strong); }
+
+a {
+  color: var(--accent-text);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+a:hover { color: var(--accent-hover); }
+
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
 ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }

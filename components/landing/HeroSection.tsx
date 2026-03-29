@@ -12,14 +12,14 @@ const FLOATING_STATS = [
 
 export default function HeroSection() {
   return (
-    <section style={{ position: 'relative', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', paddingTop: '64px', backgroundColor: 'var(--bg-primary)' }}>
+    <section style={{ position: 'relative', minHeight: '70vh', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', paddingTop: '64px', background: 'var(--gradient-main)' }}>
 
-      {/* 배경 블러 효과 */}
+      {/* 배경 패턴 */}
       <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-        <div style={{ position: 'absolute', top: '25%', left: '50%', transform: 'translate(-50%, -50%)', width: '700px', height: '500px', borderRadius: '50%', opacity: 0.18, filter: 'blur(80px)', background: 'radial-gradient(circle, #3B82F6 0%, transparent 70%)' }} />
-        <div style={{ position: 'absolute', bottom: 0, right: 0, width: '350px', height: '350px', borderRadius: '50%', opacity: 0.1, filter: 'blur(60px)', background: 'radial-gradient(circle, #22C55E 0%, transparent 70%)' }} />
+        <div style={{ position: 'absolute', top: '20%', right: '10%', width: '400px', height: '400px', borderRadius: '50%', opacity: 0.15, filter: 'blur(80px)', background: 'radial-gradient(circle, #F5DDD5 0%, transparent 70%)' }} />
+        <div style={{ position: 'absolute', bottom: '10%', left: '5%', width: '300px', height: '300px', borderRadius: '50%', opacity: 0.1, filter: 'blur(60px)', background: 'radial-gradient(circle, #6B8F71 0%, transparent 70%)' }} />
         {/* 그리드 패턴 */}
-        <div style={{ position: 'absolute', inset: 0, opacity: 0.04, backgroundImage: 'linear-gradient(rgba(59,130,246,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(59,130,246,0.5) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
+        <div style={{ position: 'absolute', inset: 0, opacity: 0.04, backgroundImage: 'linear-gradient(var(--accent-border) 1px, transparent 1px), linear-gradient(90deg, var(--accent-border) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
       </div>
 
       <div style={{ position: 'relative', zIndex: 10, maxWidth: '1280px', margin: '0 auto', padding: '0 24px', textAlign: 'center' }}>
@@ -29,10 +29,10 @@ export default function HeroSection() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 18px', borderRadius: '999px', fontSize: '13px', fontWeight: 500, backgroundColor: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.25)', color: '#60A5FA', marginBottom: '36px' }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 18px', borderRadius: '999px', fontSize: '13px', fontWeight: 500, backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#FFFFFF', marginBottom: '36px' }}
         >
-          <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#60A5FA', animation: 'pulse 2s infinite' }} />
-          2026년 3월 서울 입지 데이터 업데이트 완료
+          <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#FFFFFF', animation: 'pulse 2s infinite' }} />
+          2026년 3월 실거래 데이터 업데이트 완료
         </motion.div>
 
         {/* 메인 헤드라인 */}
@@ -40,11 +40,10 @@ export default function HeroSection() {
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.1 }}
-          style={{ fontSize: 'clamp(40px, 7vw, 80px)', fontWeight: 800, lineHeight: 1.15, color: 'var(--text-primary)', marginBottom: '24px', letterSpacing: '-0.02em' }}
+          style={{ fontSize: 'clamp(36px, 6vw, 64px)', fontWeight: 800, lineHeight: 1.2, color: '#FFFFFF', marginBottom: '24px', letterSpacing: '-0.02em', textShadow: '0 1px 2px rgba(0,0,0,0.1)' }}
         >
-          부동산 투자의<br />
-          <span style={{ color: '#3B82F6' }}>모든 데이터</span>를<br />
-          한눈에
+          부동산의 모든 답,<br />
+          <span style={{ color: '#FFF3D6' }}>한곳에 압축</span>
         </motion.h1>
 
         {/* 서브카피 */}
@@ -52,10 +51,10 @@ export default function HeroSection() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.2 }}
-          style={{ fontSize: '18px', color: 'var(--text-secondary)', lineHeight: 1.8, maxWidth: '560px', margin: '0 auto 48px' }}
+          style={{ fontSize: '17px', color: 'rgba(255,255,255,0.9)', lineHeight: 1.7, maxWidth: '520px', margin: '0 auto 40px' }}
         >
-          시세 차트 분석부터 입지 점수 지도, 청약 정보까지.<br />
-          데이터 기반으로 더 스마트한 부동산 결정을 내리세요.
+          집값이 궁금할 때, 투자할 지 고민될 때, 우리 동네 뭐가 생기는지 알고 싶을 때 —<br />
+          내집이 모든 답을 쉽게 전해드립니다.
         </motion.p>
 
         {/* CTA 버튼 */}
@@ -67,18 +66,18 @@ export default function HeroSection() {
         >
           <Link
             href="/location-map"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '16px 32px', borderRadius: '14px', fontSize: '16px', fontWeight: 600, backgroundColor: '#3B82F6', color: 'white', textDecoration: 'none', boxShadow: '0 0 40px rgba(59,130,246,0.3)' }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '16px 32px', borderRadius: '14px', fontSize: '16px', fontWeight: 700, backgroundColor: '#FFFFFF', color: '#C4654A', textDecoration: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }}
           >
             <MapPin size={20} />
-            입지 지도 보기
+            부동산 지도 보기
             <ArrowRight size={18} />
           </Link>
           <Link
             href="/market"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '16px 32px', borderRadius: '14px', fontSize: '16px', fontWeight: 600, backgroundColor: 'var(--border-light)', color: 'var(--text-primary)', textDecoration: 'none', border: '1px solid var(--border-hover)' }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '16px 32px', borderRadius: '14px', fontSize: '16px', fontWeight: 600, backgroundColor: 'transparent', color: '#FFFFFF', textDecoration: 'none', border: '2px solid rgba(255,255,255,0.5)' }}
           >
             <BarChart3 size={20} />
-            시세 분석 보기
+            실거래가 조회
           </Link>
         </motion.div>
 

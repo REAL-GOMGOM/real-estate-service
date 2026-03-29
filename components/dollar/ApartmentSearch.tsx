@@ -75,7 +75,7 @@ export default function ApartmentSearch({ onAdd, loading }: Props) {
         style={{
           display: 'flex', alignItems: 'center', gap: '6px',
           padding: '8px 16px', borderRadius: '10px', fontSize: '13px', fontWeight: 600,
-          backgroundColor: aptName.trim() ? '#3B82F6' : 'var(--border-light)',
+          backgroundColor: aptName.trim() ? 'var(--accent)' : 'var(--border-light)',
           color: aptName.trim() ? 'white' : 'var(--text-dim)',
           border: 'none', cursor: aptName.trim() ? 'pointer' : 'default',
           transition: 'background 0.15s',

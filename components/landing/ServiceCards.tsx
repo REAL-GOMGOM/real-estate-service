@@ -10,7 +10,7 @@ const SERVICES = [
     title: '시세 차트 분석',
     description: '서울 및 수도권 주요 지역의 실거래가 시세를 차트로 분석하세요. 이동평균, 거래량, 변동률을 한눈에 확인합니다.',
     href: '/market',
-    color: '#3B82F6',
+    color: 'var(--accent)',
     badge: '실시간 업데이트',
   },
   {

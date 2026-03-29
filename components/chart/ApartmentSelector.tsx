@@ -179,7 +179,7 @@ export default function ApartmentSelector({
               style={{
                 padding: '4px 9px', borderRadius: '7px', fontSize: '11px', fontWeight: 600,
                 cursor: 'pointer', border: 'none',
-                backgroundColor: regionIdx === idx && !districtSearch ? '#3B82F6' : 'var(--border-light)',
+                backgroundColor: regionIdx === idx && !districtSearch ? 'var(--accent)' : 'var(--border-light)',
                 color: regionIdx === idx && !districtSearch ? '#fff' : 'var(--text-dim)',
               }}
             >
@@ -200,9 +200,9 @@ export default function ApartmentSelector({
                 style={{
                   padding: '4px 9px', borderRadius: '7px', fontSize: '11px', fontWeight: 500,
                   cursor: 'pointer',
-                  border: active ? '1px solid rgba(59,130,246,0.5)' : toheo ? '1px solid rgba(249,115,22,0.25)' : '1px solid var(--border)',
-                  backgroundColor: active ? 'rgba(59,130,246,0.18)' : toheo ? 'rgba(249,115,22,0.07)' : 'var(--border-light)',
-                  color: active ? '#60A5FA' : toheo ? '#FB923C' : 'var(--text-muted)',
+                  border: active ? '1px solid var(--accent-border)' : toheo ? '1px solid rgba(249,115,22,0.25)' : '1px solid var(--border)',
+                  backgroundColor: active ? 'var(--accent-bg)' : toheo ? 'rgba(249,115,22,0.07)' : 'var(--border-light)',
+                  color: active ? 'var(--accent)' : toheo ? '#FB923C' : 'var(--text-muted)',
                 }}
               >
                 {d.replace(/^(서울|경기|인천|부산|대구|울산)\s/, '')}
@@ -218,7 +218,7 @@ export default function ApartmentSelector({
             <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>토허제</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <div style={{ width: '8px', height: '8px', borderRadius: '2px', backgroundColor: 'rgba(59,130,246,0.4)', border: '1px solid rgba(59,130,246,0.5)' }} />
+            <div style={{ width: '8px', height: '8px', borderRadius: '2px', backgroundColor: 'var(--accent-border)', border: '1px solid var(--accent-border)' }} />
             <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>선택 중</span>
           </div>
         </div>
@@ -234,7 +234,7 @@ export default function ApartmentSelector({
               style={{
                 padding: '5px 10px', borderRadius: '8px',
                 fontSize: '11px', fontWeight: 500, cursor: 'pointer', border: 'none',
-                backgroundColor: selectedArea === 'all' ? '#3B82F6' : 'var(--border-light)',
+                backgroundColor: selectedArea === 'all' ? 'var(--accent)' : 'var(--border-light)',
                 color: selectedArea === 'all' ? 'white' : 'var(--text-muted)',
               }}
             >
@@ -247,7 +247,7 @@ export default function ApartmentSelector({
                 style={{
                   padding: '5px 10px', borderRadius: '8px',
                   fontSize: '11px', fontWeight: 500, cursor: 'pointer', border: 'none',
-                  backgroundColor: selectedArea === area ? '#3B82F6' : 'var(--border-light)',
+                  backgroundColor: selectedArea === area ? 'var(--accent)' : 'var(--border-light)',
                   color: selectedArea === area ? 'white' : 'var(--text-muted)',
                 }}
               >
@@ -289,17 +289,17 @@ export default function ApartmentSelector({
               style={{
                 display: 'flex', alignItems: 'center', gap: '10px',
                 padding: '12px 12px', borderRadius: '12px', width: '100%',
-                backgroundColor: selectedId === apt.id ? 'rgba(59,130,246,0.12)' : 'var(--border-light)',
-                border: selectedId === apt.id ? '1px solid rgba(59,130,246,0.4)' : '1px solid var(--border-light)',
+                backgroundColor: selectedId === apt.id ? 'var(--accent-bg)' : 'var(--border-light)',
+                border: selectedId === apt.id ? '1px solid var(--accent-border)' : '1px solid var(--border-light)',
                 cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s',
               }}
             >
               <div style={{
                 width: '36px', height: '36px', borderRadius: '10px', flexShrink: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                backgroundColor: selectedId === apt.id ? 'rgba(59,130,246,0.2)' : 'var(--border-light)',
+                backgroundColor: selectedId === apt.id ? 'var(--accent-border)' : 'var(--border-light)',
               }}>
-                <Building2 size={16} style={{ color: selectedId === apt.id ? '#3B82F6' : 'var(--text-dim)' }} />
+                <Building2 size={16} style={{ color: selectedId === apt.id ? 'var(--accent)' : 'var(--text-dim)' }} />
               </div>
 
               <div style={{ flex: 1, minWidth: 0 }}>

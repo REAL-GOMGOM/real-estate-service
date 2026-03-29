@@ -159,7 +159,7 @@ function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () =
             onClick={() => setSelArea(null)}
             style={{
               padding: '6px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: 600,
-              backgroundColor: selArea === null ? '#3B82F6' : 'var(--border-light)',
+              backgroundColor: selArea === null ? 'var(--accent)' : 'var(--border-light)',
               color:           selArea === null ? 'var(--text-primary)'  : 'var(--text-muted)',
               border: 'none', cursor: 'pointer',
             }}
@@ -172,7 +172,7 @@ function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () =
               onClick={() => setSelArea(selArea === area ? null : area)}
               style={{
                 padding: '6px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: 600,
-                backgroundColor: selArea === area ? '#3B82F6' : 'var(--border-light)',
+                backgroundColor: selArea === area ? 'var(--accent)' : 'var(--border-light)',
                 color:           selArea === area ? 'var(--text-primary)'  : 'var(--text-muted)',
                 border: 'none', cursor: 'pointer',
               }}
@@ -217,7 +217,7 @@ function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () =
                       strokeDasharray="4 4"
                     />
                   )}
-                  <Scatter data={chartData} fill="#3B82F6" opacity={0.85} />
+                  <Scatter data={chartData} fill="var(--accent)" opacity={0.85} />
                 </ScatterChart>
               </ResponsiveContainer>
             </div>
@@ -438,7 +438,7 @@ export default function TransactionsClient() {
           <button style={{
             padding: '12px 4px', marginRight: '24px', fontSize: '15px', fontWeight: 700,
             color: 'var(--text-primary)', background: 'none', border: 'none', cursor: 'default',
-            borderBottom: '2px solid #3B82F6', marginBottom: '-1px',
+            borderBottom: '2px solid var(--accent)', marginBottom: '-1px',
           }}>
             매매
           </button>
@@ -485,9 +485,9 @@ export default function TransactionsClient() {
               onClick={() => { setMonths(value); setFetched(''); }}
               style={{
                 padding: '10px 18px', borderRadius: '10px', fontSize: '13px', fontWeight: 600,
-                backgroundColor: months === value ? '#3B82F6' : 'var(--bg-card)',
+                backgroundColor: months === value ? 'var(--accent)' : 'var(--bg-card)',
                 color:           months === value ? 'var(--text-primary)'  : 'var(--text-dim)',
-                border: `1px solid ${months === value ? '#3B82F6' : 'var(--border)'}`,
+                border: `1px solid ${months === value ? 'var(--accent)' : 'var(--border)'}`,
                 cursor: 'pointer',
               }}
             >

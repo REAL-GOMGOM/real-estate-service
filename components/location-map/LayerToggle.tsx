@@ -11,7 +11,7 @@ export interface MapLayer {
 export const MAP_LAYERS: MapLayer[] = [
   // 학군 그룹
   { key: 'elementary', label: '초', icon: '🏫', color: '#22C55E', group: 'school' },
-  { key: 'middle',     label: '중', icon: '🏫', color: '#3B82F6', group: 'school' },
+  { key: 'middle',     label: '중', icon: '🏫', color: 'var(--accent)', group: 'school' },
   { key: 'high',       label: '고', icon: '🏫', color: '#F97316', group: 'school' },
   // 인프라 그룹 (향후 확장)
   // { key: 'childcare',  label: '어린이집', icon: '👶', color: '#EC4899', group: 'infra' },

@@ -26,7 +26,7 @@ export default function SubscriptionClientPage({ items }: Props) {
   const stats = useMemo(() => [
     { label: '전체',     value: items.length,                                         color: 'var(--text-primary)' },
     { label: '청약 중',  value: items.filter((i) => i.status === 'ongoing').length,   color: '#22C55E' },
-    { label: '청약 예정', value: items.filter((i) => i.status === 'upcoming').length, color: '#3B82F6' },
+    { label: '청약 예정', value: items.filter((i) => i.status === 'upcoming').length, color: 'var(--accent)' },
     { label: '청약 마감', value: items.filter((i) => i.status === 'closed').length,   color: 'var(--text-dim)' },
   ], [items]);
 
@@ -123,7 +123,7 @@ export default function SubscriptionClientPage({ items }: Props) {
             href="https://www.applyhome.co.kr"
             target="_blank"
             rel="noopener noreferrer"
-            style={{ color: '#3B82F6', marginLeft: '4px' }}
+            style={{ color: 'var(--accent)', marginLeft: '4px' }}
           >
             청약홈(applyhome.co.kr)
           </a>에서 확인하세요.
