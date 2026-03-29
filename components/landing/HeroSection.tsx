@@ -44,6 +44,10 @@ export default function HeroSection() {
         >
           부동산의 모든 답,<br />
           <span style={{ color: '#FFF3D6' }}>한곳에 압축</span>
+          <br />
+          <span style={{ fontSize: 'clamp(20px, 3vw, 32px)', fontWeight: 600, color: 'rgba(255,255,255,0.7)', letterSpacing: '0.05em' }}>
+            내집(My.ZIP)
+          </span>
         </motion.h1>
 
         {/* 서브카피 */}
