@@ -164,7 +164,69 @@ function GapContent() {
         {/* 결과 */}
         {result && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {/* 시그널 카드 */}
+
+            {/* 갭투자 시뮬레이션 카드 */}
+            {result.latestPrice && result.rentAvg && (
+              <div style={{ padding: '24px', borderRadius: '14px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+                <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-strong)', marginBottom: '16px' }}>
+                  {result.complexA.name} 갭투자 분석
+                </h3>
+
+                {/* 핵심 수치 */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))', gap: '12px', marginBottom: '20px' }}>
+                  {[
+                    { label: '매매가', value: `${(result.latestPrice / 10000).toFixed(1)}억`, color: 'var(--text-strong)' },
+                    { label: '전세가', value: `${(result.rentAvg / 10000).toFixed(1)}억`, color: 'var(--accent)' },
+                    { label: '갭 (투자금)', value: `${((result.investmentGap || 0) / 10000).toFixed(1)}억`, color: '#D4A853' },
+                    { label: '전세가율', value: `${result.rentRatio}%`, color: (result.rentRatio || 0) >= 70 ? 'var(--success-text, #3D6B44)' : 'var(--danger-text, #B93E32)' },
+                  ].map((item) => (
+                    <div key={item.label} style={{ padding: '14px', borderRadius: '12px', backgroundColor: 'var(--btn-bg)', textAlign: 'center' }}>
+                      <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '4px' }}>{item.label}</p>
+                      <p style={{ fontSize: '22px', fontWeight: 800, fontFamily: 'Roboto Mono, monospace', color: item.color }}>{item.value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* 수익률 시뮬레이션 */}
+                <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '10px' }}>매매가 상승 시 수익률 시뮬레이션</p>
+                <div style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border)' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', padding: '8px 14px', backgroundColor: 'var(--btn-bg)', borderBottom: '1px solid var(--border)' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-dim)' }}>상승액</span>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-dim)', textAlign: 'center' }}>매도 시 시세</span>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-dim)', textAlign: 'right' }}>수익률</span>
+                  </div>
+                  {[5000, 10000, 15000, 20000, 30000].map((rise) => {
+                    const gap = result.investmentGap || 1;
+                    const roi = ((rise / gap) * 100);
+                    return (
+                      <div key={rise} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', padding: '10px 14px', borderBottom: '1px solid var(--border-light)' }}>
+                        <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>+{(rise / 10000).toFixed(1)}억</span>
+                        <span style={{ fontSize: '13px', color: 'var(--text-primary)', textAlign: 'center', fontFamily: 'Roboto Mono, monospace' }}>
+                          {((result.latestPrice! + rise) / 10000).toFixed(1)}억
+                        </span>
+                        <span style={{ fontSize: '14px', fontWeight: 700, textAlign: 'right', fontFamily: 'Roboto Mono, monospace', color: roi > 0 ? 'var(--up-color)' : 'var(--down-color)' }}>
+                          {roi > 0 ? '+' : ''}{roi.toFixed(0)}%
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* 전세가율 판정 */}
+                <div style={{ marginTop: '16px', padding: '12px 16px', borderRadius: '10px', backgroundColor: (result.rentRatio || 0) >= 70 ? 'var(--success-bg, #E8F0E9)' : 'var(--danger-bg, #FDE8E6)', fontSize: '13px' }}>
+                  {(result.rentRatio || 0) >= 70
+                    ? <span style={{ color: 'var(--success-text, #3D6B44)' }}>전세가율 {result.rentRatio}% — 갭투자 적합 구간 (투자금 {((result.investmentGap || 0) / 10000).toFixed(1)}억)</span>
+                    : <span style={{ color: 'var(--danger-text, #B93E32)' }}>전세가율 {result.rentRatio}% — 갭이 커서 높은 투자금 필요 ({((result.investmentGap || 0) / 10000).toFixed(1)}억)</span>
+                  }
+                </div>
+
+                <p style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '10px' }}>
+                  매매 {result.tradeCount}건 · 전세 {result.rentCount}건 기준 (최근 6개월)
+                </p>
+              </div>
+            )}
+
+            {/* 시그널 카드 (B 단지 비교 시) */}
             {result.complexB && (() => {
               const sc = signalConfig[result.signal];
               const Icon = sc.icon;
