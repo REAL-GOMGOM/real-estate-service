@@ -75,7 +75,7 @@ function createMarkerElement(loc: LocationScore, onClick: () => void): HTMLDivEl
   }
 
   const nameEl = document.createElement('span');
-  nameEl.style.cssText = 'font-size:11px;font-weight:700;color:#F1F5F9;font-family:Pretendard,sans-serif;letter-spacing:-0.3px;';
+  nameEl.style.cssText = 'font-size:11px;font-weight:700;color:var(--text-primary);font-family:Pretendard,sans-serif;letter-spacing:-0.3px;';
   nameEl.textContent = loc.name;
 
   const scoreRow = document.createElement('div');
