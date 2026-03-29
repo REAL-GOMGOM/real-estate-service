@@ -33,7 +33,8 @@
       "Bash(python3 scripts/test_rone.py)",
       "Bash(python3 scripts/api_sync/sync_rone_index.py)",
       "Read(//dev/**)",
-      "Read(//Users/bangjoohan/Downloads/**)"
+      "Read(//Users/bangjoohan/Downloads/**)",
+      "Bash(pip3 install:*)"
     ]
   }
 }
