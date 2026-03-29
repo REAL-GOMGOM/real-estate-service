@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
         const params = new URLSearchParams({
           LAWD_CD:   lawdCd,
           DEAL_YMD:  yyyymm,
-          numOfRows: '100',
+          numOfRows: '500',
           pageNo:    '1',
         });
         const url = BASE_URL + '?serviceKey=' + apiKey + '&' + params.toString();
