@@ -124,7 +124,7 @@ export default function TransactionSearch() {
   }
 
   return (
-    <section style={{ padding: '80px 24px', backgroundColor: '#070B16' }}>
+    <section style={{ padding: '80px 24px', backgroundColor: 'var(--bg-secondary)' }}>
       <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
 
         {/* 섹션 헤더 */}
