@@ -32,13 +32,15 @@ export default function SubscriptionCard({ item }: Props) {
 
   return (
     <div style={{
-      padding: '20px',
+      padding: '16px',
       borderRadius: '16px',
       backgroundColor: 'var(--bg-card)',
       border: '1px solid var(--border)',
       display: 'flex',
       flexDirection: 'column',
-      gap: '14px',
+      gap: '12px',
+      overflow: 'hidden',
+      wordBreak: 'break-word' as const,
     }}>
       {/* 상단: 상태 + D-day */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -75,7 +77,7 @@ export default function SubscriptionCard({ item }: Props) {
             </span>
           )}
         </div>
-        <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>{item.address}</p>
+        <p style={{ fontSize: '12px', color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.address}</p>
       </div>
 
       {/* 메타 정보 */}
