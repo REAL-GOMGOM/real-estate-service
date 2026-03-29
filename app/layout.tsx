@@ -19,7 +19,13 @@ export const metadata: Metadata = {
     title: '내집(Naezip) | 부동산의 모든 답, 한곳에',
     description: '실거래가·투자분석·입지점수·청약정보를 한곳에 압축.',
   },
-  icons: { icon: '/favicon.ico', apple: '/logo.png' },
+  icons: {
+    icon: [
+      { url: '/favicon.png', sizes: '32x32', type: 'image/png' },
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: { url: '/apple-touch-icon.png', sizes: '180x180' },
+  },
   manifest: '/manifest.json',
   other: { 'theme-color': '#C4654A' },
 };
