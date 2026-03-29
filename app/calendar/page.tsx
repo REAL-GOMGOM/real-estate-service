@@ -87,7 +87,7 @@ function CalendarContent() {
           }}>
             <div>
               <h1 style={{ fontSize: 'clamp(20px, 3vw, 26px)', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '4px' }}>
-                부동산 달력
+                경제 달력
               </h1>
               <p style={{ fontSize: '13px', color: 'var(--text-dim)' }}>
                 청약·금리·입주·정책 일정을 한눈에
