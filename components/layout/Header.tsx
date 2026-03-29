@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { label: '청약',           href: '/subscription' },
   { label: '달력',           href: '/calendar' },
   { label: '변동률',         href: '/price-map' },
+  { label: '갭분석',         href: '/gap-analysis' },
   { label: '뉴스',           href: '/news' },
 ];
 
