@@ -129,7 +129,7 @@ export default function KoreaMap({ regions, onRegionClick, tradeType = 'sale' }:
   const [districtData, setDistrictData] = useState<DistrictData[]>([]);
   const [loadingDistricts, setLoadingDistricts] = useState(false);
 
-  const svgBaseWidth = 500;
+  const svgBaseWidth = 650;
 
   // GeoJSON 로드
   useEffect(() => {
@@ -206,7 +206,7 @@ export default function KoreaMap({ regions, onRegionClick, tradeType = 'sale' }:
 
   if (!provinceGeo) {
     return (
-      <div style={{ width: '100%', maxWidth: '500px', height: '600px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)' }}>
+      <div style={{ width: '100%', maxWidth: '700px', height: '600px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)' }}>
         지도 로딩 중...
       </div>
     );
@@ -238,7 +238,7 @@ export default function KoreaMap({ regions, onRegionClick, tradeType = 'sale' }:
         </div>
       )}
 
-      <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: '100%', maxWidth: '500px', height: 'auto' }}>
+      <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: '100%', maxWidth: '700px', height: 'auto' }}>
         {currentFeatures.map((feature) => {
           const geoCode = feature.properties.code;
           const featureName = feature.properties.name;

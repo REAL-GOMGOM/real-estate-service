@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCalendarEvents } from '@/lib/calendar-events';
+import { getCalendarEvents, type CalendarEvent } from '@/lib/calendar-events';
 
 function tryDbEvents(year: number, month: number) {
   try {
@@ -12,9 +12,53 @@ function tryDbEvents(year: number, month: number) {
       'SELECT id, event_date, category, title, description, source_url, icon, importance FROM calendar_events WHERE event_date >= ? AND event_date < ? ORDER BY event_date ASC'
     ).all(startDate, endDate);
     db.close();
-    return rows;
+    return rows as CalendarEvent[];
   } catch {
     return null;
+  }
+}
+
+// 청약 데이터에서 달력 이벤트 생성
+async function fetchSubscriptionEvents(year: number, month: number): Promise<CalendarEvent[]> {
+  try {
+    // 내부 API 호출 대신 직접 subscription-api 호출
+    const { fetchSubscriptions } = await import('@/lib/subscription-api');
+    const items = await fetchSubscriptions();
+    const prefix = `${year}-${String(month).padStart(2, '0')}`;
+    const events: CalendarEvent[] = [];
+    let id = 1000;
+
+    for (const item of items) {
+      // 시작일이 해당 월인 경우
+      if (item.startDate?.startsWith(prefix)) {
+        events.push({
+          id: id++,
+          event_date: item.startDate,
+          category: 'subscription',
+          title: `${item.name} 청약`,
+          description: `${item.district} · ${item.totalUnits > 0 ? item.totalUnits + '세대' : ''} · ${item.houseType || ''}`,
+          source_url: 'https://www.applyhome.co.kr',
+          icon: '🏠',
+          importance: item.competitionRate && item.competitionRate > 10 ? 'high' : 'normal',
+        });
+      }
+      // 발표일이 해당 월인 경우
+      if (item.announceDate?.startsWith(prefix)) {
+        events.push({
+          id: id++,
+          event_date: item.announceDate,
+          category: 'subscription',
+          title: `${item.name} 당첨 발표`,
+          description: `${item.district}`,
+          source_url: 'https://www.applyhome.co.kr',
+          icon: '🏠',
+          importance: 'normal',
+        });
+      }
+    }
+    return events;
+  } catch {
+    return [];
   }
 }
 
@@ -25,15 +69,26 @@ export async function GET(request: NextRequest) {
     const year = Number(searchParams.get('year')) || now.getFullYear();
     const month = Number(searchParams.get('month')) || now.getMonth() + 1;
 
-    // 1) SQLite 시도 (로컬 + 크롤링 데이터 있을 때)
+    // 1) SQLite 시도
     const dbEvents = tryDbEvents(year, month);
-    if (dbEvents && dbEvents.length > 0) {
-      return NextResponse.json({ events: dbEvents });
-    }
 
-    // 2) 확정 정기 이벤트 (Vercel fallback)
-    const events = getCalendarEvents(year, month);
-    return NextResponse.json({ events });
+    // 2) 확정 정기 이벤트
+    const fixedEvents = getCalendarEvents(year, month);
+
+    // 3) 청약 이벤트
+    const subEvents = await fetchSubscriptionEvents(year, month);
+
+    // 합치기 (DB > 정기 > 청약, 중복 제거)
+    const allEvents = [...(dbEvents || fixedEvents), ...subEvents];
+    const seen = new Set<string>();
+    const deduped = allEvents.filter((e) => {
+      const key = `${e.event_date}-${e.title}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).sort((a, b) => a.event_date.localeCompare(b.event_date));
+
+    return NextResponse.json({ events: deduped });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : '서버 오류';
     return NextResponse.json({ error: message }, { status: 500 });
