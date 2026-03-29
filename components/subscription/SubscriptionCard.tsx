@@ -60,11 +60,21 @@ export default function SubscriptionCard({ item }: Props) {
         )}
       </div>
 
-      {/* 단지명 */}
+      {/* 단지명 + 공급유형 */}
       <div>
-        <p style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>
-          {item.name}
-        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', flexWrap: 'wrap' }}>
+          <p style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>
+            {item.name}
+          </p>
+          {item.houseType && (
+            <span style={{
+              padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 600,
+              backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)',
+            }}>
+              {item.houseType}
+            </span>
+          )}
+        </div>
         <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>{item.address}</p>
       </div>
 
