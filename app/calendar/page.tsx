@@ -108,11 +108,9 @@ function CalendarContent() {
             </div>
           )}
 
-          {/* 달력 그리드 (데스크탑) / 리스트 (모바일) */}
+          {/* 달력 그리드 (항상 표시) / 모바일은 리스트도 함께 */}
           {!loading && (
-            isMobile ? (
-              <MobileListView events={sortedForList} onEventClick={setSelectedEvent} />
-            ) : (
+            <>
               <CalendarGrid
                 year={year}
                 month={month}
@@ -120,7 +118,17 @@ function CalendarContent() {
                 activeCategories={activeCategories}
                 onEventClick={setSelectedEvent}
               />
-            )
+              {isMobile && sortedForList.length > 0 && (
+                <div style={{ marginTop: '20px' }}>
+                  <MobileListView events={sortedForList} onEventClick={setSelectedEvent} />
+                </div>
+              )}
+              {events.length === 0 && (
+                <p style={{ textAlign: 'center', color: 'var(--text-dim)', marginTop: '16px', fontSize: '14px' }}>
+                  이번 달 등록된 이벤트가 없습니다
+                </p>
+              )}
+            </>
           )}
         </div>
       </main>

@@ -99,6 +99,7 @@ export default function ApartmentSelector({
   const [regionIdx, setRegionIdx] = useState<number>(-1);
   const [districtSearch, setDistrictSearch] = useState('');
   const [search, setSearch] = useState('');
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const ALL_DISTRICTS = REGIONS.flatMap((r) => r.districts);
   const visibleDistricts = districtSearch.trim()
@@ -118,23 +119,38 @@ export default function ApartmentSelector({
       display: 'flex', flexDirection: 'column',
     }}>
 
-      {/* 헤더 */}
-      <div style={{ padding: '20px 20px 14px', borderBottom: '1px solid var(--border-light)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
-          <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>아파트 차트</h2>
-          {isToheo && (
-            <span style={{
-              display: 'flex', alignItems: 'center', gap: '3px',
-              padding: '2px 7px', borderRadius: '999px', fontSize: '10px', fontWeight: 700,
-              backgroundColor: 'rgba(249,115,22,0.15)', color: '#F97316',
-              border: '1px solid rgba(249,115,22,0.3)',
-            }}>
-              <AlertTriangle size={9} />토허제
+      {/* 헤더 - 모바일에서는 접기/펼치기 토글 */}
+      <div
+        style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-light)', cursor: isMobile ? 'pointer' : 'default' }}
+        onClick={() => isMobile && setMobileOpen(!mobileOpen)}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>
+              {isMobile ? `📍 ${activeDistrict}` : '아파트 차트'}
+            </h2>
+            {isToheo && (
+              <span style={{
+                display: 'flex', alignItems: 'center', gap: '3px',
+                padding: '2px 7px', borderRadius: '999px', fontSize: '10px', fontWeight: 700,
+                backgroundColor: 'rgba(249,115,22,0.15)', color: '#F97316',
+                border: '1px solid rgba(249,115,22,0.3)',
+              }}>
+                <AlertTriangle size={9} />토허제
+              </span>
+            )}
+          </div>
+          {isMobile && (
+            <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
+              {mobileOpen ? '▲ 접기' : '▼ 필터 열기'}
             </span>
           )}
         </div>
-        <p style={{ fontSize: '11px', color: 'var(--text-dim)' }}>단지 선택 후 실거래가 차트 확인</p>
+        {!isMobile && <p style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '3px' }}>단지 선택 후 실거래가 차트 확인</p>}
       </div>
+
+      {/* 모바일: 접혀있으면 나머지 숨김. PC: 항상 표시 */}
+      <div style={{ display: (!isMobile || mobileOpen) ? 'flex' : 'none', flexDirection: 'column', flex: 1, overflowY: 'auto' }}>
 
       {/* 지역 선택 */}
       <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-light)' }}>
@@ -315,6 +331,7 @@ export default function ApartmentSelector({
           ))}
         </div>
       </div>
+      </div>{/* 모바일 접기/펼치기 래퍼 닫기 */}
     </aside>
   );
 }

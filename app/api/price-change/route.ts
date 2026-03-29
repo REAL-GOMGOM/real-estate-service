@@ -95,20 +95,16 @@ export async function GET(request: NextRequest) {
 
     const statblId = STAT_TABLES[type] || STAT_TABLES.sale;
 
-    // 이번달 시도, 없으면 지난달
+    // 최신 데이터 찾기: 이번달 → 지난달 → 2달전 순으로 시도
     let thisData: Record<string, number> = {};
     let lastData: Record<string, number> = {};
-    try {
-      thisData = await fetchRoneIndex(apiKey, statblId, getMonthStr(0));
-      lastData = await fetchRoneIndex(apiKey, statblId, getMonthStr(-1));
-    } catch {
-      thisData = await fetchRoneIndex(apiKey, statblId, getMonthStr(-1));
-      lastData = await fetchRoneIndex(apiKey, statblId, getMonthStr(-2));
-    }
 
-    if (Object.keys(thisData).length === 0) {
-      thisData = await fetchRoneIndex(apiKey, statblId, getMonthStr(-1));
-      lastData = await fetchRoneIndex(apiKey, statblId, getMonthStr(-2));
+    for (let offset = 0; offset >= -3; offset--) {
+      thisData = await fetchRoneIndex(apiKey, statblId, getMonthStr(offset));
+      if (Object.keys(thisData).length > 0) {
+        lastData = await fetchRoneIndex(apiKey, statblId, getMonthStr(offset - 1));
+        break;
+      }
     }
 
     const regions: RegionChange[] = [];
