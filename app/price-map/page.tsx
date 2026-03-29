@@ -101,7 +101,7 @@ function PriceMapContent() {
           }}>
             {/* 지도 */}
             <div style={{ flex: isMobile ? 'unset' : '1', width: isMobile ? '100%' : 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <KoreaMap regions={data.regions} onRegionClick={setSelectedRegion} />
+              <KoreaMap regions={data.regions} onRegionClick={setSelectedRegion} tradeType={tradeType} />
               <div style={{ marginTop: '16px' }}>
                 <MapLegend />
               </div>
