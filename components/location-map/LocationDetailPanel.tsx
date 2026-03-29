@@ -9,9 +9,10 @@ import { getScoreColor, getScoreBgColor } from './LocationSidebar';
 interface Props {
   location: LocationScore;
   onClose: () => void;
+  embedded?: boolean;
 }
 
-export default function LocationDetailPanel({ location, onClose }: Props) {
+export default function LocationDetailPanel({ location, onClose, embedded }: Props) {
   const scoreDiff = (location.score - location.prevScore).toFixed(1);
   const isUp   = location.trend === 'up';
   const isDown = location.trend === 'down';
@@ -23,7 +24,7 @@ export default function LocationDetailPanel({ location, onClose }: Props) {
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  const panelStyle: React.CSSProperties = isMobile ? {
+  const panelStyle: React.CSSProperties = embedded ? {} : isMobile ? {
     position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 100,
     borderRadius: '20px 20px 0 0',
     maxHeight: '70vh', overflowY: 'auto',
