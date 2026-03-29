@@ -72,9 +72,6 @@ function CalendarContent() {
     });
   };
 
-  const filteredEvents = events.filter((e) => activeCategories.has(e.category));
-  const sortedForList = [...filteredEvents].sort((a, b) => a.event_date.localeCompare(b.event_date));
-
   return (
     <>
       <main style={{ paddingTop: '64px', backgroundColor: 'var(--bg-primary)', minHeight: '100vh' }}>
@@ -118,11 +115,7 @@ function CalendarContent() {
                 activeCategories={activeCategories}
                 onEventClick={setSelectedEvent}
               />
-              {isMobile && sortedForList.length > 0 && (
-                <div style={{ marginTop: '20px' }}>
-                  <MobileListView events={sortedForList} onEventClick={setSelectedEvent} />
-                </div>
-              )}
+              {/* 모바일: 리스트 제거, 달력만 표시 */}
               {events.length === 0 && (
                 <p style={{ textAlign: 'center', color: 'var(--text-dim)', marginTop: '16px', fontSize: '14px' }}>
                   이번 달 등록된 이벤트가 없습니다

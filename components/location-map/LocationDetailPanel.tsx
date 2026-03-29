@@ -40,7 +40,7 @@ export default function LocationDetailPanel({ location, onClose, embedded }: Pro
       border: location.isToheo ? '1px solid rgba(249,115,22,0.4)' : '1px solid var(--border-hover)',
       backdropFilter: 'blur(16px)',
       boxShadow: location.isToheo ? '0 24px 64px rgba(249,115,22,0.15)' : '0 24px 64px rgba(0,0,0,0.5)',
-      padding: '24px',
+      padding: '18px',
     }}>
 
       {/* 닫기 */}
@@ -100,7 +100,7 @@ export default function LocationDetailPanel({ location, onClose, embedded }: Pro
           <MapPin size={18} style={{ color: getScoreColor(location.score) }} />
         </div>
         <div>
-          <p style={{ fontSize: '17px', fontWeight: 700, color: 'var(--text-primary)' }}>{location.name}</p>
+          <p style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>{location.name}</p>
           <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>{location.district}</p>
         </div>
       </div>
@@ -115,7 +115,7 @@ export default function LocationDetailPanel({ location, onClose, embedded }: Pro
         <div>
           <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>입지 점수</p>
           <p style={{
-            fontSize: '36px', fontWeight: 800,
+            fontSize: '28px', fontWeight: 800,
             fontFamily: 'Roboto Mono, monospace',
             color: getScoreColor(location.score),
           }}>
