@@ -181,7 +181,7 @@ export default function TransactionSearch() {
 
         {/* 검색 폼 */}
         <form onSubmit={handleSearch} style={{ display: 'flex', gap: '10px', marginBottom: '28px', flexWrap: 'wrap' }}>
-          <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
+          <div style={{ position: 'relative', flex: 1, minWidth: '0' }}>
             <Search
               size={16}
               style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', pointerEvents: 'none' }}
@@ -221,7 +221,7 @@ export default function TransactionSearch() {
             {aptQuery ? `"${aptQuery}" 검색 결과 없음` : '거래 데이터 없음'}
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))', gap: '12px' }}>
             {filtered.map((apt) => {
               const up = apt.changeRate >= 0;
               return (

@@ -92,7 +92,7 @@ export default function MarketPreview() {
         </motion.div>
 
         {/* 시세 카드 */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))', gap: '20px' }}>
           {MARKET_DATA.map((item, index) => (
             <motion.div
               key={item.id}
