@@ -94,7 +94,7 @@ export default function LocationSidebar({
       {/* 헤더 */}
       <div style={{ padding: '20px 20px 14px', borderBottom: '1px solid var(--border-light)' }}>
         <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '3px' }}>
-          전국 입지 점수 지도
+          내집 부동산 지도
         </h2>
         <p style={{ fontSize: '11px', color: 'var(--text-dim)' }}>2026년 3월 기준 · 점수 낮을수록 입지 우수</p>
       </div>

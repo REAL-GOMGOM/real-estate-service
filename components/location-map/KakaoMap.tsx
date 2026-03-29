@@ -220,8 +220,28 @@ export default function KakaoMap({
 
     if (!activeLayers || activeLayers.size === 0) return;
 
-    const filtered = schools.filter((s) => activeLayers.has(s.school_level));
-    const showSchools = map.getLevel() <= SCHOOL_ZOOM_THRESHOLD;
+    const zoomLevel = map.getLevel();
+    const showSchools = zoomLevel <= SCHOOL_ZOOM_THRESHOLD;
+    if (!showSchools) return;
+
+    // 뷰포트 범위 내 학교만 필터 (성능 최적화)
+    let filtered = schools.filter((s) => activeLayers.has(s.school_level) && s.latitude && s.longitude);
+
+    // 지도 범위 가져오기 시도
+    try {
+      const bounds = (map as any).getBounds();
+      if (bounds) {
+        const sw = bounds.getSouthWest();
+        const ne = bounds.getNorthEast();
+        filtered = filtered.filter((s) =>
+          s.latitude >= sw.getLat() && s.latitude <= ne.getLat() &&
+          s.longitude >= sw.getLng() && s.longitude <= ne.getLng()
+        );
+      }
+    } catch { /* bounds 못 가져오면 전체 */ }
+
+    // 최대 300개 제한
+    if (filtered.length > 300) filtered = filtered.slice(0, 300);
 
     schoolOverlaysRef.current = filtered.map((school) => {
       const position = new window.kakao.maps.LatLng(school.latitude, school.longitude);
@@ -247,9 +267,20 @@ export default function KakaoMap({
     renderMarkers();
     renderSchoolMarkers();
 
-    const handler = () => { if (mapRef.current) applyZoomLevel(mapRef.current); };
+    const handler = () => {
+      if (mapRef.current) {
+        applyZoomLevel(mapRef.current);
+        renderSchoolMarkers(); // 줌 변경 시 학교 마커 갱신
+      }
+    };
     zoomHandlerRef.current = handler;
     window.kakao.maps.event.addListener(mapRef.current, 'zoom_changed', handler);
+    // 패닝 시에도 갱신 (debounce)
+    let dragTimer: ReturnType<typeof setTimeout>;
+    window.kakao.maps.event.addListener(mapRef.current, 'dragend', () => {
+      clearTimeout(dragTimer);
+      dragTimer = setTimeout(() => renderSchoolMarkers(), 300);
+    });
   }, []);
 
   // locations 변경 시 마커 재생성
