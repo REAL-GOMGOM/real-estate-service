@@ -32,4 +32,11 @@ export interface GapResult {
   signal: 'undervalued' | 'overvalued' | 'normal';
   zScore: number;
   dataWarning?: string;
+  // 갭투자 분석 추가
+  rentAvg?: number | null;       // 평균 전세가 (만원)
+  rentRatio?: number | null;     // 전세가율 (%)
+  investmentGap?: number | null; // 투자금(갭) = 매매가 - 전세가 (만원)
+  latestPrice?: number;          // 최근 매매 평균가 (만원)
+  tradeCount?: number;
+  rentCount?: number;
 }
