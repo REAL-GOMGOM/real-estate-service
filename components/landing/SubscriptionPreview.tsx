@@ -26,7 +26,7 @@ export default function SubscriptionPreview({ items }: Props) {
   const [selectedItem, setSelectedItem] = useState<SubscriptionItem | null>(null);
 
   return (
-    <section style={{ padding: '96px 0', backgroundColor: 'var(--bg-card)' }}>
+    <section style={{ padding: 'clamp(40px, 8vw, 96px) 0', backgroundColor: 'var(--bg-card)' }}>
       <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px' }}>
 
         {/* 섹션 헤더 */}

@@ -36,7 +36,7 @@ export default function SubscriptionTable({ items, onSelect }: Props) {
   if (items.length === 0) {
     return (
       <div style={{
-        padding: '80px 24px',
+        padding: 'clamp(32px, 6vw, 80px) 24px',
         textAlign: 'center',
         color: 'var(--text-dim)',
         fontSize: '14px',
