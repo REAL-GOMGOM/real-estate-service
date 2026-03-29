@@ -13,7 +13,7 @@ const NAV_ITEMS = [
   { label: '실질 가치',      href: '/dollar' },
   { label: '부동산 지도',    href: '/location-map' },
   { label: '청약',           href: '/subscription' },
-  { label: '달력',           href: '/calendar' },
+  { label: '경제달력',           href: '/calendar' },
   { label: '변동률',         href: '/price-map' },
   { label: '갭분석',         href: '/gap-analysis' },
   { label: '뉴스',           href: '/news' },

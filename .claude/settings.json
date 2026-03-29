@@ -34,7 +34,8 @@
       "Bash(python3 scripts/api_sync/sync_rone_index.py)",
       "Read(//dev/**)",
       "Read(//Users/bangjoohan/Downloads/**)",
-      "Bash(pip3 install:*)"
+      "Bash(pip3 install:*)",
+      "Bash(curl -s \"https://www.naezipkorea.com/api/transactions?district=%EC%84%B1%EB%82%A8%EC%8B%9C%20%EB%B6%84%EB%8B%B9%EA%B5%AC&months=3\")"
     ]
   }
 }

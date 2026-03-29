@@ -70,6 +70,7 @@ export default function CalendarGrid({ year, month, events, activeCategories, on
               style={{
                 minHeight: '72px',
                 padding: '4px',
+                overflow: 'hidden',
                 backgroundColor: cell.isToday
                   ? 'var(--accent-bg)'
                   : cell.isCurrentMonth
