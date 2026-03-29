@@ -36,9 +36,9 @@ function TrendIcon({ trend }: { trend: LocationScore['trend'] }) {
 
 export default function LocationMapPreview() {
   return (
-    <section style={{ padding: '96px 0', backgroundColor: 'var(--bg-card)' }}>
+    <section style={{ padding: 'clamp(40px, 8vw, 96px) 0', backgroundColor: 'var(--bg-card)' }}>
       <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '64px', alignItems: 'center' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'clamp(24px, 5vw, 64px)', alignItems: 'center' }}>
 
           {/* 왼쪽: 설명 */}
           <motion.div

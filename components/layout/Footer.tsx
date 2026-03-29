@@ -18,7 +18,7 @@ export default function Footer() {
   return (
     <footer style={{ backgroundColor: 'var(--text-strong)', color: 'rgba(255,255,255,0.7)', padding: '48px 24px' }}>
       <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '48px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'clamp(20px, 4vw, 48px)' }}>
 
           {/* 브랜드 */}
           <div style={{ gridColumn: 'span 2' }}>
@@ -53,7 +53,7 @@ export default function Footer() {
         </div>
 
         <div style={{ marginTop: '48px', paddingTop: '32px', borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-          <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)' }}>© 2026 내집(Naezip). All rights reserved.</p>
+          <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)' }}>© 2026 내집(My.ZIP). All rights reserved.</p>
           <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)' }}>데이터: 국토교통부 · 한국부동산원 · NEIS</p>
         </div>
       </div>
