@@ -28,6 +28,7 @@ interface Props {
   school: SchoolData;
   nearbySchools: SchoolData[];
   onClose: () => void;
+  embedded?: boolean;
 }
 
 const LEVEL_LABELS: Record<string, string> = {
@@ -53,7 +54,7 @@ function gradeColor(grade: string | null): string {
   }
 }
 
-export default function SchoolDetailPanel({ school, nearbySchools, onClose }: Props) {
+export default function SchoolDetailPanel({ school, nearbySchools, onClose, embedded }: Props) {
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -65,7 +66,7 @@ export default function SchoolDetailPanel({ school, nearbySchools, onClose }: Pr
   const color = LEVEL_COLORS[school.school_level] || '#3B82F6';
   const nearbyMiddle = nearbySchools.filter((s) => s.school_level === 'middle' && s.id !== school.id);
 
-  const panelStyle: React.CSSProperties = isMobile ? {
+  const panelStyle: React.CSSProperties = embedded ? {} : isMobile ? {
     position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 100,
     borderRadius: '20px 20px 0 0',
     maxHeight: '75vh', overflowY: 'auto',

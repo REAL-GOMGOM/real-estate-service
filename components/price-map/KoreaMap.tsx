@@ -171,10 +171,10 @@ export default function KoreaMap({ regions, onRegionClick }: KoreaMapProps) {
               x={cx}
               y={cy - 6}
               textAnchor="middle"
-              fill="#F1F5F9"
+              fill="var(--text-primary)"
               fontSize="11"
               fontWeight="700"
-              style={{ pointerEvents: 'none', textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}
+              style={{ pointerEvents: 'none' }}
             >
               {shortName}
             </text>
@@ -183,7 +183,7 @@ export default function KoreaMap({ regions, onRegionClick }: KoreaMapProps) {
                 x={cx}
                 y={cy + 8}
                 textAnchor="middle"
-                fill={rate >= 0 ? '#FCA5A5' : '#93C5FD'}
+                fill={rate >= 0 ? 'var(--up-color)' : 'var(--down-color)'}
                 fontSize="10"
                 fontWeight="600"
                 fontFamily="Roboto Mono, monospace"

@@ -7,6 +7,7 @@ import LocationSidebar from '@/components/location-map/LocationSidebar';
 import LocationDetailPanel from '@/components/location-map/LocationDetailPanel';
 import LayerToggle from '@/components/location-map/LayerToggle';
 import SchoolDetailPanel, { type SchoolData } from '@/components/location-map/SchoolDetailPanel';
+import BottomSheet from '@/components/common/BottomSheet';
 import type { LocationScore } from '@/lib/types';
 
 const ALL_LOCATIONS: LocationScore[] = require('@/data/location-scores.json');
@@ -137,18 +138,41 @@ export default function LocationMapPage() {
           지도를 불러오는 중...
         </div>
       )}
-      {selectedLocation && (
+      {/* PC: 기존 패널 / 모바일: 바텀시트 */}
+      {!isMobile && selectedLocation && (
         <LocationDetailPanel
           location={selectedLocation}
           onClose={() => setSelectedLocation(null)}
         />
       )}
-      {selectedSchool && (
+      {!isMobile && selectedSchool && (
         <SchoolDetailPanel
           school={selectedSchool}
           nearbySchools={nearbySchools}
           onClose={() => setSelectedSchool(null)}
         />
+      )}
+      {isMobile && (
+        <BottomSheet
+          isOpen={!!(selectedLocation || selectedSchool)}
+          onClose={() => { setSelectedLocation(null); setSelectedSchool(null); }}
+        >
+          {selectedLocation && (
+            <LocationDetailPanel
+              location={selectedLocation}
+              onClose={() => { setSelectedLocation(null); }}
+              embedded
+            />
+          )}
+          {selectedSchool && (
+            <SchoolDetailPanel
+              school={selectedSchool}
+              nearbySchools={nearbySchools}
+              onClose={() => { setSelectedSchool(null); }}
+              embedded
+            />
+          )}
+        </BottomSheet>
       )}
     </div>
   );
