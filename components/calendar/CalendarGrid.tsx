@@ -47,8 +47,8 @@ export default function CalendarGrid({ year, month, events, activeCategories, on
           <div
             key={d}
             style={{
-              padding: '10px 0', textAlign: 'center',
-              fontSize: '12px', fontWeight: 600,
+              padding: '6px 0', textAlign: 'center',
+              fontSize: '11px', fontWeight: 600,
               color: i === 0 ? '#EF4444' : i === 6 ? 'var(--accent)' : 'var(--text-dim)',
               backgroundColor: 'var(--bg-overlay)',
             }}
@@ -68,8 +68,8 @@ export default function CalendarGrid({ year, month, events, activeCategories, on
             <div
               key={idx}
               style={{
-                minHeight: '100px',
-                padding: '6px',
+                minHeight: '72px',
+                padding: '4px',
                 backgroundColor: cell.isToday
                   ? 'var(--accent-bg)'
                   : cell.isCurrentMonth
@@ -82,7 +82,7 @@ export default function CalendarGrid({ year, month, events, activeCategories, on
             >
               {/* 날짜 숫자 */}
               <div style={{
-                fontSize: '13px', fontWeight: cell.isToday ? 700 : 500,
+                fontSize: '12px', fontWeight: cell.isToday ? 700 : 500,
                 color: cell.isToday
                   ? 'var(--accent)'
                   : cell.dayOfWeek === 0

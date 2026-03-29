@@ -58,7 +58,7 @@ export default function HeroSection() {
           style={{ fontSize: '17px', color: 'rgba(255,255,255,0.9)', lineHeight: 1.7, maxWidth: '520px', margin: '0 auto 40px' }}
         >
           집값이 궁금할 때, 투자할 지 고민될 때, 우리 동네 뭐가 생기는지 알고 싶을 때 —<br />
-          내집이 모든 답을 쉽게 전해드립니다.
+          <strong style={{ fontWeight: 800 }}>{'\u2018'}내집{'\u2019'}</strong>이 모든 답을 쉽게 전해드립니다.
         </motion.p>
 
         {/* CTA 버튼 */}
