@@ -294,7 +294,7 @@ export default function KoreaMap({ regions, onRegionClick, tradeType = 'sale' }:
                 x={cx} y={cy - (hasData ? 6 : 0)}
                 textAnchor="middle"
                 fill="var(--text-primary)"
-                fontSize={selectedProvince ? '10' : '11'}
+                fontSize={selectedProvince ? '8' : '10'}
                 fontWeight="700"
                 style={{ pointerEvents: 'none' }}
               >
@@ -302,10 +302,10 @@ export default function KoreaMap({ regions, onRegionClick, tradeType = 'sale' }:
               </text>
               {hasData && (
                 <text
-                  x={cx} y={cy + 8}
+                  x={cx} y={cy + 7}
                   textAnchor="middle"
                   fill={rate >= 0 ? 'var(--up-color)' : 'var(--down-color)'}
-                  fontSize="10"
+                  fontSize="8"
                   fontWeight="600"
                   fontFamily="Roboto Mono, monospace"
                   style={{ pointerEvents: 'none' }}
