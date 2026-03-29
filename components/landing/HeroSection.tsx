@@ -66,7 +66,7 @@ export default function HeroSection() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.3 }}
-          style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: '16px', marginBottom: '80px' }}
+          style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: '16px', marginBottom: '32px' }}
         >
           <Link
             href="/location-map"
@@ -86,19 +86,19 @@ export default function HeroSection() {
         </motion.div>
 
         {/* 플로팅 통계 카드 */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '16px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '12px', marginBottom: '20px' }}>
           {FLOATING_STATS.map((stat, index) => (
             <motion.div
               key={stat.label}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.5 + index * 0.1 }}
-              style={{ padding: '20px 28px', borderRadius: '20px', backgroundColor: 'var(--border-light)', border: '1px solid var(--border)', backdropFilter: 'blur(12px)', textAlign: 'left' }}
+              style={{ padding: '14px 20px', borderRadius: '14px', backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.2)', backdropFilter: 'blur(12px)', textAlign: 'left', minWidth: '130px' }}
             >
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' }}>{stat.label}</p>
-              <p style={{ fontSize: '22px', fontWeight: 700, fontFamily: 'Roboto Mono, monospace', color: 'var(--text-primary)', marginBottom: '4px' }}>{stat.value}</p>
-              <p style={{ fontSize: '12px', fontWeight: 600, color: '#22C55E', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <TrendingUp size={12} />
+              <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)', marginBottom: '4px' }}>{stat.label}</p>
+              <p style={{ fontSize: '20px', fontWeight: 700, fontFamily: 'Roboto Mono, monospace', color: '#FFFFFF', marginBottom: '2px' }}>{stat.value}</p>
+              <p style={{ fontSize: '11px', fontWeight: 600, color: '#FFF3D6', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                <TrendingUp size={11} />
                 {stat.change}
               </p>
             </motion.div>
@@ -106,16 +106,7 @@ export default function HeroSection() {
         </div>
       </div>
 
-      {/* 스크롤 인디케이터 */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1.2 }}
-        style={{ position: 'absolute', bottom: '32px', left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}
-      >
-        <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>스크롤</span>
-        <div style={{ width: '1px', height: '48px', background: 'linear-gradient(to bottom, rgba(59,130,246,0.6), transparent)' }} />
-      </motion.div>
+      {/* 스크롤 인디케이터 - 히어로 내부 하단 */}
     </section>
   );
 }
