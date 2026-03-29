@@ -236,11 +236,11 @@ function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () =
               <col style={{ width: '14%' }} />
             </colgroup>
             <thead>
-              <tr style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
+              <tr style={{ backgroundColor: '#F0EBE5' }}>
                 {['계약일', '면적', '층', '거래가', '고점대비', '평당가'].map((h) => (
                   <th key={h} style={{
-                    padding: '10px 12px', fontSize: '11px', fontWeight: 600,
-                    color: 'var(--text-dim)', textAlign: 'left', whiteSpace: 'nowrap',
+                    padding: '10px 12px', fontSize: '11px', fontWeight: 700,
+                    color: '#1A1714', textAlign: 'left', whiteSpace: 'nowrap',
                   }}>
                     {h}
                   </th>
