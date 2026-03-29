@@ -102,9 +102,9 @@ export default function CalendarGrid({ year, month, events, activeCategories, on
                 ))}
                 {hasMore && (
                   <span style={{
-                    fontSize: '10px', color: 'var(--text-dim)', paddingLeft: '4px', cursor: 'default',
+                    fontSize: '8px', color: 'var(--text-dim)', cursor: 'default',
                   }}>
-                    +{dayEvents.length - MAX_VISIBLE_EVENTS}건 더보기
+                    +{dayEvents.length - MAX_VISIBLE_EVENTS}
                   </span>
                 )}
               </div>

@@ -118,7 +118,7 @@ export default function LocationMapPage() {
   }, [selectedSchool, schools]);
 
   const mapArea = (
-    <div style={{ position: 'relative', flex: 1, height: isMobile ? '55vh' : 'calc(100vh - 64px)' }}>
+    <div style={{ position: 'relative', flex: 1, height: isMobile ? '60vh' : 'calc(100vh - 64px)' }}>
       {mapReady ? (
         <KakaoMap
           locations={filteredLocations}
@@ -192,44 +192,11 @@ export default function LocationMapPage() {
     />
   );
 
-  const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
-
   return (
     <>
       <Header />
       <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', paddingTop: '64px' }}>
-        {isMobile ? (
-          <>
-            {/* 모바일: 지도 전체 + 필터 토글 */}
-            <div style={{ position: 'relative', width: '100%', height: 'calc(100vh - 64px)' }}>
-              {mapArea}
-              <button
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                style={{
-                  position: 'absolute', top: '12px', left: '12px', zIndex: 20,
-                  padding: '8px 14px', borderRadius: '10px',
-                  backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
-                  boxShadow: 'var(--shadow-md)', fontSize: '13px', fontWeight: 600,
-                  color: 'var(--text-primary)', cursor: 'pointer',
-                }}
-              >
-                {sidebarOpen ? '✕ 닫기' : '☰ 필터'}
-              </button>
-            </div>
-            {sidebarOpen && (
-              <div style={{
-                position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50,
-                maxHeight: '60vh', overflowY: 'auto',
-                backgroundColor: 'var(--bg-card)', borderRadius: '20px 20px 0 0',
-                border: '1px solid var(--border)', boxShadow: '0 -4px 20px rgba(0,0,0,0.1)',
-              }}>
-                {sidebar}
-              </div>
-            )}
-          </>
-        ) : (
-          <>{sidebar}{mapArea}</>
-        )}
+        {isMobile ? <>{mapArea}{sidebar}</> : <>{sidebar}{mapArea}</>}
       </div>
     </>
   );
