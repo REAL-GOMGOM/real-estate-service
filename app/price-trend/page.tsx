@@ -11,7 +11,7 @@ import SubPageHeader from '@/components/common/SubPageHeader';
 
 const TrendChart = dynamic(
   () => import('@/components/price-trend/TrendChart'),
-  { ssr: false, loading: () => <div style={{ height: '440px', borderRadius: '14px', backgroundColor: 'var(--bg-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)' }}>차트 로딩 중...</div> },
+  { ssr: false, loading: () => <div style={{ height: '440px', borderRadius: '14px', backgroundColor: 'var(--bg-card)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px' }}><div style={{ width: '40px', height: '40px', borderRadius: '50%', border: '3px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.8s linear infinite' }} /><p style={{ fontSize: '14px', color: 'var(--text-dim)', fontWeight: 500 }}>차트 불러오는 중...</p><style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style></div> },
 );
 
 const PERIOD_TOGGLE = PERIOD_OPTIONS.map((o) => ({ label: o.label, value: o.value }));
@@ -124,8 +124,10 @@ export default function PriceTrendPage() {
     <>
       <Header />
       <Suspense fallback={
-        <div style={{ height: 'calc(100vh - 64px)', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-primary)', color: 'var(--text-dim)', paddingTop: '64px' }}>
-          로딩 중...
+        <div style={{ height: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-primary)', paddingTop: '64px', gap: '16px' }}>
+          <div style={{ width: '40px', height: '40px', borderRadius: '50%', border: '3px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.8s linear infinite' }} />
+          <p style={{ fontSize: '14px', color: 'var(--text-dim)', fontWeight: 500 }}>불러오는 중...</p>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       }>
         <PriceTrendContent />
