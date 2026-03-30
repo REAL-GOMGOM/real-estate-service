@@ -7,6 +7,7 @@ import ToggleGroup from '@/components/price-map/ToggleGroup';
 import RegionSelector from '@/components/price-trend/RegionSelector';
 import RegionRankingTable from '@/components/price-trend/RegionRankingTable';
 import { PERIOD_OPTIONS, type TrendPeriod, type PriceTrendData } from '@/types/price-trend';
+import SubPageHeader from '@/components/common/SubPageHeader';
 
 const TrendChart = dynamic(
   () => import('@/components/price-trend/TrendChart'),
@@ -64,6 +65,7 @@ function PriceTrendContent() {
   return (
     <main style={{ paddingTop: '64px', backgroundColor: 'var(--bg-primary)', minHeight: '100vh' }}>
       <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '28px 20px' }}>
+        <SubPageHeader parentLabel="변동률" parentHref="/price-map" />
 
         {/* 헤더 */}
         <div style={{

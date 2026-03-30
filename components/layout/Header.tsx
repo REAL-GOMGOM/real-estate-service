@@ -24,13 +24,7 @@ const NAV_ITEMS: NavItem[] = [
       { label: '갭투자 가이드', href: '/gap-guide', desc: '갭투자 전략 시뮬레이션' },
     ],
   },
-  {
-    label: '지도',
-    children: [
-      { label: '입지 점수 지도', href: '/location-map', desc: '전국 입지 점수 확인' },
-      { label: '학군 지도', href: '/school-map', desc: '학교 정보 지도' },
-    ],
-  },
+  { label: '부동산지도', href: '/location-map' },
   { label: '청약', href: '/subscription' },
   { label: '경제달력', href: '/calendar' },
   { label: '뉴스', href: '/news' },
@@ -56,7 +50,7 @@ export default function Header() {
         right: 0,
         zIndex: 50,
         backgroundColor: 'var(--bg-header)',
-        borderBottom: '1px solid var(--border)',
+        borderBottomWidth: '1px', borderBottomStyle: 'solid', borderBottomColor: 'var(--border)',
         backdropFilter: 'blur(12px)',
         transition: 'background-color 0.3s, border-color 0.3s',
       }}
@@ -86,7 +80,6 @@ export default function Header() {
                         display: 'flex', alignItems: 'center', gap: '3px',
                         fontSize: '13.5px', fontWeight: groupActive ? 600 : 500,
                         color: groupActive ? 'var(--accent)' : 'var(--text-muted)',
-                        borderBottom: groupActive ? '2px solid var(--accent)' : '2px solid transparent',
                         paddingBottom: '2px',
                         transition: 'color 0.15s',
                         background: 'none', border: 'none', cursor: 'pointer',
@@ -105,19 +98,21 @@ export default function Header() {
                     {openDropdown === item.label && (
                       <div
                         style={{
-                          position: 'absolute', top: '100%', left: 0,
-                          backgroundColor: 'var(--bg-card)',
-                          border: '1px solid var(--border)',
-                          borderRadius: '12px',
-                          boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-                          padding: '8px',
-                          minWidth: '240px',
+                          position: 'absolute', top: '100%', left: '-12px',
+                          paddingTop: '8px',
                           zIndex: 100,
-                          marginTop: '8px',
                         }}
-                        onMouseEnter={() => setOpenDropdown(item.label)}
-                        onMouseLeave={() => setOpenDropdown(null)}
                       >
+                        <div
+                          style={{
+                            backgroundColor: 'var(--bg-card)',
+                            border: '1px solid var(--border)',
+                            borderRadius: '12px',
+                            boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+                            padding: '8px',
+                            minWidth: '240px',
+                          }}
+                        >
                         {item.children.map((child) => {
                           const childActive = pathname === child.href || pathname.startsWith(child.href + '/');
                           return (
@@ -147,6 +142,7 @@ export default function Header() {
                             </Link>
                           );
                         })}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -162,7 +158,8 @@ export default function Header() {
                     fontSize: '13.5px', fontWeight: active ? 600 : 500,
                     color: active ? 'var(--accent)' : 'var(--text-muted)',
                     textDecoration: 'none',
-                    borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
+                    borderBottomWidth: '2px', borderBottomStyle: 'solid',
+                    borderBottomColor: active ? 'var(--accent)' : 'transparent',
                     paddingBottom: '2px',
                     transition: 'color 0.15s',
                   }}
