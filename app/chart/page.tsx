@@ -51,13 +51,8 @@ function ChartContent() {
 
       if (json.error) {
         if (json.error.includes('지원하지 않는')) {
-          setActiveDistrict('강남구');
-          const fallbackRes  = await fetch(`/api/transactions?district=강남구&months=${months}`);
-          const fallbackJson = await fallbackRes.json();
-          if (fallbackJson.data?.length > 0) {
-            setApiData(fallbackJson.data);
-            setSelectedId(fallbackJson.data[0].id);
-          }
+          setApiError(`"${district}"은(는) 아직 지원하지 않는 지역입니다. 구를 직접 선택해주세요.`);
+          setApiData(null);
           return;
         }
         throw new Error(json.error);
