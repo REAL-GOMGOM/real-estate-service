@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { TrendingUp, TrendingDown, Building2, AlertTriangle, Search } from 'lucide-react';
+import { DISTRICT_GROUPS, ALL_DISTRICTS, findRegionIndex } from '@/lib/district-groups';
 
 interface ApartmentSummary {
   id: string;
@@ -25,53 +26,6 @@ interface Props {
   isMobile?: boolean;
 }
 
-const REGIONS: { label: string; districts: string[] }[] = [
-  {
-    label: '서울',
-    districts: [
-      '강남구', '서초구', '송파구', '용산구', '마포구', '성동구',
-      '영등포구', '양천구', '강동구', '광진구', '동작구', '관악구',
-      '강서구', '구로구', '노원구', '도봉구', '동대문구', '서대문구',
-      '성북구', '은평구', '종로구', '중구', '중랑구', '강북구', '금천구',
-    ],
-  },
-  {
-    label: '경기',
-    districts: [
-      '성남시 분당구', '과천시', '하남시', '수원시 영통구', '수원시 팔달구',
-      '용인시 수지구', '용인시 기흥구', '용인시 처인구',
-      '고양시 일산동구', '고양시 일산서구', '고양시 덕양구',
-      '안양시 동안구', '안양시 만안구', '광명시', '의왕시', '부천시',
-      '구리시', '남양주시', '의정부시', '시흥시', '김포시', '화성시',
-      '평택시', '파주시', '군포시', '양주시', '광주시', '이천시',
-    ],
-  },
-  {
-    label: '인천',
-    districts: [
-      '인천 연수구', '인천 서구', '인천 부평구', '인천 남동구',
-      '인천 계양구', '인천 미추홀구', '인천 동구', '인천 중구',
-    ],
-  },
-  {
-    label: '부산',
-    districts: [
-      '부산 해운대구', '부산 수영구', '부산 동래구', '부산 연제구',
-      '부산 남구', '부산 부산진구', '부산 동구', '부산 중구',
-      '부산 서구', '부산 영도구', '부산 강서구', '부산 사상구',
-      '부산 북구', '부산 금정구', '부산 사하구',
-    ],
-  },
-  {
-    label: '대구/울산',
-    districts: [
-      '대구 수성구', '대구 달서구', '대구 북구', '대구 동구',
-      '대구 중구', '대구 서구', '대구 남구', '대구 달성군',
-      '울산 남구', '울산 동구', '울산 북구', '울산 중구', '울산 울주군',
-    ],
-  },
-];
-
 // 토허제 지정 구역
 const TOHEO_DISTRICTS = new Set([
   '강남구', '서초구', '송파구', '용산구', '마포구', '성동구',
@@ -94,19 +48,18 @@ export default function ApartmentSelector({
   const selectedApt = apartments.find((a) => a.id === selectedId);
   const isToheo     = TOHEO_DISTRICTS.has(activeDistrict);
 
-  const activeRegionIndex = REGIONS.findIndex((r) => r.districts.includes(activeDistrict));
+  const activeRegionIndex = findRegionIndex(activeDistrict);
   // -1 = 전체
   const [regionIdx, setRegionIdx] = useState<number>(-1);
   const [districtSearch, setDistrictSearch] = useState('');
   const [search, setSearch] = useState('');
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const ALL_DISTRICTS = REGIONS.flatMap((r) => r.districts);
   const visibleDistricts = districtSearch.trim()
     ? ALL_DISTRICTS.filter((d) => d.includes(districtSearch.trim()))
     : regionIdx === -1
       ? ALL_DISTRICTS
-      : REGIONS[regionIdx].districts;
+      : DISTRICT_GROUPS[regionIdx].districts;
 
   return (
     <aside style={{
@@ -172,7 +125,7 @@ export default function ApartmentSelector({
 
         {/* 권역 탭 */}
         <div style={{ display: 'flex', gap: '4px', marginBottom: '8px', flexWrap: 'wrap' }}>
-          {[{ label: '전체', idx: -1 }, ...REGIONS.map((r, i) => ({ label: r.label, idx: i }))].map(({ label, idx }) => (
+          {[{ label: '전체', idx: -1 }, ...DISTRICT_GROUPS.map((r, i) => ({ label: r.label, idx: i }))].map(({ label, idx }) => (
             <button
               key={label}
               onClick={() => { setRegionIdx(idx); setDistrictSearch(''); }}
