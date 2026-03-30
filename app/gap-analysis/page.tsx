@@ -9,7 +9,7 @@ import type { GapResult, ComplexSearchResult } from '@/types/gap-analysis';
 
 const GapChart = dynamic(() => import('@/components/gap-analysis/GapChart'), { ssr: false });
 
-const DISTRICTS = ['강남구', '서초구', '송파구', '용산구', '마포구', '성동구', '강동구', '양천구', '노원구', '성남시 분당구', '과천시'];
+import { DISTRICT_GROUPS, ALL_DISTRICTS } from '@/lib/district-groups';
 
 function ComplexSearchInput({
   label,
@@ -59,7 +59,13 @@ function ComplexSearchInput({
           <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
             <select value={district} onChange={(e) => onDistrictChange(e.target.value)}
               style={{ padding: '8px', borderRadius: '8px', fontSize: '13px', backgroundColor: 'var(--btn-bg)', color: 'var(--text-primary)', border: '1px solid var(--border)', outline: 'none' }}>
-              {DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
+              {DISTRICT_GROUPS.map((group) => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.districts.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </optgroup>
+              ))}
             </select>
             <div style={{ position: 'relative', flex: 1 }}>
               <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
