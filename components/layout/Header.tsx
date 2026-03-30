@@ -4,23 +4,46 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Image from 'next/image';
-import { Menu, X, Sun, Moon } from 'lucide-react';
+import { Menu, X, Sun, Moon, ChevronDown } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 
-const NAV_ITEMS = [
-  { label: '실거래',         href: '/transactions' },
-  { label: '차트',           href: '/chart' },
-  { label: '실질가치',       href: '/dollar' },
-  { label: '부동산지도',     href: '/location-map' },
-  { label: '청약',           href: '/subscription' },
-  { label: '경제달력',       href: '/calendar' },
-  { label: '변동률',         href: '/price-map' },
-  { label: '갭분석',         href: '/gap-analysis' },
-  { label: '뉴스',           href: '/news' },
+type NavChild = { label: string; href: string; desc?: string };
+type NavItem =
+  | { label: string; href: string; children?: never }
+  | { label: string; href?: never; children: NavChild[] };
+
+const NAV_ITEMS: NavItem[] = [
+  { label: '실거래', href: '/transactions' },
+  {
+    label: '분석',
+    children: [
+      { label: '아파트 차트', href: '/chart', desc: '실거래가 시세 차트 분석' },
+      { label: '실질가치', href: '/dollar', desc: '달러·BTC·금 기준 비교' },
+      { label: '변동률 지도', href: '/price-map', desc: '지역별 가격 변동률' },
+      { label: '갭분석', href: '/gap-analysis', desc: '매매가-전세가 갭 비교' },
+      { label: '갭투자 가이드', href: '/gap-guide', desc: '갭투자 전략 시뮬레이션' },
+    ],
+  },
+  {
+    label: '지도',
+    children: [
+      { label: '입지 점수 지도', href: '/location-map', desc: '전국 입지 점수 확인' },
+      { label: '학군 지도', href: '/school-map', desc: '학교 정보 지도' },
+    ],
+  },
+  { label: '청약', href: '/subscription' },
+  { label: '경제달력', href: '/calendar' },
+  { label: '뉴스', href: '/news' },
 ];
+
+function isChildActive(children: NavChild[], pathname: string): boolean {
+  return children.some(c => pathname === c.href || pathname.startsWith(c.href + '/'));
+}
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [openAccordion, setOpenAccordion] = useState<string | null>(null);
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
 
@@ -49,6 +72,87 @@ export default function Header() {
           {/* 데스크탑 네비게이션 */}
           <nav style={{ alignItems: 'center', gap: '18px' }} className="hidden lg:flex">
             {NAV_ITEMS.map((item) => {
+              if (item.children) {
+                const groupActive = isChildActive(item.children, pathname);
+                return (
+                  <div
+                    key={item.label}
+                    style={{ position: 'relative' }}
+                    onMouseEnter={() => setOpenDropdown(item.label)}
+                    onMouseLeave={() => setOpenDropdown(null)}
+                  >
+                    <button
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '3px',
+                        fontSize: '13.5px', fontWeight: groupActive ? 600 : 500,
+                        color: groupActive ? 'var(--accent)' : 'var(--text-muted)',
+                        borderBottom: groupActive ? '2px solid var(--accent)' : '2px solid transparent',
+                        paddingBottom: '2px',
+                        transition: 'color 0.15s',
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        padding: '0', margin: '0',
+                        borderBottomWidth: '2px', borderBottomStyle: 'solid',
+                        borderBottomColor: groupActive ? 'var(--accent)' : 'transparent',
+                      }}
+                    >
+                      {item.label}
+                      <ChevronDown size={13} style={{
+                        transition: 'transform 0.2s',
+                        transform: openDropdown === item.label ? 'rotate(180deg)' : 'rotate(0deg)',
+                      }} />
+                    </button>
+
+                    {openDropdown === item.label && (
+                      <div
+                        style={{
+                          position: 'absolute', top: '100%', left: 0,
+                          backgroundColor: 'var(--bg-card)',
+                          border: '1px solid var(--border)',
+                          borderRadius: '12px',
+                          boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+                          padding: '8px',
+                          minWidth: '240px',
+                          zIndex: 100,
+                          marginTop: '8px',
+                        }}
+                        onMouseEnter={() => setOpenDropdown(item.label)}
+                        onMouseLeave={() => setOpenDropdown(null)}
+                      >
+                        {item.children.map((child) => {
+                          const childActive = pathname === child.href || pathname.startsWith(child.href + '/');
+                          return (
+                            <Link
+                              key={child.href}
+                              href={child.href}
+                              style={{
+                                display: 'block', padding: '10px 14px', borderRadius: '8px',
+                                textDecoration: 'none',
+                                transition: 'background-color 0.15s',
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-overlay)'; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                            >
+                              <span style={{
+                                fontSize: '14px', fontWeight: 600,
+                                color: childActive ? 'var(--accent)' : 'var(--text-primary)',
+                                display: 'block',
+                              }}>
+                                {child.label}
+                              </span>
+                              {child.desc && (
+                                <span style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '2px', display: 'block' }}>
+                                  {child.desc}
+                                </span>
+                              )}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
               const active = pathname === item.href || pathname.startsWith(item.href + '/');
               return (
                 <Link
@@ -125,6 +229,64 @@ export default function Header() {
       {isMenuOpen && (
         <div style={{ backgroundColor: 'var(--bg-primary)', padding: '8px 24px 16px', borderTop: '1px solid var(--border)' }} className="lg:hidden">
           {NAV_ITEMS.map((item) => {
+            if (item.children) {
+              const isOpen = openAccordion === item.label;
+              const groupActive = isChildActive(item.children, pathname);
+              return (
+                <div key={item.label} style={{ marginBottom: '4px' }}>
+                  <button
+                    onClick={() => setOpenAccordion(isOpen ? null : item.label)}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      width: '100%', padding: '12px 16px', borderRadius: '10px',
+                      fontSize: '15px', fontWeight: 700,
+                      color: groupActive ? 'var(--accent)' : 'var(--text-secondary)',
+                      backgroundColor: groupActive ? 'var(--accent-bg)' : 'var(--bg-overlay)',
+                      border: 'none', cursor: 'pointer',
+                      borderLeft: groupActive ? '3px solid var(--accent)' : '3px solid transparent',
+                    }}
+                  >
+                    {item.label}
+                    <ChevronDown size={16} style={{
+                      transition: 'transform 0.2s',
+                      transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                    }} />
+                  </button>
+
+                  {isOpen && (
+                    <div style={{ paddingLeft: '20px', marginTop: '4px' }}>
+                      {item.children.map((child) => {
+                        const childActive = pathname === child.href || pathname.startsWith(child.href + '/');
+                        return (
+                          <Link
+                            key={child.href}
+                            href={child.href}
+                            style={{
+                              display: 'block', padding: '10px 16px', borderRadius: '10px',
+                              fontSize: '14px', fontWeight: childActive ? 600 : 500,
+                              color: childActive ? 'var(--accent)' : 'var(--text-secondary)',
+                              textDecoration: 'none',
+                              backgroundColor: childActive ? 'var(--accent-bg)' : 'transparent',
+                              marginBottom: '2px',
+                              borderLeft: childActive ? '3px solid var(--accent)' : '3px solid transparent',
+                            }}
+                            onClick={() => setIsMenuOpen(false)}
+                          >
+                            {child.label}
+                            {child.desc && (
+                              <span style={{ display: 'block', fontSize: '11px', color: 'var(--text-dim)', marginTop: '2px' }}>
+                                {child.desc}
+                              </span>
+                            )}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
             const active = pathname === item.href || pathname.startsWith(item.href + '/');
             return (
               <Link
