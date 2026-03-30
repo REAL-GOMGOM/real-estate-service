@@ -15,6 +15,34 @@ function getMonthList(months: number): string[] {
   return result;
 }
 
+async function fetchAllPages(apiKey: string, lawdCd: string, yyyymm: string): Promise<string> {
+  const makeUrl = (pageNo: number) => {
+    const params = new URLSearchParams({
+      LAWD_CD: lawdCd,
+      DEAL_YMD: yyyymm,
+      numOfRows: '1000',
+      pageNo: String(pageNo),
+    });
+    return BASE_URL + '?serviceKey=' + apiKey + '&' + params.toString();
+  };
+
+  const firstPage = await fetch(makeUrl(1), { next: { revalidate: 86400 } }).then(r => r.text());
+
+  const totalMatch = firstPage.match(/<totalCount>(\d+)<\/totalCount>/);
+  const totalCount = totalMatch ? parseInt(totalMatch[1]) : 0;
+
+  if (totalCount <= 1000) return firstPage;
+
+  const totalPages = Math.min(Math.ceil(totalCount / 1000), 3);
+  const additionalPages = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, i) =>
+      fetch(makeUrl(i + 2), { next: { revalidate: 86400 } }).then(r => r.text())
+    )
+  );
+
+  return [firstPage, ...additionalPages].join('\n');
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const district = searchParams.get('district') ?? '강남구';
@@ -35,16 +63,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const responses = await Promise.all(
-      monthList.map((yyyymm) => {
-        const params = new URLSearchParams({
-          LAWD_CD:   lawdCd,
-          DEAL_YMD:  yyyymm,
-          numOfRows: '500',
-          pageNo:    '1',
-        });
-        const url = BASE_URL + '?serviceKey=' + apiKey + '&' + params.toString();
-        return fetch(url, { next: { revalidate: 86400 } }).then((r) => r.text());
-      })
+      monthList.map((yyyymm) => fetchAllPages(apiKey, lawdCd, yyyymm))
     );
 
     const transactions: any[] = [];
