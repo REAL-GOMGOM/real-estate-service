@@ -1,32 +1,20 @@
 'use client';
 
+import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { ArrowRight, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { getScoreColor, getScoreBgColor } from '@/lib/score-utils';
 import locationScoresData from '@/data/location-scores.json';
 import type { LocationScore } from '@/lib/types';
 
 const locationScores = locationScoresData as LocationScore[];
 
-// 점수에 따른 색상 반환
-function getScoreColor(score: number): string {
-  if (score >= 4.0) return '#22C55E';
-  if (score >= 3.0) return '#86EFAC';
-  if (score >= 2.0) return '#F59E0B';
-  return '#EF4444';
-}
-
-function getScoreBgColor(score: number): string {
-  if (score >= 4.0) return 'rgba(34, 197, 94, 0.14)';
-  if (score >= 3.0) return 'rgba(134, 239, 172, 0.1)';
-  if (score >= 2.0) return 'rgba(245, 158, 11, 0.14)';
-  return 'rgba(239, 68, 68, 0.14)';
-}
-
-// 점수 높은 순 TOP 5
-const TOP_LOCATIONS = [...locationScores]
-  .sort((a, b) => b.score - a.score)
-  .slice(0, 5);
+const REGIONS = [
+  '전체', '서울', '경기', '인천',
+  '1기신도시', '2기신도시', '3기신도시',
+  '부산', '대구', '울산',
+] as const;
 
 function TrendIcon({ trend }: { trend: LocationScore['trend'] }) {
   if (trend === 'up') return <TrendingUp size={14} style={{ color: '#22C55E' }} />;
@@ -35,6 +23,16 @@ function TrendIcon({ trend }: { trend: LocationScore['trend'] }) {
 }
 
 export default function LocationMapPreview() {
+  const [selectedRegion, setSelectedRegion] = useState<string>('전체');
+
+  const topLocations = useMemo(() => {
+    return [...locationScores]
+      .filter(l => l.level === 'district')
+      .filter(l => selectedRegion === '전체' || l.region === selectedRegion)
+      .sort((a, b) => a.score - b.score)
+      .slice(0, 5);
+  }, [selectedRegion]);
+
   return (
     <section style={{ padding: 'clamp(40px, 8vw, 96px) 0', backgroundColor: 'var(--bg-card)' }}>
       <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px' }}>
@@ -51,10 +49,10 @@ export default function LocationMapPreview() {
               2026년 3월 업데이트
             </span>
             <h2 style={{ fontSize: 'clamp(26px, 4vw, 38px)', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '20px', lineHeight: 1.3 }}>
-              서울 입지 점수 지도
+              전국 입지 점수 지도
             </h2>
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', lineHeight: 1.9, marginBottom: '32px' }}>
-              매월 업데이트되는 서울 주요 지역의 입지 점수를 지도 위에서 확인하세요.
+              매월 업데이트되는 전국 주요 지역의 입지 점수를 지도 위에서 확인하세요.
               시세차익 가능성, 교통, 학군, 생활 인프라를 종합한 점수를 제공합니다.
             </p>
             <Link
@@ -74,12 +72,31 @@ export default function LocationMapPreview() {
             transition={{ duration: 0.6, delay: 0.1 }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)' }}>이달의 서울 TOP 5 입지</span>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)' }}>이달의 TOP 5 입지</span>
               <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>점수 기준</span>
             </div>
 
+            {/* 권역 탭 */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '16px' }}>
+              {REGIONS.map((region) => (
+                <button
+                  key={region}
+                  onClick={() => setSelectedRegion(region)}
+                  style={{
+                    padding: '5px 10px', borderRadius: '8px',
+                    fontSize: '11px', fontWeight: 500, cursor: 'pointer', border: 'none',
+                    backgroundColor: selectedRegion === region ? 'var(--accent)' : 'var(--border-light)',
+                    color: selectedRegion === region ? 'white' : 'var(--text-muted)',
+                    transition: 'background 0.15s', whiteSpace: 'nowrap',
+                  }}
+                >
+                  {region}
+                </button>
+              ))}
+            </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {TOP_LOCATIONS.map((location, index) => (
+              {topLocations.map((location, index) => (
                 <motion.div
                   key={location.id}
                   initial={{ opacity: 0, x: 20 }}
@@ -113,10 +130,10 @@ export default function LocationMapPreview() {
             {/* 점수 범례 */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginTop: '20px', paddingTop: '20px', borderTop: '1px solid var(--border-light)' }}>
               {[
-                { color: '#22C55E', label: '4.0 이상' },
-                { color: '#86EFAC', label: '3.0~3.9' },
-                { color: '#F59E0B', label: '2.0~2.9' },
-                { color: '#EF4444', label: '1.0~1.9' },
+                { color: '#22C55E', label: '1.0~1.9 최우수' },
+                { color: '#86EFAC', label: '2.0~2.9 우수' },
+                { color: '#F59E0B', label: '3.0~3.9 보통' },
+                { color: '#EF4444', label: '4.0 이상 일반' },
               ].map((item) => (
                 <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: item.color, flexShrink: 0 }} />

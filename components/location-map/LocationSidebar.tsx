@@ -3,19 +3,8 @@
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import type { LocationScore } from '@/lib/types';
 
-export function getScoreColor(score: number): string {
-  if (score >= 4.0) return '#22C55E';
-  if (score >= 3.0) return '#86EFAC';
-  if (score >= 2.0) return '#F59E0B';
-  return '#EF4444';
-}
-
-export function getScoreBgColor(score: number): string {
-  if (score >= 4.0) return 'rgba(34,197,94,0.15)';
-  if (score >= 3.0) return 'rgba(134,239,172,0.1)';
-  if (score >= 2.0) return 'rgba(245,158,11,0.15)';
-  return 'rgba(239,68,68,0.15)';
-}
+import { getScoreColor, getScoreBgColor } from '@/lib/score-utils';
+export { getScoreColor, getScoreBgColor } from '@/lib/score-utils';
 
 // 권역 탭 — 2줄 구성
 const REGION_TABS_ROW1 = ['전체', '서울', '경기', '인천'];
