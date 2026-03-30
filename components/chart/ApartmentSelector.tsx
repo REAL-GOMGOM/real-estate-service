@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Building2, AlertTriangle, Search } from 'lucide-react';
 import { DISTRICT_GROUPS, ALL_DISTRICTS, findRegionIndex } from '@/lib/district-groups';
 
@@ -50,10 +50,18 @@ export default function ApartmentSelector({
 
   const activeRegionIndex = findRegionIndex(activeDistrict);
   // -1 = 전체
-  const [regionIdx, setRegionIdx] = useState<number>(-1);
+  const [regionIdx, setRegionIdx] = useState<number>(() => {
+    const idx = findRegionIndex(activeDistrict);
+    return idx >= 0 ? idx : -1;
+  });
   const [districtSearch, setDistrictSearch] = useState('');
   const [search, setSearch] = useState('');
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    const idx = findRegionIndex(activeDistrict);
+    if (idx >= 0) setRegionIdx(idx);
+  }, [activeDistrict]);
 
   const visibleDistricts = districtSearch.trim()
     ? ALL_DISTRICTS.filter((d) => d.includes(districtSearch.trim()))
