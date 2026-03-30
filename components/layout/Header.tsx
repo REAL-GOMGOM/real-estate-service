@@ -10,6 +10,7 @@ import { useTheme } from '@/components/ThemeProvider';
 const NAV_ITEMS = [
   { label: '실거래',         href: '/transactions' },
   { label: '차트',           href: '/chart' },
+  { label: '실질가치',       href: '/dollar' },
   { label: '부동산지도',     href: '/location-map' },
   { label: '청약',           href: '/subscription' },
   { label: '경제달력',       href: '/calendar' },
