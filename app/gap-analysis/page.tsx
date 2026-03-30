@@ -3,7 +3,8 @@
 import { useState, useCallback, Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import Header from '@/components/layout/Header';
-import { Search, TrendingUp, TrendingDown, Minus, AlertTriangle, BarChart2 } from 'lucide-react';
+import Link from 'next/link';
+import { Search, TrendingUp, TrendingDown, Minus, AlertTriangle, BarChart2, ArrowRight } from 'lucide-react';
 import type { GapResult, ComplexSearchResult } from '@/types/gap-analysis';
 
 const GapChart = dynamic(() => import('@/components/gap-analysis/GapChart'), { ssr: false });
@@ -134,9 +135,17 @@ function GapContent() {
           <p style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
             두 단지의 실거래가 갭을 비교하여 저평가/고평가를 판단합니다
           </p>
-          <a href="/gap-guide" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--accent)', textDecoration: 'none', whiteSpace: 'nowrap' }}>
-            📖 갭투자 가이드 →
-          </a>
+          <Link href="/gap-guide" style={{
+            display: 'inline-flex', alignItems: 'center', gap: '8px',
+            padding: '12px 24px', borderRadius: '12px',
+            backgroundColor: 'var(--accent)', color: 'white',
+            fontSize: '14px', fontWeight: 700, textDecoration: 'none',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            transition: 'transform 0.15s, box-shadow 0.15s',
+          }}>
+            📖 갭투자 가이드
+            <ArrowRight size={16} />
+          </Link>
         </div>
 
         {/* 단지 선택 */}
@@ -279,7 +288,7 @@ export default function GapAnalysisPage() {
   return (
     <>
       <Header />
-      <Suspense fallback={<div style={{ paddingTop: '64px', textAlign: 'center', color: 'var(--text-dim)', padding: '60px' }}>로딩 중...</div>}>
+      <Suspense fallback={<div style={{ paddingTop: '64px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px', gap: '16px' }}><div style={{ width: '40px', height: '40px', borderRadius: '50%', border: '3px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'spin 0.8s linear infinite' }} /><p style={{ fontSize: '14px', color: 'var(--text-dim)', fontWeight: 500 }}>불러오는 중...</p><style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style></div>}>
         <GapContent />
       </Suspense>
     </>
