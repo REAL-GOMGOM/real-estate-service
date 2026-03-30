@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Search, X } from 'lucide-react';
+import ErrorState from '@/components/common/ErrorState';
 import {
   ScatterChart, Scatter, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid, ReferenceLine,
@@ -386,6 +387,7 @@ export default function TransactionsClient() {
   const [query,      setQuery]      = useState('');
   const [groups,     setGroups]     = useState<AptGroup[]>([]);
   const [loading,    setLoading]    = useState(false);
+  const [error,      setError]      = useState<string | null>(null);
   const [fetched,    setFetched]    = useState('');
   const [activeApt,  setActiveApt]  = useState<AptGroup | null>(null);
 
@@ -393,6 +395,7 @@ export default function TransactionsClient() {
     const key = `${d}-${m}`;
     if (fetched === key) return;
     setLoading(true);
+    setError(null);
     try {
       const res  = await fetch(`/api/transactions?district=${encodeURIComponent(d)}&months=${m}`);
       const json = await res.json();
@@ -400,6 +403,7 @@ export default function TransactionsClient() {
       setFetched(key);
     } catch {
       setGroups([]);
+      setError('데이터 조회에 실패했습니다');
     } finally {
       setLoading(false);
     }
@@ -510,6 +514,15 @@ export default function TransactionsClient() {
             />
           </div>
         </div>
+
+        {/* 에러 상태 */}
+        {error && !loading && (
+          <ErrorState
+            message="실거래 데이터를 불러오지 못했습니다"
+            detail={error}
+            onRetry={() => { setError(null); setFetched(''); load(district, months); }}
+          />
+        )}
 
         {/* 카드 그리드 */}
         {loading ? (
