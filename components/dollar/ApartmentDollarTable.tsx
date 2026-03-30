@@ -231,7 +231,7 @@ export default function ApartmentDollarTable({ entries, baseYear, compareYear, o
             {/* 카드 헤더 */}
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '4px' }}>
               <div>
-                <span style={{ fontSize: '16px', fontWeight: 800, color: '#FFFFFF' }}>{entry.aptName}</span>
+                <span style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>{entry.aptName}</span>
                 <span style={{ fontSize: '12px', color: 'var(--text-dim)', marginLeft: '8px' }}>{entry.district}</span>
                 <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
                   {dollarGain && (
