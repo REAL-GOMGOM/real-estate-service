@@ -5,6 +5,29 @@ import { X, TrendingUp, TrendingDown, Minus, MapPin, AlertTriangle, BarChart2 } 
 import { useState, useEffect } from 'react';
 import type { LocationScore } from '@/lib/types';
 import { getScoreColor, getScoreBgColor } from './LocationSidebar';
+import { DISTRICT_CODE } from '@/lib/district-codes';
+
+const FALLBACK_DISTRICT_MAP: Record<string, string> = {
+  '서울특별시': '강남구',
+  '부산광역시': '부산 해운대구',
+  '대구광역시': '대구 수성구',
+  '울산광역시': '울산 남구',
+  '인천광역시': '인천 연수구',
+  '성남·송파·하남': '송파구',
+  '광명·시흥': '광명시',
+};
+
+function getChartDistrict(location: LocationScore): string {
+  const dist = location.district;
+  const name = location.name;
+  if (DISTRICT_CODE[dist]) return dist;
+  if (FALLBACK_DISTRICT_MAP[dist]) return FALLBACK_DISTRICT_MAP[dist];
+  const match = Object.keys(DISTRICT_CODE).find(
+    key => key.startsWith(dist) || key.startsWith(name)
+  );
+  if (match) return match;
+  return '강남구';
+}
 
 interface Props {
   location: LocationScore;
@@ -59,7 +82,7 @@ export default function LocationDetailPanel({ location, onClose, embedded }: Pro
 
       {/* 차트 보기 버튼 */}
       <Link
-        href={`/chart?district=${encodeURIComponent(location.district)}`}
+        href={`/chart?district=${encodeURIComponent(getChartDistrict(location))}`}
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
           padding: '10px', borderRadius: '12px', marginBottom: '14px',
