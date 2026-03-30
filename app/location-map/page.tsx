@@ -8,6 +8,7 @@ import LocationDetailPanel from '@/components/location-map/LocationDetailPanel';
 import LayerToggle from '@/components/location-map/LayerToggle';
 import SchoolDetailPanel, { type SchoolData } from '@/components/location-map/SchoolDetailPanel';
 import BottomSheet from '@/components/common/BottomSheet';
+import FloatingNavPanel from '@/components/location-map/FloatingNavPanel';
 import type { LocationScore } from '@/lib/types';
 
 const ALL_LOCATIONS: LocationScore[] = require('@/data/location-scores.json');
@@ -138,6 +139,8 @@ export default function LocationMapPage() {
           지도를 불러오는 중...
         </div>
       )}
+      {/* 플로팅 네비게이션 (PC, 팝업 없을 때만) */}
+      {!isMobile && !selectedLocation && !selectedSchool && <FloatingNavPanel />}
       {/* PC: 기존 패널 / 모바일: 바텀시트 */}
       {!isMobile && selectedLocation && (
         <LocationDetailPanel
