@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Header from '@/components/layout/Header';
 import Link from 'next/link';
 import { Calculator, AlertTriangle, CheckCircle, ArrowRight, TrendingUp } from 'lucide-react';
+import SubPageHeader from '@/components/common/SubPageHeader';
 
 function fmtPrice(manwon: number): string {
   if (manwon >= 10000) return `${(manwon / 10000).toFixed(1)}억`;
@@ -28,6 +29,7 @@ export default function GapGuidePage() {
       <Header />
       <main style={{ paddingTop: '64px', backgroundColor: 'var(--bg-primary)', minHeight: '100vh' }}>
         <div style={{ maxWidth: '800px', margin: '0 auto', padding: '32px 20px' }}>
+          <SubPageHeader parentLabel="갭분석" parentHref="/gap-analysis" />
 
           <h1 style={{ fontSize: 'clamp(24px, 4vw, 32px)', fontWeight: 800, color: 'var(--text-strong)', marginBottom: '8px' }}>
             갭투자 가이드

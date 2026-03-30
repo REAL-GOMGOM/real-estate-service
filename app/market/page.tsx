@@ -1,5 +1,6 @@
 import Header from '@/components/layout/Header';
 import { BarChart2 } from 'lucide-react';
+import SubPageHeader from '@/components/common/SubPageHeader';
 
 export default function MarketPage() {
   return (
@@ -7,6 +8,7 @@ export default function MarketPage() {
       <Header />
       <main style={{ minHeight: '100vh', backgroundColor: 'var(--bg-primary)', paddingTop: '64px' }}>
         <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '120px 24px', textAlign: 'center' }}>
+          <SubPageHeader parentLabel="차트" parentHref="/chart" />
           <div style={{
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             width: '72px', height: '72px', borderRadius: '20px',
