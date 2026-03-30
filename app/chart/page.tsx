@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic';
 import Header from '@/components/layout/Header';
 import ApartmentSelector from '@/components/chart/ApartmentSelector';
 import PriceChart from '@/components/chart/PriceChart';
+import ErrorState from '@/components/common/ErrorState';
 
 const TransactionTable = dynamic(
   () => import('@/components/chart/TransactionTable'),
@@ -231,6 +232,15 @@ function ChartContent() {
               </span>
             </div>
           </div>
+
+          {/* API 에러 — 데이터 없음 */}
+          {apiError && !apiData && !isLoading && (
+            <ErrorState
+              message="차트 데이터를 불러오지 못했습니다"
+              detail={apiError}
+              onRetry={() => fetchApiData(activeDistrict, selectedPeriod)}
+            />
+          )}
 
           {/* 단지 헤더 */}
           {selectedApt && (
