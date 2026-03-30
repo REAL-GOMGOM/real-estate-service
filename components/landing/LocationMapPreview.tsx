@@ -27,7 +27,12 @@ export default function LocationMapPreview() {
 
   const topLocations = useMemo(() => {
     return [...locationScores]
-      .filter(l => l.level === 'district')
+      .filter(l => {
+        if (selectedRegion === '1기신도시' || selectedRegion === '2기신도시' || selectedRegion === '3기신도시') {
+          return true;
+        }
+        return l.level === 'district';
+      })
       .filter(l => selectedRegion === '전체' || l.region === selectedRegion)
       .sort((a, b) => a.score - b.score)
       .slice(0, 5);
