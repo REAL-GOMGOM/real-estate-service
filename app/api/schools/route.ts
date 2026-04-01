@@ -48,9 +48,11 @@ export async function GET(request: NextRequest) {
       filtered = filtered.filter((s) => s.type === type);
     }
 
-    return NextResponse.json({ schools: filtered });
+    return NextResponse.json({ schools: filtered }, {
+      headers: { 'Cache-Control': 's-maxage=86400' },
+    });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : '서버 오류';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('[schools API]', error instanceof Error ? error.message : error);
+    return NextResponse.json({ error: '학교 데이터를 불러올 수 없습니다' }, { status: 500 });
   }
 }

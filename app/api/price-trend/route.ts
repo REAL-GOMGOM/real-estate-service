@@ -104,8 +104,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ period, data: dataPoints });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : '서버 오류';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('[price-trend API]', error instanceof Error ? error.message : error);
+    return NextResponse.json({ error: '시세 데이터를 불러올 수 없습니다' }, { status: 500 });
   }
 }
 

@@ -45,7 +45,8 @@ export async function GET(request: NextRequest) {
 
     const apiKey = process.env.REALESTATE_STAT_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({ error: 'REALESTATE_STAT_API_KEY 미설정' }, { status: 500 });
+      console.error('[price-change/districts API] REALESTATE_STAT_API_KEY 미설정');
+      return NextResponse.json({ error: '구별 시세 데이터를 불러올 수 없습니다' }, { status: 500 });
     }
 
     const statblId = STAT_TABLES[type] || STAT_TABLES.sale;
@@ -106,7 +107,7 @@ export async function GET(request: NextRequest) {
       districts,
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : '서버 오류';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('[price-change/districts API]', error instanceof Error ? error.message : error);
+    return NextResponse.json({ error: '구별 시세 데이터를 불러올 수 없습니다' }, { status: 500 });
   }
 }

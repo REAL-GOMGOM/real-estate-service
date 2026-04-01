@@ -7,7 +7,7 @@ const RENT_API_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptRent/getRTMS
 
 async function fetchTrades(apiKey: string, lawdCd: string, dealYmd: string, aptName?: string) {
   const url = `${API_URL}?serviceKey=${apiKey}&LAWD_CD=${lawdCd}&DEAL_YMD=${dealYmd}&numOfRows=1000&pageNo=1`;
-  const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+  const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, next: { revalidate: 3600 } });
   const text = await res.text();
 
   const trades: { name: string; price: number; area: number; date: string }[] = [];
@@ -32,7 +32,7 @@ async function fetchTrades(apiKey: string, lawdCd: string, dealYmd: string, aptN
 async function fetchRents(apiKey: string, lawdCd: string, dealYmd: string, aptName?: string) {
   const url = `${RENT_API_URL}?serviceKey=${apiKey}&LAWD_CD=${lawdCd}&DEAL_YMD=${dealYmd}&numOfRows=1000&pageNo=1`;
   try {
-    const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, next: { revalidate: 3600 } });
     const text = await res.text();
     const trades: { name: string; deposit: number; area: number; date: string }[] = [];
     const names = text.match(/<aptNm>([^<]+)<\/aptNm>/g) || [];
@@ -71,7 +71,10 @@ export async function POST(request: NextRequest) {
     }
 
     const apiKey = process.env.PUBLIC_DATA_API_KEY;
-    if (!apiKey) return NextResponse.json({ error: 'API키 미설정' }, { status: 500 });
+    if (!apiKey) {
+      console.error('[gap-analysis API] PUBLIC_DATA_API_KEY 미설정');
+      return NextResponse.json({ error: '갭분석 데이터를 불러올 수 없습니다' }, { status: 500 });
+    }
 
     const lawdA = DISTRICT_CODE[complexA.district];
     if (!lawdA) return NextResponse.json({ error: `${complexA.district} 코드 없음` }, { status: 400 });
@@ -156,6 +159,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(result);
   } catch (error: unknown) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : '오류' }, { status: 500 });
+    console.error('[gap-analysis API]', error instanceof Error ? error.message : error);
+    return NextResponse.json({ error: '갭분석 데이터를 불러올 수 없습니다' }, { status: 500 });
   }
 }

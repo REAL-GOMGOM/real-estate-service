@@ -43,7 +43,8 @@ export async function GET() {
   const clientSecret = process.env.NAVER_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
-    return NextResponse.json({ error: '네이버 API 키 미설정' }, { status: 500 });
+    console.error('[news API] NAVER_CLIENT_ID/SECRET 미설정');
+    return NextResponse.json({ error: '뉴스 데이터를 불러올 수 없습니다' }, { status: 500 });
   }
 
   const headers = {
