@@ -1,7 +1,6 @@
 /** 부동산 달력 관련 타입 정의 */
 
 export type EventCategory =
-  | 'subscription'
   | 'rate'
   | 'move_in'
   | 'policy'
@@ -31,7 +30,6 @@ export interface CategoryInfo {
 }
 
 export const CATEGORY_MAP: Record<EventCategory, CategoryInfo> = {
-  subscription: { key: 'subscription', label: '청약', color: '#EF4444', icon: '🏠' },
   rate:         { key: 'rate',         label: '금리', color: '#3B82F6', icon: '🏦' },
   move_in:      { key: 'move_in',      label: '입주', color: '#22C55E', icon: '🏗️' },
   policy:       { key: 'policy',       label: '정책', color: '#F97316', icon: '📋' },
