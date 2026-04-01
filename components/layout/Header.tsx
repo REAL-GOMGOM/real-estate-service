@@ -14,6 +14,7 @@ type NavItem =
 
 const NAV_ITEMS: NavItem[] = [
   { label: '실거래', href: '/transactions' },
+  { label: '랭킹', href: '/ranking' },
   {
     label: '분석',
     children: [
