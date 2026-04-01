@@ -111,8 +111,8 @@ export default function SubscriptionClientPage({ items }: Props) {
         {/* 뷰 모드 토글 */}
         <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', padding: '4px', borderRadius: '12px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)', width: 'fit-content' }}>
           {([
-            { mode: 'list' as const,     icon: <List size={15} />,         label: '목록' },
             { mode: 'calendar' as const,  icon: <CalendarDays size={15} />, label: '달력' },
+            { mode: 'list' as const,     icon: <List size={15} />,         label: '목록' },
           ]).map(({ mode, icon, label }) => (
             <button
               key={mode}
