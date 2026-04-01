@@ -15,7 +15,7 @@ interface Props {
 const STATUS_ORDER = { ongoing: 0, upcoming: 1, closed: 2 } as const;
 
 export default function SubscriptionClientPage({ items }: Props) {
-  const [viewMode,         setViewMode]         = useState<'list' | 'calendar'>('list');
+  const [viewMode,         setViewMode]         = useState<'list' | 'calendar'>('calendar');
   const [selectedStatus,   setSelectedStatus]   = useState('전체');
   const [selectedDistrict, setSelectedDistrict] = useState('전체');
   const [searchQuery,      setSearchQuery]      = useState('');
@@ -26,12 +26,27 @@ export default function SubscriptionClientPage({ items }: Props) {
     [items],
   );
 
-  const stats = useMemo(() => [
-    { label: '전체',     value: items.length,                                         color: 'var(--text-primary)' },
-    { label: '청약 중',  value: items.filter((i) => i.status === 'ongoing').length,   color: '#22C55E' },
-    { label: '청약 예정', value: items.filter((i) => i.status === 'upcoming').length, color: 'var(--accent)' },
-    { label: '청약 마감', value: items.filter((i) => i.status === 'closed').length,   color: 'var(--text-dim)' },
-  ], [items]);
+  const stats = useMemo(() => {
+    function formatDate(d: string): string {
+      if (!d || d.length < 10) return '';
+      return d.slice(2, 4) + '.' + d.slice(5, 7) + '.' + d.slice(8, 10);
+    }
+    function dateRange(list: SubscriptionItem[]): string {
+      const starts = list.map((i) => i.startDate).filter(Boolean).sort();
+      const ends   = list.map((i) => i.endDate).filter(Boolean).sort();
+      if (starts.length === 0) return '';
+      return `${formatDate(starts[0])} ~ ${formatDate(ends[ends.length - 1])}`;
+    }
+    const ongoing  = items.filter((i) => i.status === 'ongoing');
+    const upcoming = items.filter((i) => i.status === 'upcoming');
+    const closed   = items.filter((i) => i.status === 'closed');
+    return [
+      { label: '전체',     value: items.length,    color: 'var(--text-primary)', range: dateRange(items) },
+      { label: '청약 중',  value: ongoing.length,  color: '#22C55E',             range: dateRange(ongoing) },
+      { label: '청약 예정', value: upcoming.length, color: 'var(--accent)',       range: dateRange(upcoming) },
+      { label: '청약 마감', value: closed.length,   color: 'var(--text-dim)',     range: dateRange(closed) },
+    ];
+  }, [items]);
 
   const filteredItems = useMemo(() => {
     return items
@@ -84,6 +99,11 @@ export default function SubscriptionClientPage({ items }: Props) {
                 {stat.value}
                 <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-dim)', marginLeft: '4px' }}>건</span>
               </p>
+              {stat.range && (
+                <p style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '6px', fontFamily: 'Roboto Mono, monospace' }}>
+                  {stat.range}
+                </p>
+              )}
             </div>
           ))}
         </div>

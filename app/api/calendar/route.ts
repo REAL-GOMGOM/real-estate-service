@@ -18,50 +18,6 @@ function tryDbEvents(year: number, month: number) {
   }
 }
 
-// 청약 데이터에서 달력 이벤트 생성
-async function fetchSubscriptionEvents(year: number, month: number): Promise<CalendarEvent[]> {
-  try {
-    // 내부 API 호출 대신 직접 subscription-api 호출
-    const { fetchSubscriptions } = await import('@/lib/subscription-api');
-    const items = await fetchSubscriptions();
-    const prefix = `${year}-${String(month).padStart(2, '0')}`;
-    const events: CalendarEvent[] = [];
-    let id = 1000;
-
-    for (const item of items) {
-      // 시작일이 해당 월인 경우
-      if (item.startDate?.startsWith(prefix)) {
-        events.push({
-          id: id++,
-          event_date: item.startDate,
-          category: 'subscription',
-          title: `${item.name} 청약`,
-          description: `${item.district} · ${item.totalUnits > 0 ? item.totalUnits + '세대' : ''} · ${item.houseType || ''}`,
-          source_url: 'https://www.applyhome.co.kr',
-          icon: '🏠',
-          importance: item.competitionRate && item.competitionRate > 10 ? 'high' : 'normal',
-        });
-      }
-      // 발표일이 해당 월인 경우
-      if (item.announceDate?.startsWith(prefix)) {
-        events.push({
-          id: id++,
-          event_date: item.announceDate,
-          category: 'subscription',
-          title: `${item.name} 당첨 발표`,
-          description: `${item.district}`,
-          source_url: 'https://www.applyhome.co.kr',
-          icon: '🏠',
-          importance: 'normal',
-        });
-      }
-    }
-    return events;
-  } catch {
-    return [];
-  }
-}
-
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = request.nextUrl;
@@ -75,20 +31,12 @@ export async function GET(request: NextRequest) {
     // 2) 확정 정기 이벤트
     const fixedEvents = getCalendarEvents(year, month);
 
-    // 3) 청약 이벤트 (타임아웃 3초, 실패해도 정기 이벤트는 반환)
-    let subEvents: CalendarEvent[] = [];
-    try {
-      const subPromise = fetchSubscriptionEvents(year, month);
-      const timeout = new Promise<CalendarEvent[]>((resolve) => setTimeout(() => resolve([]), 3000));
-      subEvents = await Promise.race([subPromise, timeout]);
-    } catch { /* 실패 무시 */ }
-
-    // 합치기 (DB + 정기 + 청약, 중복 제거)
-    const merged = [...(dbEvents || []), ...fixedEvents, ...subEvents];
+    // 경제지표 이벤트만 (DB 우선, 없으면 정기 이벤트)
+    const allEvents = [...(dbEvents || fixedEvents)];
 
     // 중복 제거 (같은 날짜 + 같은 타이틀)
     const seen = new Set<string>();
-    const deduped = merged.filter((e) => {
+    const deduped = allEvents.filter((e) => {
       const key = `${e.event_date}-${e.title}`;
       if (seen.has(key)) return false;
       seen.add(key);
