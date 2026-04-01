@@ -61,6 +61,12 @@ export interface CompetitionRateEntry {
   reqCount: number | null;
 }
 
+export interface SupplyDate {
+  type: 'special' | 'first' | 'second' | 'etc';
+  label: string;
+  date: string;
+}
+
 export interface SubscriptionItem {
   id: string;
   name: string;
@@ -76,6 +82,7 @@ export interface SubscriptionItem {
   minPrice: number | null;
   maxPrice: number | null;
   houseType: string;
+  supplyDates: SupplyDate[];
 }
 
 declare global {
