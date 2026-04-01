@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { List, CalendarDays } from 'lucide-react';
 import SubscriptionFilter from '@/components/subscription/SubscriptionFilter';
 import SubscriptionTable from '@/components/subscription/SubscriptionTable';
 import SubscriptionDetailModal from '@/components/subscription/SubscriptionDetailModal';
+import SubscriptionCalendar from '@/components/subscription/SubscriptionCalendar';
 import type { SubscriptionItem } from '@/lib/types';
 
 interface Props {
@@ -13,6 +15,7 @@ interface Props {
 const STATUS_ORDER = { ongoing: 0, upcoming: 1, closed: 2 } as const;
 
 export default function SubscriptionClientPage({ items }: Props) {
+  const [viewMode,         setViewMode]         = useState<'list' | 'calendar'>('list');
   const [selectedStatus,   setSelectedStatus]   = useState('전체');
   const [selectedDistrict, setSelectedDistrict] = useState('전체');
   const [searchQuery,      setSearchQuery]      = useState('');
@@ -85,24 +88,53 @@ export default function SubscriptionClientPage({ items }: Props) {
           ))}
         </div>
 
-        {/* 필터 */}
-        <SubscriptionFilter
-          selectedStatus={selectedStatus}
-          selectedDistrict={selectedDistrict}
-          searchQuery={searchQuery}
-          onStatusChange={setSelectedStatus}
-          onDistrictChange={setSelectedDistrict}
-          onSearchChange={setSearchQuery}
-          districts={districts}
-        />
+        {/* 뷰 모드 토글 */}
+        <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', padding: '4px', borderRadius: '12px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)', width: 'fit-content' }}>
+          {([
+            { mode: 'list' as const,     icon: <List size={15} />,         label: '목록' },
+            { mode: 'calendar' as const,  icon: <CalendarDays size={15} />, label: '달력' },
+          ]).map(({ mode, icon, label }) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
+                border: 'none', cursor: 'pointer',
+                backgroundColor: viewMode === mode ? 'var(--accent)' : 'transparent',
+                color: viewMode === mode ? '#fff' : 'var(--text-muted)',
+                transition: 'all 0.15s',
+              }}
+            >
+              {icon} {label}
+            </button>
+          ))}
+        </div>
 
-        {/* 결과 카운트 */}
-        <p style={{ fontSize: '13px', color: 'var(--text-dim)', marginBottom: '16px' }}>
-          총 <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{filteredItems.length}</span>건
-        </p>
+        {viewMode === 'list' ? (
+          <>
+            {/* 필터 */}
+            <SubscriptionFilter
+              selectedStatus={selectedStatus}
+              selectedDistrict={selectedDistrict}
+              searchQuery={searchQuery}
+              onStatusChange={setSelectedStatus}
+              onDistrictChange={setSelectedDistrict}
+              onSearchChange={setSearchQuery}
+              districts={districts}
+            />
 
-        {/* 청약 목록 */}
-        <SubscriptionTable items={filteredItems} onSelect={setSelectedItem} />
+            {/* 결과 카운트 */}
+            <p style={{ fontSize: '13px', color: 'var(--text-dim)', marginBottom: '16px' }}>
+              총 <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{filteredItems.length}</span>건
+            </p>
+
+            {/* 청약 목록 */}
+            <SubscriptionTable items={filteredItems} onSelect={setSelectedItem} />
+          </>
+        ) : (
+          <SubscriptionCalendar items={items} onSelect={setSelectedItem} />
+        )}
 
         {/* 상세 모달 */}
         {selectedItem && (

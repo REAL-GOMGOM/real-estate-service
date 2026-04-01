@@ -1,5 +1,5 @@
 import { cacheLife } from 'next/cache';
-import type { SubscriptionItem, CompetitionRateEntry } from '@/lib/types';
+import type { SubscriptionItem, CompetitionRateEntry, SupplyDate } from '@/lib/types';
 
 const ODCLOUD_BASE     = 'https://api.odcloud.kr/api';
 const DETAIL_SVC       = 'ApplyhomeInfoDetailSvc/v1';
@@ -196,6 +196,27 @@ function buildCompetitionRateMap(cmpetRows: ApiRow[]): Map<string, CmpetMapValue
 }
 
 // ────────────────────────────────────────────────
+// 공급유형별 일정 추출
+// ────────────────────────────────────────────────
+const SUPPLY_DATE_FIELDS: [string, SupplyDate['type'], string][] = [
+  ['SPSPLY_RCEPT_BGNDE',          'special', '특별공급'],
+  ['GNRL_RNK1_CRSPAREA_RCPTDE',   'first',   '1순위'],
+  ['GNRL_RNK2_CRSPAREA_RCPTDE',   'second',  '2순위'],
+  ['GNRL_RNK1_ETC_AREA_RCPTDE',   'etc',     '무순위/기타'],
+];
+
+function extractSupplyDates(row: ApiRow): SupplyDate[] {
+  const dates: SupplyDate[] = [];
+  for (const [field, type, label] of SUPPLY_DATE_FIELDS) {
+    const val = row[field]?.trim();
+    if (val && val.length >= 8) {
+      dates.push({ type, label, date: val });
+    }
+  }
+  return dates;
+}
+
+// ────────────────────────────────────────────────
 // API 행 → SubscriptionItem 변환
 // ────────────────────────────────────────────────
 function buildHouseType(stats: HouseStats | undefined): string {
@@ -242,6 +263,7 @@ function mapRowToItem(
     minPrice:         stats?.minPrice ?? null,
     maxPrice:         stats?.maxPrice ?? null,
     houseType:        buildHouseType(stats),
+    supplyDates:      extractSupplyDates(row),
   };
 }
 
