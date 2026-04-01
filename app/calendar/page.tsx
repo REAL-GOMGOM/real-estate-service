@@ -9,7 +9,7 @@ import EventDetailModal from '@/components/calendar/EventDetailModal';
 import { CATEGORY_MAP, type CalendarEvent, type EventCategory } from '@/types/calendar';
 
 const ALL_CATEGORIES: EventCategory[] = [
-  'subscription', 'rate', 'move_in', 'policy', 'loan', 'index', 'other',
+  'subscription', 'rate', 'move_in', 'policy', 'loan', 'index', 'us_economic', 'other',
 ];
 
 function CalendarContent() {

@@ -38,7 +38,8 @@
       "Bash(curl -s \"https://www.naezipkorea.com/api/transactions?district=%EC%84%B1%EB%82%A8%EC%8B%9C%20%EB%B6%84%EB%8B%B9%EA%B5%AC&months=3\")",
       "Bash(curl -s -o /dev/null -w \"%{time_total}s\" 'https://www.naezipkorea.com/api/price-change?type=sale&period=monthly')",
       "Bash(curl -s -o /dev/null -w \"%{time_total}s\" 'https://www.naezipkorea.com/api/calendar?year=2026&month=3')",
-      "Bash(curl -s -o /dev/null -w \"%{time_total}s\" 'https://www.naezipkorea.com/api/transactions?district=강남구&months=3')"
+      "Bash(curl -s -o /dev/null -w \"%{time_total}s\" 'https://www.naezipkorea.com/api/transactions?district=강남구&months=3')",
+      "Read(//Users/bangjoohan/.openclaw/workspace/realestate-alert/**)"
     ]
   }
 }
