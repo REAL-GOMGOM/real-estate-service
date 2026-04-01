@@ -5,7 +5,7 @@ import EventBadge from './EventBadge';
 import type { CalendarEvent, EventCategory } from '@/types/calendar';
 
 const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
-const MAX_VISIBLE_EVENTS = 2;
+const MAX_VISIBLE_EVENTS = 3;
 
 interface CalendarGridProps {
   year: number;
@@ -103,9 +103,9 @@ export default function CalendarGrid({ year, month, events, activeCategories, on
                 ))}
                 {hasMore && (
                   <span style={{
-                    fontSize: '8px', color: 'var(--text-dim)', cursor: 'default',
+                    fontSize: '10px', color: 'var(--text-dim)', cursor: 'default',
                   }}>
-                    +{dayEvents.length - MAX_VISIBLE_EVENTS}
+                    +{dayEvents.length - MAX_VISIBLE_EVENTS}건
                   </span>
                 )}
               </div>

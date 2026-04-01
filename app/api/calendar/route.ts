@@ -31,8 +31,8 @@ export async function GET(request: NextRequest) {
     // 2) 확정 정기 이벤트
     const fixedEvents = getCalendarEvents(year, month);
 
-    // 경제지표 이벤트만 (DB 우선, 없으면 정기 이벤트)
-    const allEvents = [...(dbEvents || fixedEvents)];
+    // DB 이벤트 + 확정 정기 이벤트 합치기
+    const allEvents = [...(dbEvents || []), ...fixedEvents];
 
     // 중복 제거 (같은 날짜 + 같은 타이틀)
     const seen = new Set<string>();
