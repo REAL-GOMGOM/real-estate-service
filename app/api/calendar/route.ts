@@ -83,17 +83,22 @@ export async function GET(request: NextRequest) {
       subEvents = await Promise.race([subPromise, timeout]);
     } catch { /* 실패 무시 */ }
 
-    // 합치기 (DB > 정기 > 청약, 중복 제거)
-    const allEvents = [...(dbEvents || fixedEvents), ...subEvents];
+    // 합치기 (DB + 정기 + 청약, 중복 제거)
+    const merged = [...(dbEvents || []), ...fixedEvents, ...subEvents];
+
+    // 중복 제거 (같은 날짜 + 같은 타이틀)
     const seen = new Set<string>();
-    const deduped = allEvents.filter((e) => {
+    const deduped = merged.filter((e) => {
       const key = `${e.event_date}-${e.title}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     }).sort((a, b) => a.event_date.localeCompare(b.event_date));
 
-    return NextResponse.json({ events: deduped });
+    // id 재할당 (충돌 방지)
+    const events = deduped.map((e, i) => ({ ...e, id: i + 1 }));
+
+    return NextResponse.json({ events });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : '서버 오류';
     return NextResponse.json({ error: message }, { status: 500 });

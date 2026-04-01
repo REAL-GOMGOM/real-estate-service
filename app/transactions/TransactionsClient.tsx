@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Search, X } from 'lucide-react';
 import ErrorState from '@/components/common/ErrorState';
 import {
@@ -380,6 +381,9 @@ function AptCard({ apt, onClick }: { apt: AptGroup; onClick: () => void }) {
 
 // ── 메인 ──────────────────────────────────────────
 export default function TransactionsClient() {
+  const searchParams = useSearchParams();
+  const districtParam = searchParams.get('district');
+
   const [today,      setToday]      = useState(new Date(0));
   useEffect(() => { setToday(new Date()); }, []);
   const [district,   setDistrict]   = useState('강남구');
@@ -390,6 +394,21 @@ export default function TransactionsClient() {
   const [error,      setError]      = useState<string | null>(null);
   const [fetched,    setFetched]    = useState('');
   const [activeApt,  setActiveApt]  = useState<AptGroup | null>(null);
+
+  const [viewMode, setViewMode] = useState<'summary' | 'detail'>(
+    districtParam ? 'detail' : 'summary'
+  );
+  const [summaryData, setSummaryData] = useState<any[]>([]);
+  const [summaryLoading, setSummaryLoading] = useState(true);
+
+  // districtParam이 있으면 바로 해당 지역 detail 뷰로 진입
+  useEffect(() => {
+    if (districtParam) {
+      setDistrict(districtParam);
+      setViewMode('detail');
+      setFetched('');
+    }
+  }, [districtParam]);
 
   const load = useCallback(async (d: string, m: number) => {
     const key = `${d}-${m}`;
@@ -409,7 +428,22 @@ export default function TransactionsClient() {
     }
   }, [fetched]);
 
-  useEffect(() => { load(district, months); }, [district, months]);
+  useEffect(() => {
+    if (viewMode === 'detail') load(district, months);
+  }, [district, months, viewMode]);
+
+  // 시도별 요약 데이터 fetch
+  useEffect(() => {
+    if (viewMode !== 'summary') return;
+    setSummaryLoading(true);
+    fetch('/api/transactions/summary')
+      .then(r => r.json())
+      .then(json => {
+        setSummaryData(json.summary || []);
+        setSummaryLoading(false);
+      })
+      .catch(() => setSummaryLoading(false));
+  }, [viewMode]);
 
   const filtered   = query.trim() ? groups.filter((g) => g.name.includes(query.trim())) : groups;
   const totalTx    = filtered.reduce((s, g) => s + g.transactions.length, 0);
@@ -436,6 +470,113 @@ export default function TransactionsClient() {
           </div>
           <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>출처: 국토교통부 실거래공개시스템</p>
         </div>
+
+        {/* 시도별 요약 카드 뷰 */}
+        {viewMode === 'summary' && (
+          <>
+            {summaryLoading ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} style={{
+                    height: '160px', borderRadius: '16px',
+                    backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-light)',
+                    animation: 'pulse 1.5s ease-in-out infinite',
+                  }} />
+                ))}
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
+                {summaryData.map((region) => (
+                  <button
+                    key={region.label}
+                    onClick={() => {
+                      setDistrict(region.firstDistrict);
+                      setViewMode('detail');
+                      setFetched('');
+                    }}
+                    style={{
+                      padding: '20px', borderRadius: '16px',
+                      backgroundColor: 'var(--bg-card)',
+                      border: '1px solid var(--border)',
+                      cursor: 'pointer', textAlign: 'left',
+                      transition: 'border-color 0.15s, box-shadow 0.15s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = 'var(--accent)';
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = 'var(--border)';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
+                  >
+                    {/* 상단: 시도명 + 거래건수 */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                        {region.label}
+                      </span>
+                      <span style={{ fontSize: '20px', fontWeight: 800, fontFamily: 'Roboto Mono, monospace', color: 'var(--text-primary)' }}>
+                        {region.estimatedCount.toLocaleString()}건
+                      </span>
+                    </div>
+
+                    {/* 신고가 */}
+                    {region.newHighs > 0 && (
+                      <div style={{ marginBottom: '12px' }}>
+                        <span style={{ fontSize: '13px', color: 'var(--text-dim)' }}>
+                          신고가{' '}
+                          <strong style={{ color: '#EF4444' }}>{region.newHighs}</strong>건
+                        </span>
+                      </div>
+                    )}
+
+                    {/* 하단: 평균가 */}
+                    <div style={{
+                      display: 'flex', gap: '14px',
+                      paddingTop: '12px', borderTop: '1px solid var(--border-light)',
+                    }}>
+                      {region.avg59 && (
+                        <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
+                          59㎡{' '}
+                          <strong style={{ color: 'var(--text-secondary)', fontFamily: 'Roboto Mono, monospace' }}>
+                            {region.avg59 >= 10000 ? `${(region.avg59 / 10000).toFixed(1)}억` : `${region.avg59.toLocaleString()}만`}
+                          </strong>
+                        </span>
+                      )}
+                      {region.avg84 && (
+                        <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
+                          84㎡{' '}
+                          <strong style={{ color: 'var(--text-secondary)', fontFamily: 'Roboto Mono, monospace' }}>
+                            {region.avg84 >= 10000 ? `${(region.avg84 / 10000).toFixed(1)}억` : `${region.avg84.toLocaleString()}만`}
+                          </strong>
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <p style={{ marginTop: '16px', fontSize: '11px', color: 'var(--text-dim)' }}>
+              ※ 대표 구 기준 추정치입니다. 지역을 클릭하면 상세 거래를 확인할 수 있습니다.
+            </p>
+          </>
+        )}
+
+        {/* detail 뷰: 뒤로가기 + 기존 상세 */}
+        {viewMode === 'detail' && (
+          <>
+        <button
+          onClick={() => setViewMode('summary')}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: '4px',
+            fontSize: '13px', fontWeight: 600, color: 'var(--accent)',
+            background: 'none', border: 'none', cursor: 'pointer',
+            padding: '8px 0', marginBottom: '12px',
+          }}
+        >
+          ← 전체 보기
+        </button>
 
         {/* 매매 탭 */}
         <div style={{ borderBottom: '1px solid var(--border)', marginBottom: '20px', display: 'flex' }}>
@@ -553,6 +694,8 @@ export default function TransactionsClient() {
         <p style={{ marginTop: '24px', fontSize: '11px', color: 'var(--text-dim)', lineHeight: 1.8 }}>
           ※ 매매 계약일 기준 · 신고가는 조회 기간 내 동일 면적 최고가 기준
         </p>
+          </>
+        )}
       </div>
 
       {/* 상세 모달 */}

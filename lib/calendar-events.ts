@@ -45,6 +45,58 @@ const FOMC_2026 = [
   { date: '2026-12-16', desc: 'FOMC 12월 회의 결과 (점도표)' },
 ];
 
+// 2026년 미국 CPI 발표일 (BLS 공식)
+// 출처: https://www.bls.gov/schedule/news_release/cpi.htm
+const US_CPI_2026 = [
+  { date: '2026-01-13', desc: '12월 CPI 발표' },
+  { date: '2026-02-11', desc: '1월 CPI 발표' },
+  { date: '2026-03-11', desc: '2월 CPI 발표' },
+  { date: '2026-04-10', desc: '3월 CPI 발표' },
+  { date: '2026-05-12', desc: '4월 CPI 발표' },
+  { date: '2026-06-10', desc: '5월 CPI 발표' },
+  { date: '2026-07-14', desc: '6월 CPI 발표' },
+  { date: '2026-08-12', desc: '7월 CPI 발표' },
+  { date: '2026-09-11', desc: '8월 CPI 발표' },
+  { date: '2026-10-14', desc: '9월 CPI 발표' },
+  { date: '2026-11-10', desc: '10월 CPI 발표' },
+  { date: '2026-12-10', desc: '11월 CPI 발표' },
+];
+
+// 2026년 미국 고용보고서 (NFP) — 매월 첫째 금요일 (08:30 ET)
+// 출처: https://www.bls.gov/schedule/news_release/empsit.htm
+const US_NFP_2026 = [
+  { date: '2026-01-09', desc: '12월 비농업 고용 보고서' },
+  { date: '2026-02-06', desc: '1월 비농업 고용 보고서' },
+  { date: '2026-03-06', desc: '2월 비농업 고용 보고서' },
+  { date: '2026-04-03', desc: '3월 비농업 고용 보고서' },
+  { date: '2026-05-01', desc: '4월 비농업 고용 보고서' },
+  { date: '2026-06-05', desc: '5월 비농업 고용 보고서' },
+  { date: '2026-07-03', desc: '6월 비농업 고용 보고서' },
+  { date: '2026-08-07', desc: '7월 비농업 고용 보고서' },
+  { date: '2026-09-04', desc: '8월 비농업 고용 보고서' },
+  { date: '2026-10-02', desc: '9월 비농업 고용 보고서' },
+  { date: '2026-11-06', desc: '10월 비농업 고용 보고서' },
+  { date: '2026-12-04', desc: '11월 비농업 고용 보고서' },
+];
+
+// 2026년 미국 GDP 발표일 (BEA 분기별)
+// ⚠️ 추정 일정 — BEA 공식 발표 시 업데이트 필요
+// 출처 참고: https://www.bea.gov/news/schedule
+const US_GDP_2026 = [
+  { date: '2026-01-29', desc: 'GDP Q4 속보치 (Advance) ⚠추정' },
+  { date: '2026-02-26', desc: 'GDP Q4 잠정치 (Preliminary) ⚠추정' },
+  { date: '2026-03-26', desc: 'GDP Q4 확정치 (Final) ⚠추정' },
+  { date: '2026-04-29', desc: 'GDP Q1 속보치 (Advance) ⚠추정' },
+  { date: '2026-05-28', desc: 'GDP Q1 잠정치 (Preliminary) ⚠추정' },
+  { date: '2026-06-25', desc: 'GDP Q1 확정치 (Final) ⚠추정' },
+  { date: '2026-07-30', desc: 'GDP Q2 속보치 (Advance) ⚠추정' },
+  { date: '2026-08-27', desc: 'GDP Q2 잠정치 (Preliminary) ⚠추정' },
+  { date: '2026-09-24', desc: 'GDP Q2 확정치 (Final) ⚠추정' },
+  { date: '2026-10-29', desc: 'GDP Q3 속보치 (Advance) ⚠추정' },
+  { date: '2026-11-25', desc: 'GDP Q3 잠정치 (Preliminary) ⚠추정' },
+  { date: '2026-12-22', desc: 'GDP Q3 확정치 (Final) ⚠추정' },
+];
+
 // 주간 아파트 동향 (매주 목요일, 한국부동산원)
 function getWeeklyThursdays(year: number, month: number): string[] {
   const dates: string[] = [];
@@ -85,11 +137,11 @@ export function getCalendarEvents(year: number, month: number): CalendarEvent[] 
       events.push({
         id: id++,
         event_date: fomc.date,
-        category: 'rate',
+        category: 'us_economic',
         title: 'FOMC 회의 결과 발표',
         description: fomc.desc,
         source_url: 'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm',
-        icon: '🏦',
+        icon: '🇺🇸',
         importance: 'high',
       });
     }
@@ -121,6 +173,54 @@ export function getCalendarEvents(year: number, month: number): CalendarEvent[] 
     icon: '📊',
     importance: 'normal',
   });
+
+  // 미국 CPI
+  for (const cpi of US_CPI_2026) {
+    if (cpi.date.startsWith(prefix)) {
+      events.push({
+        id: id++,
+        event_date: cpi.date,
+        category: 'us_economic',
+        title: '미국 CPI (소비자물가지수)',
+        description: cpi.desc + ' · 08:30 ET',
+        source_url: 'https://www.bls.gov/cpi/',
+        icon: '🇺🇸',
+        importance: 'high',
+      });
+    }
+  }
+
+  // 미국 고용보고서 (NFP)
+  for (const nfp of US_NFP_2026) {
+    if (nfp.date.startsWith(prefix)) {
+      events.push({
+        id: id++,
+        event_date: nfp.date,
+        category: 'us_economic',
+        title: '미국 비농업 고용 (NFP)',
+        description: nfp.desc + ' · 08:30 ET',
+        source_url: 'https://www.bls.gov/ces/',
+        icon: '🇺🇸',
+        importance: 'high',
+      });
+    }
+  }
+
+  // 미국 GDP
+  for (const gdp of US_GDP_2026) {
+    if (gdp.date.startsWith(prefix)) {
+      events.push({
+        id: id++,
+        event_date: gdp.date,
+        category: 'us_economic',
+        title: '미국 GDP',
+        description: gdp.desc + ' · 08:30 ET',
+        source_url: 'https://www.bea.gov/news/schedule',
+        icon: '🇺🇸',
+        importance: gdp.desc.includes('속보치') ? 'high' : 'normal',
+      });
+    }
+  }
 
   return events.sort((a, b) => a.event_date.localeCompare(b.event_date));
 }

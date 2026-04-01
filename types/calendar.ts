@@ -7,6 +7,7 @@ export type EventCategory =
   | 'policy'
   | 'loan'
   | 'index'
+  | 'us_economic'
   | 'other';
 
 export type Importance = 'high' | 'normal' | 'low';
@@ -36,5 +37,6 @@ export const CATEGORY_MAP: Record<EventCategory, CategoryInfo> = {
   policy:       { key: 'policy',       label: '정책', color: '#F97316', icon: '📋' },
   loan:         { key: 'loan',         label: '대출', color: '#8B5CF6', icon: '💰' },
   index:        { key: 'index',        label: '지표', color: '#06B6D4', icon: '📊' },
+  us_economic:  { key: 'us_economic',  label: '미국경제', color: '#6366F1', icon: '🇺🇸' },
   other:        { key: 'other',        label: '기타', color: '#6B7280', icon: '📌' },
 };
