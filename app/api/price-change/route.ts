@@ -90,7 +90,8 @@ export async function GET(request: NextRequest) {
     // 2) R-ONE API 직접 호출
     const apiKey = process.env.REALESTATE_STAT_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({ error: 'REALESTATE_STAT_API_KEY 미설정' }, { status: 500 });
+      console.error('[price-change API] REALESTATE_STAT_API_KEY 미설정');
+      return NextResponse.json({ error: '시세 변동 데이터를 불러올 수 없습니다' }, { status: 500 });
     }
 
     const statblId = STAT_TABLES[type] || STAT_TABLES.sale;
@@ -136,7 +137,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(data, { headers: { "Cache-Control": "s-maxage=3600, stale-while-revalidate=86400" } });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : '서버 오류';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('[price-change API]', error instanceof Error ? error.message : error);
+    return NextResponse.json({ error: '시세 변동 데이터를 불러올 수 없습니다' }, { status: 500 });
   }
 }

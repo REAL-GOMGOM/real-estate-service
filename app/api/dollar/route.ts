@@ -87,7 +87,8 @@ export async function GET(req: NextRequest) {
 
   const rawKey = process.env.PUBLIC_DATA_API_KEY;
   if (!rawKey) {
-    return Response.json({ error: 'PUBLIC_DATA_API_KEY 환경변수가 설정되지 않았습니다' }, { status: 500 });
+    console.error('[dollar API] PUBLIC_DATA_API_KEY 환경변수 미설정');
+    return Response.json({ error: '데이터를 불러올 수 없습니다' }, { status: 500 });
   }
   const apiKey = decodeURIComponent(rawKey);
 

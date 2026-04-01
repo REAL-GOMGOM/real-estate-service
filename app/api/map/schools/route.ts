@@ -114,7 +114,7 @@ export async function GET(request: NextRequest) {
     const schools = await fetchNeisSchools(apiKey, district, level);
     return NextResponse.json({ schools });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : '서버 오류';
-    return NextResponse.json({ error: message, schools: [] }, { status: 500 });
+    console.error('[map/schools API]', error instanceof Error ? error.message : error);
+    return NextResponse.json({ error: '학교 데이터를 불러올 수 없습니다', schools: [] }, { status: 500 });
   }
 }

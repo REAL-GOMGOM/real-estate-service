@@ -55,7 +55,8 @@ export async function GET(req: NextRequest) {
 
   const rawKey = process.env.PUBLIC_DATA_API_KEY;
   if (!rawKey) {
-    return NextResponse.json({ error: 'API 키 미설정' }, { status: 500 });
+    console.error('[transactions API] PUBLIC_DATA_API_KEY 미설정');
+    return NextResponse.json({ error: '거래 데이터를 불러올 수 없습니다' }, { status: 500 });
   }
 
   const apiKey    = decodeURIComponent(rawKey);

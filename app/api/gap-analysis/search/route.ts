@@ -24,7 +24,8 @@ export async function GET(request: NextRequest) {
 
     const apiKey = process.env.PUBLIC_DATA_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({ error: 'API키 미설정' }, { status: 500 });
+      console.error('[gap-analysis/search API] PUBLIC_DATA_API_KEY 미설정');
+      return NextResponse.json({ error: '단지 검색에 실패했습니다' }, { status: 500 });
     }
 
     // 최근 3개월 데이터에서 검색
@@ -76,6 +77,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ results });
   } catch (error: unknown) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : '오류' }, { status: 500 });
+    console.error('[gap-analysis/search API]', error instanceof Error ? error.message : error);
+    return NextResponse.json({ error: '단지 검색에 실패했습니다' }, { status: 500 });
   }
 }

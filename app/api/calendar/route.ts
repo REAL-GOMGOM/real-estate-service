@@ -98,9 +98,11 @@ export async function GET(request: NextRequest) {
     // id 재할당 (충돌 방지)
     const events = deduped.map((e, i) => ({ ...e, id: i + 1 }));
 
-    return NextResponse.json({ events });
+    return NextResponse.json({ events }, {
+      headers: { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=86400' },
+    });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : '서버 오류';
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('[calendar API]', error instanceof Error ? error.message : error);
+    return NextResponse.json({ error: '달력 데이터를 불러올 수 없습니다' }, { status: 500 });
   }
 }
