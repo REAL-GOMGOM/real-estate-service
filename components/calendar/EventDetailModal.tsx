@@ -95,21 +95,6 @@ export default function EventDetailModal({ event, onClose }: EventDetailModalPro
           </p>
         )}
 
-        {/* 청약 이벤트면 내부 링크 */}
-        {event.category === 'subscription' && (
-          <a
-            href="/subscription"
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-              padding: '10px', borderRadius: '10px', marginBottom: '10px',
-              backgroundColor: 'var(--accent-bg)', border: '1px solid var(--accent-border)',
-              fontSize: '13px', fontWeight: 600, color: 'var(--accent)', textDecoration: 'none',
-            }}
-          >
-            청약 상세 보기
-          </a>
-        )}
-
         {/* 원본 링크 */}
         {event.source_url && (
           <a

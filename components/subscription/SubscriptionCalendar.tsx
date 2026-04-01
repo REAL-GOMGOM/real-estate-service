@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { SubscriptionItem, SupplyDate } from '@/lib/types';
 
@@ -25,10 +25,26 @@ const SUPPLY_LABELS: Record<SupplyDate['type'], string> = {
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
+function useIsMobile() {
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)');
+    setMobile(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return mobile;
+}
+
 export default function SubscriptionCalendar({ items, onSelect }: Props) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
+  const isMobile = useIsMobile();
+
+  const maxBars = isMobile ? 2 : 3;
+  const nameLen = isMobile ? 4 : 6;
 
   const goToPrev = () => {
     if (month === 1) { setYear((y) => y - 1); setMonth(12); }
@@ -72,41 +88,41 @@ export default function SubscriptionCalendar({ items, onSelect }: Props) {
   const isCurrentMonth = year === today.getFullYear() && month === today.getMonth() + 1;
 
   return (
-    <div>
+    <div style={{ width: '100%', overflow: 'hidden' }}>
       {/* 헤더: 이전/다음 월 + 오늘 버튼 */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        marginBottom: '20px',
+        marginBottom: '16px',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '8px' : '12px' }}>
           <button onClick={goToPrev} style={navBtnStyle} aria-label="이전 월">
             <ChevronLeft size={18} />
           </button>
           <h3 style={{
-            fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)',
-            minWidth: '140px', textAlign: 'center',
+            fontSize: isMobile ? '16px' : '18px', fontWeight: 700, color: 'var(--text-primary)',
+            minWidth: isMobile ? '100px' : '140px', textAlign: 'center',
           }}>
             {year}년 {month}월
           </h3>
           <button onClick={goToNext} style={navBtnStyle} aria-label="다음 월">
             <ChevronRight size={18} />
           </button>
+          {!isCurrentMonth && (
+            <button onClick={goToToday} style={{
+              padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600,
+              backgroundColor: 'var(--accent-bg)', color: 'var(--accent)',
+              border: '1px solid var(--accent-border)', cursor: 'pointer',
+            }}>
+              오늘
+            </button>
+          )}
         </div>
-        {!isCurrentMonth && (
-          <button onClick={goToToday} style={{
-            padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600,
-            backgroundColor: 'var(--accent-bg)', color: 'var(--accent)',
-            border: '1px solid var(--accent-border)', cursor: 'pointer',
-          }}>
-            오늘
-          </button>
-        )}
       </div>
 
       {/* 범례 */}
-      <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: isMobile ? '10px' : '16px', marginBottom: '12px', flexWrap: 'wrap' }}>
         {(['special', 'first', 'second', 'etc'] as const).map((type) => (
-          <div key={type} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-muted)' }}>
+          <div key={type} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: isMobile ? '11px' : '12px', color: 'var(--text-muted)' }}>
             <div style={{ width: '10px', height: '10px', borderRadius: '2px', backgroundColor: SUPPLY_COLORS[type] }} />
             {SUPPLY_LABELS[type]}
           </div>
@@ -117,9 +133,10 @@ export default function SubscriptionCalendar({ items, onSelect }: Props) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '1px', marginBottom: '1px' }}>
         {WEEKDAYS.map((w, i) => (
           <div key={w} style={{
-            padding: '8px 0', textAlign: 'center', fontSize: '12px', fontWeight: 600,
+            padding: isMobile ? '6px 0' : '8px 0', textAlign: 'center',
+            fontSize: isMobile ? '11px' : '12px', fontWeight: 600,
             color: i === 0 ? '#E74C3C' : i === 6 ? '#3B82F6' : 'var(--text-dim)',
-            backgroundColor: 'var(--bg-card)',
+            backgroundColor: 'var(--bg-card)', boxSizing: 'border-box',
           }}>
             {w}
           </div>
@@ -130,52 +147,68 @@ export default function SubscriptionCalendar({ items, onSelect }: Props) {
       <div style={{
         display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '1px',
         backgroundColor: 'var(--border-light)', borderRadius: '12px', overflow: 'hidden',
+        width: '100%',
       }}>
         {calendarDays.map((day, idx) => {
           if (day === null) {
-            return <div key={`empty-${idx}`} style={{ backgroundColor: 'var(--bg-primary)', minHeight: '80px' }} />;
+            return <div key={`empty-${idx}`} style={{
+              backgroundColor: 'var(--bg-primary)',
+              minHeight: isMobile ? '60px' : '100px',
+              boxSizing: 'border-box',
+            }} />;
           }
 
           const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
           const events = dateEventsMap[dateStr] || [];
           const isToday = dateStr === todayStr;
           const dayOfWeek = new Date(year, month - 1, day).getDay();
+          const overflow = events.length > maxBars ? events.length - maxBars : 0;
 
           return (
             <div key={dateStr} style={{
-              backgroundColor: 'var(--bg-card)', minHeight: '80px', padding: '4px',
+              backgroundColor: 'var(--bg-card)',
+              minHeight: isMobile ? '60px' : '100px',
+              padding: isMobile ? '2px' : '4px',
+              boxSizing: 'border-box',
+              overflow: 'hidden',
             }}>
               <span style={{
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                width: '24px', height: '24px', borderRadius: '50%',
-                fontSize: '12px', fontWeight: isToday ? 800 : 500,
+                width: isMobile ? '20px' : '24px', height: isMobile ? '20px' : '24px',
+                borderRadius: '50%',
+                fontSize: isMobile ? '11px' : '12px', fontWeight: isToday ? 800 : 500,
                 fontFamily: 'Roboto Mono, monospace',
                 backgroundColor: isToday ? 'var(--accent)' : 'transparent',
                 color: isToday ? '#fff' : dayOfWeek === 0 ? '#E74C3C' : dayOfWeek === 6 ? '#3B82F6' : 'var(--text-secondary)',
               }}>
                 {day}
               </span>
-              <div style={{ marginTop: '2px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                {events.slice(0, 3).map((ev, i) => (
+              <div style={{ marginTop: '1px', display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                {events.slice(0, maxBars).map((ev, i) => (
                   <button
                     key={i}
                     onClick={() => onSelect(ev.item)}
                     title={`${ev.item.name} (${ev.supply.label})`}
                     style={{
-                      display: 'block', width: '100%', padding: '2px 4px',
-                      borderRadius: '3px', fontSize: '10px', fontWeight: 600,
+                      display: 'block', width: '100%',
+                      padding: isMobile ? '2px 3px' : '2px 4px',
+                      minHeight: isMobile ? '24px' : 'auto',
+                      borderRadius: '3px',
+                      fontSize: isMobile ? '9px' : '10px', fontWeight: 600,
                       backgroundColor: SUPPLY_COLORS[ev.supply.type] + '20',
                       color: SUPPLY_COLORS[ev.supply.type],
                       border: 'none', cursor: 'pointer', textAlign: 'left',
                       overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
+                      maxWidth: '100%', boxSizing: 'border-box',
+                      lineHeight: isMobile ? '20px' : 'normal',
                     }}
                   >
-                    {ev.supply.label} {ev.item.name.length > 6 ? ev.item.name.slice(0, 6) + '\u2026' : ev.item.name}
+                    {ev.supply.label} {ev.item.name.length > nameLen ? ev.item.name.slice(0, nameLen) + '\u2026' : ev.item.name}
                   </button>
                 ))}
-                {events.length > 3 && (
-                  <span style={{ fontSize: '10px', color: 'var(--text-dim)', paddingLeft: '4px' }}>
-                    +{events.length - 3}건
+                {overflow > 0 && (
+                  <span style={{ fontSize: isMobile ? '9px' : '10px', color: 'var(--text-dim)', paddingLeft: '3px' }}>
+                    +{overflow}건
                   </span>
                 )}
               </div>

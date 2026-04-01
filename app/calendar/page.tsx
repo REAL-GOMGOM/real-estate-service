@@ -9,7 +9,7 @@ import EventDetailModal from '@/components/calendar/EventDetailModal';
 import { CATEGORY_MAP, type CalendarEvent, type EventCategory } from '@/types/calendar';
 
 const ALL_CATEGORIES: EventCategory[] = [
-  'subscription', 'rate', 'move_in', 'policy', 'loan', 'index', 'us_economic', 'other',
+  'rate', 'move_in', 'policy', 'loan', 'index', 'us_economic', 'other',
 ];
 
 function CalendarContent() {
@@ -87,7 +87,7 @@ function CalendarContent() {
                 경제 달력
               </h1>
               <p style={{ fontSize: '13px', color: 'var(--text-dim)' }}>
-                청약·금리·입주·정책 일정을 한눈에
+                금리·입주·정책·지표 일정을 한눈에
               </p>
             </div>
             <MonthNavigator year={year} month={month} onPrev={goPrev} onNext={goNext} onToday={goToday} />

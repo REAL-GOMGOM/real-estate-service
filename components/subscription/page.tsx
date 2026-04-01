@@ -131,29 +131,26 @@ export default function SubscriptionClientPage({ items }: Props) {
           ))}
         </div>
 
+        {/* 필터 */}
+        <SubscriptionFilter
+          selectedStatus={selectedStatus}
+          selectedDistrict={selectedDistrict}
+          searchQuery={searchQuery}
+          onStatusChange={setSelectedStatus}
+          onDistrictChange={setSelectedDistrict}
+          onSearchChange={setSearchQuery}
+          districts={districts}
+        />
+
+        {/* 결과 카운트 */}
+        <p style={{ fontSize: '13px', color: 'var(--text-dim)', marginBottom: '16px' }}>
+          총 <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{filteredItems.length}</span>건
+        </p>
+
         {viewMode === 'list' ? (
-          <>
-            {/* 필터 */}
-            <SubscriptionFilter
-              selectedStatus={selectedStatus}
-              selectedDistrict={selectedDistrict}
-              searchQuery={searchQuery}
-              onStatusChange={setSelectedStatus}
-              onDistrictChange={setSelectedDistrict}
-              onSearchChange={setSearchQuery}
-              districts={districts}
-            />
-
-            {/* 결과 카운트 */}
-            <p style={{ fontSize: '13px', color: 'var(--text-dim)', marginBottom: '16px' }}>
-              총 <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{filteredItems.length}</span>건
-            </p>
-
-            {/* 청약 목록 */}
-            <SubscriptionTable items={filteredItems} onSelect={setSelectedItem} />
-          </>
+          <SubscriptionTable items={filteredItems} onSelect={setSelectedItem} />
         ) : (
-          <SubscriptionCalendar items={items} onSelect={setSelectedItem} />
+          <SubscriptionCalendar items={filteredItems} onSelect={setSelectedItem} />
         )}
 
         {/* 상세 모달 */}
