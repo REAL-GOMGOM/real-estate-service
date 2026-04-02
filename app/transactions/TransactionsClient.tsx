@@ -9,6 +9,7 @@ import {
   ResponsiveContainer, CartesianGrid, ReferenceLine,
 } from 'recharts';
 import { DISTRICT_CODE } from '@/lib/district-codes';
+import { matchesQuery } from '@/lib/search-utils';
 import Header from '@/components/layout/Header';
 
 const DISTRICTS = Object.keys(DISTRICT_CODE);
@@ -445,7 +446,7 @@ export default function TransactionsClient() {
       .catch(() => setSummaryLoading(false));
   }, [viewMode]);
 
-  const filtered   = query.trim() ? groups.filter((g) => g.name.includes(query.trim())) : groups;
+  const filtered   = query.trim() ? groups.filter((g) => matchesQuery(g.name, query.trim())) : groups;
   const totalTx    = filtered.reduce((s, g) => s + g.transactions.length, 0);
   const newHighCnt = filtered.filter(detectNewHigh).length;
 

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Building2, AlertTriangle, Search } from 'lucide-react';
 import { DISTRICT_GROUPS, ALL_DISTRICTS, findRegionIndex } from '@/lib/district-groups';
+import { matchesQuery } from '@/lib/search-utils';
 
 interface ApartmentSummary {
   id: string;
@@ -240,10 +241,10 @@ export default function ApartmentSelector({
           />
         </div>
         <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '10px' }}>
-          주요 단지 ({apartments.filter(a => !search || a.name.includes(search)).length}개)
+          주요 단지 ({apartments.filter(a => !search || matchesQuery(a.name, search)).length}개)
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          {apartments.filter(a => !search || a.name.includes(search)).map((apt) => (
+          {apartments.filter(a => !search || matchesQuery(a.name, search)).map((apt) => (
             <button
               key={apt.id}
               onClick={() => onSelect(apt.id)}
