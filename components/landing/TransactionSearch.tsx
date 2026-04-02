@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, TrendingUp, TrendingDown, ExternalLink } from 'lucide-react';
+import { matchesQuery } from '@/lib/search-utils';
 
 const REGIONS: { label: string; districts: string[] }[] = [
   {
@@ -111,7 +112,7 @@ export default function TransactionSearch() {
   useEffect(() => { loadDistrict(district); }, [district]);
 
   const filtered = aptQuery.trim()
-    ? apts.filter((a) => a.name.includes(aptQuery.trim()))
+    ? apts.filter((a) => matchesQuery(a.name, aptQuery.trim()))
     : apts.slice(0, 6);
 
   function goToChart(targetDistrict: string) {

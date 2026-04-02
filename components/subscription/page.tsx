@@ -7,6 +7,7 @@ import SubscriptionTable from '@/components/subscription/SubscriptionTable';
 import SubscriptionDetailModal from '@/components/subscription/SubscriptionDetailModal';
 import SubscriptionCalendar from '@/components/subscription/SubscriptionCalendar';
 import type { SubscriptionItem } from '@/lib/types';
+import { matchesQuery } from '@/lib/search-utils';
 
 interface Props {
   items: SubscriptionItem[];
@@ -53,7 +54,7 @@ export default function SubscriptionClientPage({ items }: Props) {
       .filter((item) => {
         const statusMatch   = selectedStatus   === '전체' || item.status   === selectedStatus;
         const districtMatch = selectedDistrict === '전체' || item.district === selectedDistrict;
-        const searchMatch   = searchQuery === '' || item.name.includes(searchQuery);
+        const searchMatch   = searchQuery === '' || matchesQuery(item.name, searchQuery);
         return statusMatch && districtMatch && searchMatch;
       })
       .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]);
