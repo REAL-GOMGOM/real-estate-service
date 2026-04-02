@@ -238,7 +238,7 @@ export default function KoreaMap({ regions, onRegionClick, tradeType = 'sale' }:
         </div>
       )}
 
-      <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: '100%', maxWidth: '700px', height: 'auto' }}>
+      <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: '100%', minWidth: '320px', maxWidth: '700px', height: 'auto' }}>
         {currentFeatures.map((feature) => {
           const geoCode = feature.properties.code;
           const featureName = feature.properties.name;
