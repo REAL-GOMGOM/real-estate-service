@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { DISTRICT_CODE } from '@/lib/district-codes';
+import { matchesQuery } from '@/lib/search-utils';
 
 const API_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev';
 
@@ -54,7 +55,7 @@ export async function GET(request: NextRequest) {
           const area = parseFloat((areas[i] || '').replace(/<\/?excluUseAr>/g, '').trim());
           const dong = (dongs[i] || '').replace(/<\/?umdNm>/g, '').trim();
 
-          if (!name.includes(q)) continue;
+          if (!matchesQuery(name, q)) continue;
 
           const key = `${dong}-${name}`;
           if (!complexMap[key]) {

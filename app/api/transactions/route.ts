@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { DISTRICT_CODE } from '@/lib/district-codes';
+import { matchesQuery } from '@/lib/search-utils';
 
 const BASE_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade';
 
@@ -118,7 +119,7 @@ export async function GET(req: NextRequest) {
 
     const result = Object.values(grouped)
       .filter((apt: any) => apt.transactions.length >= 1)
-      .filter((apt: any) => !aptName || apt.name.includes(aptName))
+      .filter((apt: any) => !aptName || matchesQuery(apt.name, aptName))
       .sort((a: any, b: any) => b.transactions.length - a.transactions.length)
       .slice(0, aptName ? 100 : 60);
 
