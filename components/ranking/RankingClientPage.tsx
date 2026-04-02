@@ -241,7 +241,10 @@ export default function RankingClientPage() {
           </h1>
           <p style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
             이번 주 가장 활발한 거래와 가격 변동
-            {data && <span style={{ marginLeft: '8px', fontSize: '12px', color: 'var(--text-dim)' }}>· {data.period}</span>}
+            <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
+              {' · '}{PERIOD_OPTIONS.find((o) => o.key === period)?.label}
+              {tab !== 'priceChange' && ` · ${AREA_OPTIONS.find((o) => o.key === area)?.label} 면적`}
+            </span>
           </p>
         </div>
 
@@ -270,10 +273,13 @@ export default function RankingClientPage() {
         </div>
 
         {/* 필터 */}
-        {tab !== 'priceChange' && (
-          <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', flexWrap: 'wrap', alignItems: 'center' }}>
             {/* 면적 */}
-            <div style={{ display: 'flex', gap: '4px', padding: '3px', borderRadius: '10px', backgroundColor: 'var(--border-light)' }}>
+            <div style={{
+              display: 'flex', gap: '4px', padding: '3px', borderRadius: '10px', backgroundColor: 'var(--border-light)',
+              opacity: tab === 'priceChange' ? 0.4 : 1,
+              pointerEvents: tab === 'priceChange' ? 'none' : 'auto',
+            }}>
               {AREA_OPTIONS.map((opt) => (
                 <button
                   key={opt.key}
@@ -290,6 +296,9 @@ export default function RankingClientPage() {
                 </button>
               ))}
             </div>
+
+            {/* 구분선 */}
+            <div style={{ width: '1px', height: '24px', backgroundColor: 'var(--border)' }} />
             {/* 기간 */}
             <div style={{ display: 'flex', gap: '4px', padding: '3px', borderRadius: '10px', backgroundColor: 'var(--border-light)' }}>
               {PERIOD_OPTIONS.map((opt) => (
@@ -308,8 +317,7 @@ export default function RankingClientPage() {
                 </button>
               ))}
             </div>
-          </div>
-        )}
+        </div>
 
         {/* 콘텐츠 */}
         {loading ? (
