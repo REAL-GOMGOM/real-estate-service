@@ -273,7 +273,7 @@ export default function ApartmentDollarTable({ entries, baseYear, compareYear, o
 
             {/* 자산별 비교 행 */}
             <AssetRow
-              icon="₩" label="원화" accent="#E2E8F0"
+              icon="₩" label="원화" accent="#94A3B8"
               baseVal={hasBase    ? fmtKrw(basePriceKrw!)    : '—'}
               compareVal={hasCompare ? fmtKrw(comparePriceKrw!) : '—'}
               pct={krwPct}
