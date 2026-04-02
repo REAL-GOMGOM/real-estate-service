@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { DISTRICT_CODE } from '@/lib/district-codes';
+import { matchesQuery } from '@/lib/search-utils';
 import type { GapResult, MonthlyPrice } from '@/types/gap-analysis';
 
 const API_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev';
@@ -19,7 +20,7 @@ async function fetchTrades(apiKey: string, lawdCd: string, dealYmd: string, aptN
 
   for (let i = 0; i < names.length; i++) {
     const name = names[i].replace(/<\/?aptNm>/g, '').trim();
-    if (aptName && !name.includes(aptName)) continue;
+    if (aptName && !matchesQuery(name, aptName)) continue;
     const price = parseInt((amounts[i] || '').replace(/<\/?dealAmount>/g, '').replace(/,/g, '').trim()) || 0;
     const area = parseFloat((areas[i] || '').replace(/<\/?excluUseAr>/g, '').trim()) || 0;
     const y = (years[i] || '').replace(/<\/?dealYear>/g, '').trim();
@@ -40,7 +41,7 @@ async function fetchRents(apiKey: string, lawdCd: string, dealYmd: string, aptNa
     const areas = text.match(/<excluUseAr>([^<]+)<\/excluUseAr>/g) || [];
     for (let i = 0; i < names.length; i++) {
       const name = names[i].replace(/<\/?aptNm>/g, '').trim();
-      if (aptName && !name.includes(aptName)) continue;
+      if (aptName && !matchesQuery(name, aptName)) continue;
       const dep = parseInt((deposits[i] || '').replace(/<\/?deposit>/g, '').replace(/,/g, '').trim()) || 0;
       const area = parseFloat((areas[i] || '').replace(/<\/?excluUseAr>/g, '').trim()) || 0;
       if (dep > 0) trades.push({ name, deposit: dep, area, date: '' });
