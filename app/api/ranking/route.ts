@@ -131,12 +131,15 @@ async function fetchPriceChange(apiKey: string) {
     const d = new Date(); d.setMonth(d.getMonth() + offset);
     return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
   }
-  const [m0, m1, m2] = await Promise.all([fetchMonth(monthStr(-1)), fetchMonth(monthStr(-2)), fetchMonth(monthStr(0))]);
+  const months = [monthStr(0), monthStr(-1), monthStr(-2), monthStr(-3)];
+  const fetched = await Promise.all(months.map(fetchMonth));
   let thisData: Record<string, number> = {};
   let lastData: Record<string, number> = {};
-  if (Object.keys(m2).length > 0) { thisData = m2; lastData = m0; }
-  else if (Object.keys(m0).length > 0) { thisData = m0; lastData = m1; }
-  else { thisData = m1; lastData = {}; }
+  for (let i = 0; i < fetched.length - 1; i++) {
+    if (Object.keys(fetched[i]).length > 0 && Object.keys(fetched[i + 1]).length > 0) {
+      thisData = fetched[i]; lastData = fetched[i + 1]; break;
+    }
+  }
 
   const entries: { name: string; changeRate: number; direction: 'up' | 'down' | 'flat' }[] = [];
   for (const [name, val] of Object.entries(thisData)) {
