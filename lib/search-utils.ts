@@ -2,11 +2,14 @@
  * 단지명 fuzzy matching 유틸리티
  *
  * 테스트 케이스:
- * - "금호센트럴자이" → "금호자이1차" ✅ (prefix "금호" + brand "자이")
+ * - "금호센트럴자이" → "금호자이1차" ✅ (alias + prefix+brand)
  * - "래미안대치팰리스" → "래미안대치팰리스" ✅ (exact substring)
- * - "잠실엘스" → "잠실엘스" ✅ (exact substring)
+ * - "잠실엘스" → "잠실주공5단지" ✅ (alias)
+ * - "헬리오시티" → "송파헬리오시티" ✅ (alias)
  * - "금호" → "금호자이1차", "금호어울림" 등 ✅ (prefix match)
  */
+
+import { resolveAlias } from './apt-aliases';
 
 const APT_BRANDS = [
   '래미안', '자이', '힐스테이트', '아크로', '더샵', '푸르지오', '롯데캐슬',
@@ -38,6 +41,14 @@ export function tokenize(query: string): string[] {
 export function matchesQuery(aptName: string, query: string): boolean {
   const normalizedName = aptName.replace(/\s+/g, '');
   const normalizedQuery = query.replace(/\s+/g, '');
+
+  // 0순위: 별칭 매칭 (통칭 → 국토부 등록명)
+  const aliases = resolveAlias(query);
+  if (aliases.length > 0) {
+    for (const alias of aliases) {
+      if (normalizedName.includes(alias.replace(/\s+/g, ''))) return true;
+    }
+  }
 
   // 1순위: 정확한 부분문자열 매칭
   if (normalizedName.includes(normalizedQuery)) return true;
