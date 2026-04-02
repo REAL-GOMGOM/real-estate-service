@@ -23,8 +23,6 @@ interface Props {
 
 // 이 레벨 이상이면 시 단위 표시
 const CITY_LEVEL_THRESHOLD = 10;
-// 학교 마커는 이 줌 레벨 이하에서만 표시 (충분히 줌인했을 때)
-const SCHOOL_ZOOM_THRESHOLD = 12;
 
 const SCHOOL_COLORS: Record<string, string> = {
   elementary: '#22C55E',
@@ -191,10 +189,6 @@ export default function KakaoMap({
     const showCity  = zoomLevel >= CITY_LEVEL_THRESHOLD;
     cityOverlaysRef.current.forEach((o) => o.setMap(showCity ? map : null));
     districtOverlaysRef.current.forEach((o) => o.setMap(showCity ? null : map));
-
-    // 학교 마커: 충분히 줌인했을 때만 표시
-    const showSchools = zoomLevel <= SCHOOL_ZOOM_THRESHOLD;
-    schoolOverlaysRef.current.forEach((o) => o.setMap(showSchools ? map : null));
   }, []);
 
   const renderMarkers = useCallback(() => {
@@ -220,10 +214,6 @@ export default function KakaoMap({
 
     if (!activeLayers || activeLayers.size === 0) return;
 
-    const zoomLevel = map.getLevel();
-    const showSchools = zoomLevel <= SCHOOL_ZOOM_THRESHOLD;
-    if (!showSchools) return;
-
     // 뷰포트 범위 내 학교만 필터 (성능 최적화)
     let filtered = schools.filter((s) => activeLayers.has(s.school_level) && s.latitude && s.longitude);
 
@@ -248,7 +238,7 @@ export default function KakaoMap({
       const content = createSchoolMarkerElement(school, () => onSchoolClick?.(school));
       return new window.kakao.maps.CustomOverlay({
         position, content, yAnchor: 1.2, zIndex: 5,
-        map: showSchools ? map : null,
+        map,
       });
     });
   }, [schools, activeLayers, onSchoolClick]);
