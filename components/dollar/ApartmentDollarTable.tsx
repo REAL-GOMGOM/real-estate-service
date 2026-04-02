@@ -83,14 +83,14 @@ function AssetRow({ icon, label, accent, baseVal, compareVal, pct, baseYear, com
         }}>
           {icon}
         </span>
-        <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 500 }}>{label}</span>
+        <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 700 }}>{label}</span>
       </div>
 
       {/* 기준년 값 */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{ fontSize: '10px', color: 'var(--text-dim)', marginBottom: '2px' }}>{baseYear}년</p>
         <p style={{
-          fontSize: '15px', fontWeight: 700,
+          fontSize: '15px', fontWeight: 800,
           fontFamily: 'Roboto Mono, monospace', color: 'var(--text-secondary)',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
@@ -105,8 +105,8 @@ function AssetRow({ icon, label, accent, baseVal, compareVal, pct, baseYear, com
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{ fontSize: '10px', color: 'var(--text-dim)', marginBottom: '2px' }}>{compareYear}년</p>
         <p style={{
-          fontSize: '15px', fontWeight: 700,
-          fontFamily: 'Roboto Mono, monospace', color: accent,
+          fontSize: '15px', fontWeight: 800,
+          fontFamily: 'Roboto Mono, monospace', color: 'var(--text-primary)',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
           {compareVal}
