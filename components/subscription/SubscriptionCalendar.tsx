@@ -41,6 +41,7 @@ export default function SubscriptionCalendar({ items, onSelect }: Props) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
+  const [expandedDate, setExpandedDate] = useState<string | null>(null);
   const isMobile = useIsMobile();
 
   const maxBars = isMobile ? 2 : 3;
@@ -207,15 +208,85 @@ export default function SubscriptionCalendar({ items, onSelect }: Props) {
                   </button>
                 ))}
                 {overflow > 0 && (
-                  <span style={{ fontSize: isMobile ? '9px' : '10px', color: 'var(--text-dim)', paddingLeft: '3px' }}>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setExpandedDate(dateStr); }}
+                    style={{
+                      fontSize: isMobile ? '9px' : '10px', color: 'var(--accent)', paddingLeft: '3px',
+                      background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, textAlign: 'left',
+                    }}
+                  >
                     +{overflow}건
-                  </span>
+                  </button>
                 )}
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* 날짜별 전체 이벤트 팝업 */}
+      {expandedDate && dateEventsMap[expandedDate] && (
+        <>
+          <div
+            onClick={() => setExpandedDate(null)}
+            style={{
+              position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)',
+              zIndex: 40,
+            }}
+          />
+          <div style={{
+            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+            width: 'min(360px, calc(100vw - 32px))', maxHeight: 'calc(100vh - 64px)',
+            overflowY: 'auto', backgroundColor: 'var(--bg-card)',
+            border: '1px solid var(--border)', borderRadius: '16px',
+            padding: '20px', zIndex: 41,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h4 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                {expandedDate}
+              </h4>
+              <button
+                onClick={() => setExpandedDate(null)}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  fontSize: '18px', color: 'var(--text-dim)', padding: '4px',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {dateEventsMap[expandedDate].map((ev, i) => (
+                <button
+                  key={i}
+                  onClick={() => { setExpandedDate(null); onSelect(ev.item); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '10px',
+                    width: '100%', padding: '12px', borderRadius: '10px',
+                    backgroundColor: SUPPLY_COLORS[ev.supply.type] + '10',
+                    border: `1px solid ${SUPPLY_COLORS[ev.supply.type]}30`,
+                    cursor: 'pointer', textAlign: 'left',
+                  }}
+                >
+                  <span style={{
+                    padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 700,
+                    backgroundColor: SUPPLY_COLORS[ev.supply.type] + '20',
+                    color: SUPPLY_COLORS[ev.supply.type], flexShrink: 0,
+                  }}>
+                    {ev.supply.label}
+                  </span>
+                  <span style={{
+                    fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)',
+                    overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
+                  }}>
+                    {ev.item.name}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
