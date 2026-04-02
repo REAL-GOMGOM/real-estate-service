@@ -51,12 +51,13 @@ export async function GET(request: NextRequest) {
 
     const statblId = STAT_TABLES[type] || STAT_TABLES.sale;
 
-    // 최신 데이터 찾기
+    // 최신 데이터 찾기 (당월 → 전월 → 전전월 → 3개월전 fallback)
     let thisRows: any[] = [];
     let lastRows: any[] = [];
-    for (let offset = 0; offset >= -3; offset--) {
-      thisRows = await fetchRoneAll(apiKey, statblId, getMonthStr(offset));
-      if (thisRows.length > 0) {
+    for (let offset = 0; offset >= -4; offset--) {
+      const rows = await fetchRoneAll(apiKey, statblId, getMonthStr(offset));
+      if (rows.length > 0) {
+        thisRows = rows;
         lastRows = await fetchRoneAll(apiKey, statblId, getMonthStr(offset - 1));
         break;
       }

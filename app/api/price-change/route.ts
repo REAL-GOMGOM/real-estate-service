@@ -96,19 +96,26 @@ export async function GET(request: NextRequest) {
 
     const statblId = STAT_TABLES[type] || STAT_TABLES.sale;
 
-    // 최신 데이터 찾기: 이번달 → 지난달 → 2달전 순으로 시도
+    // 최신 데이터 찾기: 당월 → 전월 → 전전월 → 3개월전 순으로 fallback
     let thisData: Record<string, number> = {};
     let lastData: Record<string, number> = {};
+    let usedMonth = '';
 
-    // 병렬로 최근 3개월 시도 (하나라도 데이터 있으면 사용)
-    const [m0, m1, m2] = await Promise.all([
-      fetchRoneIndex(apiKey, statblId, getMonthStr(-1)),
-      fetchRoneIndex(apiKey, statblId, getMonthStr(-2)),
-      fetchRoneIndex(apiKey, statblId, getMonthStr(0)),
-    ]);
-    if (Object.keys(m2).length > 0) { thisData = m2; lastData = m0; }
-    else if (Object.keys(m0).length > 0) { thisData = m0; lastData = m1; }
-    else { thisData = m1; lastData = {}; }
+    // 병렬로 최근 4개월 호출
+    const months = [getMonthStr(0), getMonthStr(-1), getMonthStr(-2), getMonthStr(-3)];
+    const fetched = await Promise.all(
+      months.map((m) => fetchRoneIndex(apiKey, statblId, m)),
+    );
+
+    // 데이터 있는 가장 최근 월 = thisData, 그 다음 = lastData
+    for (let i = 0; i < fetched.length - 1; i++) {
+      if (Object.keys(fetched[i]).length > 0 && Object.keys(fetched[i + 1]).length > 0) {
+        thisData = fetched[i];
+        lastData = fetched[i + 1];
+        usedMonth = months[i];
+        break;
+      }
+    }
 
     const regions: RegionChange[] = [];
     for (const [name, code] of Object.entries(REGION_MAP)) {
@@ -128,8 +135,12 @@ export async function GET(request: NextRequest) {
     const nonCapitalRegions = regions.filter((r) => !CAPITAL_CODES.includes(r.code));
     const avg = (arr: RegionChange[]) => arr.length > 0 ? +(arr.reduce((s, r) => s + r.change_rate, 0) / arr.length).toFixed(2) : 0;
 
+    const periodLabel = usedMonth
+      ? `${usedMonth.slice(0, 4)}년 ${parseInt(usedMonth.slice(4))}월 (부동산원)`
+      : `${new Date().getFullYear()}년 ${new Date().getMonth() + 1}월 (부동산원)`;
+
     const data: PriceChangeData = {
-      period: `${new Date().getFullYear()}년 ${new Date().getMonth() + 1}월 (부동산원)`,
+      period: periodLabel,
       type,
       summary: { nationwide: avg(regions), capital_area: avg(capitalRegions), non_capital: avg(nonCapitalRegions) },
       regions,
