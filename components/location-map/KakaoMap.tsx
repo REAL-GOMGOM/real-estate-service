@@ -24,7 +24,7 @@ interface Props {
 // 이 레벨 이상이면 시 단위 표시
 const CITY_LEVEL_THRESHOLD = 10;
 // 학교 마커는 이 줌 레벨 이하에서만 표시 (충분히 줌인했을 때)
-const SCHOOL_ZOOM_THRESHOLD = 7;
+const SCHOOL_ZOOM_THRESHOLD = 12;
 
 const SCHOOL_COLORS: Record<string, string> = {
   elementary: '#22C55E',
