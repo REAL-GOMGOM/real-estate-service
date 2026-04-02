@@ -111,14 +111,30 @@ async function fetchDistrict(
 }
 
 // ── R-ONE 상승률 ────────────────────────────────────
-async function fetchPriceChange(apiKey: string) {
+type ChangeEntry = { name: string; changeRate: number; direction: 'up' | 'down' | 'flat' };
+type RankedEntry = ChangeEntry & { rank: number };
+
+async function fetchPriceChange(apiKey: string): Promise<{ regions: RankedEntry[]; seoulDistricts: RankedEntry[] }> {
   const STATBL_ID = 'A_2024_00045';
-  async function fetchMonth(month: string): Promise<Record<string, number>> {
+
+  async function fetchRawRows(month: string) {
     const url = `${RONE_URL}?KEY=${apiKey}&STATBL_ID=${STATBL_ID}&DTACYCLE_CD=MM&WRTTIME_IDTFR_ID=${month}&Type=json&pSize=500`;
     const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, next: { revalidate: 3600 } });
     const json = await res.json();
-    const rows = json?.SttsApiTblData?.[1]?.row || [];
-    // 서울 하위 전체 경로 수집 → leaf 노드(구 단위)만 추출
+    return json?.SttsApiTblData?.[1]?.row || [];
+  }
+
+  function parseRegions(rows: any[]): Record<string, number> {
+    const result: Record<string, number> = {};
+    for (const r of rows) {
+      if ((r.CLS_FULLNM || '').split('>').length === 1) {
+        result[r.CLS_NM] = parseFloat(r.DTA_VAL);
+      }
+    }
+    return result;
+  }
+
+  function parseSeoulDistricts(rows: any[]): Record<string, number> {
     const pathMap: Record<string, number> = {};
     for (const r of rows) {
       const full = r.CLS_FULLNM || '';
@@ -131,34 +147,53 @@ async function fetchPriceChange(apiKey: string) {
     for (const path of allPaths) {
       const isLeaf = !allPaths.some((other) => other !== path && other.startsWith(path + '>'));
       if (isLeaf) {
-        const name = path.split('>').pop() || path;
-        result[name] = pathMap[path];
+        result[path.split('>').pop() || path] = pathMap[path];
       }
     }
     return result;
   }
+
   function monthStr(offset: number): string {
     const d = new Date(); d.setMonth(d.getMonth() + offset);
     return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
   }
+
+  function calcEntries(thisData: Record<string, number>, lastData: Record<string, number>): ChangeEntry[] {
+    const entries: ChangeEntry[] = [];
+    for (const [name, val] of Object.entries(thisData)) {
+      const last = lastData[name];
+      if (last == null) continue;
+      const rate = ((val - last) / last) * 100;
+      entries.push({ name, changeRate: +rate.toFixed(3), direction: rate > 0.01 ? 'up' : rate < -0.01 ? 'down' : 'flat' });
+    }
+    return entries.sort((a, b) => b.changeRate - a.changeRate);
+  }
+
+  // 4개월 원시 데이터 병렬 호출
   const months = [monthStr(0), monthStr(-1), monthStr(-2), monthStr(-3)];
-  const fetched = await Promise.all(months.map(fetchMonth));
-  let thisData: Record<string, number> = {};
-  let lastData: Record<string, number> = {};
-  for (let i = 0; i < fetched.length - 1; i++) {
-    if (Object.keys(fetched[i]).length > 0 && Object.keys(fetched[i + 1]).length > 0) {
-      thisData = fetched[i]; lastData = fetched[i + 1]; break;
+  const rawRows = await Promise.all(months.map(fetchRawRows));
+
+  // 연속 데이터 있는 최신 쌍 찾기
+  let thisRows: any[] = [];
+  let lastRows: any[] = [];
+  for (let i = 0; i < rawRows.length - 1; i++) {
+    if (rawRows[i].length > 0 && rawRows[i + 1].length > 0) {
+      thisRows = rawRows[i]; lastRows = rawRows[i + 1]; break;
     }
   }
 
-  const entries: { name: string; changeRate: number; direction: 'up' | 'down' | 'flat' }[] = [];
-  for (const [name, val] of Object.entries(thisData)) {
-    const last = lastData[name];
-    if (last == null) continue;
-    const rate = ((val - last) / last) * 100;
-    entries.push({ name, changeRate: +rate.toFixed(3), direction: rate > 0.01 ? 'up' : rate < -0.01 ? 'down' : 'flat' });
-  }
-  return entries.sort((a, b) => b.changeRate - a.changeRate).slice(0, 10).map((e, i) => ({ rank: i + 1, ...e }));
+  // 시도별 (depth 1)
+  const regionEntries = calcEntries(parseRegions(thisRows), parseRegions(lastRows));
+  const SKIP = ['전국', '수도권', '지방권', '5대광역시'];
+  const regions = regionEntries
+    .filter((e) => !SKIP.includes(e.name))
+    .map((e, i) => ({ rank: i + 1, ...e }));
+
+  // 서울 구별 (leaf)
+  const seoulEntries = calcEntries(parseSeoulDistricts(thisRows), parseSeoulDistricts(lastRows));
+  const seoulDistricts = seoulEntries.slice(0, 10).map((e, i) => ({ rank: i + 1, ...e }));
+
+  return { regions, seoulDistricts };
 }
 
 // ── 랭킹 계산 ──────────────────────────────────────
@@ -273,17 +308,17 @@ export async function GET(request: NextRequest) {
     }
 
     // 상승률 (R-ONE, 별도 호출)
-    let priceChangeData: Awaited<ReturnType<typeof fetchPriceChange>> = [];
+    let priceChangeResult: { regions: RankedEntry[]; seoulDistricts: RankedEntry[] } = { regions: [], seoulDistricts: [] };
     const roneKey = process.env.REALESTATE_STAT_API_KEY;
     if (roneKey) {
-      try { priceChangeData = await fetchPriceChange(roneKey); } catch { /* skip */ }
+      try { priceChangeResult = await fetchPriceChange(roneKey); } catch { /* skip */ }
     }
 
     const periodLabel = period <= 3 ? '최근 3개월' : '최근 1년';
     return NextResponse.json({
       period: periodLabel, area, updatedAt: new Date().toISOString(),
       topPrice, volume, newHigh,
-      priceChange: { data: priceChangeData },
+      priceChange: priceChangeResult,
     }, {
       headers: { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=86400' },
     });

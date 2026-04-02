@@ -26,7 +26,7 @@ interface RankingData {
   topPrice: Record<string, TopPriceItem[]>;
   volume: Record<string, VolumeItem[]>;
   newHigh: Record<string, NewHighItem[]>;
-  priceChange: { data: PriceChangeItem[] };
+  priceChange: { regions: PriceChangeItem[]; seoulDistricts: PriceChangeItem[] };
 }
 
 type TabKey = 'topPrice' | 'volume' | 'newHigh' | 'priceChange';
@@ -180,13 +180,24 @@ export default function RankingClientPage() {
     if (!data) return null;
 
     if (tab === 'priceChange') {
-      const items = data.priceChange.data;
+      const { regions, seoulDistricts } = data.priceChange;
       return (
-        <RegionCard title="서울 구별 상승률">
-          {items.length > 0
-            ? <div style={listStyle}>{items.map((it) => <PriceChangeCard key={it.rank} item={it} />)}</div>
-            : <EmptyState />}
-        </RegionCard>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 340px), 1fr))',
+          gap: '16px',
+        }}>
+          <RegionCard title="시도별 상승률">
+            {regions.length > 0
+              ? <div style={listStyle}>{regions.map((it) => <PriceChangeCard key={it.rank} item={it} />)}</div>
+              : <EmptyState />}
+          </RegionCard>
+          <RegionCard title="서울 구별 상승률">
+            {seoulDistricts.length > 0
+              ? <div style={listStyle}>{seoulDistricts.map((it) => <PriceChangeCard key={it.rank} item={it} />)}</div>
+              : <EmptyState />}
+          </RegionCard>
+        </div>
       );
     }
 
