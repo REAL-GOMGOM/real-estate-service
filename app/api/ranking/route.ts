@@ -118,11 +118,21 @@ async function fetchPriceChange(apiKey: string) {
     const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, next: { revalidate: 3600 } });
     const json = await res.json();
     const rows = json?.SttsApiTblData?.[1]?.row || [];
-    const result: Record<string, number> = {};
+    // 서울 하위 전체 경로 수집 → leaf 노드(구 단위)만 추출
+    const pathMap: Record<string, number> = {};
     for (const r of rows) {
       const full = r.CLS_FULLNM || '';
-      if (full.startsWith('서울>') && full.split('>').length === 2) {
-        result[full.split('>')[1]] = parseFloat(r.DTA_VAL);
+      if (full.startsWith('서울>')) {
+        pathMap[full] = parseFloat(r.DTA_VAL);
+      }
+    }
+    const allPaths = Object.keys(pathMap);
+    const result: Record<string, number> = {};
+    for (const path of allPaths) {
+      const isLeaf = !allPaths.some((other) => other !== path && other.startsWith(path + '>'));
+      if (isLeaf) {
+        const name = path.split('>').pop() || path;
+        result[name] = pathMap[path];
       }
     }
     return result;
