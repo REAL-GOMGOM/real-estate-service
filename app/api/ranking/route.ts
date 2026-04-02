@@ -182,11 +182,14 @@ async function fetchPriceChange(apiKey: string): Promise<{ regions: RankedEntry[
     }
   }
 
-  // 시도별 (depth 1)
+  // 시도별 (depth 1) — 실제 17개 시도만 허용
+  const ALLOWED_REGIONS = new Set([
+    '서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종',
+    '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주',
+  ]);
   const regionEntries = calcEntries(parseRegions(thisRows), parseRegions(lastRows));
-  const SKIP = ['전국', '수도권', '지방권', '5대광역시'];
   const regions = regionEntries
-    .filter((e) => !SKIP.includes(e.name))
+    .filter((e) => ALLOWED_REGIONS.has(e.name))
     .map((e, i) => ({ rank: i + 1, ...e }));
 
   // 서울 구별 (leaf)
