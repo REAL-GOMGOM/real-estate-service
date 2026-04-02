@@ -95,11 +95,16 @@ function PriceMapContent() {
         )}
 
         {!loading && data && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
-            {/* 지도 — 전체 너비 */}
+          <div style={{
+            display: 'flex', flexDirection: isMobile ? 'column' : 'row',
+            gap: '24px', alignItems: isMobile ? 'center' : 'flex-start',
+          }}>
+            {/* 지도 */}
             <div style={{
-              width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center',
-              minHeight: isMobile ? '400px' : '600px',
+              flex: isMobile ? 'unset' : '5',
+              width: isMobile ? '100%' : 'auto',
+              minHeight: isMobile ? '400px' : '550px',
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
             }}>
               <KoreaMap regions={data.regions} onRegionClick={setSelectedRegion} tradeType={tradeType} />
               <div style={{ marginTop: '16px' }}>
@@ -107,8 +112,8 @@ function PriceMapContent() {
               </div>
             </div>
 
-            {/* 아래: 랭킹 테이블 */}
-            <div style={{ width: '100%' }}>
+            {/* 랭킹 테이블 */}
+            <div style={{ flex: isMobile ? 'unset' : '3', width: '100%' }}>
               {/* 선택된 지역 상세 */}
               {selectedRegion && (
                 <div style={{
