@@ -85,7 +85,7 @@ export default function LocationSidebar({
         <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '3px' }}>
           내집 부동산 지도
         </h2>
-        <p style={{ fontSize: '11px', color: 'var(--text-dim)' }}>2026년 3월 기준 · 점수 낮을수록 입지 우수</p>
+        <p style={{ fontSize: '11px', color: 'var(--text-dim)' }}>서울·수도권 주요 지역의 입지 점수를 지도에서 확인하세요. 학군, 교통, 생활인프라를 종합 평가합니다.</p>
       </div>
 
       {/* 권역 탭 */}

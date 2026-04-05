@@ -77,7 +77,7 @@ function PriceTrendContent() {
               상승률 대시보드
             </h1>
             <p style={{ fontSize: '13px', color: 'var(--text-dim)' }}>
-              시도별 아파트 가격 변동률 추이
+              시도별 아파트 매매·전세 가격지수 추이를 확인합니다. 출처: 한국부동산원
             </p>
           </div>
           <ToggleGroup options={PERIOD_TOGGLE} selected={period} onChange={setPeriod} />

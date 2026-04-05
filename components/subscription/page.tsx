@@ -70,7 +70,7 @@ export default function SubscriptionClientPage({ items }: Props) {
             청약 정보
           </h1>
           <p style={{ fontSize: '15px', color: 'var(--text-muted)' }}>
-            수도권 주요 청약 일정 · 경쟁률 · 분양가 정보
+            전국 아파트 청약 일정, 경쟁률, 공급유형별 접수일을 한눈에 확인하세요. 출처: 한국부동산원 청약홈
           </p>
         </div>
 
