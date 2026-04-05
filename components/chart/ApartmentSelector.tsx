@@ -57,6 +57,8 @@ export default function ApartmentSelector({
   });
   const [districtSearch, setDistrictSearch] = useState('');
   const [search, setSearch] = useState('');
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -227,7 +229,7 @@ export default function ApartmentSelector({
           <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', pointerEvents: 'none' }} />
           <input
             type="text"
-            placeholder={`단지명 검색 (${activeDistrict})`}
+            placeholder={mounted ? `단지명 검색 (${activeDistrict})` : '단지명 검색'}
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -240,7 +242,12 @@ export default function ApartmentSelector({
           />
         </div>
         <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '10px' }}>
-          {search ? `'${search}' 검색 결과 (${apartments.filter(a => matchesQuery(a.name, search)).length}개)` : `${activeDistrict} 단지 (${apartments.length}개)`}
+          {mounted
+            ? (search
+              ? `'${search}' 검색 결과 (${apartments.filter(a => matchesQuery(a.name, search)).length}개)`
+              : `${activeDistrict} 단지 (${apartments.length}개)`)
+            : `단지 (${apartments.length}개)`
+          }
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           {apartments.filter(a => !search || matchesQuery(a.name, search)).map((apt) => (
