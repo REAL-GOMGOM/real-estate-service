@@ -50,6 +50,7 @@ async function searchNews(query: string, display: number, category: NewsItem['ca
   return (json.items ?? []).map((item: any) => ({
     title:            stripHtml(item.title),
     link:             item.originallink || item.link,
+    naverLink:        item.link,
     pubDate:          item.pubDate,
     source:           new URL(item.originallink || item.link).hostname.replace('www.', '').split('.')[0],
     category,
@@ -87,8 +88,18 @@ export async function GET() {
     const top12 = allNews.slice(0, 12);
     const rest = allNews.slice(12);
 
+    // 원본 URL → 실패 시 네이버 URL로 fallback
+    async function getThumbnail(item: typeof top12[0]): Promise<string | null> {
+      const result = await extractThumbnail(item.link);
+      if (result) return result;
+      if ((item as any).naverLink && (item as any).naverLink !== item.link) {
+        return extractThumbnail((item as any).naverLink);
+      }
+      return null;
+    }
+
     const thumbnails = await Promise.allSettled(
-      top12.map((item) => extractThumbnail(item.link))
+      top12.map((item) => getThumbnail(item))
     );
 
     top12.forEach((item, i) => {
