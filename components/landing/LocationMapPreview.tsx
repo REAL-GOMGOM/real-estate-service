@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { ArrowRight, TrendingUp, TrendingDown, Minus } from 'lucide-react';
@@ -24,6 +24,12 @@ function TrendIcon({ trend }: { trend: LocationScore['trend'] }) {
 
 export default function LocationMapPreview() {
   const [selectedRegion, setSelectedRegion] = useState<string>('전체');
+  const [updateMonth, setUpdateMonth] = useState('');
+  useEffect(() => {
+    const now = new Date();
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    setUpdateMonth(`${prev.getFullYear()}년 ${prev.getMonth() + 1}월`);
+  }, []);
 
   const topLocations = useMemo(() => {
     return [...locationScores]
@@ -51,7 +57,7 @@ export default function LocationMapPreview() {
             transition={{ duration: 0.6 }}
           >
             <span style={{ display: 'inline-block', padding: '4px 12px', borderRadius: '999px', fontSize: '12px', fontWeight: 500, backgroundColor: 'rgba(34,197,94,0.12)', color: '#22C55E', marginBottom: '16px' }}>
-              2026년 3월 업데이트
+              {updateMonth ? `${updateMonth} 업데이트` : '업데이트'}
             </span>
             <h2 style={{ fontSize: 'clamp(26px, 4vw, 38px)', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '20px', lineHeight: 1.3 }}>
               전국 입지 점수 지도
