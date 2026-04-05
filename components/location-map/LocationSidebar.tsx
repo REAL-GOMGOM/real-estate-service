@@ -141,13 +141,13 @@ export default function LocationSidebar({
         <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>점수 범례</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
           {[
-            { color: '#EF4444', label: '1.0 ~ 1.9', desc: '최우수' },
-            { color: '#F59E0B', label: '2.0 ~ 2.9', desc: '우수' },
-            { color: '#86EFAC', label: '3.0 ~ 3.9', desc: '보통' },
-            { color: '#22C55E', label: '4.0 이상',  desc: '일반' },
+            { score: 1.5, label: '1.0 ~ 1.9', desc: '최우수' },
+            { score: 2.5, label: '2.0 ~ 2.9', desc: '우수' },
+            { score: 3.5, label: '3.0 ~ 3.9', desc: '보통' },
+            { score: 4.5, label: '4.0 이상',  desc: '일반' },
           ].map((item) => (
             <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-              <span style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: item.color, flexShrink: 0 }} />
+              <span style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: getScoreColor(item.score), flexShrink: 0 }} />
               <span style={{ fontSize: '11px', color: 'var(--text-dim)', minWidth: '65px' }}>{item.label}</span>
               <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>{item.desc}</span>
             </div>
