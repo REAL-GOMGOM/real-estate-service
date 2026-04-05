@@ -128,18 +128,30 @@ export default function NewsPage() {
                     onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
                   >
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                      {/* 카테고리 아이콘 */}
-                      <div style={{
-                        width: '32px', height: '32px', borderRadius: '8px', flexShrink: 0,
-                        backgroundColor: cc.bg,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        marginTop: '2px',
-                      }}>
-                        {item.category === 'realestate'
-                          ? <Building2 size={15} color={cc.color} />
-                          : <Globe     size={15} color={cc.color} />
-                        }
-                      </div>
+                      {/* 썸네일 또는 카테고리 아이콘 */}
+                      {item.thumbnail ? (
+                        <img
+                          src={item.thumbnail}
+                          alt=""
+                          style={{
+                            width: 72, height: 72, borderRadius: 8, flexShrink: 0,
+                            objectFit: 'cover', backgroundColor: 'var(--border-light)',
+                          }}
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      ) : (
+                        <div style={{
+                          width: '32px', height: '32px', borderRadius: '8px', flexShrink: 0,
+                          backgroundColor: cc.bg,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          marginTop: '2px',
+                        }}>
+                          {item.category === 'realestate'
+                            ? <Building2 size={15} color={cc.color} />
+                            : <Globe     size={15} color={cc.color} />
+                          }
+                        </div>
+                      )}
 
                       <div style={{ flex: 1, minWidth: 0 }}>
                         {/* 제목 */}
