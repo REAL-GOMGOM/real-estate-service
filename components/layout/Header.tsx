@@ -56,15 +56,15 @@ export default function Header() {
       }}
     >
       <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '64px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '64px', position: 'relative' }}>
 
           {/* 로고 */}
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
+          <Link href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', width: 44 }}>
             <Image src="/logo.png" alt="내집(My.ZIP)" width={44} height={44} style={{ objectFit: 'contain' }} priority />
           </Link>
 
-          {/* 데스크탑 네비게이션 */}
-          <nav style={{ alignItems: 'center', gap: '18px' }} className="hidden lg:flex">
+          {/* 데스크탑 네비게이션 (중앙) */}
+          <nav style={{ alignItems: 'center', gap: '18px', position: 'absolute', left: '50%', transform: 'translateX(-50%)' }} className="hidden lg:flex">
             {NAV_ITEMS.map((item) => {
               if (item.children) {
                 const groupActive = isChildActive(item.children, pathname);
@@ -170,8 +170,8 @@ export default function Header() {
             })}
           </nav>
 
-          {/* 우측 */}
-          <div style={{ alignItems: 'center', gap: '10px' }} className="hidden lg:flex">
+          {/* 우측 균형용 빈 공간 (로고와 동일 너비) */}
+          <div style={{ width: 44 }} className="hidden lg:flex">
             {/* 인증 기능 추가 시 복원
             <button style={{
               padding: '8px 18px', borderRadius: '10px', fontSize: '14px', fontWeight: 500,
