@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { ArrowRight, MapPin, BarChart3, TrendingUp } from 'lucide-react';
@@ -11,6 +12,13 @@ const FLOATING_STATS = [
 ];
 
 export default function HeroSection() {
+  const [dataMonth, setDataMonth] = useState('');
+  useEffect(() => {
+    const now = new Date();
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    setDataMonth(`${prev.getFullYear()}년 ${prev.getMonth() + 1}월`);
+  }, []);
+
   return (
     <section style={{ position: 'relative', minHeight: '70vh', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', paddingTop: '64px', background: 'var(--gradient-main)' }}>
 
@@ -32,7 +40,7 @@ export default function HeroSection() {
           style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 18px', borderRadius: '999px', fontSize: '13px', fontWeight: 500, backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: '#FFFFFF', marginTop: '24px', marginBottom: '28px' }}
         >
           <span style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#FFFFFF', animation: 'pulse 2s infinite' }} />
-          2026년 3월 실거래 데이터 업데이트 완료
+          {dataMonth ? `${dataMonth} 실거래 데이터 반영 중` : '실거래 데이터 반영 중'}
         </motion.div>
 
         {/* 메인 헤드라인 */}
