@@ -43,7 +43,7 @@ function fmt(n: number): string {
   return n.toFixed(2);
 }
 
-export default function BankRateComparison() {
+export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPolicy?: () => void }) {
   const [data, setData] = useState<BankRateData | null>(null);
   const [loading, setLoading] = useState(true);
   const [rateFilter, setRateFilter] = useState<'all' | 'fixed' | 'variable'>('all');
@@ -85,19 +85,37 @@ export default function BankRateComparison() {
           데이터를 불러올 수 없습니다
         </h2>
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 16px', lineHeight: 1.6 }}>
-          {data?.message ?? '금감원 API 점검 중입니다. 평일에 다시 확인해주세요.'}
+          {data?.message ?? '금감원 서버에서 데이터를 가져올 수 없습니다. 잠시 후 다시 시도해주세요.'}
         </p>
-        <button
-          onClick={fetchRates}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '8px 18px', borderRadius: 10, fontSize: 13, fontWeight: 500,
-            backgroundColor: 'var(--accent)', color: '#fff', border: 'none', cursor: 'pointer',
-          }}
-        >
-          <RefreshCw size={14} />
-          다시 시도
-        </button>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <button
+            onClick={fetchRates}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '8px 18px', borderRadius: 10, fontSize: 13, fontWeight: 500,
+              backgroundColor: 'var(--accent)', color: '#fff', border: 'none', cursor: 'pointer',
+            }}
+          >
+            <RefreshCw size={14} />
+            다시 시도
+          </button>
+          {onSwitchToPolicy && (
+            <button
+              onClick={onSwitchToPolicy}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '8px 18px', borderRadius: 10, fontSize: 13, fontWeight: 500,
+                backgroundColor: 'var(--border-light)', color: 'var(--text-secondary)',
+                border: '1px solid var(--border)', cursor: 'pointer',
+              }}
+            >
+              정책대출 보기
+            </button>
+          )}
+        </div>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 14, marginBottom: 0 }}>
+          정책대출 시뮬레이션은 정상 이용 가능합니다
+        </p>
       </div>
     );
   }
