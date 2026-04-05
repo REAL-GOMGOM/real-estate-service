@@ -23,6 +23,7 @@ const NAV_ITEMS: NavItem[] = [
       { label: '변동률 지도', href: '/price-map', desc: '지역별 가격 변동률' },
       { label: '갭분석', href: '/gap-analysis', desc: '매매가-전세가 갭 비교' },
       { label: '갭투자 가이드', href: '/gap-guide', desc: '갭투자 전략 시뮬레이션' },
+      { label: '대출 시뮬레이터', href: '/loan', desc: '정책대출 금리 계산' },
     ],
   },
   { label: '부동산지도', href: '/location-map' },
