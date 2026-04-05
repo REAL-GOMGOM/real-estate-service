@@ -83,6 +83,7 @@ export default function LoanSimulator() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [priceLoading, setPriceLoading] = useState(false);
   const [selectedApt, setSelectedApt] = useState<{ name: string; district: string; count: number; avg: number } | null>(null);
+  const [priceEdited, setPriceEdited] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const districtNames = Object.keys(DISTRICT_CODE);
@@ -106,6 +107,7 @@ export default function LoanSimulator() {
     setSearchResults([]);
     setSearchQuery('');
     setPriceLoading(true);
+    setPriceEdited(false);
     setSelectedApt({ name, district, count: 0, avg: 0 });
     try {
       const res = await fetch(`/api/transactions?district=${encodeURIComponent(district)}&months=3&aptName=${encodeURIComponent(name)}`);
@@ -404,7 +406,7 @@ export default function LoanSimulator() {
               <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>직접 입력</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={monoAccent}>{fmtWon(housePrice)}</span>
-                {selectedApt && selectedApt.count > 0 && (
+                {selectedApt && selectedApt.count > 0 && !priceEdited && (
                   <span style={{
                     fontSize: 11, color: 'var(--accent)', fontWeight: 600,
                     backgroundColor: 'var(--accent-bg)', padding: '2px 6px', borderRadius: 4,
@@ -414,10 +416,18 @@ export default function LoanSimulator() {
                 )}
               </span>
             </div>
+            {/* 자동 입력 안내 */}
+            {selectedApt && selectedApt.count > 0 && (
+              <p style={{ fontSize: 12, marginBottom: 6, margin: '0 0 6px' , color: priceEdited ? 'var(--text-muted)' : '#22C55E' }}>
+                {priceEdited
+                  ? '\u270F\uFE0F 매매가가 직접 입력 값으로 변경되었습니다'
+                  : `\u2705 ${selectedApt.name}의 최근 3개월 실거래 평균가(${fmtWon(selectedApt.avg)})가 자동 입력되었습니다. 직접 수정도 가능합니다.`}
+              </p>
+            )}
             <input
               type="number"
               value={housePrice}
-              onChange={(e) => setHousePrice(Math.max(0, Number(e.target.value) || 0))}
+              onChange={(e) => { if (selectedApt) setPriceEdited(true); setHousePrice(Math.max(0, Number(e.target.value) || 0)); }}
               step={1000}
               style={inputStyle}
             />
@@ -427,7 +437,7 @@ export default function LoanSimulator() {
               max={300000}
               step={1000}
               value={housePrice}
-              onChange={(e) => setHousePrice(Number(e.target.value))}
+              onChange={(e) => { if (selectedApt) setPriceEdited(true); setHousePrice(Number(e.target.value)); }}
               style={sliderStyle}
             />
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
