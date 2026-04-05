@@ -9,6 +9,7 @@ import {
   LAST_UPDATED,
 } from '@/lib/loan-products';
 import { Calculator, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Info, Landmark, Building2 } from 'lucide-react';
+import BankRateComparison from './BankRateComparison';
 
 type LoanTab = 'policy' | 'bank';
 
@@ -195,45 +196,10 @@ export default function LoanSimulator() {
           >
             <Building2 size={15} />
             시중은행
-            <span style={{
-              fontSize: 9, fontWeight: 700, lineHeight: 1,
-              padding: '2px 5px', borderRadius: 4,
-              backgroundColor: activeTab === 'bank' ? 'rgba(255,255,255,0.25)' : 'var(--border-light)',
-              color: activeTab === 'bank' ? '#fff' : 'var(--text-dim)',
-            }}>
-              준비중
-            </span>
           </button>
         </div>
 
-        {activeTab === 'bank' && (
-          <div style={{
-            padding: 32, borderRadius: 16, textAlign: 'center',
-            backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
-          }}>
-            <Building2 size={40} style={{ color: 'var(--text-dim)', marginBottom: 16 }} />
-            <h2 style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 8px' }}>
-              시중은행 주담대 금리 비교
-            </h2>
-            <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '0 0 16px', lineHeight: 1.6 }}>
-              금감원 API 연동 준비 중입니다.
-              <br />
-              곧 은행별 주담대 금리 비교 기능이 추가됩니다.
-            </p>
-            <div style={{
-              display: 'inline-flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center',
-            }}>
-              {['KB국민', '신한', '하나', '우리', '농협'].map((name) => (
-                <span key={name} style={{
-                  padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 500,
-                  backgroundColor: 'var(--border-light)', color: 'var(--text-dim)',
-                }}>
-                  {name}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
+        {activeTab === 'bank' && <BankRateComparison />}
 
         {activeTab === 'policy' && (<>
         {/* ── 기본 정보 ── */}
