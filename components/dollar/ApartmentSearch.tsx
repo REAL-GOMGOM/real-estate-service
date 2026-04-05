@@ -2,17 +2,12 @@
 
 import { useState } from 'react';
 import { Search, Plus } from 'lucide-react';
-import { DISTRICT_CODE } from '@/lib/district-codes';
+import { DISTRICT_GROUPS } from '@/lib/district-groups';
 
 interface Props {
   onAdd: (district: string, aptName: string) => void;
   loading: boolean;
 }
-
-const SEOUL_DISTRICTS = Object.keys(DISTRICT_CODE).filter((k) =>
-  !k.includes('시 ') && !k.includes('인천') && !k.includes('부산') &&
-  !k.includes('대구') && !k.includes('울산')
-);
 
 export default function ApartmentSearch({ onAdd, loading }: Props) {
   const [district, setDistrict] = useState('강남구');
@@ -50,7 +45,11 @@ export default function ApartmentSearch({ onAdd, loading }: Props) {
           border: '1px solid var(--border)', outline: 'none', cursor: 'pointer',
         }}
       >
-        {SEOUL_DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
+        {DISTRICT_GROUPS.map((group) => (
+          <optgroup key={group.label} label={group.label}>
+            {group.districts.map((d) => <option key={d} value={d}>{d}</option>)}
+          </optgroup>
+        ))}
       </select>
 
       {/* 단지명 입력 */}
