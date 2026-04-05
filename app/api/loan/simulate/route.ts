@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
       isCapitalArea: Boolean(isCapitalArea ?? true),
       exclusiveDiscount: exclusiveDiscount ?? null,
       stackableDiscounts: Array.isArray(stackableDiscounts) ? stackableDiscounts : [],
-      repaymentType: repaymentType === 'equal_principal' ? 'equal_principal' : 'equal_principal_interest',
+      repaymentType: repaymentType === 'equal_principal' ? 'equal_principal' : repaymentType === 'graduated' ? 'graduated' : 'equal_principal_interest',
     };
 
     const result = simulateLoan(input);

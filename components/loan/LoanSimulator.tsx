@@ -66,7 +66,7 @@ export default function LoanSimulator() {
   const [isCapitalArea, setIsCapitalArea] = useState(true);
   const [exclusiveDiscount, setExclusiveDiscount] = useState<string | null>(null);
   const [stackableDiscounts, setStackableDiscounts] = useState<string[]>([]);
-  const [repaymentType, setRepaymentType] = useState<'equal_principal_interest' | 'equal_principal'>('equal_principal_interest');
+  const [repaymentType, setRepaymentType] = useState<'equal_principal_interest' | 'equal_principal' | 'graduated'>('equal_principal_interest');
   const [showSchedule, setShowSchedule] = useState(false);
 
   // Debounced numeric inputs
@@ -262,8 +262,8 @@ export default function LoanSimulator() {
           </div>
           <div>
             <FieldLabel style={{ marginBottom: 8 }}>상환방식</FieldLabel>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {([['equal_principal_interest', '원리금균등'], ['equal_principal', '원금균등']] as const).map(([v, l]) => (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {([['equal_principal_interest', '원리금균등'], ['equal_principal', '원금균등'], ['graduated', '체증식']] as const).map(([v, l]) => (
                 <button key={v} onClick={() => setRepaymentType(v)} style={pillStyle(repaymentType === v)}>{l}</button>
               ))}
             </div>
@@ -362,8 +362,47 @@ export default function LoanSimulator() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 18 }}>
             <ResultCard label="대출금액" value={fmtWonShort(result.loanAmount)} sub={`LTV ${result.ltvUsed}%`} />
             <ResultCard label="적용금리" value={`${result.appliedRate}%`} sub={isDidimdol ? `기본 ${result.baseRate}%` : '고정금리'} />
-            <ResultCard label="월 상환액" value={`${fmt(Math.round(result.monthlyPayment))}만`} highlight />
+            <ResultCard
+              label={repaymentType === 'graduated' ? '월 상환액 (1년차)' : '월 상환액'}
+              value={`${fmt(Math.round(result.monthlyPayment))}만`}
+              highlight
+            />
           </div>
+
+          {/* 체증식 연차별 변화 */}
+          {repaymentType === 'graduated' && result.graduatedYears && (
+            <div style={{
+              padding: '14px 16px', borderRadius: 12, marginBottom: 18,
+              backgroundColor: 'var(--border-light)',
+            }}>
+              <FieldLabel style={{ marginBottom: 10 }}>연차별 월 납입액 변화</FieldLabel>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {result.graduatedYears.map((g, i) => (
+                  <div key={g.year} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {i > 0 && <span style={{ color: 'var(--text-dim)', fontSize: 12 }}>→</span>}
+                    <div style={{
+                      padding: '6px 12px', borderRadius: 8,
+                      backgroundColor: i === 0 ? 'var(--accent-bg)' : 'var(--bg-card)',
+                      border: i === 0 ? '1px solid var(--accent)' : '1px solid var(--border)',
+                    }}>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block' }}>{g.year}년차</span>
+                      <span style={{ fontSize: 14, fontWeight: 800, color: i === 0 ? 'var(--accent)' : 'var(--text-strong)', fontFamily: MONO }}>
+                        {fmt(Math.round(g.monthlyPayment))}만
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 10, marginBottom: 0, lineHeight: 1.5 }}>
+                체증식은 초기 부담이 적고 소득 증가에 맞춰 상환액이 늘어나는 방식입니다
+              </p>
+              {isDidimdol && (
+                <p style={{ fontSize: 11, color: 'var(--warning, #c89632)', marginTop: 4, marginBottom: 0 }}>
+                  * 디딤돌 체증식은 고정금리만 가능합니다
+                </p>
+              )}
+            </div>
+          )}
 
           {/* 금리 분해 바 (디딤돌) */}
           {rateBreakdown && (
