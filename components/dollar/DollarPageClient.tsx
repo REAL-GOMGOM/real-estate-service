@@ -141,7 +141,7 @@ export default function DollarPageClient() {
             실질 가치 비교
           </h1>
           <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
-            달러 · 비트코인 · 금 기준으로 아파트 실질 가치가 어떻게 변했는지 확인합니다
+            아파트 매매가를 달러, 비트코인, 금으로 환산하여 실질 가치 변동을 분석합니다. 출처: 국토교통부, 한국은행
           </p>
         </div>
 

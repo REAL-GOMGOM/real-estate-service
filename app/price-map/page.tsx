@@ -69,7 +69,7 @@ function PriceMapContent() {
               매매/전세 변동률 지도
             </h1>
             <p style={{ fontSize: '13px', color: 'var(--text-dim)' }}>
-              시도별 아파트 가격 변동률 현황
+              시도별 아파트 매매·전세 가격 변동률을 지도에서 확인합니다. 출처: 한국부동산원
             </p>
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>

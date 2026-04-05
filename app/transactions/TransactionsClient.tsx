@@ -469,7 +469,8 @@ export default function TransactionsClient() {
               {today.getFullYear() > 2000 ? todayLabel(today) : '—'}
             </span>
           </div>
-          <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>출처: 국토교통부 실거래공개시스템</p>
+          <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '4px' }}>국토교통부 실거래가 공개시스템 데이터를 기반으로 전국 아파트 매매 거래를 조회합니다.</p>
+          <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>출처: 국토교통부</p>
         </div>
 
         {/* 시도별 요약 카드 뷰 */}

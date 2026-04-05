@@ -139,7 +139,7 @@ function GapContent() {
         </h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
           <p style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
-            두 단지의 실거래가 갭을 비교하여 저평가/고평가를 판단합니다
+            매매가와 전세가의 차이를 분석하여 투자 가치를 판단합니다. 출처: 국토교통부
           </p>
           <Link href="/gap-guide" style={{
             display: 'inline-flex', alignItems: 'center', gap: '8px',

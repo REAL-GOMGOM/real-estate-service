@@ -195,6 +195,10 @@ function ChartContent() {
       <main style={{ flex: 1, overflowY: isMobile ? 'visible' : 'auto', height: isMobile ? 'auto' : 'calc(100vh - 64px)', backgroundColor: 'var(--bg-primary)' }}>
         <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '32px 28px' }}>
 
+          <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '24px' }}>
+            단지별 실거래가 추이를 차트로 확인하세요. 이동평균, 거래량, 면적별 비교가 가능합니다. 출처: 국토교통부
+          </p>
+
           {/* 기간 필터 */}
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '24px' }}>
             <div style={{ display: 'flex', gap: '8px' }}>

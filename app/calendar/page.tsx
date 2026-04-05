@@ -87,7 +87,7 @@ function CalendarContent() {
                 경제 달력
               </h1>
               <p style={{ fontSize: '13px', color: 'var(--text-dim)' }}>
-                금리·입주·정책·지표 일정을 한눈에
+                금리 결정, 경제 지표 발표 등 부동산 시장에 영향을 주는 주요 일정입니다
               </p>
             </div>
             <MonthNavigator year={year} month={month} onPrev={goPrev} onNext={goNext} onToday={goToday} />

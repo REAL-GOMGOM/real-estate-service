@@ -240,7 +240,7 @@ export default function RankingClientPage() {
             주간 랭킹
           </h1>
           <p style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
-            이번 주 가장 활발한 거래와 가격 변동
+            최근 실거래 데이터를 기반으로 최고가, 거래량, 신고가, 상승률을 분석합니다. 출처: 국토교통부
             <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
               {' · '}{PERIOD_OPTIONS.find((o) => o.key === period)?.label}
               {tab !== 'priceChange' && ` · ${AREA_OPTIONS.find((o) => o.key === area)?.label} 면적`}
