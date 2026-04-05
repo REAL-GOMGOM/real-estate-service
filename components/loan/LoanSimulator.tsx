@@ -8,7 +8,8 @@ import {
   STACKABLE_DISCOUNTS,
   LAST_UPDATED,
 } from '@/lib/loan-products';
-import { Calculator, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Info, Landmark, Building2 } from 'lucide-react';
+import { Calculator, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Info, Landmark, Building2, Search, X, Loader2 } from 'lucide-react';
+import { DISTRICT_CODE } from '@/lib/district-codes';
 import BankRateComparison from './BankRateComparison';
 
 type LoanTab = 'policy' | 'bank';
@@ -73,6 +74,54 @@ export default function LoanSimulator() {
   const [stackableDiscounts, setStackableDiscounts] = useState<string[]>([]);
   const [repaymentType, setRepaymentType] = useState<'equal_principal_interest' | 'equal_principal' | 'graduated'>('equal_principal_interest');
   const [showSchedule, setShowSchedule] = useState(false);
+
+  // 단지 검색
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchDistrict, setSearchDistrict] = useState('강남구');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<{ id: string; name: string; dong: string; district: string }[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [priceLoading, setPriceLoading] = useState(false);
+  const [selectedApt, setSelectedApt] = useState<string | null>(null);
+  const searchTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const districtNames = Object.keys(DISTRICT_CODE);
+
+  function handleSearchInput(q: string) {
+    setSearchQuery(q);
+    clearTimeout(searchTimer.current);
+    if (q.length < 2) { setSearchResults([]); return; }
+    searchTimer.current = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const res = await fetch(`/api/gap-analysis/search?q=${encodeURIComponent(q)}&district=${encodeURIComponent(searchDistrict)}`);
+        const data = await res.json();
+        setSearchResults(data.results ?? []);
+      } catch { setSearchResults([]); }
+      finally { setSearchLoading(false); }
+    }, 400);
+  }
+
+  async function handleSelectApt(name: string, district: string) {
+    setSelectedApt(name);
+    setSearchResults([]);
+    setSearchQuery('');
+    setPriceLoading(true);
+    try {
+      const res = await fetch(`/api/transactions?district=${encodeURIComponent(district)}&months=3&aptName=${encodeURIComponent(name)}`);
+      const data = await res.json();
+      const txns = data?.data?.[0]?.transactions;
+      if (txns && txns.length > 0) {
+        const prices = txns.map((t: { price: number }) => t.price);
+        const avg = Math.round(prices.reduce((a: number, b: number) => a + b, 0) / prices.length);
+        setHousePrice(avg);
+      }
+    } catch { /* 검색 실패 시 매매가 유지 */ }
+    finally {
+      setPriceLoading(false);
+      setShowSearch(false);
+    }
+  }
 
   // Debounced numeric inputs
   const dHousePrice = useDebounce(housePrice, 300);
@@ -204,10 +253,134 @@ export default function LoanSimulator() {
         {activeTab === 'policy' && (<>
         {/* ── 기본 정보 ── */}
         <Section title="기본 정보">
-          {/* 매매가 */}
+          {/* 단지 검색 */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <FieldLabel>매매가</FieldLabel>
+              <button
+                onClick={() => setShowSearch(!showSearch)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 500,
+                  backgroundColor: showSearch ? 'var(--accent)' : 'var(--border-light)',
+                  color: showSearch ? '#fff' : 'var(--text-muted)',
+                  border: 'none', cursor: 'pointer', transition: 'all 0.15s',
+                }}
+              >
+                <Search size={12} />
+                단지 검색
+              </button>
+            </div>
+
+            {showSearch && (
+              <div style={{
+                padding: 14, borderRadius: 12, marginBottom: 12,
+                backgroundColor: 'var(--border-light)', border: '1px solid var(--border)',
+              }}>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <select
+                    value={searchDistrict}
+                    onChange={(e) => { setSearchDistrict(e.target.value); setSearchResults([]); }}
+                    style={{
+                      padding: '8px 10px', borderRadius: 8, fontSize: 12,
+                      backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)',
+                      border: '1px solid var(--border)', outline: 'none', cursor: 'pointer',
+                      minWidth: 100,
+                    }}
+                  >
+                    {districtNames.map((d) => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                  <div style={{ flex: 1, position: 'relative' }}>
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => handleSearchInput(e.target.value)}
+                      placeholder="아파트명 (예: 래미안)"
+                      style={{
+                        ...inputStyle,
+                        fontSize: 13, fontFamily: 'inherit', fontWeight: 400,
+                        paddingRight: 32,
+                      }}
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => { setSearchQuery(''); setSearchResults([]); }}
+                        style={{
+                          position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                          background: 'none', border: 'none', cursor: 'pointer', padding: 2,
+                          color: 'var(--text-dim)',
+                        }}
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {searchLoading && (
+                  <div style={{ padding: 12, textAlign: 'center' }}>
+                    <Loader2 size={16} style={{ color: 'var(--text-dim)', animation: 'spin 1s linear infinite' }} />
+                    <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                  </div>
+                )}
+
+                {!searchLoading && searchResults.length > 0 && (
+                  <div style={{ maxHeight: 200, overflowY: 'auto', borderRadius: 8 }}>
+                    {searchResults.map((r) => (
+                      <button
+                        key={r.id}
+                        onClick={() => handleSelectApt(r.name, r.district)}
+                        style={{
+                          display: 'block', width: '100%', textAlign: 'left',
+                          padding: '8px 10px', border: 'none', cursor: 'pointer',
+                          backgroundColor: 'var(--bg-card)', fontSize: 13,
+                          color: 'var(--text-primary)', borderBottom: '1px solid var(--border)',
+                          transition: 'background 0.1s',
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--accent-bg)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-card)'; }}
+                      >
+                        <span style={{ fontWeight: 600 }}>{r.name}</span>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>{r.dong}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {!searchLoading && searchQuery.length >= 2 && searchResults.length === 0 && (
+                  <p style={{ fontSize: 12, color: 'var(--text-dim)', textAlign: 'center', margin: '8px 0 0' }}>
+                    검색 결과가 없습니다
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* 선택된 단지 표시 */}
+            {selectedApt && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8,
+                padding: '6px 10px', borderRadius: 8,
+                backgroundColor: 'var(--accent-bg)', border: '1px solid var(--accent)',
+                fontSize: 12, color: 'var(--accent)',
+              }}>
+                <Search size={12} />
+                <span style={{ fontWeight: 600 }}>{selectedApt}</span>
+                <span style={{ color: 'var(--text-muted)' }}>최근 실거래 평균</span>
+                {priceLoading && <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} />}
+                <button
+                  onClick={() => setSelectedApt(null)}
+                  style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', padding: 2 }}
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* 매매가 입력 */}
           <div style={{ marginBottom: 22 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-              <FieldLabel>매매가</FieldLabel>
+              <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>직접 입력</span>
               <span style={monoAccent}>{fmtWon(housePrice)}</span>
             </div>
             <input
