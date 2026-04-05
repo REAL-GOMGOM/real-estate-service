@@ -227,11 +227,10 @@ export default function ApartmentSelector({
           <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', pointerEvents: 'none' }} />
           <input
             type="text"
-            placeholder="단지명 검색 (전국)"
+            placeholder={`단지명 검색 (${activeDistrict})`}
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
-              if (e.target.value.length >= 2) onAptSearch(e.target.value);
             }}
             style={{
               width: '100%', padding: '7px 10px 7px 28px', borderRadius: '8px',
@@ -241,7 +240,7 @@ export default function ApartmentSelector({
           />
         </div>
         <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '10px' }}>
-          주요 단지 ({apartments.filter(a => !search || matchesQuery(a.name, search)).length}개)
+          {search ? `'${search}' 검색 결과 (${apartments.filter(a => matchesQuery(a.name, search)).length}개)` : `${activeDistrict} 단지 (${apartments.length}개)`}
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           {apartments.filter(a => !search || matchesQuery(a.name, search)).map((apt) => (
