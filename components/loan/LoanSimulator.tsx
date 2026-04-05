@@ -485,6 +485,8 @@ export default function LoanSimulator() {
                 <button key={v} onClick={() => setRepaymentType(v)} style={pillStyle(repaymentType === v)}>{l}</button>
               ))}
             </div>
+            {/* 선택된 상환방식 설명 */}
+            <RepaymentDesc type={repaymentType} />
           </div>
         </Section>
 
@@ -885,6 +887,42 @@ function ResultCard({ label, value, sub, highlight }: { label: string; value: st
         {value}
       </p>
       {sub && <p style={{ fontSize: 10, color: 'var(--text-dim)', margin: '6px 0 0' }}>{sub}</p>}
+    </div>
+  );
+}
+
+const REPAYMENT_DESCRIPTIONS: Record<string, { title: string; desc: string; pros: string; cons: string }> = {
+  equal_principal_interest: {
+    title: '원리금균등',
+    desc: '매달 동일한 금액(원금+이자)을 상환합니다.',
+    pros: '매달 일정액 → 가계 지출 계획 쉬움',
+    cons: '초기에 이자 비중 높고, 총 이자가 원금균등보다 많음',
+  },
+  equal_principal: {
+    title: '원금균등',
+    desc: '매달 동일한 원금 + 남은 잔액 기준 이자를 상환합니다.',
+    pros: '총 이자 부담이 가장 적음',
+    cons: '초기 상환액이 가장 높아 부담 큼',
+  },
+  graduated: {
+    title: '체증식',
+    desc: '초기 상환액이 적고, 매년 일정 비율로 상환액이 증가합니다.',
+    pros: '사회 초년생 등 초기 소득이 적을 때 유리',
+    cons: '후반기 상환 부담 크고, 총 이자가 가장 많음',
+  },
+};
+
+function RepaymentDesc({ type }: { type: string }) {
+  const info = REPAYMENT_DESCRIPTIONS[type];
+  if (!info) return null;
+  return (
+    <div style={{
+      marginTop: 10, padding: '12px 14px', borderRadius: 10,
+      backgroundColor: 'var(--border-light)', fontSize: 12, lineHeight: 1.6,
+    }}>
+      <p style={{ color: 'var(--text-secondary)', margin: '0 0 6px' }}>{info.desc}</p>
+      <p style={{ color: 'var(--success, #3D6B44)', margin: '0 0 2px' }}>+ {info.pros}</p>
+      <p style={{ color: 'var(--danger, #B93E32)', margin: 0 }}>- {info.cons}</p>
     </div>
   );
 }
