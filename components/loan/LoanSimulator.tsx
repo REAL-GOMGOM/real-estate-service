@@ -82,7 +82,7 @@ export default function LoanSimulator() {
   const [searchResults, setSearchResults] = useState<{ id: string; name: string; dong: string; district: string }[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [priceLoading, setPriceLoading] = useState(false);
-  const [selectedApt, setSelectedApt] = useState<string | null>(null);
+  const [selectedApt, setSelectedApt] = useState<{ name: string; district: string; count: number; avg: number } | null>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const districtNames = Object.keys(DISTRICT_CODE);
@@ -103,10 +103,10 @@ export default function LoanSimulator() {
   }
 
   async function handleSelectApt(name: string, district: string) {
-    setSelectedApt(name);
     setSearchResults([]);
     setSearchQuery('');
     setPriceLoading(true);
+    setSelectedApt({ name, district, count: 0, avg: 0 });
     try {
       const res = await fetch(`/api/transactions?district=${encodeURIComponent(district)}&months=3&aptName=${encodeURIComponent(name)}`);
       const data = await res.json();
@@ -115,6 +115,7 @@ export default function LoanSimulator() {
         const prices = txns.map((t: { price: number }) => t.price);
         const avg = Math.round(prices.reduce((a: number, b: number) => a + b, 0) / prices.length);
         setHousePrice(avg);
+        setSelectedApt({ name, district, count: txns.length, avg });
       }
     } catch { /* 검색 실패 시 매매가 유지 */ }
     finally {
@@ -358,20 +359,40 @@ export default function LoanSimulator() {
             {/* 선택된 단지 표시 */}
             {selectedApt && (
               <div style={{
-                display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8,
-                padding: '6px 10px', borderRadius: 8,
-                backgroundColor: 'var(--accent-bg)', border: '1px solid var(--accent)',
-                fontSize: 12, color: 'var(--accent)',
+                marginBottom: 12, padding: '14px 18px', borderRadius: 12,
+                backgroundColor: 'var(--accent-bg)',
+                borderLeft: '4px solid var(--accent)',
+                position: 'relative',
               }}>
-                <Search size={12} />
-                <span style={{ fontWeight: 600 }}>{selectedApt}</span>
-                <span style={{ color: 'var(--text-muted)' }}>최근 실거래 평균</span>
-                {priceLoading && <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} />}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{selectedApt.name}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{selectedApt.district}</span>
+                </div>
+                <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', margin: '0 0 8px' }}>
+                  최근 3개월 실거래 평균가 적용 중
+                </p>
+                {priceLoading ? (
+                  <Loader2 size={14} style={{ color: 'var(--accent)', animation: 'spin 1s linear infinite' }} />
+                ) : selectedApt.count > 0 && (
+                  <div style={{ borderTop: '1px solid var(--accent-border, rgba(196,101,74,0.2))', paddingTop: 8 }}>
+                    <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontFamily: MONO }}>
+                      거래 {selectedApt.count}건 평균 &middot;{' '}
+                    </span>
+                    <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--accent)', fontFamily: MONO }}>
+                      {fmtWon(selectedApt.avg)}
+                    </span>
+                  </div>
+                )}
                 <button
                   onClick={() => setSelectedApt(null)}
-                  style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', padding: 2 }}
+                  style={{
+                    position: 'absolute', top: 12, right: 12,
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'var(--text-dim)', padding: 2, fontSize: 12,
+                    display: 'flex', alignItems: 'center', gap: 3,
+                  }}
                 >
-                  <X size={12} />
+                  <X size={14} /> 해제
                 </button>
               </div>
             )}
@@ -381,7 +402,17 @@ export default function LoanSimulator() {
           <div style={{ marginBottom: 22 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
               <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>직접 입력</span>
-              <span style={monoAccent}>{fmtWon(housePrice)}</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={monoAccent}>{fmtWon(housePrice)}</span>
+                {selectedApt && selectedApt.count > 0 && (
+                  <span style={{
+                    fontSize: 11, color: 'var(--accent)', fontWeight: 600,
+                    backgroundColor: 'var(--accent-bg)', padding: '2px 6px', borderRadius: 4,
+                  }}>
+                    실거래 평균
+                  </span>
+                )}
+              </span>
             </div>
             <input
               type="number"
