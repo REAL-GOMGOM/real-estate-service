@@ -105,7 +105,7 @@ export const LOAN_PRODUCTS = [
     housePriceLimit: { general: 50000, newlywed: 60000 },
     ltv: { general: 70, firstTime: 80, firstTimeCapital: 70 },
     dti: 60,
-    terms: [10, 15, 20],
+    terms: [10, 15, 20, 30],
     eligibility: ['무주택 세대주', '순자산 5.11억원 이하', 'CB점수 350점 이상'],
   },
   {

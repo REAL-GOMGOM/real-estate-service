@@ -18,7 +18,7 @@ export interface LoanInput {
   isCapitalArea: boolean;
   exclusiveDiscount: string | null;
   stackableDiscounts: string[];
-  repaymentType: 'equal_principal_interest' | 'equal_principal';
+  repaymentType: 'equal_principal_interest' | 'equal_principal' | 'graduated';
 }
 
 export interface MonthlySchedule {
@@ -27,6 +27,11 @@ export interface MonthlySchedule {
   interest: number;
   payment: number;
   remainingBalance: number;
+}
+
+export interface GraduatedYearInfo {
+  year: number;
+  monthlyPayment: number;
 }
 
 export interface LoanResult {
@@ -42,6 +47,7 @@ export interface LoanResult {
   feasible: boolean;
   rejectReasons: string[];
   schedule: MonthlySchedule[];
+  graduatedYears?: GraduatedYearInfo[];
 }
 
 export function calcEqualPrincipalInterest(
@@ -63,6 +69,31 @@ export function calcEqualPrincipalFirstMonth(
   return principal / months + principal * r;
 }
 
+// 체증식: 초기 상환액이 적고 매년 일정 비율로 증가
+// 총 상환액은 원리금균등과 동일하되 초기에 적게, 후기에 많이 내는 구조
+export function calcGraduatedPayment(
+  principal: number,
+  annualRate: number,
+  months: number,
+  year: number
+): number {
+  const growthRate = months <= 120 ? 0.06 : months <= 180 ? 0.04 : months <= 240 ? 0.03 : 0.02;
+
+  const r = annualRate / 100 / 12;
+  const equalPayment = r === 0
+    ? principal / months
+    : principal * r * Math.pow(1 + r, months) / (Math.pow(1 + r, months) - 1);
+
+  const years = months / 12;
+  let sumFactor = 0;
+  for (let y = 0; y < years; y++) {
+    sumFactor += Math.pow(1 + growthRate, y) * 12;
+  }
+  const firstYearMonthly = (equalPayment * months) / sumFactor;
+
+  return firstYearMonthly * Math.pow(1 + growthRate, year - 1);
+}
+
 function buildSchedule(
   principal: number,
   annualRate: number,
@@ -78,7 +109,11 @@ function buildSchedule(
     let principalPay: number;
     let payment: number;
 
-    if (repaymentType === 'equal_principal_interest') {
+    if (repaymentType === 'graduated') {
+      const year = Math.ceil(m / 12);
+      payment = calcGraduatedPayment(principal, annualRate, months, year);
+      principalPay = payment - interest;
+    } else if (repaymentType === 'equal_principal_interest') {
       payment = calcEqualPrincipalInterest(principal, annualRate, months);
       principalPay = payment - interest;
     } else {
@@ -108,7 +143,8 @@ function calcTotalInterest(
 ): number {
   const r = annualRate / 100 / 12;
 
-  if (repaymentType === 'equal_principal_interest') {
+  if (repaymentType === 'equal_principal_interest' || repaymentType === 'graduated') {
+    // 체증식도 총 상환액은 원리금균등과 동일
     const monthlyPayment = calcEqualPrincipalInterest(principal, annualRate, months);
     return monthlyPayment * months - principal;
   }
@@ -246,12 +282,29 @@ export function simulateLoan(input: LoanInput): LoanResult {
   // 월 상환액
   const months = input.loanTerm * 12;
   let monthlyPayment: number;
-  if (input.repaymentType === 'equal_principal_interest') {
+  if (input.repaymentType === 'graduated') {
+    monthlyPayment = calcGraduatedPayment(loanAmount, appliedRate, months, 1);
+  } else if (input.repaymentType === 'equal_principal_interest') {
     monthlyPayment = calcEqualPrincipalInterest(loanAmount, appliedRate, months);
   } else {
     monthlyPayment = calcEqualPrincipalFirstMonth(loanAmount, appliedRate, months);
   }
   monthlyPayment = Math.round(monthlyPayment * 100) / 100;
+
+  // 체증식 연차별 정보
+  let graduatedYears: GraduatedYearInfo[] | undefined;
+  if (input.repaymentType === 'graduated') {
+    const totalYears = input.loanTerm;
+    const keyYears = [1];
+    if (totalYears >= 10) keyYears.push(10);
+    if (totalYears >= 20) keyYears.push(20);
+    if (totalYears >= 30) keyYears.push(30);
+    if (!keyYears.includes(totalYears)) keyYears.push(totalYears);
+    graduatedYears = keyYears.map((y) => ({
+      year: y,
+      monthlyPayment: Math.round(calcGraduatedPayment(loanAmount, appliedRate, months, y) * 100) / 100,
+    }));
+  }
 
   // 총이자, 총상환
   const totalInterest = Math.round(
@@ -259,7 +312,7 @@ export function simulateLoan(input: LoanInput): LoanResult {
   ) / 100;
   const totalPayment = Math.round((loanAmount + totalInterest) * 100) / 100;
 
-  // DSR 계산
+  // DSR 계산 (체증식은 1년차 기준)
   const annualRepayment = monthlyPayment * 12;
   const dsr =
     input.income > 0
@@ -289,6 +342,7 @@ export function simulateLoan(input: LoanInput): LoanResult {
     totalPayment,
     dsr,
     ltvUsed,
+    graduatedYears,
     feasible,
     rejectReasons,
     schedule,
