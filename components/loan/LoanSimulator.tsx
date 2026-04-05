@@ -12,23 +12,40 @@ import { Calculator, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Info } 
 
 const SAVINGS_IDS = ['savings_5y', 'savings_10y', 'savings_15y'];
 
+// 상품 선택지 (디딤돌을 일반/생애최초신혼으로 분리)
+const PRODUCT_OPTIONS = [
+  { id: 'didimdol', label: '디딤돌 (일반)', isNewlywedFirst: false },
+  { id: 'didimdol-newlywed', label: '디딤돌 (생애최초 신혼)', isNewlywedFirst: true },
+  { id: 'bogeumjari', label: '보금자리론', isNewlywedFirst: false },
+  { id: 'baby-loan', label: '신생아 특례', isNewlywedFirst: false },
+] as const;
+
 function fmt(n: number): string {
   return n.toLocaleString('ko-KR');
 }
 
 function fmtWon(n: number): string {
+  if (n >= 10000) {
+    const eok = Math.floor(n / 10000);
+    const man = n % 10000;
+    if (man === 0) return `${eok}억원`;
+    return `${eok}억 ${fmt(man)}만원`;
+  }
+  return `${fmt(n)}만원`;
+}
+
+function fmtWonShort(n: number): string {
   if (n >= 10000) return `${(n / 10000).toFixed(1)}억`;
   return `${fmt(Math.round(n))}만`;
 }
 
 export default function LoanSimulator() {
-  const [productId, setProductId] = useState('didimdol');
+  const [selectedOption, setSelectedOption] = useState('didimdol');
   const [housePrice, setHousePrice] = useState(50000);
   const [deposit, setDeposit] = useState(15000);
   const [income, setIncome] = useState(5000);
   const [existingDebt, setExistingDebt] = useState(0);
   const [loanTerm, setLoanTerm] = useState(20);
-  const [isNewlywedFirst, setIsNewlywedFirst] = useState(false);
   const [isLocalHouse, setIsLocalHouse] = useState(false);
   const [isCapitalArea, setIsCapitalArea] = useState(true);
   const [exclusiveDiscount, setExclusiveDiscount] = useState<string | null>(null);
@@ -36,7 +53,14 @@ export default function LoanSimulator() {
   const [repaymentType, setRepaymentType] = useState<'equal_principal_interest' | 'equal_principal'>('equal_principal_interest');
   const [showSchedule, setShowSchedule] = useState(false);
 
+  // 선택된 옵션 → 실제 productId, isNewlywedFirst 파생
+  const optionMeta = PRODUCT_OPTIONS.find((o) => o.id === selectedOption)!;
+  const productId = selectedOption === 'didimdol-newlywed' ? 'didimdol' : selectedOption;
+  const isNewlywedFirst = optionMeta.isNewlywedFirst;
+  const isDidimdol = productId === 'didimdol';
+
   const product = LOAN_PRODUCTS.find((p) => p.id === productId)!;
+  const neededLoan = Math.max(0, housePrice - deposit);
 
   const result: LoanResult = useMemo(() => {
     const input: LoanInput = {
@@ -56,16 +80,14 @@ export default function LoanSimulator() {
     return simulateLoan(input);
   }, [housePrice, deposit, income, existingDebt, loanTerm, productId, isNewlywedFirst, isLocalHouse, isCapitalArea, exclusiveDiscount, stackableDiscounts, repaymentType]);
 
-  const isDidimdol = productId === 'didimdol';
-
-  function handleProductChange(id: string) {
-    setProductId(id);
-    const p = LOAN_PRODUCTS.find((pp) => pp.id === id)!;
+  function handleOptionChange(id: string) {
+    setSelectedOption(id);
+    const realId = id === 'didimdol-newlywed' ? 'didimdol' : id;
+    const p = LOAN_PRODUCTS.find((pp) => pp.id === realId)!;
     if (!p.terms.includes(loanTerm)) setLoanTerm(p.terms[p.terms.length - 1]);
-    if (id !== 'didimdol') {
+    if (realId !== 'didimdol') {
       setExclusiveDiscount(null);
       setStackableDiscounts([]);
-      setIsNewlywedFirst(false);
     }
   }
 
@@ -95,90 +117,151 @@ export default function LoanSimulator() {
           </p>
         </div>
 
-        {/* Product Tabs */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
-          {LOAN_PRODUCTS.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => handleProductChange(p.id)}
-              style={{
-                padding: '10px 18px',
-                borderRadius: 12,
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: 'pointer',
-                border: productId === p.id ? '2px solid var(--accent)' : '1px solid var(--border)',
-                backgroundColor: productId === p.id ? 'var(--accent-bg)' : 'var(--bg-card)',
-                color: productId === p.id ? 'var(--accent)' : 'var(--text-secondary)',
-                transition: 'all 0.15s',
-              }}
-            >
-              {p.name}
-            </button>
-          ))}
-        </div>
-
-        {/* Product Info */}
-        <div style={{
-          padding: '14px 18px',
-          borderRadius: 12,
-          backgroundColor: 'var(--bg-card)',
-          border: '1px solid var(--border)',
-          marginBottom: 24,
-        }}>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 8px' }}>
-            {product.description}
-          </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px' }}>
-            {product.eligibility.map((e, i) => (
-              <span key={i} style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: 'var(--accent)', flexShrink: 0 }} />
-                {e}
+        {/* ── 기본 정보 섹션 ── */}
+        <Section title="기본 정보">
+          {/* 매매가 */}
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+              <FieldLabel>매매가</FieldLabel>
+              <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--accent)', fontFamily: 'var(--font-mono, monospace)' }}>
+                {fmtWon(housePrice)}
               </span>
-            ))}
+            </div>
+            <input
+              type="number"
+              value={housePrice}
+              onChange={(e) => setHousePrice(Math.max(0, Number(e.target.value) || 0))}
+              step={1000}
+              style={inputStyle}
+            />
+            <input
+              type="range"
+              min={10000}
+              max={300000}
+              step={1000}
+              value={housePrice}
+              onChange={(e) => setHousePrice(Number(e.target.value))}
+              style={{ width: '100%', marginTop: 8, accentColor: 'var(--accent)', cursor: 'pointer' }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
+              <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>1억</span>
+              <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>30억</span>
+            </div>
           </div>
-        </div>
 
-        {/* Input Section */}
-        <div style={{
-          padding: 20,
-          borderRadius: 14,
-          backgroundColor: 'var(--bg-card)',
-          border: '1px solid var(--border)',
-          marginBottom: 24,
-        }}>
-          <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-strong)', margin: '0 0 18px' }}>
-            기본 정보
-          </h2>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-            <NumberField label="매매가 (만원)" value={housePrice} onChange={setHousePrice} step={1000} />
-            <NumberField label="자기자금 (만원)" value={deposit} onChange={setDeposit} step={1000} />
-            <NumberField label="부부합산 연소득 (만원)" value={income} onChange={setIncome} step={100} />
-            <NumberField label="기존 대출 연상환액 (만원)" value={existingDebt} onChange={setExistingDebt} step={100} />
+          {/* 자기자금 */}
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+              <FieldLabel>자기자금 (만원)</FieldLabel>
+              <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                필요 대출금: <strong style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono, monospace)' }}>{fmtWon(neededLoan)}</strong>
+              </span>
+            </div>
+            <input
+              type="number"
+              value={deposit}
+              onChange={(e) => {
+                const v = Math.max(0, Math.min(housePrice, Number(e.target.value) || 0));
+                setDeposit(v);
+              }}
+              step={1000}
+              style={inputStyle}
+            />
           </div>
 
-          {/* Term */}
-          <div style={{ marginTop: 18 }}>
-            <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>
-              대출기간
-            </label>
+          {/* 연소득 + 기존대출 */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div>
+              <FieldLabel style={{ marginBottom: 6 }}>부부합산 연소득 (만원)</FieldLabel>
+              <input
+                type="number"
+                value={income}
+                onChange={(e) => setIncome(Math.max(0, Number(e.target.value) || 0))}
+                step={100}
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <FieldLabel style={{ marginBottom: 6 }}>기존 대출 연상환액 (만원)</FieldLabel>
+              <input
+                type="number"
+                value={existingDebt}
+                onChange={(e) => setExistingDebt(Math.max(0, Number(e.target.value) || 0))}
+                step={100}
+                style={inputStyle}
+              />
+            </div>
+          </div>
+        </Section>
+
+        {/* ── 상품 선택 섹션 ── */}
+        <Section title="상품 선택">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {PRODUCT_OPTIONS.map((opt) => {
+              const selected = selectedOption === opt.id;
+              return (
+                <label
+                  key={opt.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '12px 16px',
+                    borderRadius: 12,
+                    border: selected ? '2px solid var(--accent)' : '1px solid var(--border)',
+                    backgroundColor: selected ? 'var(--accent-bg)' : 'transparent',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="product"
+                    checked={selected}
+                    onChange={() => handleOptionChange(opt.id)}
+                    style={{ accentColor: 'var(--accent)', width: 16, height: 16, cursor: 'pointer' }}
+                  />
+                  <span style={{
+                    fontSize: 14,
+                    fontWeight: selected ? 600 : 400,
+                    color: selected ? 'var(--accent)' : 'var(--text-primary)',
+                  }}>
+                    {opt.label}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+
+          {/* 자격요건 */}
+          <div style={{
+            marginTop: 12,
+            padding: '10px 14px',
+            borderRadius: 10,
+            backgroundColor: 'var(--border-light)',
+          }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px' }}>
+              {product.eligibility.map((e, i) => (
+                <span key={i} style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: 'var(--accent)', flexShrink: 0 }} />
+                  {e}
+                </span>
+              ))}
+            </div>
+          </div>
+        </Section>
+
+        {/* ── 대출 조건 섹션 ── */}
+        <Section title="대출 조건">
+          {/* 대출기간 */}
+          <div style={{ marginBottom: 18 }}>
+            <FieldLabel style={{ marginBottom: 8 }}>대출기간</FieldLabel>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {product.terms.map((t) => (
                 <button
                   key={t}
                   onClick={() => setLoanTerm(t)}
-                  style={{
-                    padding: '8px 16px',
-                    borderRadius: 10,
-                    fontSize: 13,
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                    border: 'none',
-                    backgroundColor: loanTerm === t ? 'var(--accent)' : 'var(--border-light)',
-                    color: loanTerm === t ? 'white' : 'var(--text-muted)',
-                    transition: 'background 0.15s',
-                  }}
+                  style={pillStyle(loanTerm === t)}
                 >
                   {t}년
                 </button>
@@ -186,123 +269,127 @@ export default function LoanSimulator() {
             </div>
           </div>
 
-          {/* Repayment Type */}
-          <div style={{ marginTop: 18 }}>
-            <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>
-              상환방식
-            </label>
+          {/* 상환방식 */}
+          <div>
+            <FieldLabel style={{ marginBottom: 8 }}>상환방식</FieldLabel>
             <div style={{ display: 'flex', gap: 8 }}>
               {([['equal_principal_interest', '원리금균등'], ['equal_principal', '원금균등']] as const).map(([val, label]) => (
                 <button
                   key={val}
                   onClick={() => setRepaymentType(val)}
-                  style={{
-                    padding: '8px 16px',
-                    borderRadius: 10,
-                    fontSize: 13,
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                    border: 'none',
-                    backgroundColor: repaymentType === val ? 'var(--accent)' : 'var(--border-light)',
-                    color: repaymentType === val ? 'white' : 'var(--text-muted)',
-                    transition: 'background 0.15s',
-                  }}
+                  style={pillStyle(repaymentType === val)}
                 >
                   {label}
                 </button>
               ))}
             </div>
           </div>
+        </Section>
 
-          {/* Toggles */}
-          <div style={{ marginTop: 18, display: 'flex', flexWrap: 'wrap', gap: '10px 20px' }}>
-            <ToggleChip label="수도권" checked={isCapitalArea} onChange={setIsCapitalArea} />
-            <ToggleChip label="지방 소재" checked={isLocalHouse} onChange={setIsLocalHouse} />
-            {isDidimdol && (
-              <ToggleChip label="생애최초/신혼" checked={isNewlywedFirst} onChange={setIsNewlywedFirst} />
-            )}
-          </div>
-        </div>
-
-        {/* Discount Section (didimdol only) */}
+        {/* ── 우대금리 섹션 (디딤돌만) ── */}
         {isDidimdol && (
-          <div style={{
-            padding: 20,
-            borderRadius: 14,
-            backgroundColor: 'var(--bg-card)',
-            border: '1px solid var(--border)',
-            marginBottom: 24,
-          }}>
-            <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-strong)', margin: '0 0 16px' }}>
-              우대금리
-            </h2>
-
-            {/* Exclusive */}
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', display: 'block', marginBottom: 8 }}>
-                택1 우대 (하나만 선택)
-              </label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {EXCLUSIVE_DISCOUNTS.map((d) => (
-                  <button
-                    key={d.id}
-                    onClick={() => setExclusiveDiscount(exclusiveDiscount === d.id ? null : d.id)}
-                    style={{
-                      padding: '6px 12px',
-                      borderRadius: 8,
-                      fontSize: 12,
-                      fontWeight: 500,
-                      cursor: 'pointer',
-                      border: exclusiveDiscount === d.id ? '1.5px solid var(--accent)' : '1px solid var(--border)',
-                      backgroundColor: exclusiveDiscount === d.id ? 'var(--accent-bg)' : 'transparent',
-                      color: exclusiveDiscount === d.id ? 'var(--accent)' : 'var(--text-secondary)',
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    {d.label} (-{d.rate}%p)
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Stackable */}
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', display: 'block', marginBottom: 8 }}>
-                중복 우대 (복수 선택)
-              </label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {STACKABLE_DISCOUNTS.map((d) => {
-                  const selected = stackableDiscounts.includes(d.id);
+          <Section title="우대금리">
+            {/* 택1 */}
+            <div style={{ marginBottom: 18 }}>
+              <FieldLabel style={{ marginBottom: 8 }}>택1 우대 (하나만 선택)</FieldLabel>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {/* 없음 옵션 */}
+                <label style={radioRowStyle(exclusiveDiscount === null)}>
+                  <input
+                    type="radio"
+                    name="exclusive"
+                    checked={exclusiveDiscount === null}
+                    onChange={() => setExclusiveDiscount(null)}
+                    style={radioStyle}
+                  />
+                  <span style={{ fontSize: 13, color: exclusiveDiscount === null ? 'var(--accent)' : 'var(--text-secondary)' }}>
+                    없음
+                  </span>
+                </label>
+                {EXCLUSIVE_DISCOUNTS.map((d) => {
+                  const selected = exclusiveDiscount === d.id;
                   return (
-                    <button
-                      key={d.id}
-                      onClick={() => toggleStackable(d.id)}
-                      style={{
-                        padding: '6px 12px',
-                        borderRadius: 8,
+                    <label key={d.id} style={radioRowStyle(selected)}>
+                      <input
+                        type="radio"
+                        name="exclusive"
+                        checked={selected}
+                        onChange={() => setExclusiveDiscount(d.id)}
+                        style={radioStyle}
+                      />
+                      <span style={{ fontSize: 13, color: selected ? 'var(--accent)' : 'var(--text-secondary)', flex: 1 }}>
+                        {d.label}
+                      </span>
+                      <span style={{
                         fontSize: 12,
-                        fontWeight: 500,
-                        cursor: 'pointer',
-                        border: selected ? '1.5px solid var(--accent)' : '1px solid var(--border)',
-                        backgroundColor: selected ? 'var(--accent-bg)' : 'transparent',
-                        color: selected ? 'var(--accent)' : 'var(--text-secondary)',
-                        transition: 'all 0.15s',
-                      }}
-                    >
-                      {d.label} (-{d.rate}%p)
-                      {d.note && <span style={{ fontSize: 10, color: 'var(--text-dim)', marginLeft: 4 }}>({d.note})</span>}
-                    </button>
+                        fontWeight: 600,
+                        color: selected ? 'var(--accent)' : 'var(--text-dim)',
+                        fontFamily: 'var(--font-mono, monospace)',
+                      }}>
+                        -{d.rate}%p
+                      </span>
+                    </label>
                   );
                 })}
               </div>
-              <p style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 6 }}>
-                * 청약저축(5/10/15년)은 1개만 선택 가능
+            </div>
+
+            {/* 중복 가능 */}
+            <div>
+              <FieldLabel style={{ marginBottom: 8 }}>중복 가능 우대 (복수 선택)</FieldLabel>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {STACKABLE_DISCOUNTS.map((d) => {
+                  const checked = stackableDiscounts.includes(d.id);
+                  return (
+                    <label key={d.id} style={checkRowStyle(checked)}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleStackable(d.id)}
+                        style={{ accentColor: 'var(--accent)', width: 16, height: 16, cursor: 'pointer' }}
+                      />
+                      <span style={{ fontSize: 13, color: checked ? 'var(--accent)' : 'var(--text-secondary)', flex: 1 }}>
+                        {d.label}
+                        {d.note && <span style={{ fontSize: 10, color: 'var(--text-dim)', marginLeft: 4 }}>({d.note})</span>}
+                      </span>
+                      <span style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: checked ? 'var(--accent)' : 'var(--text-dim)',
+                        fontFamily: 'var(--font-mono, monospace)',
+                      }}>
+                        -{d.rate}%p
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 8, marginBottom: 0 }}>
+                * 청약저축 (5년/10년/15년)은 1개만 선택 가능
               </p>
             </div>
-          </div>
+          </Section>
         )}
 
-        {/* Result Section */}
+        {/* ── 지역 섹션 ── */}
+        <Section title="지역">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <ToggleRow
+              label="지방 소재 주택"
+              sub={isDidimdol ? '(-0.2%p 우대)' : undefined}
+              checked={isLocalHouse}
+              onChange={setIsLocalHouse}
+            />
+            <ToggleRow
+              label="수도권 여부"
+              sub={isDidimdol && isNewlywedFirst ? '(생애최초 LTV 70% 제한)' : undefined}
+              checked={isCapitalArea}
+              onChange={setIsCapitalArea}
+            />
+          </div>
+        </Section>
+
+        {/* ── 결과 패널 ── */}
         <div style={{
           padding: 20,
           borderRadius: 14,
@@ -344,17 +431,39 @@ export default function LoanSimulator() {
             </div>
           )}
 
-          {/* Key Numbers */}
+          {/* 핵심 숫자 3카드 */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-            gap: 12,
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: 10,
             marginBottom: 16,
           }}>
-            <ResultCard label="대출금액" value={fmtWon(result.loanAmount)} sub={`LTV ${result.ltvUsed}%`} />
-            <ResultCard label="적용금리" value={`${result.appliedRate}%`} sub={isDidimdol ? `기본 ${result.baseRate}% - 우대 ${result.discountRate}%` : `고정금리`} />
-            <ResultCard label="월 상환액" value={`${fmt(Math.round(result.monthlyPayment))}만` } highlight />
-            <ResultCard label="총 이자" value={fmtWon(result.totalInterest)} sub={`총 상환 ${fmtWon(result.totalPayment)}`} />
+            <ResultCard
+              label="대출금액"
+              value={fmtWonShort(result.loanAmount)}
+              sub={`LTV ${result.ltvUsed}%`}
+            />
+            <ResultCard
+              label="적용금리"
+              value={`${result.appliedRate}%`}
+              sub={isDidimdol ? `${result.baseRate}% - ${result.discountRate}%p` : '고정금리'}
+            />
+            <ResultCard
+              label="월 상환액"
+              value={`${fmt(Math.round(result.monthlyPayment))}만`}
+              highlight
+            />
+          </div>
+
+          {/* 부가 정보 */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: 10,
+            marginBottom: 16,
+          }}>
+            <MiniStat label="총 이자" value={fmtWonShort(result.totalInterest)} />
+            <MiniStat label="총 상환" value={fmtWonShort(result.totalPayment)} />
           </div>
 
           {/* DSR */}
@@ -374,7 +483,7 @@ export default function LoanSimulator() {
           </div>
         </div>
 
-        {/* Schedule */}
+        {/* ── 상환 스케줄 ── */}
         {result.schedule.length > 0 && (
           <div style={{
             borderRadius: 14,
@@ -424,11 +533,11 @@ export default function LoanSimulator() {
                   <tbody>
                     {result.schedule.map((s) => (
                       <tr key={s.month} style={{ borderTop: '1px solid var(--border)' }}>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--text-muted)' }}>{s.month}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--text-primary)', fontFamily: 'var(--font-mono, monospace)' }}>{fmt(Math.round(s.principal))}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono, monospace)' }}>{fmt(Math.round(s.interest))}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--text-strong)', fontWeight: 600, fontFamily: 'var(--font-mono, monospace)' }}>{fmt(Math.round(s.payment))}</td>
-                        <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--text-muted)', fontFamily: 'var(--font-mono, monospace)' }}>{fmt(Math.round(s.remainingBalance))}</td>
+                        <td style={tdStyle}>{s.month}</td>
+                        <td style={tdMonoStyle}>{fmt(Math.round(s.principal))}</td>
+                        <td style={{ ...tdMonoStyle, color: 'var(--text-secondary)' }}>{fmt(Math.round(s.interest))}</td>
+                        <td style={{ ...tdMonoStyle, color: 'var(--text-strong)', fontWeight: 600 }}>{fmt(Math.round(s.payment))}</td>
+                        <td style={{ ...tdMonoStyle, color: 'var(--text-muted)' }}>{fmt(Math.round(s.remainingBalance))}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -438,7 +547,7 @@ export default function LoanSimulator() {
           </div>
         )}
 
-        {/* Footer note */}
+        {/* Footer */}
         <p style={{ fontSize: 11, color: 'var(--text-dim)', textAlign: 'center', lineHeight: 1.6 }}>
           본 시뮬레이션은 참고용이며 실제 대출 심사 결과와 다를 수 있습니다.
           <br />
@@ -449,63 +558,164 @@ export default function LoanSimulator() {
   );
 }
 
+/* ── Shared styles ── */
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '10px 12px',
+  borderRadius: 10,
+  fontSize: 14,
+  fontFamily: 'var(--font-mono, monospace)',
+  backgroundColor: 'var(--border-light)',
+  color: 'var(--text-primary)',
+  border: '1px solid var(--border)',
+  outline: 'none',
+  boxSizing: 'border-box',
+};
+
+function pillStyle(active: boolean): React.CSSProperties {
+  return {
+    padding: '8px 16px',
+    borderRadius: 10,
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: 'pointer',
+    border: 'none',
+    backgroundColor: active ? 'var(--accent)' : 'var(--border-light)',
+    color: active ? 'white' : 'var(--text-muted)',
+    transition: 'background 0.15s',
+  };
+}
+
+function radioRowStyle(selected: boolean): React.CSSProperties {
+  return {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '8px 12px',
+    borderRadius: 10,
+    border: selected ? '1.5px solid var(--accent)' : '1px solid var(--border)',
+    backgroundColor: selected ? 'var(--accent-bg)' : 'transparent',
+    cursor: 'pointer',
+    transition: 'all 0.15s',
+  };
+}
+
+function checkRowStyle(checked: boolean): React.CSSProperties {
+  return {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '8px 12px',
+    borderRadius: 10,
+    border: checked ? '1.5px solid var(--accent)' : '1px solid var(--border)',
+    backgroundColor: checked ? 'var(--accent-bg)' : 'transparent',
+    cursor: 'pointer',
+    transition: 'all 0.15s',
+  };
+}
+
+const radioStyle: React.CSSProperties = {
+  accentColor: 'var(--accent)',
+  width: 16,
+  height: 16,
+  cursor: 'pointer',
+};
+
+const tdStyle: React.CSSProperties = {
+  padding: '8px 12px',
+  textAlign: 'right',
+  color: 'var(--text-muted)',
+};
+
+const tdMonoStyle: React.CSSProperties = {
+  padding: '8px 12px',
+  textAlign: 'right',
+  color: 'var(--text-primary)',
+  fontFamily: 'var(--font-mono, monospace)',
+};
+
 /* ── Sub-components ── */
 
-function NumberField({ label, value, onChange, step = 100 }: {
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-  step?: number;
-}) {
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div>
-      <label style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>
-        {label}
-      </label>
-      <input
-        type="number"
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value) || 0)}
-        step={step}
-        style={{
-          width: '100%',
-          padding: '10px 12px',
-          borderRadius: 10,
-          fontSize: 14,
-          fontFamily: 'var(--font-mono, monospace)',
-          backgroundColor: 'var(--border-light)',
-          color: 'var(--text-primary)',
-          border: '1px solid var(--border)',
-          outline: 'none',
-          boxSizing: 'border-box',
-        }}
-      />
+    <div style={{
+      padding: 20,
+      borderRadius: 14,
+      backgroundColor: 'var(--bg-card)',
+      border: '1px solid var(--border)',
+      marginBottom: 24,
+    }}>
+      <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-strong)', margin: '0 0 18px' }}>
+        {title}
+      </h2>
+      {children}
     </div>
   );
 }
 
-function ToggleChip({ label, checked, onChange }: {
+function FieldLabel({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  return (
+    <label style={{
+      fontSize: 12,
+      fontWeight: 500,
+      color: 'var(--text-muted)',
+      display: 'block',
+      ...style,
+    }}>
+      {children}
+    </label>
+  );
+}
+
+function ToggleRow({ label, sub, checked, onChange }: {
   label: string;
+  sub?: string;
   checked: boolean;
   onChange: (v: boolean) => void;
 }) {
   return (
-    <button
-      onClick={() => onChange(!checked)}
-      style={{
-        padding: '6px 14px',
-        borderRadius: 20,
-        fontSize: 12,
-        fontWeight: 500,
-        cursor: 'pointer',
-        border: checked ? '1.5px solid var(--accent)' : '1px solid var(--border)',
-        backgroundColor: checked ? 'var(--accent-bg)' : 'transparent',
-        color: checked ? 'var(--accent)' : 'var(--text-muted)',
-        transition: 'all 0.15s',
-      }}
-    >
-      {label}
-    </button>
+    <label style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '10px 14px',
+      borderRadius: 10,
+      border: '1px solid var(--border)',
+      cursor: 'pointer',
+      backgroundColor: checked ? 'var(--accent-bg)' : 'transparent',
+      transition: 'all 0.15s',
+    }}>
+      <span>
+        <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>{label}</span>
+        {sub && <span style={{ fontSize: 11, color: 'var(--text-dim)', marginLeft: 6 }}>{sub}</span>}
+      </span>
+      <div
+        onClick={(e) => { e.preventDefault(); onChange(!checked); }}
+        style={{
+          width: 40,
+          height: 22,
+          borderRadius: 11,
+          backgroundColor: checked ? 'var(--accent)' : 'var(--border)',
+          position: 'relative',
+          transition: 'background 0.2s',
+          cursor: 'pointer',
+          flexShrink: 0,
+        }}
+      >
+        <div style={{
+          width: 18,
+          height: 18,
+          borderRadius: 9,
+          backgroundColor: 'white',
+          position: 'absolute',
+          top: 2,
+          left: checked ? 20 : 2,
+          transition: 'left 0.2s',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+        }} />
+      </div>
+    </label>
   );
 }
 
@@ -517,11 +727,12 @@ function ResultCard({ label, value, sub, highlight }: {
 }) {
   return (
     <div style={{
-      padding: '14px 16px',
+      padding: '14px 12px',
       borderRadius: 12,
       backgroundColor: highlight ? 'var(--accent-bg)' : 'var(--border-light)',
+      textAlign: 'center',
     }}>
-      <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 4px' }}>{label}</p>
+      <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 6px' }}>{label}</p>
       <p style={{
         fontSize: 18,
         fontWeight: 700,
@@ -531,7 +742,23 @@ function ResultCard({ label, value, sub, highlight }: {
       }}>
         {value}
       </p>
-      {sub && <p style={{ fontSize: 11, color: 'var(--text-dim)', margin: '4px 0 0' }}>{sub}</p>}
+      {sub && <p style={{ fontSize: 10, color: 'var(--text-dim)', margin: '4px 0 0' }}>{sub}</p>}
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{
+      padding: '10px 14px',
+      borderRadius: 10,
+      backgroundColor: 'var(--border-light)',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    }}>
+      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{label}</span>
+      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-mono, monospace)' }}>{value}</span>
     </div>
   );
 }
