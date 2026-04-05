@@ -917,12 +917,13 @@ function RepaymentDesc({ type }: { type: string }) {
   if (!info) return null;
   return (
     <div style={{
-      marginTop: 10, padding: '12px 14px', borderRadius: 10,
-      backgroundColor: 'var(--border-light)', fontSize: 12, lineHeight: 1.6,
+      marginTop: 10, padding: '12px 16px', borderRadius: 10,
+      backgroundColor: 'var(--accent-bg)', lineHeight: 1.7,
+      transition: 'opacity 0.2s',
     }}>
-      <p style={{ color: 'var(--text-secondary)', margin: '0 0 6px' }}>{info.desc}</p>
-      <p style={{ color: 'var(--success, #3D6B44)', margin: '0 0 2px' }}>+ {info.pros}</p>
-      <p style={{ color: 'var(--danger, #B93E32)', margin: 0 }}>- {info.cons}</p>
+      <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 6px' }}>{info.desc}</p>
+      <p style={{ fontSize: 12, color: '#22C55E', margin: '0 0 2px' }}>&#x2705; {info.pros}</p>
+      <p style={{ fontSize: 12, color: '#F59E0B', margin: 0 }}>&#x26A0;&#xFE0F; {info.cons}</p>
     </div>
   );
 }
