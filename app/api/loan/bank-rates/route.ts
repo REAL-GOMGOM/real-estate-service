@@ -196,9 +196,7 @@ export async function GET() {
     const result = data?.result;
 
     if (!result || result.err_cd !== '000') {
-      const msg = result?.err_cd === '010'
-        ? '금감원 API 인증키를 확인해주세요.'
-        : '금감원 API 점검 중입니다. 평일에 다시 확인해주세요.';
+      const msg = '금감원 서버에서 데이터를 가져올 수 없습니다. 잠시 후 다시 시도해주세요.';
       return NextResponse.json(
         { error: null, banks: [], message: msg },
         {

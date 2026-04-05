@@ -199,7 +199,7 @@ export default function LoanSimulator() {
           </button>
         </div>
 
-        {activeTab === 'bank' && <BankRateComparison />}
+        {activeTab === 'bank' && <BankRateComparison onSwitchToPolicy={() => setActiveTab('policy')} />}
 
         {activeTab === 'policy' && (<>
         {/* ── 기본 정보 ── */}
