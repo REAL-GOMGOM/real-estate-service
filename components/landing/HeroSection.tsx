@@ -106,7 +106,7 @@ export default function HeroSection() {
               <p style={{ fontSize: '18px', fontWeight: 800, fontFamily: 'Roboto Mono, monospace', color: '#1A1714', marginBottom: '2px' }}>{stat.value}</p>
               <p style={{ fontSize: '10px', fontWeight: 600, color: '#3D6B44', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
                 <TrendingUp size={10} />
-                {stat.change}
+                전월 대비 {stat.change}
               </p>
             </motion.div>
           ))}
