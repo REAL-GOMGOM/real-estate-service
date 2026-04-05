@@ -52,7 +52,7 @@ function toPyeong(area: number): number {
 function getMonths(count: number): string[] {
   const result: string[] = [];
   const now = new Date();
-  for (let i = 1; i <= count; i++) {
+  for (let i = 0; i < count; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     result.push(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`);
   }
