@@ -4,8 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Image from 'next/image';
-import { Menu, X, Sun, Moon, ChevronDown } from 'lucide-react';
-import { useTheme } from '@/components/ThemeProvider';
+import { Menu, X, ChevronDown } from 'lucide-react';
 
 type NavChild = { label: string; href: string; desc?: string };
 type NavItem =
@@ -41,7 +40,6 @@ export default function Header() {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [openAccordion, setOpenAccordion] = useState<string | null>(null);
   const pathname = usePathname();
-  const { theme, toggleTheme } = useTheme();
 
   return (
     <header
@@ -172,20 +170,9 @@ export default function Header() {
             })}
           </nav>
 
-          {/* 우측: 테마 토글 + CTA */}
+          {/* 우측 */}
           <div style={{ alignItems: 'center', gap: '10px' }} className="hidden lg:flex">
-            <button
-              onClick={toggleTheme}
-              style={{
-                width: '36px', height: '36px', borderRadius: '10px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                backgroundColor: 'var(--bg-overlay)', border: '1px solid var(--border)',
-                cursor: 'pointer', color: 'var(--text-muted)', transition: 'all 0.15s',
-              }}
-              title={theme === 'light' ? '다크 모드' : '라이트 모드'}
-            >
-              {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
-            </button>
+            {/* 인증 기능 추가 시 복원
             <button style={{
               padding: '8px 18px', borderRadius: '10px', fontSize: '14px', fontWeight: 500,
               color: 'var(--text-muted)', border: '1px solid var(--border)',
@@ -199,21 +186,11 @@ export default function Header() {
             }}>
               시작하기
             </button>
+            */}
           </div>
 
-          {/* 모바일: 테마 토글 + 메뉴 */}
+          {/* 모바일: 메뉴 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} className="lg:hidden">
-            <button
-              onClick={toggleTheme}
-              style={{
-                width: '36px', height: '36px', borderRadius: '10px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                backgroundColor: 'var(--bg-overlay)', border: '1px solid var(--border)',
-                cursor: 'pointer', color: 'var(--text-muted)',
-              }}
-            >
-              {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
-            </button>
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               style={{ padding: '8px', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}

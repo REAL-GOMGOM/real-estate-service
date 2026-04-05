@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import ThemeProvider from '@/components/ThemeProvider';
 
 export const metadata: Metadata = {
   title: '내집(My.ZIP) | 실거래가·투자분석·건축정보 — 부동산 통합 플랫폼',
@@ -39,19 +38,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ko" suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{
-          __html: `
-            (function() {
-              var t = localStorage.getItem('theme');
-              if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-            })();
-          `,
-        }} />
-      </head>
+    <html lang="ko">
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        {children}
       </body>
     </html>
   );
