@@ -8,7 +8,9 @@ import {
   STACKABLE_DISCOUNTS,
   LAST_UPDATED,
 } from '@/lib/loan-products';
-import { Calculator, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Info } from 'lucide-react';
+import { Calculator, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Info, Landmark, Building2 } from 'lucide-react';
+
+type LoanTab = 'policy' | 'bank';
 
 const SAVINGS_IDS = ['savings_5y', 'savings_10y', 'savings_15y'];
 
@@ -55,6 +57,8 @@ function useDebounce<T>(value: T, ms: number): T {
 /* ── Main Component ── */
 
 export default function LoanSimulator() {
+  const [activeTab, setActiveTab] = useState<LoanTab>('policy');
+
   // Inputs
   const [selectedOption, setSelectedOption] = useState('didimdol');
   const [housePrice, setHousePrice] = useState(50000);
@@ -157,6 +161,81 @@ export default function LoanSimulator() {
           </p>
         </div>
 
+        {/* ── 탭 ── */}
+        <div style={{
+          display: 'flex', gap: 4, marginBottom: 24, padding: 4,
+          borderRadius: 12, backgroundColor: 'var(--bg-card)',
+          border: '1px solid var(--border)', width: 'fit-content',
+        }}>
+          <button
+            onClick={() => setActiveTab('policy')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+              border: 'none', cursor: 'pointer',
+              backgroundColor: activeTab === 'policy' ? 'var(--accent)' : 'transparent',
+              color: activeTab === 'policy' ? '#fff' : 'var(--text-muted)',
+              transition: 'all 0.15s',
+            }}
+          >
+            <Landmark size={15} />
+            정책대출
+          </button>
+          <button
+            onClick={() => setActiveTab('bank')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+              border: 'none', cursor: 'pointer',
+              backgroundColor: activeTab === 'bank' ? 'var(--accent)' : 'transparent',
+              color: activeTab === 'bank' ? '#fff' : 'var(--text-muted)',
+              transition: 'all 0.15s',
+              position: 'relative',
+            }}
+          >
+            <Building2 size={15} />
+            시중은행
+            <span style={{
+              fontSize: 9, fontWeight: 700, lineHeight: 1,
+              padding: '2px 5px', borderRadius: 4,
+              backgroundColor: activeTab === 'bank' ? 'rgba(255,255,255,0.25)' : 'var(--border-light)',
+              color: activeTab === 'bank' ? '#fff' : 'var(--text-dim)',
+            }}>
+              준비중
+            </span>
+          </button>
+        </div>
+
+        {activeTab === 'bank' && (
+          <div style={{
+            padding: 32, borderRadius: 16, textAlign: 'center',
+            backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
+          }}>
+            <Building2 size={40} style={{ color: 'var(--text-dim)', marginBottom: 16 }} />
+            <h2 style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 8px' }}>
+              시중은행 주담대 금리 비교
+            </h2>
+            <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '0 0 16px', lineHeight: 1.6 }}>
+              금감원 API 연동 준비 중입니다.
+              <br />
+              곧 은행별 주담대 금리 비교 기능이 추가됩니다.
+            </p>
+            <div style={{
+              display: 'inline-flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center',
+            }}>
+              {['KB국민', '신한', '하나', '우리', '농협'].map((name) => (
+                <span key={name} style={{
+                  padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 500,
+                  backgroundColor: 'var(--border-light)', color: 'var(--text-dim)',
+                }}>
+                  {name}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'policy' && (<>
         {/* ── 기본 정보 ── */}
         <Section title="기본 정보">
           {/* 매매가 */}
@@ -532,6 +611,7 @@ export default function LoanSimulator() {
           <br />
           금리 기준일: {LAST_UPDATED} | 한국주택금융공사 공시
         </p>
+        </>)}
       </div>
     </main>
   );
