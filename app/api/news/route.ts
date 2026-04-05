@@ -6,6 +6,7 @@ export interface NewsItem {
   pubDate: string;
   source: string;
   category: 'realestate' | 'general';
+  thumbnail: string | null;
 }
 
 function stripHtml(str: string): string {
@@ -22,6 +23,23 @@ function formatDate(pubDate: string): string {
   return `${Math.floor(diff / 1440)}일 전`;
 }
 
+async function extractThumbnail(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      signal: AbortSignal.timeout(3000),
+    });
+    const html = await res.text();
+
+    const match = html.match(/<meta\s+property=["']og:image["']\s+content=["']([^"']+)["']/i)
+      || html.match(/<meta\s+content=["']([^"']+)["']\s+property=["']og:image["']/i);
+
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
+
 async function searchNews(query: string, display: number, category: NewsItem['category'], headers: Record<string, string>): Promise<(NewsItem & { pubDateTs: number; pubDateFormatted: string })[]> {
   const url = `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(query)}&display=${display}&sort=date`;
   const res  = await fetch(url, { headers, next: { revalidate: 1800 } });
@@ -33,6 +51,7 @@ async function searchNews(query: string, display: number, category: NewsItem['ca
     pubDate:          item.pubDate,
     source:           new URL(item.originallink || item.link).hostname.replace('www.', '').split('.')[0],
     category,
+    thumbnail:        null,
     pubDateTs:        new Date(item.pubDate).getTime(),
     pubDateFormatted: formatDate(item.pubDate),
   }));
@@ -58,9 +77,23 @@ export async function GET() {
       searchNews('경제 이슈 사회', 6, 'general', headers),
     ]);
 
-    const news = [...reItems, ...genItems]
+    const allNews = [...reItems, ...genItems]
       .sort((a, b) => b.pubDateTs - a.pubDateTs)
       .slice(0, 30);
+
+    // 상위 12개만 썸네일 추출 (성능)
+    const top12 = allNews.slice(0, 12);
+    const rest = allNews.slice(12);
+
+    const thumbnails = await Promise.allSettled(
+      top12.map((item) => extractThumbnail(item.link))
+    );
+
+    top12.forEach((item, i) => {
+      item.thumbnail = thumbnails[i].status === 'fulfilled' ? thumbnails[i].value : null;
+    });
+
+    const news = [...top12, ...rest];
 
     return NextResponse.json({ news });
   } catch (e) {
