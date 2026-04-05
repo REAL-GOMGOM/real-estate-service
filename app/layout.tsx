@@ -39,6 +39,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ko">
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: `document.documentElement.removeAttribute('data-theme');localStorage.removeItem('theme');` }} />
+      </head>
       <body>
         {children}
       </body>
