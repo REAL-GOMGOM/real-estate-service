@@ -50,7 +50,7 @@ export default function NewsPage() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
             <div>
               <h1 style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '4px' }}>뉴스</h1>
-              <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '4px' }}>관리자가 선별하여 엄선한 부동산 뉴스를 제공해 드립니다.</p>
+              <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '4px' }}>내집(My.ZIP)이 선별하여 엄선한 부동산 뉴스를 제공해 드립니다.</p>
               {lastFetched && (
                 <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>마지막 업데이트 {lastFetched}</p>
               )}
