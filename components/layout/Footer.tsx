@@ -16,7 +16,7 @@ const FOOTER_LINKS = {
 
 export default function Footer() {
   return (
-    <footer style={{ backgroundColor: 'var(--text-strong)', color: 'rgba(255,255,255,0.7)', padding: '48px 24px' }}>
+    <footer style={{ backgroundColor: '#F5F0EB', color: '#6B5B4F', padding: '48px 24px', borderTop: '1px solid #E8DDD4' }}>
       <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'clamp(20px, 4vw, 48px)' }}>
 
@@ -24,13 +24,13 @@ export default function Footer() {
           <div style={{ gridColumn: 'span 2' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
               <img src="/logo.png" alt="내집" width={40} height={40} style={{ objectFit: 'contain' }} />
-              <span style={{ fontWeight: 800, fontSize: '18px', color: '#FFFFFF' }}>내집 <span style={{ fontWeight: 400, fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>My.ZIP</span></span>
+              <span style={{ fontWeight: 800, fontSize: '18px', color: '#4A3F36' }}>내집 <span style={{ fontWeight: 400, fontSize: '12px', color: '#9B8E82' }}>My.ZIP</span></span>
             </div>
-            <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)', lineHeight: '1.8' }}>
+            <p style={{ fontSize: '14px', color: '#6B5B4F', lineHeight: '1.8' }}>
               모든 부동산 고민의 답을 한곳에 압축하여,<br />
               누구나 쉽게 이해하도록 전해드립니다.
             </p>
-            <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', marginTop: '16px' }}>
+            <p style={{ fontSize: '12px', color: '#9B8E82', marginTop: '16px' }}>
               ※ 내집의 데이터는 참고용이에요. 투자 결정 전에 꼭 전문가에 상담하세요.
             </p>
           </div>
@@ -38,11 +38,11 @@ export default function Footer() {
           {/* 링크 그룹 */}
           {Object.entries(FOOTER_LINKS).map(([title, links]) => (
             <div key={title}>
-              <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#FFFFFF', marginBottom: '20px' }}>{title}</h4>
+              <h4 style={{ fontSize: '14px', fontWeight: 700, color: '#4A3F36', marginBottom: '20px' }}>{title}</h4>
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 {links.map((link) => (
                   <li key={link.href}>
-                    <Link href={link.href} style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)', textDecoration: 'none' }}>
+                    <Link href={link.href} style={{ fontSize: '14px', color: '#6B5B4F', textDecoration: 'none' }}>
                       {link.label}
                     </Link>
                   </li>
@@ -52,9 +52,9 @@ export default function Footer() {
           ))}
         </div>
 
-        <div style={{ marginTop: '48px', paddingTop: '32px', borderTop: '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-          <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)' }}>© 2026 내집(My.ZIP). All rights reserved.</p>
-          <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.4)' }}>데이터: 국토교통부 · 한국부동산원 · NEIS</p>
+        <div style={{ marginTop: '48px', paddingTop: '32px', borderTop: '1px solid #E8DDD4', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+          <p style={{ fontSize: '13px', color: '#9B8E82' }}>© 2026 내집(My.ZIP). All rights reserved.</p>
+          <p style={{ fontSize: '13px', color: '#9B8E82' }}>데이터: 국토교통부 · 한국부동산원 · NEIS</p>
         </div>
       </div>
     </footer>
