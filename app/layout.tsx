@@ -27,6 +27,9 @@ export const metadata: Metadata = {
     apple: { url: '/apple-touch-icon.png', sizes: '180x180' },
   },
   manifest: '/manifest.json',
+  verification: {
+    other: { 'naver-site-verification': '794ff6d4d4f358c239962451d25e8f040d10603f' },
+  },
   other: { 'theme-color': '#C4654A' },
 };
 
