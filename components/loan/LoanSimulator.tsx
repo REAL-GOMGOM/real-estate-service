@@ -954,7 +954,7 @@ function RepaymentDesc({ type }: { type: string }) {
     }}>
       <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 6px' }}>{info.desc}</p>
       <p style={{ fontSize: 12, color: '#22C55E', margin: '0 0 2px' }}>&#x2705; {info.pros}</p>
-      <p style={{ fontSize: 12, color: '#F59E0B', margin: 0 }}>&#x26A0;&#xFE0F; {info.cons}</p>
+      <p style={{ fontSize: 12, color: '#EF4444', margin: 0 }}>&#x26A0;&#xFE0F; {info.cons}</p>
     </div>
   );
 }
