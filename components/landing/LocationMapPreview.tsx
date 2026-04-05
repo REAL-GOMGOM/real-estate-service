@@ -27,8 +27,7 @@ export default function LocationMapPreview() {
   const [updateMonth, setUpdateMonth] = useState('');
   useEffect(() => {
     const now = new Date();
-    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    setUpdateMonth(`${prev.getFullYear()}년 ${prev.getMonth() + 1}월`);
+    setUpdateMonth(`${now.getFullYear()}년 ${now.getMonth() + 1}월`);
   }, []);
 
   const topLocations = useMemo(() => {

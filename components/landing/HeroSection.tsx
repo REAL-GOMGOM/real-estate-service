@@ -15,8 +15,7 @@ export default function HeroSection() {
   const [dataMonth, setDataMonth] = useState('');
   useEffect(() => {
     const now = new Date();
-    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    setDataMonth(`${prev.getFullYear()}년 ${prev.getMonth() + 1}월`);
+    setDataMonth(`${now.getFullYear()}년 ${now.getMonth() + 1}월`);
   }, []);
 
   return (
