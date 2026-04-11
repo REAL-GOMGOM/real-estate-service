@@ -176,10 +176,13 @@ export async function GET() {
   }
 
   try {
-    const url = `${FSS_BASE}?auth=${FSS_API_KEY}&topFinGrpNo=050000&pageNo=1`;
+    const url = `${FSS_BASE}?auth=${FSS_API_KEY}&topFinGrpNo=020000&pageNo=1`;
     const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+      },
       signal: AbortSignal.timeout(10000),
+      next: { revalidate: 3600 },
     });
 
     if (!res.ok) {
