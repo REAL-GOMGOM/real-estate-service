@@ -7,6 +7,7 @@ const FSS_BASE = 'https://finlife.fss.or.kr/finlifeapi/mortgageLoanProductsSearc
 
 interface FssBaseItem {
   fin_co_no: string;
+  fin_prdt_cd: string;
   kor_co_nm: string;
   fin_prdt_nm: string;
   join_way: string;
@@ -60,16 +61,16 @@ interface Summary {
 /* ── Helpers ── */
 
 function lendRateTypeKey(code: string): 'fixed' | 'variable' | 'mixed' {
-  if (code === 'F') return 'fixed';
-  if (code === 'M') return 'mixed';
-  return 'variable'; // 'S' = 변동
+  if (code === 'F') return 'fixed'; // F = 고정
+  if (code === 'M') return 'mixed'; // M = 혼합
+  return 'variable'; // C = 변동
 }
 
 function buildResponse(baseList: FssBaseItem[], optionList: FssOptionItem[]) {
-  // base 정보를 fin_co_no + fin_prdt_nm 키로 매핑
+  // base 정보를 fin_co_no + fin_prdt_cd 키로 매핑 (실제 매칭 키)
   const baseMap = new Map<string, FssBaseItem>();
   for (const b of baseList) {
-    baseMap.set(`${b.fin_co_no}::${b.fin_prdt_nm}`, b);
+    baseMap.set(`${b.fin_co_no}::${b.fin_prdt_cd}`, b);
   }
 
   // 은행별 > 상품별 > 금리타입별 집계
@@ -82,11 +83,7 @@ function buildResponse(baseList: FssBaseItem[], optionList: FssOptionItem[]) {
     if (opt.rpay_type !== 'D') continue;
 
     const baseKey = `${opt.fin_co_no}::${opt.fin_prdt_cd}`;
-    // fin_prdt_cd로 못 찾으면 fin_co_no의 첫 번째 base 사용
-    let base: FssBaseItem | undefined;
-    for (const [k, v] of baseMap) {
-      if (k.startsWith(opt.fin_co_no)) { base = v; break; }
-    }
+    const base = baseMap.get(baseKey);
     if (!base) continue;
 
     if (!bankMap.has(base.kor_co_nm)) {
