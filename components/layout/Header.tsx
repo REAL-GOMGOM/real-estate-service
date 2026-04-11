@@ -6,28 +6,38 @@ import { usePathname } from 'next/navigation';
 import Image from 'next/image';
 import { Menu, X, ChevronDown } from 'lucide-react';
 
-type NavChild = { label: string; href: string; desc?: string };
+type NavChild = { label: string; href: string; desc?: string; emoji?: string };
 type NavItem =
   | { label: string; href: string; children?: never }
   | { label: string; href?: never; children: NavChild[] };
 
 const NAV_ITEMS: NavItem[] = [
-  { label: '실거래', href: '/transactions' },
-  { label: '랭킹', href: '/ranking' },
   {
-    label: '분석',
+    label: '집값 보기',
     children: [
-      { label: '아파트 차트', href: '/chart', desc: '실거래가 시세 차트 분석' },
-      { label: '실질가치', href: '/dollar', desc: '달러·BTC·금 기준 비교' },
-      { label: '변동률 지도', href: '/price-map', desc: '지역별 가격 변동률' },
-      { label: '갭분석', href: '/gap-analysis', desc: '매매가-전세가 갭 비교' },
-      { label: '갭투자 가이드', href: '/gap-guide', desc: '갭투자 전략 시뮬레이션' },
-      { label: '대출 시뮬레이터', href: '/loan', desc: '정책대출 금리 계산' },
+      { emoji: '\uD83D\uDCB0', label: '실거래가', href: '/transactions', desc: '최근 거래된 가격' },
+      { emoji: '\uD83D\uDCCA', label: '시세 차트', href: '/chart', desc: '단지별 가격 추이' },
+      { emoji: '\uD83D\uDDFA\uFE0F', label: '부동산 지도', href: '/location-map', desc: '지역별 입지 점수' },
+      { emoji: '\uD83C\uDFC6', label: '주간 랭킹', href: '/ranking', desc: '최고가·거래량' },
     ],
   },
-  { label: '부동산지도', href: '/location-map' },
   { label: '청약', href: '/subscription' },
-  { label: '경제달력', href: '/calendar' },
+  {
+    label: '내집마련 도구',
+    children: [
+      { emoji: '\uD83D\uDCB3', label: '대출 계산기', href: '/loan', desc: '얼마까지 빌릴 수 있나' },
+      { emoji: '\uD83C\uDFE0', label: '갭투자 가이드', href: '/gap-guide', desc: '매매-전세 전략' },
+      { emoji: '\uD83D\uDCB5', label: '실질 가치', href: '/dollar', desc: '달러·금 환산 비교' },
+    ],
+  },
+  {
+    label: '시장 동향',
+    children: [
+      { emoji: '\uD83D\uDCC8', label: '가격 변동률', href: '/price-map', desc: '지역별 상승·하락' },
+      { emoji: '\uD83D\uDD04', label: '갭 분석', href: '/gap-analysis', desc: '매매가-전세가 차이' },
+      { emoji: '\uD83D\uDCC5', label: '경제달력', href: '/calendar', desc: '금리·지표 일정' },
+    ],
+  },
   { label: '뉴스', href: '/news' },
 ];
 
@@ -120,25 +130,29 @@ export default function Header() {
                               key={child.href}
                               href={child.href}
                               style={{
-                                display: 'block', padding: '10px 14px', borderRadius: '8px',
+                                display: 'flex', alignItems: 'flex-start', gap: '10px',
+                                padding: '10px 14px', borderRadius: '8px',
                                 textDecoration: 'none',
                                 transition: 'background-color 0.15s',
                               }}
                               onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-overlay)'; }}
                               onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
                             >
-                              <span style={{
-                                fontSize: '14px', fontWeight: 600,
-                                color: childActive ? 'var(--accent)' : 'var(--text-primary)',
-                                display: 'block',
-                              }}>
-                                {child.label}
-                              </span>
-                              {child.desc && (
-                                <span style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '2px', display: 'block' }}>
-                                  {child.desc}
+                              {child.emoji && <span style={{ fontSize: '18px', lineHeight: '20px', flexShrink: 0 }}>{child.emoji}</span>}
+                              <span style={{ flex: 1 }}>
+                                <span style={{
+                                  fontSize: '15px', fontWeight: 600,
+                                  color: childActive ? 'var(--accent)' : 'var(--text-primary)',
+                                  display: 'block',
+                                }}>
+                                  {child.label}
                                 </span>
-                              )}
+                                {child.desc && (
+                                  <span style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '2px', display: 'block' }}>
+                                    {child.desc}
+                                  </span>
+                                )}
+                              </span>
                             </Link>
                           );
                         })}
@@ -238,7 +252,8 @@ export default function Header() {
                             key={child.href}
                             href={child.href}
                             style={{
-                              display: 'block', padding: '10px 16px', borderRadius: '10px',
+                              display: 'flex', alignItems: 'flex-start', gap: '10px',
+                              padding: '10px 16px', borderRadius: '10px',
                               fontSize: '14px', fontWeight: childActive ? 600 : 500,
                               color: childActive ? 'var(--accent)' : 'var(--text-secondary)',
                               textDecoration: 'none',
@@ -248,12 +263,15 @@ export default function Header() {
                             }}
                             onClick={() => setIsMenuOpen(false)}
                           >
-                            {child.label}
-                            {child.desc && (
-                              <span style={{ display: 'block', fontSize: '11px', color: 'var(--text-dim)', marginTop: '2px' }}>
-                                {child.desc}
-                              </span>
-                            )}
+                            {child.emoji && <span style={{ fontSize: '16px', lineHeight: '20px', flexShrink: 0 }}>{child.emoji}</span>}
+                            <span style={{ flex: 1 }}>
+                              {child.label}
+                              {child.desc && (
+                                <span style={{ display: 'block', fontSize: '11px', color: 'var(--text-dim)', marginTop: '2px' }}>
+                                  {child.desc}
+                                </span>
+                              )}
+                            </span>
                           </Link>
                         );
                       })}
