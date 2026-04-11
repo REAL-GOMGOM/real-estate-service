@@ -31,7 +31,7 @@ export default function Footer() {
               누구나 쉽게 이해하도록 전해드립니다.
             </p>
             <p style={{ fontSize: '12px', color: '#9B8E82', marginTop: '16px' }}>
-              ※ 내집의 데이터는 참고용이에요. 투자 결정 전에 꼭 전문가에 상담하세요.
+              ※ 내집(My.ZIP)의 데이터는 참고용 입니다. 투자 및 매수 결정전 꼭 개인의 자금 사정과 전문가에게 조언을 구하시길 바랍니다.
             </p>
           </div>
 
