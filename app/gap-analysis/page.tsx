@@ -280,8 +280,7 @@ function GapContent() {
 
             {/* 면책 고지 */}
             <p style={{ fontSize: '12px', color: 'var(--text-dim)', textAlign: 'center', lineHeight: '1.6' }}>
-              본 분석은 과거 실거래가 데이터에 기반한 참고 자료이며, 투자 판단의 근거로 사용할 수 없습니다.<br />
-              실제 투자 결정은 전문가에 상담하시기 바랍니다.
+              내집(My.ZIP)의 데이터는 참고용 입니다. 투자 및 매수 결정전 꼭 개인의 자금 사정과 전문가에게 조언을 구하시길 바랍니다.
             </p>
           </div>
         )}
