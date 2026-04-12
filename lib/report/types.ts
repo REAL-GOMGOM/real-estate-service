@@ -53,4 +53,10 @@ export type Report = {
   byRegion: RegionStats[];
   topYearHighs: YearHigh[];
   disclaimer: string;
+  commentary?: ReportCommentary;
+};
+
+export type ReportCommentary = {
+  pullquote: string;
+  paragraphs: string[];
 };

@@ -4,6 +4,7 @@ import { getSudogwonDistricts } from '@/lib/report/districts';
 import { fetchSudogwonDeals } from '@/lib/report/fetch-deals';
 import { detectYearHighs } from '@/lib/report/detect-highs';
 import { aggregate } from '@/lib/report/aggregate';
+import { generateCommentary } from '@/lib/report/generate-commentary';
 import type { DateRange } from '@/lib/report/types';
 
 export const maxDuration = 60;
@@ -90,6 +91,12 @@ export async function GET(req: NextRequest) {
     // 집계
     const report = aggregate(allDeals, range, yearHighs);
 
+    // AI 코멘터리 생성
+    const commentary = await generateCommentary(report);
+    if (commentary) {
+      report.commentary = commentary;
+    }
+
     // Redis 저장 (to 날짜 기준 키)
     const dateKey = `report:${range.to.replace(/-/g, '')}`;
     await Promise.all([
@@ -109,6 +116,7 @@ export async function GET(req: NextRequest) {
       totalDealsFetched: allDeals.length,
       totalTargetDeals: report.summary.totalDeals,
       totalYearHighs: report.summary.totalYearHighs,
+      hasCommentary: !!report.commentary,
     });
   } catch (error) {
     console.error('[generate-report] 에러:', error);

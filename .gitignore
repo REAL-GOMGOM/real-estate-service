@@ -46,3 +46,4 @@ data/*.db-shm
 data/*.db-wal
 data/raw/
 data/processed/
+.env*.local
