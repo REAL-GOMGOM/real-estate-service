@@ -1,6 +1,7 @@
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import HeroSection from '@/components/landing/HeroSection';
+import ReportBanner from '@/components/landing/ReportBanner';
 import ServiceCards from '@/components/landing/ServiceCards';
 import LocationMapPreview from '@/components/landing/LocationMapPreview';
 import MarketPreview from '@/components/landing/MarketPreview';
@@ -18,6 +19,7 @@ export default async function HomePage() {
     <main>
       <Header />
       <HeroSection />
+      <ReportBanner />
       <ServiceCards />
       <TransactionSearch />
       <LocationMapPreview />
