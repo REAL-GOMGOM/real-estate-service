@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Image from 'next/image';
@@ -8,8 +8,8 @@ import { Menu, X, ChevronDown } from 'lucide-react';
 
 type NavChild = { label: string; href: string; desc?: string; emoji?: string };
 type NavItem =
-  | { label: string; href: string; children?: never }
-  | { label: string; href?: never; children: NavChild[] };
+  | { label: string; href: string; children?: never; badge?: string; badgeUntil?: string }
+  | { label: string; href?: never; children: NavChild[]; badge?: never; badgeUntil?: never };
 
 const NAV_ITEMS: NavItem[] = [
   {
@@ -38,6 +38,7 @@ const NAV_ITEMS: NavItem[] = [
       { emoji: '\uD83D\uDCC5', label: '경제달력', href: '/calendar', desc: '금리·지표 일정' },
     ],
   },
+  { label: '리포트', href: '/report', badge: 'NEW', badgeUntil: '2026-05-13' },
   { label: '뉴스', href: '/news' },
 ];
 
@@ -49,7 +50,10 @@ export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [openAccordion, setOpenAccordion] = useState<string | null>(null);
+  const [now, setNow] = useState<Date | null>(null);
   const pathname = usePathname();
+
+  useEffect(() => { setNow(new Date()); }, []);
 
   return (
     <header
@@ -164,6 +168,7 @@ export default function Header() {
               }
 
               const active = pathname === item.href || pathname.startsWith(item.href + '/');
+              const showBadge = item.badge && item.badgeUntil && now && now < new Date(item.badgeUntil);
               return (
                 <Link
                   key={item.href}
@@ -176,9 +181,24 @@ export default function Header() {
                     borderBottomColor: active ? 'var(--accent)' : 'transparent',
                     paddingBottom: '2px',
                     transition: 'color 0.15s',
+                    display: 'flex', alignItems: 'center', gap: '4px',
                   }}
                 >
                   {item.label}
+                  {showBadge && (
+                    <span style={{
+                      fontSize: '10px',
+                      fontWeight: 600,
+                      color: 'white',
+                      backgroundColor: 'var(--accent)',
+                      padding: '1px 5px',
+                      borderRadius: '6px',
+                      letterSpacing: '0.05em',
+                      lineHeight: '16px',
+                    }}>
+                      {item.badge}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -282,12 +302,14 @@ export default function Header() {
             }
 
             const active = pathname === item.href || pathname.startsWith(item.href + '/');
+            const showBadge = item.badge && item.badgeUntil && now && now < new Date(item.badgeUntil);
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 style={{
-                  display: 'block', padding: '12px 16px', borderRadius: '10px',
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  padding: '12px 16px', borderRadius: '10px',
                   fontSize: '14px', fontWeight: active ? 600 : 500,
                   color: active ? 'var(--accent)' : 'var(--text-secondary)',
                   textDecoration: 'none',
@@ -298,6 +320,20 @@ export default function Header() {
                 onClick={() => setIsMenuOpen(false)}
               >
                 {item.label}
+                {showBadge && (
+                  <span style={{
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    color: 'white',
+                    backgroundColor: 'var(--accent)',
+                    padding: '1px 5px',
+                    borderRadius: '6px',
+                    letterSpacing: '0.05em',
+                    lineHeight: '16px',
+                  }}>
+                    {item.badge}
+                  </span>
+                )}
               </Link>
             );
           })}

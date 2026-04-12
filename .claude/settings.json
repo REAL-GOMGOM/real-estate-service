@@ -57,7 +57,9 @@
       "Bash(curl -s http://localhost:3788)",
       "Bash(break)",
       "Bash(curl -s -H \"Authorization: Bearer $\\(grep CRON_SECRET /Users/bangjoohan/real-estate-service/.env.local)",
-      "Bash(curl -s http://localhost:3000/report)"
+      "Bash(curl -s http://localhost:3000/report)",
+      "Bash(curl -s http://localhost:3000/_next/static/chunks/app_globals_0jn8.0u.css)",
+      "Bash(curl -s http://localhost:3000)"
     ]
   }
 }
