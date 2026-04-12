@@ -7,6 +7,7 @@ import ReportHero from './components/ReportHero';
 import PullQuote from './components/PullQuote';
 import CardDeck from './components/CardDeck';
 import CommentaryBody from './components/CommentaryBody';
+import NotableDeals from './components/NotableDeals';
 import Details from './components/Details';
 import ReportDisclaimer from './components/ReportDisclaimer';
 import ReportSkeleton from './components/ReportSkeleton';
@@ -57,6 +58,13 @@ async function ReportContent() {
 
       {report.commentary && (
         <CommentaryBody paragraphs={report.commentary.paragraphs} />
+      )}
+
+      {report.notableDeals && report.notableDeals.length > 0 && (
+        <NotableDeals
+          deals={report.notableDeals}
+          threshold={report.notableThreshold}
+        />
       )}
 
       <Details
