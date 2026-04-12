@@ -83,15 +83,15 @@
   --chart-tooltip-bg: #FFFFFF;
   --chart-tooltip-border: #E8E3DD;
 
-  /* ── Typography Scale ── */
-  --font-display: clamp(36px, 6vw, 56px);
-  --font-h1: clamp(28px, 4.5vw, 40px);
-  --font-h2: clamp(22px, 3.5vw, 30px);
-  --font-h3: clamp(18px, 2.5vw, 22px);
-  --font-body-lg: 18px;
-  --font-body: 16px;
-  --font-sm: 14px;
-  --font-xs: 12px;
+  /* ── Typography Scale (사이트 전체 톤에 맞춤) ── */
+  --font-display: clamp(28px, 4.5vw, 40px);
+  --font-h1: clamp(22px, 3.5vw, 30px);
+  --font-h2: clamp(18px, 2.8vw, 24px);
+  --font-h3: 16px;
+  --font-body-lg: 16px;
+  --font-body: 15px;
+  --font-sm: 13px;
+  --font-xs: 11px;
 
   --line-tight: 1.2;
   --line-snug: 1.4;

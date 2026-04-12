@@ -92,6 +92,35 @@ export default function HeroSection() {
           </Link>
         </motion.div>
 
+        {/* 리포트 진입 배지 */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+          style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}
+        >
+          <Link
+            href="/report"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 16px',
+              fontSize: '13px',
+              color: '#FFFFFF',
+              textDecoration: 'none',
+              border: '1px solid rgba(255,255,255,0.3)',
+              borderRadius: '999px',
+              transition: 'background-color 0.2s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+          >
+            📊 오늘의 수도권 실거래 리포트
+            <ArrowRight size={14} />
+          </Link>
+        </motion.div>
+
         {/* 통계 카드 — 가로 3열 고정, 흰색 배경 */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', maxWidth: '480px', margin: '0 auto 20px' }}>
           {FLOATING_STATS.map((stat, index) => (
