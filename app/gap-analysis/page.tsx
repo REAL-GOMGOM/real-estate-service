@@ -280,7 +280,7 @@ function GapContent() {
 
             {/* 면책 고지 */}
             <p style={{ fontSize: '12px', color: 'var(--text-dim)', textAlign: 'center', lineHeight: '1.6' }}>
-              내집(My.ZIP)의 데이터는 참고용 입니다. 투자 및 매수 결정전 꼭 개인의 자금 사정과 전문가에게 조언을 구하시길 바랍니다.
+              ※ 내집(My.ZIP)의 데이터는 참고용이며, 투자·매수 결정은 본인의 재무 상황을 고려하고 전문가와 상담한 후 신중히 판단하시기 바랍니다.
             </p>
           </div>
         )}
