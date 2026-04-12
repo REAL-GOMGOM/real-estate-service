@@ -2,6 +2,7 @@ interface ReportHeroProps {
   title: string;
   subtitle: string;
   generatedAt: string;
+  dateRange: { from: string; to: string };
 }
 
 function formatKST(iso: string): string {
@@ -15,38 +16,49 @@ function formatKST(iso: string): string {
   return `${y}년 ${m}월 ${day}일 ${h}:${min} 업데이트`;
 }
 
-export default function ReportHero({ title, subtitle, generatedAt }: ReportHeroProps) {
+function formatMD(dateStr: string): string {
+  const [, m, d] = dateStr.split('-');
+  return `${parseInt(m)}/${parseInt(d)}`;
+}
+
+export default function ReportHero({ title, subtitle, generatedAt, dateRange }: ReportHeroProps) {
   return (
     <section style={{
-      backgroundColor: 'var(--bg-secondary)',
-      padding: 'clamp(48px, 10vw, 96px) 24px',
+      maxWidth: 'var(--container-narrow)',
+      margin: '0 auto',
+      padding: 'var(--space-9) var(--page-padding) var(--space-7)',
       textAlign: 'center',
     }}>
-      <div style={{ maxWidth: '960px', margin: '0 auto' }}>
-        <h1 style={{
-          fontSize: 'clamp(36px, 6vw, 60px)',
-          fontWeight: 800,
-          color: 'var(--text-primary)',
-          lineHeight: 1.2,
-          marginBottom: '16px',
-          letterSpacing: '-0.02em',
-        }}>
-          {title}
-        </h1>
-        <p style={{
-          fontSize: 'clamp(15px, 2vw, 18px)',
-          color: 'var(--text-muted)',
-          marginBottom: '12px',
-        }}>
-          {subtitle}
-        </p>
-        <p style={{
-          fontSize: '13px',
-          color: 'var(--text-dim)',
-        }}>
-          {formatKST(generatedAt)}
-        </p>
-      </div>
+      {/* Meta line */}
+      <p style={{
+        fontSize: 'var(--font-sm)',
+        color: 'var(--text-muted)',
+        marginBottom: 'var(--space-4)',
+        letterSpacing: '0.02em',
+      }}>
+        {formatMD(dateRange.from)} – {formatMD(dateRange.to)} · {formatKST(generatedAt)}
+      </p>
+
+      {/* Title */}
+      <h1 style={{
+        fontSize: 'var(--font-display)',
+        fontWeight: 800,
+        color: 'var(--text-primary)',
+        lineHeight: 'var(--line-tight)',
+        marginBottom: 'var(--space-4)',
+        letterSpacing: '-0.02em',
+      }}>
+        {title}
+      </h1>
+
+      {/* Subtitle */}
+      <p style={{
+        fontSize: 'var(--font-body)',
+        color: 'var(--text-muted)',
+        lineHeight: 'var(--line-normal)',
+      }}>
+        {subtitle}
+      </p>
     </section>
   );
 }

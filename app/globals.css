@@ -82,6 +82,39 @@
   --chart-grid: rgba(0,0,0,0.06);
   --chart-tooltip-bg: #FFFFFF;
   --chart-tooltip-border: #E8E3DD;
+
+  /* ── Typography Scale ── */
+  --font-display: clamp(36px, 6vw, 56px);
+  --font-h1: clamp(28px, 4.5vw, 40px);
+  --font-h2: clamp(22px, 3.5vw, 30px);
+  --font-h3: clamp(18px, 2.5vw, 22px);
+  --font-body-lg: 18px;
+  --font-body: 16px;
+  --font-sm: 14px;
+  --font-xs: 12px;
+
+  --line-tight: 1.2;
+  --line-snug: 1.4;
+  --line-normal: 1.6;
+  --line-relaxed: 1.75;
+
+  /* ── Spacing Scale (8px base) ── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+
+  /* ── Container widths ── */
+  --container-narrow: 720px;
+  --container-default: 1080px;
+
+  /* ── Page padding (responsive) ── */
+  --page-padding: clamp(16px, 4vw, 32px);
 }
 
 *, *::before, *::after {

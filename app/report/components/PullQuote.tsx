@@ -5,49 +5,32 @@ interface PullQuoteProps {
 export default function PullQuote({ text }: PullQuoteProps) {
   return (
     <section style={{
-      padding: 'clamp(40px, 8vw, 80px) 24px',
-      textAlign: 'center',
+      maxWidth: 'var(--container-narrow)',
+      margin: '0 auto',
+      padding: 'var(--space-7) var(--page-padding)',
     }}>
-      <blockquote style={{
-        maxWidth: '760px',
-        margin: '0 auto',
-        position: 'relative',
-        padding: '0 40px',
+      <div style={{
+        borderTop: '1px solid var(--border)',
+        borderBottom: '1px solid var(--border)',
+        padding: 'var(--space-6) 0',
+        textAlign: 'center',
       }}>
-        <span style={{
-          position: 'absolute',
-          top: '-16px',
-          left: '0',
-          fontSize: '64px',
-          lineHeight: 1,
-          color: 'var(--accent)',
-          opacity: 0.3,
-          fontFamily: 'Georgia, serif',
+        <blockquote style={{
+          margin: 0,
+          padding: '0 var(--space-5)',
         }}>
-          &laquo;
-        </span>
-        <p style={{
-          fontSize: 'clamp(22px, 3vw, 32px)',
-          fontWeight: 500,
-          color: 'var(--accent)',
-          lineHeight: 1.5,
-          letterSpacing: '-0.01em',
-        }}>
-          {text}
-        </p>
-        <span style={{
-          position: 'absolute',
-          bottom: '-40px',
-          right: '0',
-          fontSize: '64px',
-          lineHeight: 1,
-          color: 'var(--accent)',
-          opacity: 0.3,
-          fontFamily: 'Georgia, serif',
-        }}>
-          &raquo;
-        </span>
-      </blockquote>
+          <p style={{
+            fontSize: 'var(--font-h2)',
+            fontWeight: 500,
+            fontStyle: 'italic',
+            color: 'var(--accent)',
+            lineHeight: 'var(--line-snug)',
+            letterSpacing: '-0.01em',
+          }}>
+            {text}
+          </p>
+        </blockquote>
+      </div>
     </section>
   );
 }

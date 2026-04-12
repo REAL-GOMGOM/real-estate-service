@@ -1,24 +1,12 @@
 import type { YearHigh } from '@/lib/report/types';
+import { formatKoreanPrice, formatPercent } from '@/lib/report/format';
 
 interface TopYearHighsProps {
   items: YearHigh[];
 }
 
-function formatKoreanPrice(won: number): string {
-  const uk = Math.floor(won / 100_000_000);
-  const man = Math.round((won % 100_000_000) / 10_000);
-  if (uk > 0 && man > 0) return `${uk.toLocaleString()}억 ${man.toLocaleString()}만원`;
-  if (uk > 0) return `${uk.toLocaleString()}억`;
-  if (man > 0) return `${man.toLocaleString()}만원`;
-  return '0원';
-}
-
 function formatArea(area: number): string {
   return `${Math.round(area)}㎡`;
-}
-
-function formatPercent(ratio: number): string {
-  return `+${(ratio * 100).toFixed(1)}%`;
 }
 
 export default function TopYearHighs({ items }: TopYearHighsProps) {
