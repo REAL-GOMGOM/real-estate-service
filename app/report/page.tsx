@@ -2,10 +2,11 @@ import { Suspense } from 'react';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { getLatestReport } from '@/lib/report/get-report';
-import ReportHeader from './components/ReportHeader';
-import Summary from './components/Summary';
-import RegionTable from './components/RegionTable';
-import TopYearHighs from './components/TopYearHighs';
+import ReportHero from './components/ReportHero';
+import PullQuote from './components/PullQuote';
+import CardDeck from './components/CardDeck';
+import CommentaryBody from './components/CommentaryBody';
+import Details from './components/Details';
 import ReportDisclaimer from './components/ReportDisclaimer';
 import ReportSkeleton from './components/ReportSkeleton';
 import EmptyState from './components/EmptyState';
@@ -36,20 +37,34 @@ async function ReportContent() {
   if (report.summary.totalDeals === 0) return <EmptyState message="최근 신고된 거래가 없습니다" />;
 
   return (
-    <div style={{
-      maxWidth: '960px',
-      margin: '0 auto',
-      padding: 'clamp(32px, 6vw, 64px) 24px',
-    }}>
-      <ReportHeader
+    <>
+      <ReportHero
         title={report.title}
         subtitle={report.subtitle}
         generatedAt={report.generatedAt}
       />
-      <Summary {...report.summary} />
-      <RegionTable byRegion={report.byRegion} />
-      <TopYearHighs items={report.topYearHighs} />
-      <ReportDisclaimer disclaimer={report.disclaimer} />
-    </div>
+
+      {report.commentary && (
+        <PullQuote text={report.commentary.pullquote} />
+      )}
+
+      <CardDeck
+        topYearHighs={report.topYearHighs}
+        byRegion={report.byRegion}
+      />
+
+      {report.commentary && (
+        <CommentaryBody paragraphs={report.commentary.paragraphs} />
+      )}
+
+      <Details
+        byRegion={report.byRegion}
+        topYearHighs={report.topYearHighs}
+      />
+
+      <div style={{ maxWidth: '960px', margin: '0 auto', padding: '0 24px clamp(32px, 6vw, 64px)' }}>
+        <ReportDisclaimer disclaimer={report.disclaimer} />
+      </div>
+    </>
   );
 }
