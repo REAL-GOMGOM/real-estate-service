@@ -123,6 +123,12 @@
   padding: 0;
 }
 
+/* 한국어 어절 단위 줄바꿈 (specificity 0) */
+:where(h1, h2, h3, h4, h5, h6, p, li, dt, dd, td, th, blockquote, figcaption, label, span, a) {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
 html {
   scroll-behavior: smooth;
   overflow-x: hidden;
