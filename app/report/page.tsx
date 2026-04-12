@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import './report.css';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { getLatestReport } from '@/lib/report/get-report';

@@ -10,53 +10,49 @@ interface DetailsProps {
 export default function Details({ byRegion, topYearHighs }: DetailsProps) {
   return (
     <section style={{
-      padding: '0 24px',
-      marginBottom: 'clamp(32px, 6vw, 48px)',
+      maxWidth: 'var(--container-default)',
+      margin: '0 auto',
+      padding: 'var(--space-6) var(--page-padding) var(--space-9)',
     }}>
-      <div style={{ maxWidth: '960px', margin: '0 auto' }}>
-        <details style={{
-          borderRadius: '14px',
-          border: '1px solid var(--accent-border)',
-          overflow: 'hidden',
+      <details>
+        <summary style={{
+          cursor: 'pointer',
+          padding: 'var(--space-4) var(--space-5)',
+          fontSize: 'var(--font-h3)',
+          fontWeight: 600,
+          color: 'var(--text-primary)',
+          backgroundColor: 'var(--bg-card)',
+          border: '1px solid var(--border)',
+          borderRadius: '12px',
+          listStyle: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 'var(--space-3)',
         }}>
-          <summary style={{
-            padding: '18px 24px',
-            fontSize: '16px',
-            fontWeight: 600,
-            color: 'var(--accent-text)',
-            backgroundColor: 'var(--accent-bg)',
-            cursor: 'pointer',
-            listStyle: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}>
-            <span>더 자세한 데이터 보기</span>
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 20 20"
-              fill="none"
-              style={{ transition: 'transform 0.2s' }}
-            >
-              <path
-                d="M6 8L10 12L14 8"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </summary>
-          <div style={{
-            padding: '24px',
-            backgroundColor: 'var(--bg-card)',
-          }}>
-            <RegionTable byRegion={byRegion} />
-            <TopYearHighs items={topYearHighs} />
-          </div>
-        </details>
-      </div>
+          <span
+            className="details-chevron"
+            style={{
+              display: 'inline-flex',
+              fontSize: 'var(--font-body)',
+              color: 'var(--text-dim)',
+              flexShrink: 0,
+            }}
+          >
+            ▸
+          </span>
+          <span>더 자세한 데이터 보기</span>
+        </summary>
+
+        <div style={{
+          marginTop: 'var(--space-5)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 'var(--space-7)',
+        }}>
+          <RegionTable byRegion={byRegion} />
+          <TopYearHighs items={topYearHighs} />
+        </div>
+      </details>
     </section>
   );
 }

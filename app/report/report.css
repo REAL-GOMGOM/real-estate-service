@@ -1,0 +1,37 @@
+/* Report page responsive toggle classes */
+
+/* TopYearHighs: desktop >= 768px */
+.report-desktop { display: block; }
+.report-mobile { display: none; }
+
+@media (max-width: 767px) {
+  .report-desktop { display: none !important; }
+  .report-mobile { display: block !important; }
+}
+
+/* RegionTable: desktop >= 640px */
+.region-desktop { display: block; }
+.region-mobile { display: none; }
+
+@media (max-width: 639px) {
+  .region-desktop { display: none !important; }
+  .region-mobile { display: block !important; }
+}
+
+/* Details chevron rotation */
+details[open] .details-chevron {
+  transform: rotate(90deg);
+}
+
+.details-chevron {
+  transition: transform 0.2s ease;
+}
+
+/* Remove default summary marker */
+summary::-webkit-details-marker {
+  display: none;
+}
+summary::marker {
+  display: none;
+  content: '';
+}
