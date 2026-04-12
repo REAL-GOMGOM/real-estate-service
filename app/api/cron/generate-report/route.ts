@@ -25,7 +25,7 @@ function getTargetDateRange(): DateRange {
   to.setDate(to.getDate() - 1); // 어제
 
   const from = new Date(kst);
-  from.setDate(from.getDate() - 7); // 7일 전
+  from.setDate(from.getDate() - 30); // 30일 전
 
   return { from: formatDate(from), to: formatDate(to) };
 }

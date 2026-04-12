@@ -57,8 +57,8 @@ export function aggregate(
 
   return {
     generatedAt: new Date().toISOString(),
-    title: `${titleY}년 ${titleM}월 ${titleD}일 수도권 아파트 실거래 현황`,
-    subtitle: `최근 7일(${formatMD(range.from)} ~ ${formatMD(range.to)}) 국토부 신고 거래 기준`,
+    title: `${titleY}년 ${titleM}월 ${titleD}일 기준 수도권 아파트 실거래 리포트`,
+    subtitle: `최근 30일 국토부 신고 거래 기준 (${formatMD(range.from)} ~ ${formatMD(range.to)})`,
     dateRange: range,
     range: 'sudogwon',
     summary: {
