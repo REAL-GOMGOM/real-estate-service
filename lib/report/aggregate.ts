@@ -1,6 +1,7 @@
 import type { DateRange, Deal, YearHigh, RegionStats, Report, Sido } from './types';
 
 const MIN_PRICE = 100_000_000; // 1억 원
+const NOTABLE_THRESHOLD = 0.3;
 
 const DISCLAIMER =
   '본 리포트는 국토부 실거래가 공개시스템에 신고 완료된 거래만 포함합니다. ' +
@@ -42,9 +43,9 @@ export function aggregate(
     };
   });
 
-  const topYearHighs = [...yearHighs]
-    .sort((a, b) => b.increase - a.increase)
-    .slice(0, 20);
+  const sorted = [...yearHighs].sort((a, b) => b.increase - a.increase);
+  const notableDeals = sorted.filter((h) => h.increase >= NOTABLE_THRESHOLD).slice(0, 5);
+  const topYearHighs = sorted.filter((h) => h.increase < NOTABLE_THRESHOLD).slice(0, 20);
 
   const totalAmount = targetDeals.reduce((s, d) => s + d.dealAmount, 0);
 
@@ -69,6 +70,8 @@ export function aggregate(
     },
     byRegion,
     topYearHighs,
+    notableDeals,
+    notableThreshold: NOTABLE_THRESHOLD,
     disclaimer: DISCLAIMER,
   };
 }

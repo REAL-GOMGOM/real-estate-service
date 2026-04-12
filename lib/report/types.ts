@@ -52,6 +52,8 @@ export type Report = {
   };
   byRegion: RegionStats[];
   topYearHighs: YearHigh[];
+  notableDeals: YearHigh[];
+  notableThreshold: number;
   disclaimer: string;
   commentary?: ReportCommentary;
 };
