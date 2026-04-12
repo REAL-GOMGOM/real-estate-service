@@ -38,6 +38,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // KV 환경변수 확인 (디버그용)
+  if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
+    return NextResponse.json({
+      error: 'KV env vars missing',
+      hasUrl: !!process.env.KV_REST_API_URL,
+      hasToken: !!process.env.KV_REST_API_TOKEN,
+    }, { status: 500 });
+  }
+
   const startTime = Date.now();
 
   try {
@@ -49,10 +58,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const redis = new Redis({
-      url: process.env.KV_REST_API_URL!,
-      token: process.env.KV_REST_API_TOKEN!,
-    });
+    const redis = Redis.fromEnv();
 
     const range = getTargetDateRange();
     const districts = getSudogwonDistricts();
