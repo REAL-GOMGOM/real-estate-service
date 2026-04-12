@@ -42,6 +42,7 @@ async function ReportContent() {
         title={report.title}
         subtitle={report.subtitle}
         generatedAt={report.generatedAt}
+        dateRange={report.dateRange}
       />
 
       {report.commentary && (
