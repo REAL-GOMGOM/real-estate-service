@@ -166,7 +166,7 @@ export default function LocationDetailPanel({ location, onClose, embedded }: Pro
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {[
           { label: '기준 월',   value: location.month },
-          { label: '전월 점수', value: location.prevScore.toFixed(1), mono: true },
+          { label: '원본 AI 점수', value: location.prevScore.toFixed(1), mono: true },
           {
             label: '트렌드',
             value: location.trend === 'up' ? '상승 ▲' : location.trend === 'down' ? '하락 ▼' : '보합 —',

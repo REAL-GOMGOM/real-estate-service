@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { CookieSettingsButton } from './CookieSettingsButton';
 
 const FOOTER_LINKS = {
   '서비스': [
@@ -54,7 +55,11 @@ export default function Footer() {
 
         <div style={{ marginTop: '48px', paddingTop: '32px', borderTop: '1px solid #E8DDD4', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
           <p style={{ fontSize: '13px', color: '#9B8E82' }}>© 2026 내집(My.ZIP). All rights reserved.</p>
-          <p style={{ fontSize: '13px', color: '#9B8E82' }}>데이터: 국토교통부 · 한국부동산원 · NEIS</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '13px', color: '#9B8E82' }}>
+            <span>데이터: 국토교통부 · 한국부동산원 · NEIS</span>
+            <span style={{ color: '#D4CFC8' }}>|</span>
+            <CookieSettingsButton />
+          </div>
         </div>
       </div>
     </footer>

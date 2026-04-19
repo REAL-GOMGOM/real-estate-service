@@ -26,20 +26,70 @@ export interface ApartmentEntry {
 }
 
 export interface LocationScore {
+  // 기본 식별
   id: string;
   name: string;
   district: string;
   lat: number;
   lng: number;
-  score: number;
-  trend: 'up' | 'down' | 'flat';
-  prevScore: number;
+  region: string;
+  level: 'city' | 'district';
+  cityId?: string;
   month: string;
+
+  // 점수
+  score: number;                          // Eric 재산정점수 (1.0~5.0)
+  trend: 'up' | 'down' | 'flat';
+  prevScore: number;                      // 원본 AI 점수 (비교용)
+
+  // v2 — 정량 메트릭
+  metrics: {
+    pricePerPyeong: number | null;        // 평당가 (만원)
+    annualChange2025: number | null;      // 2025 누계 매매 변동률 (%)
+    weeklyChange2026: number | null;      // 2026.4 주간 매매 변동률 (%)
+    transport: number;                    // 교통 0~10
+    school: number;                       // 학군 0~10
+    industry: number;                     // 산업 0~10
+    supply: number;                       // 공급 0~10
+    jeonseRatio: number | null;           // 전세가율 %
+    populationFlow: number;               // 월 인구순이동
+    tradeVolumeChange: number;            // 거래량 YoY %
+    unsold: number;                       // 미분양 호수
+    confidence: 'H' | 'M' | 'L';         // 데이터 신뢰도
+  };
+
+  // v2 — 시나리오 민감도
+  scenarios: {
+    base: number;
+    price: number;
+    growth: number;
+    infra: number;
+    sensitivity: number;
+  };
+
+  // 규제
   isToheo: boolean;
   toheoUntil?: string;
-  region: string;
-  level: 'city' | 'district';  // 시 단위 or 구 단위
-  cityId?: string;              // 구가 속한 시 ID
+
+  // 특수 메모
+  specialNote?: string;
+
+  // 메타
+  source: 'eric_v2';
+  lastUpdated: string;
+}
+
+export interface LocationInsight {
+  id: string;
+  headline: string;
+  summary: string;
+  tags: string[];
+  generatedAt: string;
+  scoreAtGeneration: number;
+}
+
+export interface RegionDetail extends LocationScore {
+  insight: LocationInsight;
 }
 
 export interface ChartPoint {
