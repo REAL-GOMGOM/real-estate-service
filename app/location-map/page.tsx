@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { Suspense, useState, useMemo, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import KakaoMap from '@/components/location-map/KakaoMap';
 import LocationSidebar from '@/components/location-map/LocationSidebar';
@@ -13,14 +14,36 @@ import type { LocationScore } from '@/lib/types';
 
 const ALL_LOCATIONS: LocationScore[] = require('@/data/location-scores.json');
 
-export default function LocationMapPage() {
-  const [selectedRegion, setSelectedRegion] = useState<string>('전체');
-  const [selectedLocation, setSelectedLocation] = useState<LocationScore | null>(null);
+const VALID_REGIONS = [
+  '전체', '서울', '경기', '인천', '1기신도시', '2기신도시', '3기신도시',
+  '부산', '대구', '울산',
+];
+
+function isValidRegion(value: string | null): value is string {
+  return value !== null && VALID_REGIONS.includes(value);
+}
+
+function LocationMapContent() {
+  const searchParams = useSearchParams();
+
+  const regionParam = searchParams.get('region');
+  const highlightParam = searchParams.get('highlight');
+
+  const initialRegion = isValidRegion(regionParam) ? regionParam : '전체';
+
+  const [selectedRegion, setSelectedRegion] = useState<string>(initialRegion);
+  const [selectedLocation, setSelectedLocation] = useState<LocationScore | null>(
+    () => {
+      if (highlightParam) {
+        return ALL_LOCATIONS.find((l) => l.id === highlightParam) ?? null;
+      }
+      return null;
+    },
+  );
   const [showToheoOnly, setShowToheoOnly] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
-  // 학교 관련 상태
   const [activeLayers, setActiveLayers] = useState<Set<string>>(() => new Set());
   const [schools, setSchools] = useState<SchoolData[]>([]);
   const [selectedSchool, setSelectedSchool] = useState<SchoolData | null>(null);
@@ -72,14 +95,12 @@ export default function LocationMapPage() {
     }
   }, [selectedRegion]);
 
-  // 학교 데이터 fetch
   const fetchSchools = useCallback(async () => {
     if (activeLayers.size === 0) {
       setSchools([]);
       return;
     }
     try {
-      // 선택된 권역에 맞는 지역으로 쿼리
       const district = selectedRegion === '전체' ? '' : selectedRegion;
       const res = await fetch(`/api/map/schools${district ? `?district=${encodeURIComponent(district)}` : ''}`);
       const json = await res.json();
@@ -104,15 +125,14 @@ export default function LocationMapPage() {
 
   const handleSchoolClick = (school: SchoolData) => {
     setSelectedSchool(school);
-    setSelectedLocation(null); // 입지 패널 닫기
+    setSelectedLocation(null);
   };
 
   const handleLocationClick = (loc: LocationScore) => {
     setSelectedLocation(loc);
-    setSelectedSchool(null); // 학교 패널 닫기
+    setSelectedSchool(null);
   };
 
-  // 선택된 학교 주변 학교들
   const nearbySchools = useMemo(() => {
     if (!selectedSchool) return [];
     return schools.filter((s) => s.district === selectedSchool.district && s.id !== selectedSchool.id);
@@ -139,9 +159,7 @@ export default function LocationMapPage() {
           지도를 불러오는 중...
         </div>
       )}
-      {/* 플로팅 네비게이션 (PC, 팝업 없을 때만) */}
       {!isMobile && !selectedLocation && !selectedSchool && <FloatingNavPanel />}
-      {/* PC: 기존 패널 / 모바일: 바텀시트 */}
       {!isMobile && selectedLocation && (
         <LocationDetailPanel
           location={selectedLocation}
@@ -202,5 +220,33 @@ export default function LocationMapPage() {
         {isMobile ? <>{mapArea}{sidebar}</> : <>{sidebar}{mapArea}</>}
       </div>
     </>
+  );
+}
+
+function LocationMapFallback() {
+  return (
+    <>
+      <Header />
+      <div
+        style={{
+          minHeight: '60vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'var(--text-muted)',
+          paddingTop: '64px',
+        }}
+      >
+        지도 로딩 중…
+      </div>
+    </>
+  );
+}
+
+export default function LocationMapPage() {
+  return (
+    <Suspense fallback={<LocationMapFallback />}>
+      <LocationMapContent />
+    </Suspense>
   );
 }
