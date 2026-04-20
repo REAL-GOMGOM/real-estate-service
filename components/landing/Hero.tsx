@@ -5,18 +5,15 @@ import { Search } from 'lucide-react';
 import { BRAND } from '@/lib/design-tokens';
 import { useRotatingPlaceholder } from '@/hooks/useRotatingPlaceholder';
 import { QuickAccess } from './QuickAccess';
-import { VisitorStats } from './VisitorStats';
 import { LiveTicker, type TickerItem } from './LiveTicker';
-import type { VisitorStatsData } from '@/lib/visitor-tracking';
 
 interface HeroProps {
   ticker: TickerItem[];
-  initialStats: VisitorStatsData;
 }
 
 const TAGS = ['강남구', '분당', '마포구', '용산구', '청약 일정'];
 
-export function Hero({ ticker, initialStats }: HeroProps) {
+export function Hero({ ticker }: HeroProps) {
   const placeholder = useRotatingPlaceholder();
   const [dataMonth, setDataMonth] = useState('');
 
@@ -179,11 +176,6 @@ export function Hero({ ticker, initialStats }: HeroProps) {
         {/* Quick Access */}
         <div className="mb-6">
           <QuickAccess />
-        </div>
-
-        {/* Visitor Stats */}
-        <div className="mb-6">
-          <VisitorStats initialStats={initialStats} />
         </div>
 
         {/* Live Ticker */}
