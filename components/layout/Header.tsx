@@ -13,7 +13,7 @@ type NavItem =
 
 const NAV_ITEMS: NavItem[] = [
   {
-    label: '집값 보기',
+    label: '부동산 분석',
     children: [
       { emoji: '\uD83D\uDCB0', label: '실거래가', href: '/transactions', desc: '최근 거래된 가격' },
       { emoji: '\uD83D\uDCCA', label: '시세 차트', href: '/chart', desc: '단지별 가격 추이' },
