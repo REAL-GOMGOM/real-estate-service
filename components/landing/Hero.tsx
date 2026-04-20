@@ -126,8 +126,9 @@ export function Hero({ ticker }: HeroProps) {
             color: BRAND.inkSoft,
           }}
         >
-          집값이 궁금할 때, 투자할 지 고민될 때, 우리 동네 뭐가 생기는지 알고 싶을 때 —
-          <strong style={{ fontWeight: 700, color: BRAND.ink }}> 내집</strong>이 모든 답을 쉽게 전해드립니다.
+          집값이 궁금할 때, 투자할 지 고민될 때, 우리 동네 뭐가 생기는지 알고 싶을 때
+          <br />
+          <strong style={{ fontWeight: 700, color: '#C4654A' }}>내집(My.ZIP)</strong>이 모든 답을 쉽게 전해드립니다.
         </p>
 
         {/* 검색바 */}
