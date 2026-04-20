@@ -46,7 +46,7 @@ export function ScenarioBarChart({ scenarios }: Props) {
           />
           <YAxis
             domain={['auto', 'auto']}
-            tick={{ fill: BRAND.inkSoft, fontSize: 11 }}
+            tick={false}
             axisLine={false}
             tickLine={false}
             label={{
