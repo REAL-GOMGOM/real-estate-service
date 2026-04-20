@@ -18,6 +18,7 @@ const NAV_ITEMS: NavItem[] = [
       { emoji: '\uD83D\uDCB0', label: '실거래가', href: '/transactions', desc: '최근 거래된 가격' },
       { emoji: '\uD83D\uDCCA', label: '시세 차트', href: '/chart', desc: '단지별 가격 추이' },
       { emoji: '\uD83D\uDDFA\uFE0F', label: '부동산 지도', href: '/location-map', desc: '지역별 입지 점수' },
+      { emoji: '\uD83D\uDCCD', label: '지역 분석', href: '/region', desc: '126개 지역 비교 허브' },
       { emoji: '\uD83C\uDFC6', label: '주간 랭킹', href: '/ranking', desc: '최고가·거래량' },
     ],
   },
