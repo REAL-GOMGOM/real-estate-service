@@ -9,10 +9,13 @@ import {
   ResponsiveContainer, CartesianGrid, ReferenceLine,
 } from 'recharts';
 import { DISTRICT_CODE } from '@/lib/district-codes';
+import { DISTRICT_GROUPS } from '@/lib/district-groups';
 import { matchesQuery } from '@/lib/search-utils';
 import Header from '@/components/layout/Header';
 
-const DISTRICTS = Object.keys(DISTRICT_CODE);
+function findGroupIndexOfDistrict(district: string): number {
+  return DISTRICT_GROUPS.findIndex((g) => g.districts.includes(district));
+}
 
 interface Transaction {
   aptName:      string;
@@ -388,6 +391,7 @@ export default function TransactionsClient() {
   const [today,      setToday]      = useState(new Date(0));
   useEffect(() => { setToday(new Date()); }, []);
   const [district,   setDistrict]   = useState('강남구');
+  const [groupIdx,   setGroupIdx]   = useState(() => Math.max(0, findGroupIndexOfDistrict('강남구')));
   const [months,     setMonths]     = useState(6);
   const [query,      setQuery]      = useState('');
   const [groups,     setGroups]     = useState<AptGroup[]>([]);
@@ -406,6 +410,7 @@ export default function TransactionsClient() {
   useEffect(() => {
     if (districtParam) {
       setDistrict(districtParam);
+      setGroupIdx(Math.max(0, findGroupIndexOfDistrict(districtParam)));
       setViewMode('detail');
       setFetched('');
     }
@@ -606,18 +611,47 @@ export default function TransactionsClient() {
           </div>
         )}
 
-        {/* 필터 */}
+        {/* 시도 탭 */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }} role="tablist" aria-label="지역 선택">
+          {DISTRICT_GROUPS.map((g, i) => {
+            const isActive = i === groupIdx;
+            return (
+              <button
+                key={g.label}
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => {
+                  setGroupIdx(i);
+                  const first = g.districts[0];
+                  if (first) { setDistrict(first); setFetched(''); }
+                }}
+                style={{
+                  padding: '6px 14px', borderRadius: '999px', fontSize: '13px', fontWeight: 500,
+                  backgroundColor: isActive ? 'var(--accent)' : 'var(--bg-card)',
+                  color: isActive ? '#FFFFFF' : 'var(--text-muted)',
+                  border: `1px solid ${isActive ? 'var(--accent)' : 'var(--border)'}`,
+                  cursor: 'pointer', transition: 'background-color 0.15s, color 0.15s',
+                }}
+              >
+                {g.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* 구/시 드롭다운 + 기간 필터 */}
         <div style={{ display: 'flex', gap: '10px', marginBottom: '28px', flexWrap: 'wrap', alignItems: 'center' }}>
           <select
             value={district}
             onChange={(e) => { setDistrict(e.target.value); setFetched(''); }}
+            aria-label="구/시 선택"
             style={{
               padding: '10px 14px', borderRadius: '10px', fontSize: '14px', fontWeight: 500,
               backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)',
               border: '1px solid var(--border)', cursor: 'pointer', outline: 'none',
             }}
           >
-            {DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
+            {DISTRICT_GROUPS[groupIdx]?.districts.map((d) => <option key={d} value={d}>{d}</option>)}
           </select>
 
           {([
