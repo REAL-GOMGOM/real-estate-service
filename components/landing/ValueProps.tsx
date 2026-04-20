@@ -40,7 +40,7 @@ export function ValueProps() {
               color: BRAND.ink,
             }}
           >
-            왜 <span style={{ color: BRAND.terracotta }}>내집</span>인가
+            왜 <span style={{ color: BRAND.terracotta }}>내집(My.ZIP)</span>인가?
           </h2>
         </Reveal>
 
