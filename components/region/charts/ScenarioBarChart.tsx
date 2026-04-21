@@ -45,12 +45,12 @@ export function ScenarioBarChart({ scenarios }: Props) {
             tickLine={false}
           />
           <YAxis
-            domain={['auto', 'auto']}
+            domain={[0, 'auto']}
             tick={false}
             axisLine={false}
             tickLine={false}
             label={{
-              value: '상급지 지수 (높을수록 우수)',
+              value: '점수 (낮을수록 상급지)',
               angle: -90,
               position: 'insideLeft',
               style: { fill: BRAND.inkSoft, fontSize: 11, textAnchor: 'middle' },
@@ -76,6 +76,7 @@ export function ScenarioBarChart({ scenarios }: Props) {
             fill={BRAND.terracotta}
             radius={[4, 4, 0, 0]}
             maxBarSize={60}
+            minPointSize={8}
           >
             <LabelList
               dataKey="rawScore"
