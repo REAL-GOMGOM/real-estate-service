@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { RegionHubSearch } from './RegionHubSearch';
 import { RegionHubTabs } from './RegionHubTabs';
 import { RegionSortToggle, type SortBy, type SortDir } from './RegionSortToggle';
@@ -13,7 +14,9 @@ interface Props {
 }
 
 export function RegionHubClient({ initialData }: Props) {
-  const [query, setQuery] = useState('');
+  const searchParams = useSearchParams();
+  const initialQuery = searchParams?.get('q') ?? '';
+  const [query, setQuery] = useState(initialQuery);
   const [selectedRegion, setSelectedRegion] = useState('전체');
   const [sortBy, setSortBy] = useState<SortBy>('score');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -87,7 +90,7 @@ export function RegionHubClient({ initialData }: Props) {
         />
       </div>
 
-      <RegionHubGrid items={filteredSorted} />
+      <RegionHubGrid items={filteredSorted} query={query} onQueryChange={setQuery} />
     </div>
   );
 }

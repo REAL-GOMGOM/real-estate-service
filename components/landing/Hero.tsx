@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Search } from 'lucide-react';
 import { BRAND } from '@/lib/design-tokens';
 import { useRotatingPlaceholder } from '@/hooks/useRotatingPlaceholder';
@@ -15,7 +16,16 @@ const TAGS = ['강남구', '분당', '마포구', '용산구', '청약 일정'];
 
 export function Hero({ ticker }: HeroProps) {
   const placeholder = useRotatingPlaceholder();
+  const router = useRouter();
+  const [query, setQuery] = useState('');
   const [dataMonth, setDataMonth] = useState('');
+
+  const handleSubmit = (overrideQuery?: string) => {
+    const q = (overrideQuery ?? query).trim();
+    if (!q) { router.push('/region'); return; }
+    if (q.includes('청약')) { router.push('/subscription'); return; }
+    router.push(`/region?q=${encodeURIComponent(q)}`);
+  };
 
   useEffect(() => {
     const now = new Date();
@@ -133,14 +143,22 @@ export function Hero({ ticker }: HeroProps) {
 
         {/* 검색바 */}
         <div className="relative mb-4 mx-auto" style={{ maxWidth: '480px' }}>
-          <Search
-            size={18}
-            className="absolute left-4 top-1/2 -translate-y-1/2"
-            style={{ color: BRAND.inkSoft }}
-          />
+          <button
+            type="button"
+            onClick={() => handleSubmit()}
+            className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center"
+            style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, color: BRAND.inkSoft }}
+            aria-label="검색"
+          >
+            <Search size={18} />
+          </button>
           <input
-            type="text"
-            readOnly
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); handleSubmit(); }
+            }}
             placeholder={placeholder}
             className="w-full rounded-full border py-3.5 pl-11 pr-5 text-sm outline-none transition-colors duration-200"
             style={{
@@ -160,9 +178,11 @@ export function Hero({ ticker }: HeroProps) {
         {/* 태그 칩 */}
         <div className="flex flex-wrap justify-center gap-2 mb-8">
           {TAGS.map((tag) => (
-            <span
+            <button
               key={tag}
-              className="rounded-full px-3 py-1 text-xs font-medium cursor-default"
+              type="button"
+              onClick={() => handleSubmit(tag)}
+              className="rounded-full px-3 py-1 text-xs font-medium cursor-pointer transition-opacity hover:opacity-80"
               style={{
                 backgroundColor: `${BRAND.terracotta}08`,
                 color: BRAND.terracottaText,
@@ -170,7 +190,7 @@ export function Hero({ ticker }: HeroProps) {
               }}
             >
               #{tag}
-            </span>
+            </button>
           ))}
         </div>
 
