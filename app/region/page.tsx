@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
@@ -44,7 +45,9 @@ export default function RegionHubPage() {
       <Header />
       <main>
         <RegionHubHero />
-        <RegionHubClient initialData={scores} />
+        <Suspense>
+          <RegionHubClient initialData={scores} />
+        </Suspense>
       </main>
       <Footer />
     </>
