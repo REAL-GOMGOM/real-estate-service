@@ -1,8 +1,6 @@
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
-
-// auth()가 cookies()를 사용하므로 정적 prerender 비활성
-export const dynamic = 'force-dynamic';
 
 export const metadata = {
   title: '어드민 — 내집(My.ZIP)',
@@ -10,12 +8,20 @@ export const metadata = {
 };
 
 /**
- * 어드민 대시보드 (임시).
+ * 어드민 대시보드 (PPR 호환).
  *
- * PR 2C에서 layout으로 보호 일관화 예정. 그 전엔 페이지 자체에서 auth() 검증.
- * 본격 대시보드 UI는 PR 4 (글 CRUD) 시점.
+ * Suspense 경계로 인증 검증을 dynamic 영역으로 격리.
+ * 본격 대시보드 UI는 PR 4 (글 CRUD)에서 구축. 보호 일관화는 PR 2C에서 layout으로.
  */
-export default async function AdminPage() {
+export default function AdminPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminContent />
+    </Suspense>
+  );
+}
+
+async function AdminContent() {
   const session = await auth();
   if (!session?.user) {
     redirect('/admin/login');

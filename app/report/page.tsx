@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { connection } from 'next/server';
 import './report.css';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
@@ -35,25 +36,28 @@ export default function ReportPage() {
 
 // 리포트 대상 기간 마지막일이 7일 이상 과거면 stale
 const STALENESS_DAYS = 7;
-function isReportStale(dateRangeTo: string): boolean {
-  const to = new Date(dateRangeTo);
-  const now = new Date();
-  const diffDays = (now.getTime() - to.getTime()) / (1000 * 60 * 60 * 24);
-  return diffDays > STALENESS_DAYS;
-}
 
 async function ReportContent() {
+  // connection()으로 dynamic 영역 명시 (PPR 호환)
+  await connection();
+
   const report = await getLatestReport();
 
   if (!report) return <EmptyState message="리포트를 준비 중입니다" />;
   if (report.summary.totalDeals === 0) return <EmptyState message="최근 신고된 거래가 없습니다" />;
 
+  // 시간 계산은 connection() 후라 안전
+  const now = new Date();
+  const to = new Date(report.dateRange.to);
+  const diffDays = (now.getTime() - to.getTime()) / (1000 * 60 * 60 * 24);
+  const isStale = diffDays > STALENESS_DAYS;
+
   return (
     <>
-      {isReportStale(report.dateRange.to) && (
+      {isStale && (
         <StalenessBanner
+          diffDays={diffDays}
           dateRangeTo={report.dateRange.to}
-          generatedAt={report.generatedAt}
         />
       )}
       <ReportHero
