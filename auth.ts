@@ -2,6 +2,7 @@ import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
 import { authConfig } from './auth.config';
+import { getLoginRatelimit, getClientIdentifier } from '@/lib/auth/rate-limit';
 
 /**
  * Auth.js v5 메인 설정 (Node-only).
@@ -14,7 +15,7 @@ import { authConfig } from './auth.config';
  * - 비밀번호는 절대 로그·에러 메시지에 노출 X
  * - bcrypt.compare는 timing-safe
  * - 이메일 불일치 시에도 bcrypt 호출하여 timing 균등화
- * - Rate limit은 PR 2C에서 추가
+ * - Rate limit: IP당 5회/5분 (Upstash Ratelimit, fail-open)
  */
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -24,7 +25,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
+        // Rate limit — fail-open (Upstash 장애 시 통과)
+        try {
+          const ip = getClientIdentifier(request.headers);
+          const { success } = await getLoginRatelimit().limit(ip);
+          if (!success) {
+            console.warn('[auth] rate limit exceeded for', ip);
+            return null;
+          }
+        } catch (e) {
+          console.error('[auth] rate limit error (fail-open):', e);
+        }
+
         const email = credentials?.email as string | undefined;
         const password = credentials?.password as string | undefined;
 
