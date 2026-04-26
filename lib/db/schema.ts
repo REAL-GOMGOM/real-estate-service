@@ -63,7 +63,8 @@ export const posts = pgTable('posts', {
     .defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true })
     .notNull()
-    .defaultNow(),
+    .defaultNow()
+    .$onUpdate(() => new Date()),
 }, (table) => ({
   slugIdx: uniqueIndex('posts_slug_idx').on(table.slug),
   // /blog 목록: 발행된 것만 시간순
