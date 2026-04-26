@@ -22,6 +22,9 @@ export function AdminHeader({ email }: { email: string }) {
             <Link href="/admin" className="text-slate-600 hover:text-slate-900">
               대시보드
             </Link>
+            <Link href="/admin/posts" className="text-slate-600 hover:text-slate-900">
+              글
+            </Link>
             <Link href="/admin/categories" className="text-slate-600 hover:text-slate-900">
               카테고리
             </Link>
