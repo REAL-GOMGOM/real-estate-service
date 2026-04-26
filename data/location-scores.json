@@ -538,7 +538,7 @@
     },
     "isToheo": true,
     "toheoUntil": "2026.12.31",
-    "specialNote": "v1 데이터 보존 (Eric CSV에 미포함)",
+    "specialNote": "v1 데이터 보존",
     "source": "eric_v2",
     "lastUpdated": "2026-03"
   },
@@ -2256,7 +2256,7 @@
       "sensitivity": 0
     },
     "isToheo": false,
-    "specialNote": "v1 데이터 보존 (Eric CSV에 미포함)",
+    "specialNote": "v1 데이터 보존",
     "source": "eric_v2",
     "lastUpdated": "2026-03"
   },
