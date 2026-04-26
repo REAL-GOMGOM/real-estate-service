@@ -92,6 +92,11 @@ export async function createPost(
   const parsed = parseFormData(formData);
   if ('error' in parsed) return parsed;
 
+  // intent: 'save' (status=draft) | 'publish' (status=published, publishedAt=now)
+  const intent = String(formData.get('intent') ?? 'save');
+  const isPublish = intent === 'publish';
+
+  let postId: string | undefined;
   try {
     const result = await getBlogDb()
       .insert(posts)
@@ -102,17 +107,23 @@ export async function createPost(
         mdxContent: parsed.mdxContent,
         coverImageUrl: parsed.coverImageUrl,
         categoryId: parsed.categoryId,
-        status: 'draft',
+        status: isPublish ? 'published' : 'draft',
+        publishedAt: isPublish ? new Date() : null,
       })
       .returning({ id: posts.id });
 
-    const postId = result[0]?.id;
-    revalidatePath('/admin/posts');
-    return { ok: true, postId };
+    postId = result[0]?.id;
+    if (!postId) {
+      return { error: '저장 실패: 식별자 누락' };
+    }
   } catch (e) {
     console.error('[posts.create] 에러:', e);
     return { error: '이미 존재하는 slug이거나 저장 중 오류가 발생했습니다' };
   }
+
+  revalidatePath('/admin/posts');
+  // 작성 후 수정 페이지로 redirect — 폼 유실 방지 + 발행 토글 가능
+  redirect(`/admin/posts/${postId}/edit`);
 }
 
 /* ============================================================
@@ -132,32 +143,51 @@ export async function updatePost(
   const parsed = parseFormData(formData);
   if ('error' in parsed) return parsed;
 
+  const intent = String(formData.get('intent') ?? 'save');
+  const isPublish = intent === 'publish';
+
+  const updateValues: Partial<typeof posts.$inferInsert> = {
+    slug: parsed.slug,
+    title: parsed.title,
+    excerpt: parsed.excerpt,
+    mdxContent: parsed.mdxContent,
+    coverImageUrl: parsed.coverImageUrl,
+    categoryId: parsed.categoryId,
+    // updatedAt은 schema의 $onUpdate가 자동 처리
+  };
+
+  let result;
   try {
-    const result = await getBlogDb()
-      .update(posts)
-      .set({
-        slug: parsed.slug,
-        title: parsed.title,
-        excerpt: parsed.excerpt,
-        mdxContent: parsed.mdxContent,
-        coverImageUrl: parsed.coverImageUrl,
-        categoryId: parsed.categoryId,
-        // updatedAt은 schema의 $onUpdate가 자동 처리
-      })
-      .where(eq(posts.id, id))
-      .returning({ id: posts.id });
+    if (isPublish) {
+      result = await getBlogDb()
+        .update(posts)
+        .set({
+          ...updateValues,
+          status: 'published',
+          // 최초 발행 시각 보존
+          publishedAt: sql`COALESCE(${posts.publishedAt}, now())`,
+        })
+        .where(eq(posts.id, id))
+        .returning({ id: posts.id });
+    } else {
+      result = await getBlogDb()
+        .update(posts)
+        .set(updateValues)
+        .where(eq(posts.id, id))
+        .returning({ id: posts.id });
+    }
 
     if (result.length === 0) {
       return { error: '글을 찾을 수 없습니다' };
     }
-
-    revalidatePath('/admin/posts');
-    revalidatePath(`/admin/posts/${id}/edit`);
-    return { ok: true, postId: id };
   } catch (e) {
     console.error('[posts.update] 에러:', e);
     return { error: 'slug 중복 또는 저장 오류' };
   }
+
+  revalidatePath('/admin/posts');
+  revalidatePath(`/admin/posts/${id}/edit`);
+  return { ok: true, postId: id };
 }
 
 /* ============================================================
