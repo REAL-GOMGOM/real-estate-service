@@ -3,7 +3,9 @@ import type { Deal, Sido } from './types';
 const BASE_URL =
   'https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade';
 
-const CONCURRENCY = 10;
+// 60초 maxDuration 마진 확보 (840 task 기준 ~42초 예상)
+// 너무 높이면 국토부 API 차단 위험. 15~20이 안전대.
+const CONCURRENCY = 15;
 const MAX_PAGES = 3;
 
 export function getMonthList(months: number): string[] {
@@ -51,7 +53,12 @@ async function fetchAllPages(
     throw err;
   }
 
-  if (resultCode && resultCode !== '00') {
+  // 국토부 API는 시점에 따라 '00' 또는 '000' (zero-padding 자릿수 변동) 반환.
+  // 모든 zero 코드를 정상으로 인정. 비숫자 코드는 parseInt로 NaN → throw.
+  //
+  // 회귀 이력: 2026-04-13 이후 응답이 '000'으로 변경되며 모든 호출 throw,
+  // 60초 timeout 도달로 504 발생. 이번 픽스로 복구.
+  if (resultCode != null && parseInt(resultCode, 10) !== 0) {
     throw new Error(
       `API error for ${lawdCd} ${yyyymm}: resultCode=${resultCode}`,
     );
