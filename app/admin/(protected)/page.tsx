@@ -1,5 +1,4 @@
 import { Suspense } from 'react';
-import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 
 export const metadata = {
@@ -8,32 +7,23 @@ export const metadata = {
 };
 
 /**
- * 어드민 대시보드 (PPR 호환).
+ * 어드민 대시보드.
  *
- * Suspense 경계로 인증 검증을 dynamic 영역으로 격리.
- * 본격 대시보드 UI는 PR 4 (글 CRUD)에서 구축. 보호 일관화는 PR 2C에서 layout으로.
+ * 인증 검증은 (protected) layout이 처리. 이 페이지는 UI만.
+ * 본격 대시보드는 PR 4 (글 CRUD)에서 구축 예정.
  */
 export default function AdminPage() {
-  return (
-    <Suspense fallback={null}>
-      <AdminContent />
-    </Suspense>
-  );
-}
-
-async function AdminContent() {
-  const session = await auth();
-  if (!session?.user) {
-    redirect('/admin/login');
-  }
-
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-12">
       <div className="mx-auto max-w-3xl">
         <h1 className="text-2xl font-bold text-slate-900">어드민 대시보드</h1>
-        <p className="mt-2 text-sm text-slate-600">
-          {session.user.email} 으로 로그인됨
-        </p>
+        <Suspense
+          fallback={
+            <p className="mt-2 text-sm text-slate-400">로그인 정보 로딩...</p>
+          }
+        >
+          <UserInfo />
+        </Suspense>
         <div className="mt-8 rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
           <p className="text-sm text-slate-700">
             본격 대시보드 UI는 PR 4 (글 CRUD)에서 구축 예정입니다.
@@ -41,5 +31,14 @@ async function AdminContent() {
         </div>
       </div>
     </main>
+  );
+}
+
+async function UserInfo() {
+  const session = await auth();
+  return (
+    <p className="mt-2 text-sm text-slate-600">
+      {session?.user?.email ?? '알 수 없음'} 으로 로그인됨
+    </p>
   );
 }
