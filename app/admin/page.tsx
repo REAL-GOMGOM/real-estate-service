@@ -1,6 +1,9 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 
+// auth()가 cookies()를 사용하므로 정적 prerender 비활성
+export const dynamic = 'force-dynamic';
+
 export const metadata = {
   title: '어드민 — 내집(My.ZIP)',
   robots: { index: false, follow: false },

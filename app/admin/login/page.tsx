@@ -2,6 +2,9 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { LoginForm } from './LoginForm';
 
+// auth()가 cookies()를 사용하므로 정적 prerender 비활성 (단독 어드민이라 캐싱 무의미)
+export const dynamic = 'force-dynamic';
+
 /**
  * 어드민 로그인 페이지 (Server Component).
  *
