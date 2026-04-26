@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Redis } from '@upstash/redis';
+import { getReportRedis } from '@/lib/report/redis';
 import { getSudogwonDistricts } from '@/lib/report/districts';
 import { fetchSudogwonDeals } from '@/lib/report/fetch-deals';
 import { detectYearHighs } from '@/lib/report/detect-highs';
@@ -31,11 +31,17 @@ function getTargetDateRange(): DateRange {
 }
 
 export async function GET(req: NextRequest) {
-  // CRON_SECRET 인증
-  const authHeader = req.headers.get('authorization');
+  // CRON_SECRET 인증 (fail-closed: 미설정 시 호출 거부)
   const secret = process.env.CRON_SECRET;
-
-  if (secret && authHeader !== `Bearer ${secret}`) {
+  if (!secret) {
+    console.error('[generate-report] CRON_SECRET 미설정 — fail-closed');
+    return NextResponse.json(
+      { error: 'Server misconfigured: CRON_SECRET missing' },
+      { status: 500 },
+    );
+  }
+  const authHeader = req.headers.get('authorization');
+  if (authHeader !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -59,7 +65,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const redis = Redis.fromEnv();
+    const redis = getReportRedis();
 
     const range = getTargetDateRange();
     const districts = getSudogwonDistricts();
@@ -78,7 +84,8 @@ export async function GET(req: NextRequest) {
         failed: failedDistricts,
         total: totalDistricts,
       };
-      await redis.set('report:last_error', errorInfo, { ex: 7 * 24 * 60 * 60 });
+      // 디버깅 흔적 30일 보존 (7일 → 30일, 회귀 진단 용이성 향상)
+      await redis.set('report:last_error', errorInfo, { ex: 30 * 24 * 60 * 60 });
       return NextResponse.json(
         { error: errorInfo.message, failedDistricts, totalDistricts },
         { status: 500 },

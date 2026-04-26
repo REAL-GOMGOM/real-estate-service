@@ -12,6 +12,7 @@ import Details from './components/Details';
 import ReportDisclaimer from './components/ReportDisclaimer';
 import ReportSkeleton from './components/ReportSkeleton';
 import EmptyState from './components/EmptyState';
+import StalenessBanner from './components/StalenessBanner';
 
 export const metadata = {
   title: '수도권 아파트 실거래 리포트 | 내집',
@@ -32,6 +33,15 @@ export default function ReportPage() {
   );
 }
 
+// 리포트 대상 기간 마지막일이 7일 이상 과거면 stale
+const STALENESS_DAYS = 7;
+function isReportStale(dateRangeTo: string): boolean {
+  const to = new Date(dateRangeTo);
+  const now = new Date();
+  const diffDays = (now.getTime() - to.getTime()) / (1000 * 60 * 60 * 24);
+  return diffDays > STALENESS_DAYS;
+}
+
 async function ReportContent() {
   const report = await getLatestReport();
 
@@ -40,6 +50,12 @@ async function ReportContent() {
 
   return (
     <>
+      {isReportStale(report.dateRange.to) && (
+        <StalenessBanner
+          dateRangeTo={report.dateRange.to}
+          generatedAt={report.generatedAt}
+        />
+      )}
       <ReportHero
         title={report.title}
         subtitle={report.subtitle}
