@@ -1,12 +1,29 @@
 import { Suspense } from 'react';
 import { getPublishedPosts, getAllCategories } from '@/lib/blog/queries';
+import { SITE_URL, SITE_NAME } from '@/lib/site';
 import { PostCard } from './components/PostCard';
 import { CategoryTabs } from './components/CategoryTabs';
 import { Pagination } from './components/Pagination';
 
 export const metadata = {
-  title: '칼럼 — 내집(My.ZIP)',
+  title: `칼럼 — ${SITE_NAME}`,
   description: '부동산 시장·청약·대출·세금·정책에 대한 인사이트와 가이드.',
+  alternates: {
+    canonical: `${SITE_URL}/blog`,
+  },
+  openGraph: {
+    title: `칼럼 — ${SITE_NAME}`,
+    description: '부동산 시장·청약·대출·세금·정책에 대한 인사이트와 가이드.',
+    url: `${SITE_URL}/blog`,
+    siteName: SITE_NAME,
+    locale: 'ko_KR',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: `칼럼 — ${SITE_NAME}`,
+    description: '부동산 시장·청약·대출·세금·정책에 대한 인사이트와 가이드.',
+  },
 };
 
 type SearchParams = Promise<{ page?: string }>;

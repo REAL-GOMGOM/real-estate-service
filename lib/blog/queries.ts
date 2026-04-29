@@ -18,6 +18,7 @@ export type PublicPostListItem = {
 
 export type PublicPostDetail = PublicPostListItem & {
   mdxContent: string;
+  updatedAt: Date;
 };
 
 export type PublicCategory = {
@@ -135,6 +136,7 @@ export async function getPublishedPostBySlug(
       excerpt: posts.excerpt,
       coverImageUrl: posts.coverImageUrl,
       mdxContent: posts.mdxContent,
+      updatedAt: posts.updatedAt,
       publishedAt: posts.publishedAt,
       categorySlug: categories.slug,
       categoryName: categories.name,
@@ -154,6 +156,7 @@ export async function getPublishedPostBySlug(
     excerpt: r.excerpt,
     coverImageUrl: r.coverImageUrl,
     mdxContent: r.mdxContent,
+    updatedAt: r.updatedAt,
     publishedAt: r.publishedAt,
     categorySlug: r.categorySlug,
     categoryName: r.categoryName,
@@ -168,4 +171,78 @@ export async function getAllCategories(): Promise<PublicCategory[]> {
     .select({ id: categories.id, slug: categories.slug, name: categories.name })
     .from(categories)
     .orderBy(categories.name);
+}
+
+export type PublishedSlugItem = {
+  slug: string;
+  updatedAt: Date;
+  publishedAt: Date;
+};
+
+/**
+ * 발행된 모든 글의 slug + 시각 (sitemap·rss용 가벼운 list).
+ *
+ * mdxContent 같은 무거운 필드 제외 → sitemap 빌드 빠름.
+ * 글 수가 폭증하면 페이지네이션 추가 (Phase 2).
+ */
+export async function getAllPublishedSlugs(): Promise<PublishedSlugItem[]> {
+  const rows = await getBlogDb()
+    .select({
+      slug: posts.slug,
+      updatedAt: posts.updatedAt,
+      publishedAt: posts.publishedAt,
+    })
+    .from(posts)
+    .where(eq(posts.status, 'published'))
+    .orderBy(desc(posts.publishedAt));
+
+  return rows
+    .filter((r): r is typeof r & { publishedAt: Date } => r.publishedAt !== null)
+    .map((r) => ({
+      slug: r.slug,
+      updatedAt: r.updatedAt,
+      publishedAt: r.publishedAt,
+    }));
+}
+
+export type FeedItem = {
+  slug: string;
+  title: string;
+  excerpt: string | null;
+  publishedAt: Date;
+  updatedAt: Date;
+  categoryName: string | null;
+};
+
+/**
+ * RSS 피드용 최근 발행 글 (가벼운 list, 본문 X).
+ */
+export async function getRecentPublishedPostsForFeed(
+  limit = 50,
+): Promise<FeedItem[]> {
+  const rows = await getBlogDb()
+    .select({
+      slug: posts.slug,
+      title: posts.title,
+      excerpt: posts.excerpt,
+      publishedAt: posts.publishedAt,
+      updatedAt: posts.updatedAt,
+      categoryName: categories.name,
+    })
+    .from(posts)
+    .leftJoin(categories, eq(posts.categoryId, categories.id))
+    .where(eq(posts.status, 'published'))
+    .orderBy(desc(posts.publishedAt))
+    .limit(limit);
+
+  return rows
+    .filter((r): r is typeof r & { publishedAt: Date } => r.publishedAt !== null)
+    .map((r) => ({
+      slug: r.slug,
+      title: r.title,
+      excerpt: r.excerpt,
+      publishedAt: r.publishedAt,
+      updatedAt: r.updatedAt,
+      categoryName: r.categoryName,
+    }));
 }
