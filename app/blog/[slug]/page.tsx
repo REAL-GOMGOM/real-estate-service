@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { MDXRemote } from 'next-mdx-remote/rsc';
 import { getPublishedPostBySlug } from '@/lib/blog/queries';
+import { SITE_URL, SITE_NAME } from '@/lib/site';
 import { mdxComponents } from '../components/mdx-components';
 
 const SLUG_PATTERN = /^[a-z0-9-]{1,200}$/;
@@ -19,15 +20,45 @@ type Params = Promise<{ slug: string }>;
 export async function generateMetadata({ params }: { params: Params }) {
   const { slug } = await params;
   if (!SLUG_PATTERN.test(slug)) {
-    return { title: '칼럼 — 내집(My.ZIP)' };
+    return { title: `칼럼 — ${SITE_NAME}` };
   }
   const post = await getPublishedPostBySlug(slug);
   if (!post) {
-    return { title: '칼럼 — 내집(My.ZIP)' };
+    return { title: `칼럼 — ${SITE_NAME}` };
   }
+
+  const url = `${SITE_URL}/blog/${post.slug}`;
+  const description = post.excerpt ?? `${post.title} — 부동산 칼럼`;
+
   return {
-    title: `${post.title} — 내집(My.ZIP)`,
-    description: post.excerpt ?? `${post.title} — 부동산 칼럼`,
+    title: `${post.title} — ${SITE_NAME}`,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      title: post.title,
+      description,
+      url,
+      siteName: SITE_NAME,
+      locale: 'ko_KR',
+      type: 'article',
+      publishedTime: post.publishedAt.toISOString(),
+      modifiedTime: post.updatedAt.toISOString(),
+      ...(post.categoryName && { section: post.categoryName }),
+      images: [
+        {
+          url: `${url}/opengraph-image`,
+          width: 1200,
+          height: 630,
+          alt: post.title,
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: post.title,
+      description,
+      images: [`${url}/opengraph-image`],
+    },
   };
 }
 
@@ -52,8 +83,39 @@ async function PostDetail({ params }: { params: Params }) {
     post.publishedAt,
   );
 
+  // JSON-LD Article schema
+  const url = `${SITE_URL}/blog/${post.slug}`;
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: post.title,
+    description: post.excerpt ?? `${post.title} — 부동산 칼럼`,
+    datePublished: post.publishedAt.toISOString(),
+    dateModified: post.updatedAt.toISOString(),
+    author: {
+      '@type': 'Organization',
+      name: SITE_NAME,
+      url: SITE_URL,
+    },
+    publisher: {
+      '@type': 'Organization',
+      name: SITE_NAME,
+      url: SITE_URL,
+    },
+    mainEntityOfPage: {
+      '@type': 'WebPage',
+      '@id': url,
+    },
+    ...(post.coverImageUrl && { image: post.coverImageUrl }),
+    ...(post.categoryName && { articleSection: post.categoryName }),
+  };
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <Link
         href="/blog"
         className="inline-flex text-sm text-slate-500 hover:text-slate-700"

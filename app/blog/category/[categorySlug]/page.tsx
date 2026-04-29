@@ -4,6 +4,7 @@ import {
   getPublishedPosts,
   getAllCategories,
 } from '@/lib/blog/queries';
+import { SITE_URL, SITE_NAME } from '@/lib/site';
 import { PostCard } from '../../components/PostCard';
 import { CategoryTabs } from '../../components/CategoryTabs';
 import { Pagination } from '../../components/Pagination';
@@ -16,14 +17,32 @@ type SearchParams = Promise<{ page?: string }>;
 export async function generateMetadata({ params }: { params: Params }) {
   const { categorySlug } = await params;
   if (!SLUG_PATTERN.test(categorySlug)) {
-    return { title: '칼럼 — 내집(My.ZIP)' };
+    return { title: `칼럼 — ${SITE_NAME}` };
   }
   const cats = await getAllCategories();
   const cat = cats.find((c) => c.slug === categorySlug);
-  if (!cat) return { title: '칼럼 — 내집(My.ZIP)' };
+  if (!cat) return { title: `칼럼 — ${SITE_NAME}` };
+
+  const url = `${SITE_URL}/blog/category/${cat.slug}`;
+  const description = `${cat.name} 분야의 칼럼·인사이트.`;
+
   return {
-    title: `${cat.name} — 칼럼 — 내집(My.ZIP)`,
-    description: `${cat.name} 분야의 칼럼·인사이트.`,
+    title: `${cat.name} — 칼럼 — ${SITE_NAME}`,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      title: `${cat.name} — 칼럼`,
+      description,
+      url,
+      siteName: SITE_NAME,
+      locale: 'ko_KR',
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${cat.name} — 칼럼`,
+      description,
+    },
   };
 }
 

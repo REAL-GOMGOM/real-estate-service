@@ -1,8 +1,10 @@
 import type { MetadataRoute } from 'next';
 import { getAllRegionIds } from '@/lib/region-data';
+import { getAllPublishedSlugs, getAllCategories } from '@/lib/blog/queries';
+import { SITE_URL } from '@/lib/site';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = 'https://www.naezipkorea.com';
+  const baseUrl = SITE_URL;
   const now = new Date();
 
   // 정적 페이지
@@ -20,6 +22,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${baseUrl}/news`, lastModified: now, changeFrequency: 'daily', priority: 0.6 },
     { url: `${baseUrl}/gap-guide`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
     { url: `${baseUrl}/privacy`, lastModified: now, changeFrequency: 'yearly', priority: 0.3 },
+    { url: `${baseUrl}/blog`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
   ];
 
   // 126개 region URL
@@ -31,5 +34,23 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.8,
   }));
 
-  return [...staticPages, ...regionUrls];
+  // /blog 카테고리 페이지
+  const cats = await getAllCategories();
+  const categoryUrls: MetadataRoute.Sitemap = cats.map((c) => ({
+    url: `${baseUrl}/blog/category/${c.slug}`,
+    lastModified: now,
+    changeFrequency: 'weekly',
+    priority: 0.6,
+  }));
+
+  // /blog 발행 글 상세
+  const slugs = await getAllPublishedSlugs();
+  const postUrls: MetadataRoute.Sitemap = slugs.map((p) => ({
+    url: `${baseUrl}/blog/${p.slug}`,
+    lastModified: p.updatedAt,
+    changeFrequency: 'weekly',
+    priority: 0.7,
+  }));
+
+  return [...staticPages, ...regionUrls, ...categoryUrls, ...postUrls];
 }
