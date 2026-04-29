@@ -40,6 +40,7 @@ const NAV_ITEMS: NavItem[] = [
     ],
   },
   { label: '리포트', href: '/report', badge: 'NEW', badgeUntil: '2026-05-13' },
+  { label: '칼럼', href: '/blog' },
   { label: '뉴스', href: '/news' },
 ];
 
