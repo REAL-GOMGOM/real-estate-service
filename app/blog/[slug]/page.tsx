@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { MDXRemote } from 'next-mdx-remote/rsc';
@@ -146,12 +147,14 @@ async function PostDetail({ params }: { params: Params }) {
 
         {post.coverImageUrl && (
           <div className="mt-8 overflow-hidden rounded-lg bg-slate-100">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src={post.coverImageUrl}
               alt=""
+              width={1200}
+              height={675}
+              sizes="(max-width: 768px) 100vw, 768px"
               className="h-auto w-full"
-              loading="eager"
+              priority
             />
           </div>
         )}

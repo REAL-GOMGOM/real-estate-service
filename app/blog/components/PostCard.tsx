@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import type { PublicPostListItem } from '@/lib/blog/queries';
 
@@ -25,13 +26,13 @@ export function PostCard({ post }: { post: PublicPostListItem }) {
       className="group flex flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:shadow-md"
     >
       {post.coverImageUrl ? (
-        <div className="aspect-[16/9] overflow-hidden bg-slate-100">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+        <div className="relative aspect-[16/9] overflow-hidden bg-slate-100">
+          <Image
             src={post.coverImageUrl}
             alt=""
-            className="h-full w-full object-cover transition group-hover:scale-105"
-            loading="lazy"
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            className="object-cover transition group-hover:scale-105"
           />
         </div>
       ) : (
