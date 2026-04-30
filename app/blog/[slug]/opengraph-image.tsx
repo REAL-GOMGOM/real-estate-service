@@ -1,8 +1,9 @@
 import { ImageResponse } from 'next/og';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { getPublishedPostBySlug } from '@/lib/blog/queries';
 import { SITE_NAME } from '@/lib/site';
 
-export const runtime = 'edge';
 export const alt = '내집(My.ZIP) 칼럼';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
@@ -15,31 +16,21 @@ const KST_DATE_FORMAT: Intl.DateTimeFormatOptions = {
 };
 
 /**
- * Google Fonts CSS API에서 woff2 URL 추출 후 폰트 데이터 fetch.
+ * Pretendard-Bold OTF 디스크 read.
  *
- * text 파라미터로 사용된 글자만 포함된 subset 폰트 받기 — Edge 1MB 제한 회피.
- * 한국어 OG 이미지 표준 패턴 (Vercel docs).
+ * region OG (app/region/[id]/opengraph-image.tsx)와 동일 패턴.
+ * Node runtime 전용 (Edge에서는 fs 사용 불가).
  */
-async function loadKoreanFont(text: string): Promise<ArrayBuffer | null> {
-  try {
-    const cssUrl = `https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@700&text=${encodeURIComponent(text)}`;
-    const css = await fetch(cssUrl, {
-      headers: {
-        // Google Fonts API는 User-Agent에 따라 woff2 vs woff 응답 다름
-        'User-Agent':
-          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-      },
-    }).then((r) => r.text());
-
-    const match = css.match(/url\(([^)]+\.woff2)\)/);
-    if (!match) return null;
-
-    const fontUrl = match[1];
-    return await fetch(fontUrl).then((r) => r.arrayBuffer());
-  } catch (e) {
-    console.error('[og] font load failed:', e);
-    return null;
-  }
+async function loadPretendard(): Promise<ArrayBuffer> {
+  const fontPath = path.join(
+    process.cwd(),
+    'public/fonts/Pretendard-Bold.otf',
+  );
+  const fontBuffer = await fs.readFile(fontPath);
+  return fontBuffer.buffer.slice(
+    fontBuffer.byteOffset,
+    fontBuffer.byteOffset + fontBuffer.byteLength,
+  );
 }
 
 type ImageParams = Promise<{ slug: string }>;
@@ -55,8 +46,7 @@ export default async function OpengraphImage({ params }: { params: ImageParams }
     ? new Intl.DateTimeFormat('ko-KR', KST_DATE_FORMAT).format(post.publishedAt)
     : '';
 
-  const allText = `${title} ${categoryName} ${dateStr} ${SITE_NAME} ·`;
-  const fontData = await loadKoreanFont(allText);
+  const fontData = await loadPretendard();
 
   return new ImageResponse(
     (
@@ -71,7 +61,7 @@ export default async function OpengraphImage({ params }: { params: ImageParams }
           backgroundImage:
             'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
           padding: '80px',
-          fontFamily: fontData ? 'Noto Sans KR' : 'sans-serif',
+          fontFamily: 'Pretendard',
         }}
       >
         <div style={{ display: 'flex' }}>
@@ -125,16 +115,14 @@ export default async function OpengraphImage({ params }: { params: ImageParams }
     ),
     {
       ...size,
-      fonts: fontData
-        ? [
-            {
-              name: 'Noto Sans KR',
-              data: fontData,
-              style: 'normal',
-              weight: 700,
-            },
-          ]
-        : [],
+      fonts: [
+        {
+          name: 'Pretendard',
+          data: fontData,
+          style: 'normal',
+          weight: 700,
+        },
+      ],
     },
   );
 }
