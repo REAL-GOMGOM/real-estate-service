@@ -3,6 +3,7 @@
 import { useActionState, useState } from 'react';
 import { createPost, updatePost, type ActionState } from './actions';
 import { MDXEditor } from './MDXEditor';
+import { CoverImageUpload } from './CoverImageUpload';
 
 type Category = {
   id: string;
@@ -47,6 +48,9 @@ export function PostForm(props: Props) {
   const initial = props.mode === 'edit' ? props.post : null;
 
   const [mdxContent, setMdxContent] = useState(initial?.mdxContent ?? '');
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(
+    initial?.coverImageUrl ?? null,
+  );
 
   return (
     <form action={formAction} className="space-y-6">
@@ -128,18 +132,20 @@ export function PostForm(props: Props) {
           </div>
 
           <div className="md:col-span-2">
-            <label htmlFor="coverImageUrl" className="block text-xs font-medium text-slate-700">
-              커버 이미지 URL <span className="text-slate-400">(선택)</span>
+            <label className="block text-xs font-medium text-slate-700">
+              커버 이미지 <span className="text-slate-400">(선택)</span>
             </label>
             <input
-              id="coverImageUrl"
+              type="hidden"
               name="coverImageUrl"
-              type="url"
-              defaultValue={initial?.coverImageUrl ?? ''}
-              disabled={pending}
-              placeholder="https://..."
-              className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 disabled:opacity-50"
+              value={coverImageUrl ?? ''}
             />
+            <div className="mt-1">
+              <CoverImageUpload
+                value={coverImageUrl}
+                onChange={setCoverImageUrl}
+              />
+            </div>
           </div>
         </div>
       </div>
