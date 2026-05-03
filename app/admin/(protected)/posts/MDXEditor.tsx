@@ -2,9 +2,21 @@
 
 import dynamic from 'next/dynamic';
 import { useState, useRef } from 'react';
-import { upload } from '@vercel/blob/client';
 import '@uiw/react-md-editor/markdown-editor.css';
 import '@uiw/react-markdown-preview/markdown.css';
+
+// 서버 응답 에러 코드 → 사용자 표시 메시지
+const UPLOAD_ERROR_MESSAGES: Record<string, string> = {
+  unauthorized: '로그인이 만료되었습니다. 다시 로그인해주세요',
+  forbidden: '권한이 없습니다',
+  rate_limited: '업로드 빈도가 너무 높습니다. 잠시 후 다시 시도해주세요',
+  no_file: '파일이 선택되지 않았습니다',
+  too_large: '4MB 이하 이미지만 업로드 가능합니다',
+  invalid_type: 'JPG, PNG, WebP, GIF 형식만 허용됩니다',
+  upload_failed: '업로드 실패. 잠시 후 다시 시도해주세요',
+};
+
+const FALLBACK_UPLOAD_ERROR = UPLOAD_ERROR_MESSAGES.upload_failed;
 
 /**
  * MDX 에디터 wrapper.
@@ -61,22 +73,29 @@ export function MDXEditor({
     setUploading(true);
 
     try {
-      const uploadOne = async (file: File) => {
-        const yearMonth = new Date().toISOString().slice(0, 7);
-        const timestamp = Date.now();
-        const random = Math.random().toString(36).slice(2, 8);
-        const ext = (file.name.split('.').pop() ?? 'bin')
-          .toLowerCase()
-          .slice(0, 5);
-        const pathname = `blog/uploads/${yearMonth}/${timestamp}-${random}.${ext}`;
+      // 단일 파일을 server-side /api/upload에 보내고 url 반환
+      // 실패 시 사용자 표시 메시지를 담은 Error throw → 호출부 Promise.all이 reject로 전파
+      async function uploadOne(file: File): Promise<string> {
+        const formData = new FormData();
+        formData.append('file', file);
 
-        const blob = await upload(pathname, file, {
-          access: 'public',
-          handleUploadUrl: '/api/upload',
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
         });
 
-        return blob.url;
-      };
+        if (!res.ok) {
+          const { error: code } = await res
+            .json()
+            .catch(() => ({ error: 'upload_failed' }));
+          const message =
+            UPLOAD_ERROR_MESSAGES[code as string] ?? FALLBACK_UPLOAD_ERROR;
+          throw new Error(message);
+        }
+
+        const { url } = (await res.json()) as { url: string };
+        return url;
+      }
 
       const urls = await Promise.all(images.map(uploadOne));
       const insertion = urls.map((url) => `\n![](${url})\n`).join('');
