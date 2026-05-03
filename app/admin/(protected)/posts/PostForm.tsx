@@ -88,7 +88,7 @@ export function PostForm(props: Props) {
               type="text"
               required
               defaultValue={initial?.slug ?? ''}
-              pattern="[a-z0-9-]+"
+              pattern="[a-z0-9\-]+"
               maxLength={200}
               disabled={pending}
               placeholder="예: gangnam-subscription-guide"
