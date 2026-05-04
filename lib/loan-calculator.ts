@@ -5,12 +5,14 @@ import {
   MIN_RATE_GENERAL,
   MIN_RATE_NEWLYWED_FIRST,
 } from './loan-products';
+import { calcDti } from './loan-ratios';
 
 export interface LoanInput {
   housePrice: number;
   deposit: number;
   income: number;
   existingDebtPayment: number;
+  existingDebtInterest?: number;  // 기존 부채 연 이자 (만원, DTI 계산용, default 0)
   loanTerm: number;
   productId: string;
   isNewlywedFirstTime: boolean;
@@ -43,6 +45,7 @@ export interface LoanResult {
   totalInterest: number;
   totalPayment: number;
   dsr: number;
+  dti: number;  // 총부채상환비율 (정책대출 한도 60% 기준)
   ltvUsed: number;
   feasible: boolean;
   rejectReasons: string[];
@@ -167,6 +170,7 @@ export function simulateLoan(input: LoanInput): LoanResult {
       totalInterest: 0,
       totalPayment: 0,
       dsr: 0,
+      dti: 0,
       ltvUsed: 0,
       feasible: false,
       rejectReasons: ['존재하지 않는 상품입니다.'],
@@ -325,6 +329,13 @@ export function simulateLoan(input: LoanInput): LoanResult {
     rejectReasons.push(`DSR ${dsr}% > 40% 초과 (경고: 대출 심사 시 제한 가능)`);
   }
 
+  // DTI 계산 (보조 지표 — 정책대출 통상 한도 60%)
+  const dti = calcDti({
+    annualRepayment,
+    existingDebtInterest: input.existingDebtInterest ?? 0,
+    income: input.income,
+  });
+
   // 상환 스케줄
   const schedule = buildSchedule(loanAmount, appliedRate, months, input.repaymentType);
 
@@ -341,6 +352,7 @@ export function simulateLoan(input: LoanInput): LoanResult {
     totalInterest,
     totalPayment,
     dsr,
+    dti,
     ltvUsed,
     graduatedYears,
     feasible,
