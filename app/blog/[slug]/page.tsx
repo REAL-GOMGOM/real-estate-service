@@ -3,6 +3,9 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { MDXRemote } from 'next-mdx-remote/rsc';
+import Header from '@/components/layout/Header';
+import Footer from '@/components/layout/Footer';
+import BlogBreadcrumb from '@/components/blog/BlogBreadcrumb';
 import { getPublishedPostBySlug } from '@/lib/blog/queries';
 import { SITE_URL, SITE_NAME } from '@/lib/site';
 import { mdxComponents } from '../components/mdx-components';
@@ -65,11 +68,21 @@ export async function generateMetadata({ params }: { params: Params }) {
 
 export default function PostDetailPage({ params }: { params: Params }) {
   return (
-    <main className="mx-auto max-w-3xl px-4 py-12">
-      <Suspense fallback={<DetailSkeleton />}>
-        <PostDetail params={params} />
+    <>
+      <Suspense fallback={null}>
+        <Header />
       </Suspense>
-    </main>
+      {/* fixed Header(64px) 회피용 spacer */}
+      <div aria-hidden="true" className="h-16" />
+      <main className="mx-auto max-w-3xl px-4 py-12">
+        <Suspense fallback={<DetailSkeleton />}>
+          <PostDetail params={params} />
+        </Suspense>
+      </main>
+      <Suspense fallback={null}>
+        <Footer />
+      </Suspense>
+    </>
   );
 }
 
@@ -111,18 +124,50 @@ async function PostDetail({ params }: { params: Params }) {
     ...(post.categoryName && { articleSection: post.categoryName }),
   };
 
+  // 검색 결과 breadcrumb 노출용 schema.org BreadcrumbList
+  // categoryName/categorySlug가 모두 있으면 4단계, 없으면 3단계로 fallback
+  const hasCategory = !!post.categorySlug && !!post.categoryName;
+  const breadcrumbLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: hasCategory
+      ? [
+          { '@type': 'ListItem', position: 1, name: '홈', item: SITE_URL },
+          { '@type': 'ListItem', position: 2, name: '칼럼', item: `${SITE_URL}/blog` },
+          {
+            '@type': 'ListItem',
+            position: 3,
+            name: post.categoryName,
+            item: `${SITE_URL}/blog/category/${post.categorySlug}`,
+          },
+          { '@type': 'ListItem', position: 4, name: post.title },
+        ]
+      : [
+          { '@type': 'ListItem', position: 1, name: '홈', item: SITE_URL },
+          { '@type': 'ListItem', position: 2, name: '칼럼', item: `${SITE_URL}/blog` },
+          { '@type': 'ListItem', position: 3, name: post.title },
+        ],
+  };
+
   return (
     <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <Link
-        href="/blog"
-        className="inline-flex text-sm text-slate-500 hover:text-slate-700"
-      >
-        ← 칼럼 목록
-      </Link>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
+      />
+
+      {hasCategory && (
+        <BlogBreadcrumb
+          variant="post"
+          categorySlug={post.categorySlug as string}
+          categoryName={post.categoryName as string}
+          postTitle={post.title}
+        />
+      )}
 
       <article className="mt-6">
         <header>
