@@ -1,7 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-import { TrendingUp, TrendingDown, ArrowRight } from 'lucide-react';
+import { TrendingUp, TrendingDown } from 'lucide-react';
 import { BRAND } from '@/lib/design-tokens';
 import { Reveal } from '@/components/shared/Reveal';
 
@@ -44,14 +43,6 @@ export function TodayReport({ districts }: TodayReportProps) {
                 국토교통부 실거래가 공개시스템 기반
               </p>
             </div>
-            <Link
-              href="/report"
-              className="hidden md:flex items-center gap-1 text-sm font-semibold mt-4 md:mt-0 group"
-              style={{ color: BRAND.terracottaText }}
-            >
-              전체 리포트 보기
-              <ArrowRight size={15} className="transition-transform duration-200 group-hover:translate-x-1" />
-            </Link>
           </div>
         </Reveal>
 

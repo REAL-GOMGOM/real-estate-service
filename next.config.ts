@@ -16,6 +16,14 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      // 리포트 영역 종료 — 칼럼으로 일원화 (301 영구 이동, SEO 자산 보존)
+      { source: '/report', destination: '/blog', permanent: true },
+      // 미래 추가될 하위 URL 대비 와일드카드 (현재는 동적 segment 없지만 방어적)
+      { source: '/report/:path*', destination: '/blog', permanent: true },
+    ];
+  },
 };
 
 export default nextConfig;

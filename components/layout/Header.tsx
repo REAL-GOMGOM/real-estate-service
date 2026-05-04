@@ -39,7 +39,6 @@ const NAV_ITEMS: NavItem[] = [
       { emoji: '\uD83D\uDCC5', label: '경제달력', href: '/calendar', desc: '금리·지표 일정' },
     ],
   },
-  { label: '리포트', href: '/report', badge: 'NEW', badgeUntil: '2026-05-13' },
   { label: '칼럼', href: '/blog' },
   { label: '뉴스', href: '/news' },
 ];
