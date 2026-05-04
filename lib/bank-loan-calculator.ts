@@ -3,12 +3,14 @@ import {
   calcEqualPrincipalFirstMonth,
   MonthlySchedule,
 } from './loan-calculator';
+import { calcDti } from './loan-ratios';
 
 export interface BankLoanInput {
   housePrice: number;
   deposit: number;
   income: number;
   existingDebtPayment: number;
+  existingDebtInterest?: number;  // 기존 부채 연 이자 (만원, DTI 계산용, default 0)
   loanTerm: number;
   rateType: 'fixed' | 'variable';
   rateMin: number;
@@ -32,6 +34,7 @@ export interface BankLoanResult {
   totalPaymentMax: number;
   dsr: number;
   stressedDsr: number;
+  dti: number;  // 총부채상환비율 (시중은행 가이드 한도 40% 기준, DSR 우선 심사)
   ltvUsed: number;
   feasible: boolean;
   warnings: string[];
@@ -169,6 +172,13 @@ export function simulateBankLoan(input: BankLoanInput): BankLoanResult {
     warnings.push(`스트레스 DSR ${stressedDsr}% — 변동금리 규제 초과`);
   }
 
+  // DTI 계산 (보조 지표 — 시중은행 가이드 한도 40%, 현행 심사는 DSR 우선)
+  const dti = calcDti({
+    annualRepayment: annualPaymentMin,
+    existingDebtInterest: input.existingDebtInterest ?? 0,
+    income: input.income,
+  });
+
   // 5. 총 이자
   const totalInterestMin = loanAmount > 0
     ? totalInterest(loanAmount, rateMin, months, input.repaymentType)
@@ -196,6 +206,7 @@ export function simulateBankLoan(input: BankLoanInput): BankLoanResult {
     totalPaymentMax: Math.round(totalPaymentMax * 100) / 100,
     dsr,
     stressedDsr,
+    dti,
     ltvUsed: ltv,
     feasible: rejectReasons.length === 0,
     warnings,

@@ -10,6 +10,11 @@ import {
 } from '@/lib/loan-products';
 import { Calculator, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Info, Landmark, Building2, Search, X, Loader2 } from 'lucide-react';
 import { DISTRICT_CODE } from '@/lib/district-codes';
+import {
+  DTI_LIMIT_POLICY,
+  DTI_LIMIT_BANK,
+  classifyRatio,
+} from '@/lib/loan-ratios';
 import BankRateComparison from './BankRateComparison';
 
 type LoanTab = 'policy' | 'bank';
@@ -67,6 +72,7 @@ export default function LoanSimulator() {
   const [deposit, setDeposit] = useState(20000);
   const [income, setIncome] = useState(5000);
   const [existingDebt, setExistingDebt] = useState(0);
+  const [existingDebtInterest, setExistingDebtInterest] = useState(0);
   const [loanTerm, setLoanTerm] = useState(20);
   const [isLocalHouse, setIsLocalHouse] = useState(false);
   const [isCapitalArea, setIsCapitalArea] = useState(true);
@@ -131,6 +137,7 @@ export default function LoanSimulator() {
   const dDeposit = useDebounce(deposit, 300);
   const dIncome = useDebounce(income, 300);
   const dExistingDebt = useDebounce(existingDebt, 300);
+  const dExistingDebtInterest = useDebounce(existingDebtInterest, 300);
 
   // Derived
   const optionMeta = PRODUCT_OPTIONS.find((o) => o.id === selectedOption)!;
@@ -146,6 +153,7 @@ export default function LoanSimulator() {
       deposit: dDeposit,
       income: dIncome,
       existingDebtPayment: dExistingDebt,
+      existingDebtInterest: dExistingDebtInterest,
       loanTerm,
       productId,
       isNewlywedFirstTime: isNewlywedFirst,
@@ -156,7 +164,7 @@ export default function LoanSimulator() {
       repaymentType,
     };
     return simulateLoan(input);
-  }, [dHousePrice, dDeposit, dIncome, dExistingDebt, loanTerm, productId, isNewlywedFirst, isLocalHouse, isCapitalArea, exclusiveDiscount, stackableDiscounts, repaymentType]);
+  }, [dHousePrice, dDeposit, dIncome, dExistingDebt, dExistingDebtInterest, loanTerm, productId, isNewlywedFirst, isLocalHouse, isCapitalArea, exclusiveDiscount, stackableDiscounts, repaymentType]);
 
   // Rate breakdown items (didimdol only)
   const rateBreakdown = useMemo(() => {
@@ -474,6 +482,24 @@ export default function LoanSimulator() {
               <input type="number" value={existingDebt} onChange={(e) => setExistingDebt(Math.max(0, Number(e.target.value) || 0))} step={100} style={inputStyle} />
             </div>
           </div>
+
+          {/* DTI 보조 입력 — 첫 매수자는 보통 0이라 default 노출, 입력 부담 최소화 */}
+          <div style={{ marginTop: 16 }}>
+            <FieldLabel style={{ marginBottom: 6 }}>
+              기존 대출 연 이자 (만원) <span style={{ fontSize: 11, color: 'var(--text-dim)', fontWeight: 400 }}>(선택, DTI 계산용)</span>
+            </FieldLabel>
+            <input
+              type="number"
+              value={existingDebtInterest}
+              onChange={(e) => setExistingDebtInterest(Math.max(0, Number(e.target.value) || 0))}
+              step={100}
+              placeholder="0"
+              style={inputStyle}
+            />
+            <p style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 4, marginBottom: 0, lineHeight: 1.5 }}>
+              신용대출·학자금 등 주담대 외 대출의 연간 이자 합. 첫 매수자는 보통 0
+            </p>
+          </div>
         </Section>
 
         {/* ── 상품 선택 ── */}
@@ -715,28 +741,79 @@ export default function LoanSimulator() {
             <MiniStat label="총 이자" value={fmtWon(result.totalInterest)} />
           </div>
 
-          {/* DSR */}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 10,
-            padding: '12px 14px', borderRadius: 10,
-            backgroundColor: result.dsr > 40
-              ? 'var(--danger-bg, rgba(185, 62, 50, 0.08))'
-              : result.dsr > 30
-                ? 'var(--warning-bg, rgba(200, 150, 50, 0.08))'
-                : 'var(--border-light)',
-          }}>
-            <Info size={14} style={{
-              color: result.dsr > 40 ? 'var(--danger)' : result.dsr > 30 ? 'var(--warning, #c89632)' : 'var(--text-muted)',
-              flexShrink: 0,
-            }} />
-            <span style={{
-              fontSize: 13,
-              color: result.dsr > 40 ? 'var(--danger)' : result.dsr > 30 ? 'var(--warning, #c89632)' : 'var(--text-secondary)',
+          {/* DSR / DTI 행 — 소득 0이면 가드, 그 외에는 두 행 표시 */}
+          {income > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {/* DSR — 현행 심사 dominant 기준, 색상 분기 임계 30/40 그대로 */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '12px 14px', borderRadius: 10,
+                backgroundColor: result.dsr > 40
+                  ? 'var(--danger-bg, rgba(185, 62, 50, 0.08))'
+                  : result.dsr > 30
+                    ? 'var(--warning-bg, rgba(200, 150, 50, 0.08))'
+                    : 'var(--border-light)',
+              }}>
+                <Info size={14} style={{
+                  color: result.dsr > 40 ? 'var(--danger)' : result.dsr > 30 ? 'var(--warning, #c89632)' : 'var(--text-muted)',
+                  flexShrink: 0,
+                }} />
+                <span style={{
+                  fontSize: 13,
+                  color: result.dsr > 40 ? 'var(--danger)' : result.dsr > 30 ? 'var(--warning, #c89632)' : 'var(--text-secondary)',
+                }}>
+                  DSR <strong style={{ fontFamily: MONO }}>{result.dsr}%</strong>
+                  <span style={{ fontSize: 11, color: 'var(--text-dim)', marginLeft: 6 }}>
+                    현행 심사 기준
+                  </span>
+                  {result.dsr > 40 ? ' — 40% 초과, 심사 제한 가능' : result.dsr > 30 ? ' — 주의 구간' : ' — 40% 이내'}
+                </span>
+              </div>
+
+              {/* DTI — 탭별 한도 분기 (정책 60% / 시중 40%), 색상은 classifyRatio */}
+              {(() => {
+                const dtiLimit = activeTab === 'policy' ? DTI_LIMIT_POLICY : DTI_LIMIT_BANK;
+                const status = classifyRatio(result.dti, dtiLimit);
+                const captionText = activeTab === 'policy'
+                  ? `DTI ${dtiLimit}% 한도 · 정책대출 기준`
+                  : `DTI ${dtiLimit}% 가이드 · 현행 심사는 DSR 우선`;
+                const textColor =
+                  status === 'danger' ? 'var(--danger)' :
+                  status === 'warning' ? 'var(--warning, #c89632)' :
+                  'var(--text-secondary)';
+                const bgColor =
+                  status === 'danger' ? 'var(--danger-bg, rgba(185, 62, 50, 0.08))' :
+                  status === 'warning' ? 'var(--warning-bg, rgba(200, 150, 50, 0.08))' :
+                  'var(--border-light)';
+                const iconColor =
+                  status === 'danger' ? 'var(--danger)' :
+                  status === 'warning' ? 'var(--warning, #c89632)' :
+                  'var(--text-muted)';
+                return (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '12px 14px', borderRadius: 10,
+                    backgroundColor: bgColor,
+                  }}>
+                    <Info size={14} style={{ color: iconColor, flexShrink: 0 }} />
+                    <span style={{ fontSize: 13, color: textColor }}>
+                      DTI <strong style={{ fontFamily: MONO }}>{result.dti}%</strong>
+                      <span style={{ fontSize: 11, color: 'var(--text-dim)', marginLeft: 6 }}>
+                        {captionText}
+                      </span>
+                    </span>
+                  </div>
+                );
+              })()}
+            </div>
+          ) : (
+            <div style={{
+              fontSize: 13, color: 'var(--text-muted)', textAlign: 'center',
+              padding: '12px 14px', borderRadius: 10, backgroundColor: 'var(--border-light)',
             }}>
-              DSR <strong style={{ fontFamily: MONO }}>{result.dsr}%</strong>
-              {result.dsr > 40 ? ' — 40% 초과, 심사 제한 가능' : result.dsr > 30 ? ' — 주의 구간' : ' — 40% 이내'}
-            </span>
-          </div>
+              소득을 입력하면 DSR/DTI가 계산됩니다
+            </div>
+          )}
         </div>
 
         {/* ── 상환 스케줄 ── */}
@@ -790,6 +867,8 @@ export default function LoanSimulator() {
         {/* 면책 문구 */}
         <p style={{ fontSize: 11, color: 'var(--text-dim)', textAlign: 'center', lineHeight: 1.7, padding: '0 8px' }}>
           ※ 본 계산은 참고용이며 실제 대출 조건은 금융기관에 확인하세요.
+          <br />
+          DSR/DTI 한도는 정책 기준에 따른 추정. 실제 한도는 신용도·소득 증빙 방식에 따라 달라질 수 있습니다.
           <br />
           금리 기준일: {LAST_UPDATED} | 한국주택금융공사 공시
         </p>
