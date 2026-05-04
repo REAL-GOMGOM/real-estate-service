@@ -9,7 +9,7 @@ const ITEMS = [
   { icon: BarChart3, label: '실거래 조회', sub: '구·단지별', color: BRAND.sage, href: '/transactions' },
   { icon: Calendar, label: '청약 정보', sub: '일정·경쟁률', color: BRAND.amber, href: '/subscription' },
   { icon: TrendingUp, label: '변동률 지도', sub: '상승·하락', color: BRAND.terracotta, href: '/price-map' },
-  { icon: FileText, label: '리포트', sub: '월간 분석', color: BRAND.sage, href: '/report' },
+  { icon: FileText, label: '칼럼', sub: '주간 인사이트', color: BRAND.sage, href: '/blog' },
 ] as const;
 
 export function QuickAccess() {
