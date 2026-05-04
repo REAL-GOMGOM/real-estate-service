@@ -1,5 +1,8 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
+import Header from '@/components/layout/Header';
+import Footer from '@/components/layout/Footer';
+import BlogBreadcrumb from '@/components/blog/BlogBreadcrumb';
 import {
   getPublishedPosts,
   getAllCategories,
@@ -54,17 +57,27 @@ export default function CategoryPage({
   searchParams: SearchParams;
 }) {
   return (
-    <main className="mx-auto max-w-6xl px-4 py-12">
-      <header>
-        <h1 className="text-3xl font-bold text-slate-900">칼럼</h1>
-      </header>
+    <>
+      <Suspense fallback={null}>
+        <Header />
+      </Suspense>
+      {/* fixed Header(64px) 회피용 spacer */}
+      <div aria-hidden="true" className="h-16" />
+      <main className="mx-auto max-w-6xl px-4 py-12">
+        <header>
+          <h1 className="text-3xl font-bold text-slate-900">칼럼</h1>
+        </header>
 
-      <div className="mt-8">
-        <Suspense fallback={null}>
-          <Shell params={params} searchParams={searchParams} />
-        </Suspense>
-      </div>
-    </main>
+        <div className="mt-8">
+          <Suspense fallback={null}>
+            <Shell params={params} searchParams={searchParams} />
+          </Suspense>
+        </div>
+      </main>
+      <Suspense fallback={null}>
+        <Footer />
+      </Suspense>
+    </>
   );
 }
 
@@ -90,9 +103,29 @@ async function Shell({
     categorySlug,
   });
 
+  // 검색 결과 breadcrumb 노출용 schema.org BreadcrumbList
+  const breadcrumbLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: '홈', item: SITE_URL },
+      { '@type': 'ListItem', position: 2, name: '칼럼', item: `${SITE_URL}/blog` },
+      { '@type': 'ListItem', position: 3, name: cat.name },
+    ],
+  };
+
   return (
     <>
-      <CategoryTabs categories={cats} currentSlug={categorySlug} />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
+      />
+
+      <BlogBreadcrumb variant="category" categoryName={cat.name} />
+
+      <div className="mt-6">
+        <CategoryTabs categories={cats} currentSlug={categorySlug} />
+      </div>
 
       <div className="mt-8">
         {rows.length === 0 ? (

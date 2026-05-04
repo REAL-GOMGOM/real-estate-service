@@ -1,4 +1,6 @@
 import { Suspense } from 'react';
+import Header from '@/components/layout/Header';
+import Footer from '@/components/layout/Footer';
 import { getPublishedPosts, getAllCategories } from '@/lib/blog/queries';
 import { SITE_URL, SITE_NAME } from '@/lib/site';
 import { PostCard } from './components/PostCard';
@@ -34,26 +36,36 @@ export default function BlogIndexPage({
   searchParams: SearchParams;
 }) {
   return (
-    <main className="mx-auto max-w-6xl px-4 py-12">
-      <header>
-        <h1 className="text-3xl font-bold text-slate-900">칼럼</h1>
-        <p className="mt-2 text-slate-600">
-          부동산 시장·청약·대출·세금·정책에 대한 인사이트와 가이드.
-        </p>
-      </header>
+    <>
+      <Suspense fallback={null}>
+        <Header />
+      </Suspense>
+      {/* fixed Header(64px) 회피용 spacer — 다른 public 페이지의 paddingTop:80과 등가 */}
+      <div aria-hidden="true" className="h-16" />
+      <main className="mx-auto max-w-6xl px-4 py-12">
+        <header>
+          <h1 className="text-3xl font-bold text-slate-900">칼럼</h1>
+          <p className="mt-2 text-slate-600">
+            부동산 시장·청약·대출·세금·정책에 대한 인사이트와 가이드.
+          </p>
+        </header>
 
-      <div className="mt-8">
-        <Suspense fallback={<TabsSkeleton />}>
-          <Tabs />
-        </Suspense>
-      </div>
+        <div className="mt-8">
+          <Suspense fallback={<TabsSkeleton />}>
+            <Tabs />
+          </Suspense>
+        </div>
 
-      <div className="mt-8">
-        <Suspense fallback={<GridSkeleton />}>
-          <PostGrid searchParams={searchParams} />
-        </Suspense>
-      </div>
-    </main>
+        <div className="mt-8">
+          <Suspense fallback={<GridSkeleton />}>
+            <PostGrid searchParams={searchParams} />
+          </Suspense>
+        </div>
+      </main>
+      <Suspense fallback={null}>
+        <Footer />
+      </Suspense>
+    </>
   );
 }
 
