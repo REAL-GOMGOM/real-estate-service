@@ -10,6 +10,7 @@ import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BlogBreadcrumb from '@/components/blog/BlogBreadcrumb';
 import { getPublishedPostBySlug } from '@/lib/blog/queries';
+import { preprocessMdxContent } from '@/lib/blog/preprocessor';
 import { SITE_URL, SITE_NAME } from '@/lib/site';
 import { mdxSanitizeSchema } from '@/lib/mdx/sanitize-schema';
 import { mdxComponents } from '../components/mdx-components';
@@ -210,7 +211,7 @@ async function PostDetail({ params }: { params: Params }) {
 
         <div className="prose prose-slate mt-10 max-w-none">
           <MDXRemote
-            source={post.mdxContent}
+            source={preprocessMdxContent(post.mdxContent)}
             components={mdxComponents}
             options={{
               mdxOptions: {
