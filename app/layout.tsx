@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import './globals.css';
 import { KakaoFloatingButton } from '@/components/shared/KakaoFloatingButton';
 import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics';
 import { CookieConsent } from '@/components/analytics/CookieConsent';
 import { AdSenseLoader } from '@/components/shared/AdSenseLoader';
+import { VisitorTracker } from '@/components/analytics/VisitorTracker';
 
 export const metadata: Metadata = {
   title: '내집(My.ZIP) | 실거래가·투자분석·건축정보 — 부동산 통합 플랫폼',
@@ -52,6 +54,9 @@ export default function RootLayout({
         <GoogleAnalytics />
         <CookieConsent />
         <AdSenseLoader />
+        <Suspense fallback={null}>
+          <VisitorTracker />
+        </Suspense>
       </body>
     </html>
   );

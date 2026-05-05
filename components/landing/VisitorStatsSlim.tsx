@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect } from 'react';
 import { BRAND } from '@/lib/design-tokens';
 import type { VisitorStatsData } from '@/lib/visitor-tracking';
 
@@ -9,10 +8,6 @@ interface Props {
 }
 
 export function VisitorStatsSlim({ initialStats }: Props) {
-  useEffect(() => {
-    fetch('/api/track', { method: 'POST' }).catch(() => {});
-  }, []);
-
   return (
     <div
       className="mx-auto max-w-5xl px-4 md:px-6 py-6 border-t"
