@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { MDXRemote } from 'next-mdx-remote/rsc';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
@@ -213,8 +214,15 @@ async function PostDetail({ params }: { params: Params }) {
             components={mdxComponents}
             options={{
               mdxOptions: {
+                format: 'md',
                 remarkPlugins: [remarkGfm],
-                rehypePlugins: [[rehypeSanitize, mdxSanitizeSchema]],
+                rehypePlugins: [
+                  rehypeRaw,
+                  [rehypeSanitize, mdxSanitizeSchema],
+                ],
+                remarkRehypeOptions: {
+                  allowDangerousHtml: true,
+                },
               },
             }}
           />
