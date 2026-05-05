@@ -123,6 +123,7 @@ export async function createPost(
 
   revalidatePath('/admin/posts');
   revalidatePath('/blog');
+  revalidatePath('/sitemap.xml');
   // 작성 후 수정 페이지로 redirect — 폼 유실 방지 + 발행 토글 가능
   redirect(`/admin/posts/${postId}/edit`);
 }
@@ -189,6 +190,7 @@ export async function updatePost(
   revalidatePath('/admin/posts');
   revalidatePath(`/admin/posts/${id}/edit`);
   revalidatePath('/blog');
+  revalidatePath('/sitemap.xml');
   return { ok: true, postId: id };
 }
 
@@ -211,6 +213,7 @@ export async function publishPostAction(id: string, _formData: FormData) {
   revalidatePath('/admin/posts');
   revalidatePath(`/admin/posts/${id}/edit`);
   revalidatePath('/blog');
+  revalidatePath('/sitemap.xml');
 }
 
 /* ============================================================
@@ -228,6 +231,7 @@ export async function unpublishPostAction(id: string, _formData: FormData) {
   revalidatePath('/admin/posts');
   revalidatePath(`/admin/posts/${id}/edit`);
   revalidatePath('/blog');
+  revalidatePath('/sitemap.xml');
 }
 
 /* ============================================================
@@ -241,5 +245,6 @@ export async function deletePostAction(id: string, _formData: FormData) {
 
   revalidatePath('/admin/posts');
   revalidatePath('/blog');
+  revalidatePath('/sitemap.xml');
   redirect('/admin/posts');
 }
