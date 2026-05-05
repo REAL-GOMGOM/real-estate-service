@@ -4,6 +4,8 @@ import { getBlogDb } from '@/lib/db/client';
 import { posts, categories } from '@/lib/db/schema';
 
 const SLUG_PATTERN = /^[a-z0-9-]{1,200}$/;
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type PublicPostListItem = {
   id: string;
@@ -161,6 +163,23 @@ export async function getPublishedPostBySlug(
     categorySlug: r.categorySlug,
     categoryName: r.categoryName,
   };
+}
+
+/**
+ * Admin 전용 — id 기반 fetch, draft 포함
+ * (protected) route group 안에서만 호출됨. 외부 노출 X.
+ */
+export async function getPostByIdForAdmin(id: string) {
+  if (!UUID_PATTERN.test(id)) return null;
+
+  const db = getBlogDb();
+  const rows = await db
+    .select()
+    .from(posts)
+    .where(eq(posts.id, id))
+    .limit(1);
+
+  return rows[0] ?? null;
 }
 
 /**

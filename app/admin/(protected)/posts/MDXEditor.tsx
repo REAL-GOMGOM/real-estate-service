@@ -2,6 +2,10 @@
 
 import dynamic from 'next/dynamic';
 import { useState, useRef } from 'react';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
+import rehypeSanitize from 'rehype-sanitize';
+import { mdxSanitizeSchema } from '@/lib/mdx/sanitize-schema';
 import '@uiw/react-md-editor/markdown-editor.css';
 import '@uiw/react-markdown-preview/markdown.css';
 
@@ -153,6 +157,12 @@ export function MDXEditor({
           onChange={(v) => onChange(v ?? '')}
           height={500}
           preview="live"
+          previewOptions={{
+            // 미리보기는 react-markdown 기반 — raw HTML 처리에 rehype-raw 필요
+            // (발행 렌더러는 MDX native라 rehype-raw 미사용)
+            remarkPlugins: [remarkGfm],
+            rehypePlugins: [rehypeRaw, [rehypeSanitize, mdxSanitizeSchema]],
+          }}
           textareaProps={{
             placeholder:
               '마크다운 또는 MDX로 본문을 작성하세요... (이미지 paste·drop 가능)',

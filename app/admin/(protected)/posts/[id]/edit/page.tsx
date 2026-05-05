@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { eq } from 'drizzle-orm';
 import { getBlogDb } from '@/lib/db/client';
@@ -80,6 +81,14 @@ async function EditShell({ params }: { params: Params }) {
           </span>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href={`/admin/posts/${post.id}/preview`}
+            target="_blank"
+            rel="noopener"
+            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            발행 페이지 미리보기 ↗
+          </Link>
           {post.status === 'published' && (
             <form action={unpublishPostAction.bind(null, post.id)}>
               <button
