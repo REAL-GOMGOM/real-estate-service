@@ -214,8 +214,6 @@ async function PostDetail({ params }: { params: Params }) {
             options={{
               mdxOptions: {
                 remarkPlugins: [remarkGfm],
-                // sanitize는 markdown HAST 위험 패턴 방어 (현 published 글에 raw HTML 없음, 미래 prep)
-                // raw HTML 처리(rehype-raw)는 사이클 A2에서 MDX JSX 모드 충돌 검증 후 박음
                 rehypePlugins: [[rehypeSanitize, mdxSanitizeSchema]],
               },
             }}
