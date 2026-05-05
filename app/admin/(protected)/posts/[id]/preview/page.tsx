@@ -9,6 +9,7 @@ import rehypeSanitize from 'rehype-sanitize';
 import { mdxSanitizeSchema } from '@/lib/mdx/sanitize-schema';
 import { mdxComponents } from '@/app/blog/components/mdx-components';
 import { getPostByIdForAdmin } from '@/lib/blog/queries';
+import { preprocessMdxContent } from '@/lib/blog/preprocessor';
 
 interface PreviewPageProps {
   params: Promise<{ id: string }>;
@@ -44,7 +45,7 @@ export default async function PreviewPage({ params }: PreviewPageProps) {
       <article className="prose prose-slate max-w-none">
         <h1>{post.title}</h1>
         <MDXRemote
-          source={post.mdxContent}
+          source={preprocessMdxContent(post.mdxContent)}
           components={mdxComponents}
           options={{
             mdxOptions: {
