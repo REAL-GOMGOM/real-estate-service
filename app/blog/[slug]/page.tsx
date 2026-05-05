@@ -3,11 +3,14 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { MDXRemote } from 'next-mdx-remote/rsc';
+import remarkGfm from 'remark-gfm';
+import rehypeSanitize from 'rehype-sanitize';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BlogBreadcrumb from '@/components/blog/BlogBreadcrumb';
 import { getPublishedPostBySlug } from '@/lib/blog/queries';
 import { SITE_URL, SITE_NAME } from '@/lib/site';
+import { mdxSanitizeSchema } from '@/lib/mdx/sanitize-schema';
 import { mdxComponents } from '../components/mdx-components';
 
 const SLUG_PATTERN = /^[a-z0-9-]{1,200}$/;
@@ -205,7 +208,18 @@ async function PostDetail({ params }: { params: Params }) {
         )}
 
         <div className="prose prose-slate mt-10 max-w-none">
-          <MDXRemote source={post.mdxContent} components={mdxComponents} />
+          <MDXRemote
+            source={post.mdxContent}
+            components={mdxComponents}
+            options={{
+              mdxOptions: {
+                remarkPlugins: [remarkGfm],
+                // sanitize는 markdown HAST 위험 패턴 방어 (현 published 글에 raw HTML 없음, 미래 prep)
+                // raw HTML 처리(rehype-raw)는 사이클 A2에서 MDX JSX 모드 충돌 검증 후 박음
+                rehypePlugins: [[rehypeSanitize, mdxSanitizeSchema]],
+              },
+            }}
+          />
         </div>
       </article>
     </>
