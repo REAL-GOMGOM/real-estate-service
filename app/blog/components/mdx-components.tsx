@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import type { MDXComponents } from 'mdx/types';
 import { HorizontalBarChart } from './HorizontalBarChart';
+import { DemographicShiftBars } from './DemographicShiftBars';
+import { AgeGroupBars } from './AgeGroupBars';
 
 /**
  * MDX 렌더 시 사용할 컴포넌트 화이트리스트.
@@ -36,4 +38,6 @@ export const mdxComponents: MDXComponents = {
     return <img src={src} alt={alt ?? ''} loading="lazy" {...props} />;
   },
   HorizontalBarChart,
+  DemographicShiftBars,
+  AgeGroupBars,
 };
