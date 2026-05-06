@@ -215,7 +215,7 @@ async function PostDetail({ params }: { params: Params }) {
             components={mdxComponents}
             options={{
               mdxOptions: {
-                format: 'md',
+                format: 'mdx',
                 remarkPlugins: [remarkGfm],
                 rehypePlugins: [
                   rehypeRaw,
