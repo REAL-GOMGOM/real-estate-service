@@ -49,7 +49,7 @@ export default async function PreviewPage({ params }: PreviewPageProps) {
           components={mdxComponents}
           options={{
             mdxOptions: {
-              format: 'md',
+              format: 'mdx',
               remarkPlugins: [remarkGfm],
               rehypePlugins: [
                 rehypeRaw,

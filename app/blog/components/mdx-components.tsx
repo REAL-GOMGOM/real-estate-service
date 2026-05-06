@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { MDXComponents } from 'mdx/types';
+import { HorizontalBarChart } from './HorizontalBarChart';
 
 /**
  * MDX 렌더 시 사용할 컴포넌트 화이트리스트.
@@ -34,4 +35,5 @@ export const mdxComponents: MDXComponents = {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={src} alt={alt ?? ''} loading="lazy" {...props} />;
   },
+  HorizontalBarChart,
 };
