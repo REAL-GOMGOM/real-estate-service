@@ -34,6 +34,11 @@ interface HorizontalBarChartProps {
   zeroX?: number;
   /** 1 unit당 px width, 기본 10 */
   scale?: number;
+  /**
+   * 'discrete': data[].color에 박힌 5색 팔레트 사용 (기본)
+   * 'gradient': value 절대값 따라 자동 색상 매핑 (서울 25개·경기 25개 같은 그라데이션 차트)
+   */
+  colorMode?: 'discrete' | 'gradient';
 }
 
 const COLORS: Record<NonNullable<BarRow['color']>, string> = {
@@ -43,6 +48,34 @@ const COLORS: Record<NonNullable<BarRow['color']>, string> = {
   darkBlue: '#1d4ed8',
   gray: '#6b7280',
 };
+
+/**
+ * value 절대값 따라 그라데이션 색상 매핑 (kb-report SVG #2·#3 패턴)
+ * 양수 8단계 (red→orange→amber 농도), 음수 5단계 (blue 농도)
+ */
+function getGradientFill(value: number): string {
+  if (value >= 16) return '#dc2626';
+  if (value >= 13) return '#ef4444';
+  if (value >= 11) return '#f97316';
+  if (value >= 7) return '#f59e0b';
+  if (value >= 5) return '#fbbf24';
+  if (value >= 3) return '#fcd34d';
+  if (value >= 1.5) return '#fde68a';
+  if (value >= 0) return '#fef3c7';
+  if (value > -1) return '#93c5fd';
+  if (value > -2) return '#60a5fa';
+  if (value > -5) return '#3b82f6';
+  if (value > -6.5) return '#2563eb';
+  return '#1d4ed8';
+}
+
+/**
+ * 옅은 막대 색상이면 텍스트는 더 진한 색상으로 (대비 보장)
+ */
+function getGradientTextFill(barFill: string): string {
+  if (barFill === '#fef3c7' || barFill === '#fde68a') return '#a16207';
+  return barFill;
+}
 
 const ROW_HEIGHT = 20;
 const ROW_GAP = 4; // 행 사이 빈 공간
@@ -60,6 +93,7 @@ export function HorizontalBarChart({
   width = 640,
   zeroX = 200,
   scale = 10,
+  colorMode = 'discrete',
 }: HorizontalBarChartProps) {
   const dividerExtra =
     dividerAfter !== undefined ? DIVIDER_GAP * 2 : 0;
@@ -120,7 +154,12 @@ export function HorizontalBarChart({
         const barX = isPositive ? zeroX : zeroX - barWidth;
         const valueLabelX = isPositive ? barX + barWidth + 5 : barX - 5;
         const valueLabelAnchor = isPositive ? 'start' : 'end';
-        const fill = COLORS[row.color ?? 'gray'];
+        const fill = colorMode === 'gradient'
+          ? getGradientFill(row.value)
+          : COLORS[row.color ?? 'gray'];
+        const textFill = colorMode === 'gradient'
+          ? getGradientTextFill(fill)
+          : fill;
 
         return (
           <g key={`${row.label}-${i}`}>
@@ -148,7 +187,7 @@ export function HorizontalBarChart({
               y={yLabel}
               textAnchor={valueLabelAnchor}
               fontSize={11}
-              fill={fill}
+              fill={textFill}
               fontWeight={600}
             >
               {isPositive ? '+' : ''}
