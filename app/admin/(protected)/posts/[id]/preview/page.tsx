@@ -3,9 +3,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import remarkGfm from 'remark-gfm';
-import rehypeSanitize from 'rehype-sanitize';
 
-import { mdxSanitizeSchema } from '@/lib/mdx/sanitize-schema';
 import { mdxComponents } from '@/app/blog/components/mdx-components';
 import { getPostByIdForAdmin } from '@/lib/blog/queries';
 import { preprocessMdxContent } from '@/lib/blog/preprocessor';
@@ -50,9 +48,9 @@ export default async function PreviewPage({ params }: PreviewPageProps) {
             mdxOptions: {
               format: 'mdx',
               remarkPlugins: [remarkGfm],
-              rehypePlugins: [
-                [rehypeSanitize, mdxSanitizeSchema],
-              ],
+              // rehype-sanitize 제거 — mdxJsxFlowElement 노드 strip 이슈 (사이클 A8.2)
+              // 본문 출처 admin only + format='mdx' + blockJS:true(v6 default)로 XSS 안전망 확보
+              // 참고: hashicorp/next-mdx-remote#229
             },
           }}
         />
