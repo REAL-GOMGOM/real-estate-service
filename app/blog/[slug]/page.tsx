@@ -4,14 +4,12 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { MDXRemote } from 'next-mdx-remote/rsc';
 import remarkGfm from 'remark-gfm';
-import rehypeSanitize from 'rehype-sanitize';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BlogBreadcrumb from '@/components/blog/BlogBreadcrumb';
 import { getPublishedPostBySlug } from '@/lib/blog/queries';
 import { preprocessMdxContent } from '@/lib/blog/preprocessor';
 import { SITE_URL, SITE_NAME } from '@/lib/site';
-import { mdxSanitizeSchema } from '@/lib/mdx/sanitize-schema';
 import { mdxComponents } from '../components/mdx-components';
 
 const SLUG_PATTERN = /^[a-z0-9-]{1,200}$/;
@@ -216,9 +214,9 @@ async function PostDetail({ params }: { params: Params }) {
               mdxOptions: {
                 format: 'mdx',
                 remarkPlugins: [remarkGfm],
-                rehypePlugins: [
-                  [rehypeSanitize, mdxSanitizeSchema],
-                ],
+                // rehype-sanitize 제거 — mdxJsxFlowElement 노드 strip 이슈 (사이클 A8.2)
+                // 본문 출처 admin only + format='mdx' + blockJS:true(v6 default)로 XSS 안전망 확보
+                // 참고: hashicorp/next-mdx-remote#229
               },
             }}
           />
