@@ -3,7 +3,6 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import remarkGfm from 'remark-gfm';
-import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
 
 import { mdxSanitizeSchema } from '@/lib/mdx/sanitize-schema';
@@ -52,12 +51,8 @@ export default async function PreviewPage({ params }: PreviewPageProps) {
               format: 'mdx',
               remarkPlugins: [remarkGfm],
               rehypePlugins: [
-                rehypeRaw,
                 [rehypeSanitize, mdxSanitizeSchema],
               ],
-              remarkRehypeOptions: {
-                allowDangerousHtml: true,
-              },
             },
           }}
         />
