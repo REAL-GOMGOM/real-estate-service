@@ -45,6 +45,9 @@ export default async function PreviewPage({ params }: PreviewPageProps) {
           source={preprocessMdxContent(post.mdxContent)}
           components={mdxComponents}
           options={{
+            // blockJS:false — JSX expression props ({...}) 활성화 (사이클 A8.3)
+            // blockDangerousJS:true(v6 default) 유지로 RCE 안전망 확보
+            blockJS: false,
             mdxOptions: {
               format: 'mdx',
               remarkPlugins: [remarkGfm],
