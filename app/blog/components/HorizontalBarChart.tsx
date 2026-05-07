@@ -84,6 +84,17 @@ const TOP_PADDING = 50;
 const BOTTOM_PADDING = 40;
 const DIVIDER_GAP = 12; // 분리선 위/아래 추가 공간
 
+/** 값 라벨 영역 폭 추정 ("+24.0%" 같은 형태, font 11px 600 weight 기준 약 30px). 안전하게 35 */
+const VALUE_LABEL_RESERVE_WIDTH = 35;
+/** 자치구 라벨과 인접 영역 사이 여백 */
+const GROUP_LABEL_PADDING = 10;
+/** 자치구 라벨 폰트 크기 — 라벨 너비 추정용 */
+const GROUP_LABEL_FONT_SIZE = 12;
+/** 한글 글자 1자 평균 너비 (font 12px 기준 추정) */
+const KOREAN_CHAR_WIDTH_AT_12PX = 12;
+/** SVG viewBox 왼쪽 최소 여백 — 라벨이 잘리지 않을 안전선 */
+const MIN_LABEL_AREA_LEFT_PADDING = 5;
+
 export function HorizontalBarChart({
   title,
   data,
@@ -95,6 +106,37 @@ export function HorizontalBarChart({
   scale = 10,
   colorMode = 'discrete',
 }: HorizontalBarChartProps) {
+  // 음수 막대 max 절대값 (없으면 0). 라벨 위치 계산용
+  const maxNegativeWidth = Math.max(
+    0,
+    ...data.filter((r) => r.value < 0).map((r) => Math.abs(r.value) * scale),
+  );
+  const hasNegative = maxNegativeWidth > 0;
+
+  // 자치구 라벨 x 위치
+  // - 양수 only: 기존 동작 유지 (zeroX 왼쪽 padding)
+  // - 음수 포함: 음수 막대 영역 + 값 라벨 영역 더 왼쪽으로
+  const groupLabelX = hasNegative
+    ? zeroX - maxNegativeWidth - VALUE_LABEL_RESERVE_WIDTH - GROUP_LABEL_PADDING
+    : zeroX - GROUP_LABEL_PADDING;
+
+  // 라벨 길이 검증 — viewBox 밖으로 나가는지 dev mode 경고
+  const maxLabelChars = Math.max(...data.map((r) => r.label.length));
+  const estimatedMaxLabelWidth = maxLabelChars * KOREAN_CHAR_WIDTH_AT_12PX;
+  const labelStartX = groupLabelX - estimatedMaxLabelWidth;
+
+  if (
+    process.env.NODE_ENV !== 'production' &&
+    labelStartX < MIN_LABEL_AREA_LEFT_PADDING
+  ) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[HorizontalBarChart] "${title}" 라벨 영역 부족 — ` +
+        `labelStartX=${labelStartX.toFixed(0)} < ${MIN_LABEL_AREA_LEFT_PADDING}. ` +
+        `라벨 max 글자수=${maxLabelChars}. width(${width}) 또는 zeroX(${zeroX}) 키우거나 라벨 줄이세요.`,
+    );
+  }
+
   const dividerExtra =
     dividerAfter !== undefined ? DIVIDER_GAP * 2 : 0;
   const height =
@@ -165,10 +207,10 @@ export function HorizontalBarChart({
           <g key={`${row.label}-${i}`}>
             {/* 자치구·시 라벨 */}
             <text
-              x={zeroX - 10}
+              x={groupLabelX}
               y={yLabel}
               textAnchor="end"
-              fontSize={12}
+              fontSize={GROUP_LABEL_FONT_SIZE}
               fill="#374151"
             >
               {row.label}
