@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { eq, ilike, sql } from 'drizzle-orm';
-import { DISTRICT_CODE } from '@/lib/district-codes';
+import { DISTRICT_CODE, findDistrictByLawdCd } from '@/lib/district-codes';
 import { matchesQuery } from '@/lib/search-utils';
 import { getBlogDb } from '@/lib/db/client';
 import { apartments } from '@/lib/db/schema';
@@ -11,14 +11,6 @@ const APT_NAME_MAX_LEN = 50;
 
 function escapeLike(input: string): string {
   return input.replace(/[\\%_]/g, (ch) => `\\${ch}`);
-}
-
-// lawd_cd → DISTRICT_CODE 키 (district 라벨) 역조회. 매핑 못 찾으면 null.
-function findDistrictByLawdCd(lawdCd: string): string | null {
-  for (const [label, code] of Object.entries(DISTRICT_CODE)) {
-    if (code === lawdCd) return label;
-  }
-  return null;
 }
 
 function getMonthList(months: number): string[] {
