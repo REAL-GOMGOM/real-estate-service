@@ -288,6 +288,9 @@ export default function LoanSimulator() {
                 padding: 14, borderRadius: 12, marginBottom: 12,
                 backgroundColor: 'var(--border-light)', border: '1px solid var(--border)',
               }}>
+                <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '8px' }}>
+                  ※ 시·군·구 선택 후 단지명을 검색해주세요.
+                </p>
                 <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                   <select
                     value={searchDistrict}
