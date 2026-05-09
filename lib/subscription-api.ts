@@ -2,12 +2,19 @@ import { cacheLife } from 'next/cache';
 import type { SubscriptionItem, CompetitionRateEntry, SupplyDate } from '@/lib/types';
 
 const ODCLOUD_BASE     = 'https://api.odcloud.kr/api';
-const DETAIL_SVC       = 'ApplyhomeInfoDetailSvc/v1';
-const CMPET_SVC        = 'ApplyhomeInfoCmpetRtSvc/v1';
+const APT_DETAIL_SVC   = 'ApplyhomeInfoDetailSvc/v1';
+const APT_CMPET_SVC    = 'ApplyhomeInfoCmpetRtSvc/v1';
 const FETCH_TIMEOUT_MS = 5000;
 
 type SubscriptionStatus = 'upcoming' | 'ongoing' | 'closed';
 type ApiRow = Record<string, string>;
+type RowSource = 'apt' | 'remndr' | 'arbitrary';
+
+// ────────────────────────────────────────────────
+// 잔여세대 HOUSE_SECD 분류 (사이클 E)
+// ────────────────────────────────────────────────
+const HOUSE_SECD_ILLEGAL = '06'; // 불법행위재공급
+// 04: 무순위 (default)
 
 // ────────────────────────────────────────────────
 // 날짜 → 상태 변환
@@ -196,18 +203,25 @@ function buildCompetitionRateMap(cmpetRows: ApiRow[]): Map<string, CmpetMapValue
 }
 
 // ────────────────────────────────────────────────
-// 공급유형별 일정 추출
+// 공급유형별 일정 추출 — source 분기 (사이클 E)
 // ────────────────────────────────────────────────
-const SUPPLY_DATE_FIELDS: [string, SupplyDate['type'], string][] = [
-  ['SPSPLY_RCEPT_BGNDE',          'special', '특별공급'],
-  ['GNRL_RNK1_CRSPAREA_RCPTDE',   'first',   '1순위'],
-  ['GNRL_RNK2_CRSPAREA_RCPTDE',   'second',  '2순위'],
-  ['GNRL_RNK1_ETC_AREA_RCPTDE',   'etc',     '무순위/기타'],
+
+// APT 분양 — 기존 4종 중 1·2순위 + 특별 (etc 폐기, 잔여세대로 이관)
+const APT_SUPPLY_DATE_FIELDS: [string, SupplyDate['type'], string][] = [
+  ['SPSPLY_RCEPT_BGNDE',        'special', '특별공급'],
+  ['GNRL_RNK1_CRSPAREA_RCPTDE', 'first',   '1순위'],
+  ['GNRL_RNK2_CRSPAREA_RCPTDE', 'second',  '2순위'],
 ];
 
-function extractSupplyDates(row: ApiRow): SupplyDate[] {
+// 잔여세대·임의공급 공통 일정 필드 (특별·일반 두 줄)
+const REMNDR_OR_ARBITRARY_DATE_FIELDS: [string, string][] = [
+  ['SPSPLY_RCEPT_BGNDE', '특별공급'],
+  ['GNRL_RCEPT_BGNDE',   '일반공급'],
+];
+
+function extractAptSupplyDates(row: ApiRow): SupplyDate[] {
   const dates: SupplyDate[] = [];
-  for (const [field, type, label] of SUPPLY_DATE_FIELDS) {
+  for (const [field, type, label] of APT_SUPPLY_DATE_FIELDS) {
     const val = row[field]?.trim();
     if (val && val.length >= 8) {
       dates.push({ type, label, date: val });
@@ -216,8 +230,36 @@ function extractSupplyDates(row: ApiRow): SupplyDate[] {
   return dates;
 }
 
+function classifyRemndrType(houseSecd: string): 'unranked' | 'illegal' {
+  return houseSecd === HOUSE_SECD_ILLEGAL ? 'illegal' : 'unranked';
+}
+
+function extractRemndrSupplyDates(row: ApiRow): SupplyDate[] {
+  const type = classifyRemndrType(row['HOUSE_SECD'] ?? '04');
+  const typeLabel = type === 'illegal' ? '불법행위재공급' : '무순위';
+  const dates: SupplyDate[] = [];
+  for (const [field, baseLabel] of REMNDR_OR_ARBITRARY_DATE_FIELDS) {
+    const val = row[field]?.trim();
+    if (val && val.length >= 8) {
+      dates.push({ type, label: `${typeLabel}-${baseLabel}`, date: val });
+    }
+  }
+  return dates;
+}
+
+function extractArbitrarySupplyDates(row: ApiRow): SupplyDate[] {
+  const dates: SupplyDate[] = [];
+  for (const [field, baseLabel] of REMNDR_OR_ARBITRARY_DATE_FIELDS) {
+    const val = row[field]?.trim();
+    if (val && val.length >= 8) {
+      dates.push({ type: 'arbitrary', label: `임의공급-${baseLabel}`, date: val });
+    }
+  }
+  return dates;
+}
+
 // ────────────────────────────────────────────────
-// API 행 → SubscriptionItem 변환
+// API 행 → SubscriptionItem 변환 (source 분기, 사이클 E)
 // ────────────────────────────────────────────────
 function buildHouseType(stats: HouseStats | undefined): string {
   if (!stats) return '';
@@ -229,18 +271,45 @@ function buildHouseType(stats: HouseStats | undefined): string {
 
 function mapRowToItem(
   row:      ApiRow,
+  source:   RowSource,
   statsMap: Map<string, HouseStats>,
   cmpetMap: Map<string, CmpetMapValue>,
-  idPrefix: string,
 ): SubscriptionItem | null {
   const houseNo = row['HOUSE_MANAGE_NO'];
   const name    = row['HOUSE_NM']?.trim();
   if (!houseNo || !name) return null;
 
-  const startDate = row['RCEPT_BGNDE'] ?? '';
-  const endDate   = row['RCEPT_ENDDE'] ?? '';
-  const stats     = statsMap.get(houseNo);
-  const cmpet     = cmpetMap.get(houseNo);
+  let startDate: string;
+  let endDate: string;
+  let supplyDates: SupplyDate[];
+  let supplyCategory: SubscriptionItem['supplyCategory'];
+  let idPrefix: string;
+
+  if (source === 'apt') {
+    startDate = row['RCEPT_BGNDE'] ?? '';
+    endDate   = row['RCEPT_ENDDE'] ?? '';
+    supplyDates = extractAptSupplyDates(row);
+    supplyCategory = 'apt';
+    idPrefix = 'apt';
+  } else if (source === 'remndr') {
+    // 버그 수정: 잔여세대 청약접수일 필드 (사이클 E)
+    startDate = row['SUBSCRPT_RCEPT_BGNDE'] ?? row['GNRL_RCEPT_BGNDE'] ?? '';
+    endDate   = row['SUBSCRPT_RCEPT_ENDDE'] ?? row['GNRL_RCEPT_ENDDE'] ?? '';
+    supplyDates = extractRemndrSupplyDates(row);
+    const remndrType = classifyRemndrType(row['HOUSE_SECD'] ?? '04');
+    supplyCategory = remndrType === 'illegal' ? 'remndr-illegal' : 'remndr-unranked';
+    idPrefix = supplyCategory;
+  } else {
+    // arbitrary (임의공급)
+    startDate = row['SUBSCRPT_RCEPT_BGNDE'] ?? row['GNRL_RCEPT_BGNDE'] ?? '';
+    endDate   = row['SUBSCRPT_RCEPT_ENDDE'] ?? row['GNRL_RCEPT_ENDDE'] ?? '';
+    supplyDates = extractArbitrarySupplyDates(row);
+    supplyCategory = 'arbitrary';
+    idPrefix = 'arbitrary';
+  }
+
+  const stats = statsMap.get(houseNo);
+  const cmpet = cmpetMap.get(houseNo);
 
   const competitionRates: CompetitionRateEntry[] = cmpet?.entries.map((e) => ({
     houseType: e.houseType,
@@ -263,7 +332,8 @@ function mapRowToItem(
     minPrice:         stats?.minPrice ?? null,
     maxPrice:         stats?.maxPrice ?? null,
     houseType:        buildHouseType(stats),
-    supplyDates:      extractSupplyDates(row),
+    supplyDates,
+    supplyCategory,
   };
 }
 
@@ -278,6 +348,7 @@ const STATUS_ORDER: Record<SubscriptionStatus, number> = {
 
 // ────────────────────────────────────────────────
 // 메인 fetch 함수 (1시간 캐시)
+// 사이클 E: APT(분양) + 잔여세대 + 임의공급 + 취소후재공급(Cmpet only) = 10 endpoint
 // ────────────────────────────────────────────────
 export async function fetchSubscriptions(): Promise<SubscriptionItem[]> {
   'use cache';
@@ -287,43 +358,72 @@ export async function fetchSubscriptions(): Promise<SubscriptionItem[]> {
   if (!rawKey) throw new Error('PUBLIC_DATA_API_KEY 환경변수가 설정되지 않았습니다');
   const apiKey = decodeURIComponent(rawKey);
 
-  // 6개 엔드포인트 병렬 호출 — 일부 실패해도 나머지 결과 사용
+  // 10개 엔드포인트 병렬 호출 — 일부 실패해도 나머지 결과 사용
   const [
     aptDetailResult,
-    remndrDetailResult,
     aptModelResult,
-    remndrModelResult,
     aptCmpetResult,
+    remndrDetailResult,
+    remndrModelResult,
     remndrCmpetResult,
+    optDetailResult,
+    optModelResult,
+    optCmpetResult,
+    cancResplCmpetResult,
   ] = await Promise.allSettled([
-    fetchOdcloudEndpoint(DETAIL_SVC, 'getAPTLttotPblancDetail',    apiKey, 100, 3),
-    fetchOdcloudEndpoint(DETAIL_SVC, 'getRemndrLttotPblancDetail',  apiKey, 100, 3),
-    fetchOdcloudEndpoint(DETAIL_SVC, 'getAPTLttotPblancMdl',        apiKey, 300, 2),
-    fetchOdcloudEndpoint(DETAIL_SVC, 'getRemndrLttotPblancMdl',     apiKey, 300, 2),
-    fetchOdcloudEndpoint(CMPET_SVC,  'getAPTLttotPblancCmpet',      apiKey, 300, 2),
-    fetchOdcloudEndpoint(CMPET_SVC,  'getRemndrLttotPblancCmpet',   apiKey, 300, 2),
+    // APT 분양
+    fetchOdcloudEndpoint(APT_DETAIL_SVC, 'getAPTLttotPblancDetail',    apiKey, 100, 3),
+    fetchOdcloudEndpoint(APT_DETAIL_SVC, 'getAPTLttotPblancMdl',       apiKey, 300, 2),
+    fetchOdcloudEndpoint(APT_CMPET_SVC,  'getAPTLttotPblancCmpet',     apiKey, 300, 2),
+    // 잔여세대 (무순위·불법행위재공급, HOUSE_SECD로 분류)
+    fetchOdcloudEndpoint(APT_DETAIL_SVC, 'getRemndrLttotPblancDetail', apiKey, 100, 3),
+    fetchOdcloudEndpoint(APT_DETAIL_SVC, 'getRemndrLttotPblancMdl',    apiKey, 300, 2),
+    fetchOdcloudEndpoint(APT_CMPET_SVC,  'getRemndrLttotPblancCmpet',  apiKey, 300, 2),
+    // 임의공급 (사이클 E 신규)
+    fetchOdcloudEndpoint(APT_DETAIL_SVC, 'getOPTLttotPblancDetail',    apiKey, 100, 3),
+    fetchOdcloudEndpoint(APT_DETAIL_SVC, 'getOPTLttotPblancMdl',       apiKey, 300, 2),
+    fetchOdcloudEndpoint(APT_CMPET_SVC,  'getOPTLttotPblancCmpet',     apiKey, 300, 2),
+    // 취소후재공급 (Cmpet only — Detail endpoint 없음)
+    fetchOdcloudEndpoint(APT_CMPET_SVC,  'getCancResplLttotPblancCmpet', apiKey, 300, 2),
   ]);
 
   const aptDetails    = aptDetailResult.status    === 'fulfilled' ? aptDetailResult.value    : [];
-  const remndrDetails = remndrDetailResult.status === 'fulfilled' ? remndrDetailResult.value : [];
   const aptModels     = aptModelResult.status     === 'fulfilled' ? aptModelResult.value     : [];
-  const remndrModels  = remndrModelResult.status  === 'fulfilled' ? remndrModelResult.value  : [];
   const aptCmpet      = aptCmpetResult.status     === 'fulfilled' ? aptCmpetResult.value     : [];
+  const remndrDetails = remndrDetailResult.status === 'fulfilled' ? remndrDetailResult.value : [];
+  const remndrModels  = remndrModelResult.status  === 'fulfilled' ? remndrModelResult.value  : [];
   const remndrCmpet   = remndrCmpetResult.status  === 'fulfilled' ? remndrCmpetResult.value  : [];
+  const optDetails    = optDetailResult.status    === 'fulfilled' ? optDetailResult.value    : [];
+  const optModels     = optModelResult.status     === 'fulfilled' ? optModelResult.value     : [];
+  const optCmpet      = optCmpetResult.status     === 'fulfilled' ? optCmpetResult.value     : [];
+  const cancResplCmpet = cancResplCmpetResult.status === 'fulfilled' ? cancResplCmpetResult.value : [];
 
-  const statsMap = buildHouseStatsMap([...aptModels, ...remndrModels]);
-  const cmpetMap = buildCompetitionRateMap([...aptCmpet, ...remndrCmpet]);
+  // 가격·면적·경쟁률은 모든 source 합산 (HOUSE_MANAGE_NO 단일 키)
+  const statsMap = buildHouseStatsMap([...aptModels, ...remndrModels, ...optModels]);
+  const cmpetMap = buildCompetitionRateMap([
+    ...aptCmpet,
+    ...remndrCmpet,
+    ...optCmpet,
+    ...cancResplCmpet, // 취소후재공급 경쟁률은 동일 houseNo면 함께 매핑
+  ]);
 
-  const remndrSet = new Set(remndrDetails);
   const seenIds   = new Set<string>();
   const items: SubscriptionItem[] = [];
 
-  for (const row of [...aptDetails, ...remndrDetails]) {
-    const prefix = remndrSet.has(row) ? 'remndr' : 'apt';
-    const item   = mapRowToItem(row, statsMap, cmpetMap, prefix);
-    if (item && !seenIds.has(item.id)) {
-      seenIds.add(item.id);
-      items.push(item);
+  // source별로 박아 mapRowToItem에 정확한 source 전달
+  const groups: { rows: ApiRow[]; source: RowSource }[] = [
+    { rows: aptDetails,    source: 'apt' },
+    { rows: remndrDetails, source: 'remndr' },
+    { rows: optDetails,    source: 'arbitrary' },
+  ];
+
+  for (const { rows, source } of groups) {
+    for (const row of rows) {
+      const item = mapRowToItem(row, source, statsMap, cmpetMap);
+      if (item && !seenIds.has(item.id)) {
+        seenIds.add(item.id);
+        items.push(item);
+      }
     }
   }
 
