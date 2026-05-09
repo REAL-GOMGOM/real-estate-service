@@ -112,7 +112,7 @@ export interface CompetitionRateEntry {
 }
 
 export interface SupplyDate {
-  type: 'special' | 'first' | 'second' | 'etc';
+  type: 'special' | 'first' | 'second' | 'unranked' | 'arbitrary' | 'illegal';
   label: string;
   date: string;
 }
@@ -133,6 +133,8 @@ export interface SubscriptionItem {
   maxPrice: number | null;
   houseType: string;
   supplyDates: SupplyDate[];
+  /** 공급 카테고리 — apt(분양) / 잔여세대-무순위 / 잔여세대-불법행위 / 임의공급 */
+  supplyCategory: 'apt' | 'remndr-unranked' | 'remndr-illegal' | 'arbitrary';
 }
 
 declare global {

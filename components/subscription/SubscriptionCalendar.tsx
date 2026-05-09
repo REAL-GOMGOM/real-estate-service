@@ -10,18 +10,31 @@ interface Props {
 }
 
 const SUPPLY_COLORS: Record<SupplyDate['type'], string> = {
-  special: '#E74C3C',
-  first:   '#27AE60',
-  second:  '#F39C12',
-  etc:     '#8E44AD',
+  special:   '#EF4444', // red
+  first:     '#22C55E', // green
+  second:    '#F97316', // orange
+  unranked:  '#A855F7', // purple
+  arbitrary: '#EAB308', // yellow (사이클 E 신규)
+  illegal:   '#6B7280', // gray   (사이클 E 신규)
 };
 
 const SUPPLY_LABELS: Record<SupplyDate['type'], string> = {
-  special: '특별',
-  first:   '1순위',
-  second:  '2순위',
-  etc:     '무순위',
+  special:   '특별',
+  first:     '1순위',
+  second:    '2순위',
+  unranked:  '무순위',
+  arbitrary: '임의공급',
+  illegal:   '불법행위재공급',
 };
+
+const SUPPLY_LEGEND_ORDER: SupplyDate['type'][] = [
+  'special',
+  'first',
+  'second',
+  'unranked',
+  'arbitrary',
+  'illegal',
+];
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -122,7 +135,7 @@ export default function SubscriptionCalendar({ items, onSelect }: Props) {
 
       {/* 범례 */}
       <div style={{ display: 'flex', gap: isMobile ? '10px' : '16px', marginBottom: '12px', flexWrap: 'wrap' }}>
-        {(['special', 'first', 'second', 'etc'] as const).map((type) => (
+        {SUPPLY_LEGEND_ORDER.map((type) => (
           <div key={type} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: isMobile ? '11px' : '12px', color: 'var(--text-muted)' }}>
             <div style={{ width: '10px', height: '10px', borderRadius: '2px', backgroundColor: SUPPLY_COLORS[type] }} />
             {SUPPLY_LABELS[type]}
