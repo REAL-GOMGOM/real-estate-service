@@ -198,6 +198,9 @@ function ChartContent() {
           <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '24px' }}>
             단지별 실거래가 추이를 차트로 확인하세요. 이동평균, 거래량, 면적별 비교가 가능합니다. 출처: 국토교통부
           </p>
+          <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '-16px', marginBottom: '24px' }}>
+            ※ 시·군·구 선택 후 단지명을 검색해주세요.
+          </p>
 
           {/* 기간 필터 */}
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '24px' }}>

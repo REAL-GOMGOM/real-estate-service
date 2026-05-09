@@ -212,6 +212,10 @@ export default function TransactionSearch() {
           </button>
         </form>
 
+        <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '-20px', marginBottom: '24px' }}>
+          ※ 시·군·구 선택 후 단지명을 검색해주세요.
+        </p>
+
         {/* 결과 목록 */}
         {loading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '14px' }}>

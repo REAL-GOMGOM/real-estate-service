@@ -692,6 +692,10 @@ export default function TransactionsClient() {
           </div>
         </div>
 
+        <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '8px' }}>
+          ※ 시·군·구 선택 후 단지명을 검색해주세요.
+        </p>
+
         {/* 에러 상태 */}
         {error && !loading && (
           <ErrorState
