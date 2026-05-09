@@ -7,6 +7,7 @@ import {
   pgEnum,
   index,
   uniqueIndex,
+  jsonb,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -84,3 +85,54 @@ export type Post = typeof posts.$inferSelect;
 export type NewPost = typeof posts.$inferInsert;
 export type Category = typeof categories.$inferSelect;
 export type NewCategory = typeof categories.$inferInsert;
+
+/**
+ * 단지 마스터 (사이클 H Phase 2.1)
+ *
+ * K-apt 공동주택 단지 + 네이버 검색 API + 카카오 지도 API로 적재 예정.
+ * Phase 2.2에서 마이그레이션 적용 + 데이터 적재.
+ *
+ * 검색 흐름:
+ *   1. 사용자 단지명 입력 → name·aliases (jsonb GIN) 검색
+ *   2. lawd_cd로 MLTM 실거래 API 호출
+ *   3. 좌표(lat/lng)로 지도 표시
+ */
+export const apartments = pgTable('apartments', {
+  // 식별자 (예: K-apt kapt_code 또는 자체 생성 슬러그)
+  id: text('id').primaryKey(),
+
+  // 단지명
+  name: text('name').notNull(),                              // 등록명 (MLTM 실거래의 aptNm 매칭)
+  aliases: jsonb('aliases').$type<string[]>().default(sql`'[]'::jsonb`).notNull(), // 통칭·마케팅명 배열
+
+  // 위치
+  sido: text('sido').notNull(),                              // 시도 (예: '서울특별시')
+  sigungu: text('sigungu').notNull(),                        // 시군구 (예: '강남구')
+  dong: text('dong'),                                        // 읍면동
+  roadAddress: text('road_address'),                         // 도로명주소
+  jibunAddress: text('jibun_address'),                       // 지번주소
+  lawdCd: text('lawd_cd').notNull(),                         // 법정동 5자리 (실거래 API 키)
+
+  // 단지 정보
+  kaptCode: text('kapt_code'),                               // K-apt 단지 식별자
+  totalHouseholds: integer('total_households'),              // 세대수
+  totalDongs: integer('total_dongs'),                        // 동수
+
+  // 좌표 (PostGIS 미사용 — text 저장, 클라이언트에서 parseFloat)
+  lat: text('lat'),                                          // 위도
+  lng: text('lng'),                                          // 경도
+
+  // 메타
+  source: text('source').notNull(),                          // 'kapt' | 'naver' | 'manual'
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+}, (table) => ({
+  nameIdx:    index('apartments_name_idx').on(table.name),
+  lawdCdIdx:  index('apartments_lawd_cd_idx').on(table.lawdCd),
+  sigunguIdx: index('apartments_sigungu_idx').on(table.sigungu),
+}));
+
+export type Apartment = typeof apartments.$inferSelect;
+export type NewApartment = typeof apartments.$inferInsert;
