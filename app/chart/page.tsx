@@ -8,6 +8,8 @@ import Header from '@/components/layout/Header';
 import ApartmentSelector from '@/components/chart/ApartmentSelector';
 import PriceChart from '@/components/chart/PriceChart';
 import ErrorState from '@/components/common/ErrorState';
+import { AptAutocomplete, type ApartmentSearchResult } from '@/components/search/AptAutocomplete';
+import { findDistrictByLawdCd } from '@/lib/district-codes';
 
 const TransactionTable = dynamic(
   () => import('@/components/chart/TransactionTable'),
@@ -195,12 +197,20 @@ function ChartContent() {
       <main style={{ flex: 1, overflowY: isMobile ? 'visible' : 'auto', height: isMobile ? 'auto' : 'calc(100vh - 64px)', backgroundColor: 'var(--bg-primary)' }}>
         <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '32px 28px' }}>
 
-          <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '24px' }}>
+          <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '16px' }}>
             단지별 실거래가 추이를 차트로 확인하세요. 이동평균, 거래량, 면적별 비교가 가능합니다. 출처: 국토교통부
           </p>
-          <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '-16px', marginBottom: '24px' }}>
-            ※ 시·군·구 선택 후 단지명을 검색해주세요.
-          </p>
+
+          <div style={{ marginBottom: '24px' }}>
+            <AptAutocomplete
+              placeholder="단지명 입력 (예: 잠실엘스)"
+              onSelect={(apt: ApartmentSearchResult) => {
+                const d = findDistrictByLawdCd(apt.lawdCd) ?? apt.sigungu;
+                setActiveDistrict(d);
+                fetchApiData(d, selectedPeriod);
+              }}
+            />
+          </div>
 
           {/* 기간 필터 */}
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '24px' }}>

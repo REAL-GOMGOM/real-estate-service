@@ -2,16 +2,17 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Search, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import ErrorState from '@/components/common/ErrorState';
 import {
   ScatterChart, Scatter, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid, ReferenceLine,
 } from 'recharts';
-import { DISTRICT_CODE } from '@/lib/district-codes';
+import { DISTRICT_CODE, findDistrictByLawdCd } from '@/lib/district-codes';
 import { DISTRICT_GROUPS } from '@/lib/district-groups';
 import { matchesQuery } from '@/lib/search-utils';
 import Header from '@/components/layout/Header';
+import { AptAutocomplete, type ApartmentSearchResult } from '@/components/search/AptAutocomplete';
 
 function findGroupIndexOfDistrict(district: string): number {
   return DISTRICT_GROUPS.findIndex((g) => g.districts.includes(district));
@@ -676,25 +677,20 @@ export default function TransactionsClient() {
             </button>
           ))}
 
-          <div style={{ position: 'relative', flex: 1, minWidth: '180px' }}>
-            <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', pointerEvents: 'none' }} />
-            <input
-              type="text"
-              placeholder="단지명 검색"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              style={{
-                width: '100%', padding: '10px 14px 10px 36px', borderRadius: '10px',
-                fontSize: '13px', backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)',
-                border: '1px solid var(--border)', outline: 'none', boxSizing: 'border-box',
+          <div style={{ flex: 1, minWidth: '220px' }}>
+            <AptAutocomplete
+              placeholder="단지명 입력 (예: 잠실엘스)"
+              onSelect={(apt: ApartmentSearchResult) => {
+                const districtLabel = findDistrictByLawdCd(apt.lawdCd) ?? apt.sigungu;
+                const matched = findGroupIndexOfDistrict(districtLabel);
+                if (matched >= 0) setGroupIdx(matched);
+                setDistrict(districtLabel);
+                setQuery(apt.name);
+                setFetched('');
               }}
             />
           </div>
         </div>
-
-        <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '8px' }}>
-          ※ 시·군·구 선택 후 단지명을 검색해주세요.
-        </p>
 
         {/* 에러 상태 */}
         {error && !loading && (

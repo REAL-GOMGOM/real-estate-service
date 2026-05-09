@@ -118,3 +118,11 @@ export const DISTRICT_CODE: Record<string, string> = {
   // === 제주특별자치도 ===
   '제주시': '50110', '서귀포시': '50130',
 };
+
+// lawd_cd 5자리 → DISTRICT_CODE 키. 매핑 못 찾으면 null.
+export function findDistrictByLawdCd(lawdCd: string): string | null {
+  for (const [label, code] of Object.entries(DISTRICT_CODE)) {
+    if (code === lawdCd) return label;
+  }
+  return null;
+}

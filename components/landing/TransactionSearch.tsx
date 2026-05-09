@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, TrendingUp, TrendingDown, ExternalLink } from 'lucide-react';
-import { matchesQuery } from '@/lib/search-utils';
+import { TrendingUp, TrendingDown, ExternalLink } from 'lucide-react';
+import { AptAutocomplete, type ApartmentSearchResult } from '@/components/search/AptAutocomplete';
+import { findDistrictByLawdCd } from '@/lib/district-codes';
 
 const REGIONS: { label: string; districts: string[] }[] = [
   {
@@ -69,7 +70,6 @@ export default function TransactionSearch() {
   const router = useRouter();
   const [regionIdx, setRegionIdx] = useState(0);
   const [district, setDistrict]   = useState('강남구');
-  const [aptQuery, setAptQuery]   = useState('');
   const [apts, setApts]           = useState<AptSummary[]>([]);
   const [loading, setLoading]     = useState(false);
   const [fetched, setFetched]     = useState<string | null>(null);
@@ -111,17 +111,10 @@ export default function TransactionSearch() {
 
   useEffect(() => { loadDistrict(district); }, [district]);
 
-  const filtered = aptQuery.trim()
-    ? apts.filter((a) => matchesQuery(a.name, aptQuery.trim()))
-    : apts.slice(0, 6);
+  const filtered = apts.slice(0, 6);
 
   function goToChart(targetDistrict: string) {
     router.push(`/chart?district=${encodeURIComponent(targetDistrict)}`);
-  }
-
-  function handleSearch(e: React.FormEvent) {
-    e.preventDefault();
-    goToChart(district);
   }
 
   return (
@@ -180,28 +173,21 @@ export default function TransactionSearch() {
           ))}
         </div>
 
-        {/* 검색 폼 */}
-        <form onSubmit={handleSearch} style={{ display: 'flex', gap: '10px', marginBottom: '28px', flexWrap: 'wrap' }}>
-          <div style={{ position: 'relative', flex: 1, minWidth: '0' }}>
-            <Search
-              size={16}
-              style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', pointerEvents: 'none' }}
-            />
-            <input
-              type="text"
-              placeholder="단지명 입력 (예: 래미안)"
-              value={aptQuery}
-              onChange={(e) => setAptQuery(e.target.value)}
-              style={{
-                width: '100%', padding: '12px 16px 12px 40px', borderRadius: '12px',
-                fontSize: '14px', backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)',
-                border: '1px solid var(--border)', outline: 'none', boxSizing: 'border-box',
+        {/* 검색 폼 — 단지명 자동완성 */}
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '28px', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '0' }}>
+            <AptAutocomplete
+              placeholder="단지명 입력 (예: 잠실엘스)"
+              onSelect={(apt: ApartmentSearchResult) => {
+                const d = findDistrictByLawdCd(apt.lawdCd) ?? apt.sigungu;
+                router.push(`/chart?district=${encodeURIComponent(d)}`);
               }}
             />
           </div>
 
           <button
-            type="submit"
+            type="button"
+            onClick={() => goToChart(district)}
             style={{
               padding: '12px 24px', borderRadius: '12px', fontSize: '14px', fontWeight: 600,
               backgroundColor: 'var(--accent)', color: 'white', border: 'none', cursor: 'pointer',
@@ -210,11 +196,7 @@ export default function TransactionSearch() {
           >
             차트에서 보기
           </button>
-        </form>
-
-        <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '-20px', marginBottom: '24px' }}>
-          ※ 시·군·구 선택 후 단지명을 검색해주세요.
-        </p>
+        </div>
 
         {/* 결과 목록 */}
         {loading ? (
@@ -223,7 +205,7 @@ export default function TransactionSearch() {
           </div>
         ) : filtered.length === 0 ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '14px' }}>
-            {aptQuery ? `"${aptQuery}" 검색 결과 없음` : '거래 데이터 없음'}
+            거래 데이터 없음
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))', gap: '12px' }}>

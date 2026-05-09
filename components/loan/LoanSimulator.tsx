@@ -9,7 +9,8 @@ import {
   LAST_UPDATED,
 } from '@/lib/loan-products';
 import { Calculator, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Info, Landmark, Building2, Search, X, Loader2 } from 'lucide-react';
-import { DISTRICT_CODE } from '@/lib/district-codes';
+import { DISTRICT_CODE, findDistrictByLawdCd } from '@/lib/district-codes';
+import { AptAutocomplete, type ApartmentSearchResult } from '@/components/search/AptAutocomplete';
 import {
   DTI_LIMIT_POLICY,
   DTI_LIMIT_BANK,
@@ -83,49 +84,26 @@ export default function LoanSimulator() {
 
   // 단지 검색
   const [showSearch, setShowSearch] = useState(false);
-  const [searchDistrict, setSearchDistrict] = useState('강남구');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<{ id: string; name: string; dong: string; district: string }[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
   const [priceLoading, setPriceLoading] = useState(false);
   const [selectedApt, setSelectedApt] = useState<{ name: string; district: string; count: number; avg: number } | null>(null);
   const [priceEdited, setPriceEdited] = useState(false);
-  const searchTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const districtNames = Object.keys(DISTRICT_CODE);
-
-  function handleSearchInput(q: string) {
-    setSearchQuery(q);
-    clearTimeout(searchTimer.current);
-    if (q.length < 2) { setSearchResults([]); return; }
-    searchTimer.current = setTimeout(async () => {
-      setSearchLoading(true);
-      try {
-        const res = await fetch(`/api/gap-analysis/search?q=${encodeURIComponent(q)}&district=${encodeURIComponent(searchDistrict)}`);
-        const data = await res.json();
-        setSearchResults(data.results ?? []);
-      } catch { setSearchResults([]); }
-      finally { setSearchLoading(false); }
-    }, 400);
-  }
-
-  async function handleSelectApt(name: string, district: string) {
-    setSearchResults([]);
-    setSearchQuery('');
+  async function handleSelectApt(apt: ApartmentSearchResult) {
+    const district = findDistrictByLawdCd(apt.lawdCd) ?? apt.sigungu;
     setPriceLoading(true);
     setPriceEdited(false);
-    setSelectedApt({ name, district, count: 0, avg: 0 });
+    setSelectedApt({ name: apt.name, district, count: 0, avg: 0 });
     try {
-      const res = await fetch(`/api/transactions?district=${encodeURIComponent(district)}&months=3&aptName=${encodeURIComponent(name)}`);
+      const res = await fetch(`/api/transactions?aptId=${encodeURIComponent(apt.id)}&months=3`);
       const data = await res.json();
       const txns = data?.data?.[0]?.transactions;
       if (txns && txns.length > 0) {
         const prices = txns.map((t: { price: number }) => t.price);
         const avg = Math.round(prices.reduce((a: number, b: number) => a + b, 0) / prices.length);
         setHousePrice(avg);
-        setSelectedApt({ name, district, count: txns.length, avg });
+        setSelectedApt({ name: apt.name, district, count: txns.length, avg });
       }
-    } catch { /* 검색 실패 시 매매가 유지 */ }
+    } catch { /* 조회 실패 시 매매가 유지 */ }
     finally {
       setPriceLoading(false);
       setShowSearch(false);
@@ -288,84 +266,10 @@ export default function LoanSimulator() {
                 padding: 14, borderRadius: 12, marginBottom: 12,
                 backgroundColor: 'var(--border-light)', border: '1px solid var(--border)',
               }}>
-                <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '8px' }}>
-                  ※ 시·군·구 선택 후 단지명을 검색해주세요.
-                </p>
-                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                  <select
-                    value={searchDistrict}
-                    onChange={(e) => { setSearchDistrict(e.target.value); setSearchResults([]); }}
-                    style={{
-                      padding: '8px 10px', borderRadius: 8, fontSize: 12,
-                      backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)',
-                      border: '1px solid var(--border)', outline: 'none', cursor: 'pointer',
-                      minWidth: 100,
-                    }}
-                  >
-                    {districtNames.map((d) => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                  <div style={{ flex: 1, position: 'relative' }}>
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => handleSearchInput(e.target.value)}
-                      placeholder="아파트명 (예: 래미안)"
-                      style={{
-                        ...inputStyle,
-                        fontSize: 13, fontFamily: 'inherit', fontWeight: 400,
-                        paddingRight: 32,
-                      }}
-                    />
-                    {searchQuery && (
-                      <button
-                        onClick={() => { setSearchQuery(''); setSearchResults([]); }}
-                        style={{
-                          position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
-                          background: 'none', border: 'none', cursor: 'pointer', padding: 2,
-                          color: 'var(--text-dim)',
-                        }}
-                      >
-                        <X size={14} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {searchLoading && (
-                  <div style={{ padding: 12, textAlign: 'center' }}>
-                    <Loader2 size={16} style={{ color: 'var(--text-dim)', animation: 'spin 1s linear infinite' }} />
-                    <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-                  </div>
-                )}
-
-                {!searchLoading && searchResults.length > 0 && (
-                  <div style={{ maxHeight: 200, overflowY: 'auto', borderRadius: 8 }}>
-                    {searchResults.map((r) => (
-                      <button
-                        key={r.id}
-                        onClick={() => handleSelectApt(r.name, r.district)}
-                        style={{
-                          display: 'block', width: '100%', textAlign: 'left',
-                          padding: '8px 10px', border: 'none', cursor: 'pointer',
-                          backgroundColor: 'var(--bg-card)', fontSize: 13,
-                          color: 'var(--text-primary)', borderBottom: '1px solid var(--border)',
-                          transition: 'background 0.1s',
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--accent-bg)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-card)'; }}
-                      >
-                        <span style={{ fontWeight: 600 }}>{r.name}</span>
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>{r.dong}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {!searchLoading && searchQuery.length >= 2 && searchResults.length === 0 && (
-                  <p style={{ fontSize: 12, color: 'var(--text-dim)', textAlign: 'center', margin: '8px 0 0' }}>
-                    검색 결과가 없습니다
-                  </p>
-                )}
+                <AptAutocomplete
+                  placeholder="단지명 입력 (예: 잠실엘스)"
+                  onSelect={handleSelectApt}
+                />
               </div>
             )}
 
