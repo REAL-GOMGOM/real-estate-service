@@ -1,8 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { eq, ilike, sql } from 'drizzle-orm';
 import { DISTRICT_CODE } from '@/lib/district-codes';
 import { matchesQuery } from '@/lib/search-utils';
+import { getBlogDb } from '@/lib/db/client';
+import { apartments } from '@/lib/db/schema';
 
 const BASE_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade';
+
+const APT_NAME_MAX_LEN = 50;
+
+function escapeLike(input: string): string {
+  return input.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+// lawd_cd → DISTRICT_CODE 키 (district 라벨) 역조회. 매핑 못 찾으면 null.
+function findDistrictByLawdCd(lawdCd: string): string | null {
+  for (const [label, code] of Object.entries(DISTRICT_CODE)) {
+    if (code === lawdCd) return label;
+  }
+  return null;
+}
 
 function getMonthList(months: number): string[] {
   const result: string[] = [];
@@ -46,12 +63,76 @@ async function fetchAllPages(apiKey: string, lawdCd: string, yyyymm: string): Pr
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
-  const district = searchParams.get('district') ?? '강남구';
-  const months   = Math.min(parseInt(searchParams.get('months') ?? '3'), 36);
+  const aptIdParam   = searchParams.get('aptId')?.trim() ?? '';
+  const aptNameParam = searchParams.get('aptName')?.trim() ?? '';
+  const districtParam = searchParams.get('district')?.trim() ?? '';
+  const months       = Math.min(parseInt(searchParams.get('months') ?? '3'), 36);
 
-  const lawdCd = DISTRICT_CODE[district];
-  if (!lawdCd) {
-    return NextResponse.json({ error: '지원하지 않는 구: ' + district }, { status: 400 });
+  // 우선순위: aptId → aptName(단독) → district
+  // district + aptName 동시는 기존 동작(지역 내 단지명 필터) 유지
+  let lawdCd: string;
+  let district: string;
+  let resolvedAptName: string = aptNameParam;
+
+  if (aptIdParam) {
+    try {
+      const db = getBlogDb();
+      const rows = await db
+        .select({
+          id:      apartments.id,
+          name:    apartments.name,
+          sigungu: apartments.sigungu,
+          lawdCd:  apartments.lawdCd,
+        })
+        .from(apartments)
+        .where(eq(apartments.id, aptIdParam))
+        .limit(1);
+      const apt = rows[0];
+      if (!apt) {
+        return NextResponse.json({ error: 'apartment not found' }, { status: 404 });
+      }
+      lawdCd          = apt.lawdCd;
+      district        = findDistrictByLawdCd(apt.lawdCd) ?? apt.sigungu;
+      resolvedAptName = apt.name;
+    } catch (e) {
+      console.error('[transactions API] aptId 조회 실패:', e);
+      return NextResponse.json({ error: '단지 조회 실패' }, { status: 500 });
+    }
+  } else if (aptNameParam && !districtParam) {
+    // 단지명만으로 검색 — DB 첫 매칭의 lawd_cd 사용
+    try {
+      const safeName = aptNameParam.slice(0, APT_NAME_MAX_LEN);
+      const db = getBlogDb();
+      const rows = await db
+        .select({
+          id:      apartments.id,
+          name:    apartments.name,
+          sigungu: apartments.sigungu,
+          lawdCd:  apartments.lawdCd,
+        })
+        .from(apartments)
+        .where(ilike(apartments.name, `%${escapeLike(safeName)}%`))
+        .orderBy(sql`length(${apartments.name}) ASC`)
+        .limit(1);
+      const apt = rows[0];
+      if (!apt) {
+        return NextResponse.json({ error: 'no match' }, { status: 404 });
+      }
+      lawdCd          = apt.lawdCd;
+      district        = findDistrictByLawdCd(apt.lawdCd) ?? apt.sigungu;
+      resolvedAptName = apt.name;
+    } catch (e) {
+      console.error('[transactions API] aptName 조회 실패:', e);
+      return NextResponse.json({ error: '단지 조회 실패' }, { status: 500 });
+    }
+  } else {
+    // 기존 동작 — district + (선택) aptName
+    district = districtParam || '강남구';
+    const code = DISTRICT_CODE[district];
+    if (!code) {
+      return NextResponse.json({ error: '지원하지 않는 구: ' + district }, { status: 400 });
+    }
+    lawdCd = code;
   }
 
   const rawKey = process.env.PUBLIC_DATA_API_KEY;
@@ -115,7 +196,7 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    const aptName = searchParams.get('aptName')?.trim() ?? '';
+    const aptName = resolvedAptName;
 
     const result = Object.values(grouped)
       .filter((apt: any) => apt.transactions.length >= 1)
