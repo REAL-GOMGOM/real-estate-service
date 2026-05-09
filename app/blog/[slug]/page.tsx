@@ -11,6 +11,7 @@ import { getPublishedPostBySlug } from '@/lib/blog/queries';
 import { preprocessMdxContent } from '@/lib/blog/preprocessor';
 import { SITE_URL, SITE_NAME } from '@/lib/site';
 import { mdxComponents } from '../components/mdx-components';
+import { CoupangBanner } from '@/app/components/CoupangBanner';
 
 const SLUG_PATTERN = /^[a-z0-9-]{1,200}$/;
 
@@ -224,6 +225,8 @@ async function PostDetail({ params }: { params: Params }) {
             }}
           />
         </div>
+
+        <CoupangBanner subId="blog-end" />
       </article>
     </>
   );
