@@ -8,6 +8,13 @@
       "when": 1777189942775,
       "tag": "0000_romantic_rocket_racer",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1778313069621,
+      "tag": "0001_far_mysterio",
+      "breakpoints": true
     }
   ]
 }
