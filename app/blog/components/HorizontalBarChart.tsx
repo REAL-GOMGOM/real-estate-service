@@ -6,6 +6,12 @@
  * - 양수: zeroX부터 오른쪽, 라벨 막대 끝 +5px
  * - 음수: zeroX부터 왼쪽, 라벨 막대 시작 -5px
  *
+ * 사이클 K 추가 기능 (모두 optional, 미지정 시 기존 동작 100% 동일):
+ * - baseline / autoBaseline: 큰 값 좁은 범위 차이 강조 (예: 평당가 2166 vs 2437)
+ * - maxValue: 이상치 컷오프, 잘리면 ▶/◀ 표시 + 캡션
+ * - autoScale: baseline·maxValue에 맞춰 scale 자동 계산
+ * - 라벨 잘림 자동 대응: zeroX가 부족하면 자동 확장 (축소 X)
+ *
  * 색상 팔레트(사전정의):
  * - red    #dc2626 (서울 상승)
  * - orange #ea580c (경기 상승)
@@ -14,11 +20,14 @@
  * - gray   #6b7280 (중립)
  */
 
-interface BarRow {
-  label: string;
-  value: number; // 양수 = 상승, 음수 = 하락
-  color?: 'red' | 'orange' | 'blue' | 'darkBlue' | 'gray';
-}
+import {
+  CHART_CONSTANTS,
+  computeAutoBaseline,
+  computeAutoScale,
+  computeAutoZeroX,
+  computeBarWidth,
+  type BarRow,
+} from './HorizontalBarChart.utils';
 
 interface HorizontalBarChartProps {
   title: string;
@@ -30,23 +39,32 @@ interface HorizontalBarChartProps {
   dividerText?: string;
   /** viewBox width, 기본 640 */
   width?: number;
-  /** 0% 기준선 x좌표, 기본 200 */
+  /** 0% 기준선 x좌표, 기본 200. 라벨 영역 부족 시 자동 확장됨. */
   zeroX?: number;
   /** 1 unit당 px width, 기본 10 */
   scale?: number;
   /**
-   * 'discrete': data[].color에 박힌 5색 팔레트 사용 (기본)
+   * 'discrete': data[].color 5색 팔레트 사용 (기본)
    * 'gradient': value 절대값 따라 자동 색상 매핑 (서울 25개·경기 25개 같은 그라데이션 차트)
    */
   colorMode?: 'discrete' | 'gradient';
+  // ─── 사이클 K 신규 (모두 optional) ───
+  /** 막대 시작점. 미지정 시 0 (현재 동작 동일). 큰 값 좁은 범위 강조용 */
+  baseline?: number;
+  /** 자동 baseline 계산 (dataMin - range × 0.1, 음수면 0). default false */
+  autoBaseline?: boolean;
+  /** 막대 폭 상한 (이상치 컷오프). 초과 시 ▶/◀ 표시 + 캡션 */
+  maxValue?: number;
+  /** baseline·maxValue 따라 scale 자동. default: baseline·autoBaseline 또는 maxValue 지정 시 true */
+  autoScale?: boolean;
 }
 
 const COLORS: Record<NonNullable<BarRow['color']>, string> = {
-  red: '#dc2626',
-  orange: '#ea580c',
-  blue: '#2563eb',
+  red:      '#dc2626',
+  orange:   '#ea580c',
+  blue:     '#2563eb',
   darkBlue: '#1d4ed8',
-  gray: '#6b7280',
+  gray:     '#6b7280',
 };
 
 /**
@@ -57,43 +75,23 @@ function getGradientFill(value: number): string {
   if (value >= 16) return '#dc2626';
   if (value >= 13) return '#ef4444';
   if (value >= 11) return '#f97316';
-  if (value >= 7) return '#f59e0b';
-  if (value >= 5) return '#fbbf24';
-  if (value >= 3) return '#fcd34d';
+  if (value >= 7)  return '#f59e0b';
+  if (value >= 5)  return '#fbbf24';
+  if (value >= 3)  return '#fcd34d';
   if (value >= 1.5) return '#fde68a';
-  if (value >= 0) return '#fef3c7';
-  if (value > -1) return '#93c5fd';
-  if (value > -2) return '#60a5fa';
-  if (value > -5) return '#3b82f6';
+  if (value >= 0)   return '#fef3c7';
+  if (value > -1)   return '#93c5fd';
+  if (value > -2)   return '#60a5fa';
+  if (value > -5)   return '#3b82f6';
   if (value > -6.5) return '#2563eb';
   return '#1d4ed8';
 }
 
-/**
- * 옅은 막대 색상이면 텍스트는 더 진한 색상으로 (대비 보장)
- */
+/** 옅은 막대 색상이면 텍스트는 더 진한 색상으로 (대비 보장) */
 function getGradientTextFill(barFill: string): string {
   if (barFill === '#fef3c7' || barFill === '#fde68a') return '#a16207';
   return barFill;
 }
-
-const ROW_HEIGHT = 20;
-const ROW_GAP = 4; // 행 사이 빈 공간
-const ROW_PITCH = ROW_HEIGHT + ROW_GAP; // 24
-const TOP_PADDING = 50;
-const BOTTOM_PADDING = 40;
-const DIVIDER_GAP = 12; // 분리선 위/아래 추가 공간
-
-/** 값 라벨 영역 폭 추정 ("+24.0%" 같은 형태, font 11px 600 weight 기준 약 30px). 안전하게 35 */
-const VALUE_LABEL_RESERVE_WIDTH = 35;
-/** 자치구 라벨과 인접 영역 사이 여백 */
-const GROUP_LABEL_PADDING = 10;
-/** 자치구 라벨 폰트 크기 — 라벨 너비 추정용 */
-const GROUP_LABEL_FONT_SIZE = 12;
-/** 한글 글자 1자 평균 너비 (font 12px 기준 추정) */
-const KOREAN_CHAR_WIDTH_AT_12PX = 12;
-/** SVG viewBox 왼쪽 최소 여백 — 라벨이 잘리지 않을 안전선 */
-const MIN_LABEL_AREA_LEFT_PADDING = 5;
 
 export function HorizontalBarChart({
   title,
@@ -105,43 +103,112 @@ export function HorizontalBarChart({
   zeroX = 200,
   scale = 10,
   colorMode = 'discrete',
+  baseline,
+  autoBaseline = false,
+  maxValue,
+  autoScale,
 }: HorizontalBarChartProps) {
-  // 음수 막대 max 절대값 (없으면 0). 라벨 위치 계산용
-  const maxNegativeWidth = Math.max(
+  // ─── effective baseline 결정 ───
+  // autoBaseline > baseline > 0 (default — 기존 동작과 동일)
+  const values = data.map((r) => r.value);
+  const effectiveBaseline = autoBaseline
+    ? computeAutoBaseline(values)
+    : (baseline ?? 0);
+
+  // autoScale default: 신규 prop이 사용된 경우만 true. 기존 호출은 false → scale prop 그대로.
+  const shouldAutoScale =
+    autoScale ?? (baseline !== undefined || autoBaseline || (maxValue !== undefined && maxValue > 0));
+
+  // ─── zeroX 자동 조정 (라벨 잘림 자동 대응) ───
+  // 호환성 보장: 신규 props (baseline·autoBaseline·maxValue) 미사용 시 zeroX 그대로 (확장 X).
+  // 기존 4개 발행 글은 모두 default 분기 → adjustedZeroX === userZeroX 유지.
+  // 신규 props 사용 시에만 라벨/막대 영역 기반 자동 확장. 사용자 zeroX보다 작아지지는 않음.
+  const useAutoLayout =
+    baseline !== undefined ||
+    autoBaseline ||
+    (maxValue !== undefined && maxValue > 0);
+
+  const zeroXConfig = {
+    minLabelLeftPadding:    CHART_CONSTANTS.MIN_LABEL_AREA_LEFT_PADDING,
+    groupLabelPadding:      CHART_CONSTANTS.GROUP_LABEL_PADDING,
+    valueLabelReserveWidth: CHART_CONSTANTS.VALUE_LABEL_RESERVE_WIDTH,
+    koreanCharWidthAt12px:  CHART_CONSTANTS.KOREAN_CHAR_WIDTH_AT_12PX,
+  };
+
+  // 1차 추정: 신규 props 사용 시에만 자동 확장
+  const provisionalZeroX = useAutoLayout
+    ? computeAutoZeroX(data, scale, effectiveBaseline, zeroX, zeroXConfig, maxValue)
+    : zeroX;
+
+  // ─── effective scale 결정 ───
+  const availableWidth = Math.max(
     0,
-    ...data.filter((r) => r.value < 0).map((r) => Math.abs(r.value) * scale),
+    width - provisionalZeroX - CHART_CONSTANTS.VALUE_LABEL_RESERVE_WIDTH,
   );
+  const effectiveScale = shouldAutoScale
+    ? computeAutoScale(values, effectiveBaseline, availableWidth, maxValue)
+    : scale;
+
+  // autoScale일 때 scale 변경 → 음수 막대 영역도 변함 → zeroX 재보정
+  const adjustedZeroX = useAutoLayout && shouldAutoScale
+    ? computeAutoZeroX(data, effectiveScale, effectiveBaseline, zeroX, zeroXConfig, maxValue)
+    : provisionalZeroX;
+
+  // ─── 라벨 영역 계산 ───
+  // baseline 적용 시 음수 delta가 있을 수 있고 (value < baseline), baseline=0 + 음수 데이터도 있음.
+  const negativeDeltas = data
+    .map((r) => r.value - effectiveBaseline)
+    .filter((d) => d < 0)
+    .map((d) => Math.abs(d));
+  const maxNegativeWidth = negativeDeltas.length > 0
+    ? Math.max(...negativeDeltas) * effectiveScale
+    : 0;
   const hasNegative = maxNegativeWidth > 0;
 
-  // 자치구 라벨 x 위치
-  // - 양수 only: 기존 동작 유지 (zeroX 왼쪽 padding)
-  // - 음수 포함: 음수 막대 영역 + 값 라벨 영역 더 왼쪽으로
   const groupLabelX = hasNegative
-    ? zeroX - maxNegativeWidth - VALUE_LABEL_RESERVE_WIDTH - GROUP_LABEL_PADDING
-    : zeroX - GROUP_LABEL_PADDING;
+    ? adjustedZeroX - maxNegativeWidth - CHART_CONSTANTS.VALUE_LABEL_RESERVE_WIDTH - CHART_CONSTANTS.GROUP_LABEL_PADDING
+    : adjustedZeroX - CHART_CONSTANTS.GROUP_LABEL_PADDING;
 
-  // 라벨 길이 검증 — viewBox 밖으로 나가는지 dev mode 경고
+  // 라벨 길이 검증 — viewBox 밖으로 나가는지 dev 경고 (zeroX 자동 조정의 안전망)
   const maxLabelChars = Math.max(...data.map((r) => r.label.length));
-  const estimatedMaxLabelWidth = maxLabelChars * KOREAN_CHAR_WIDTH_AT_12PX;
+  const estimatedMaxLabelWidth = maxLabelChars * CHART_CONSTANTS.KOREAN_CHAR_WIDTH_AT_12PX;
   const labelStartX = groupLabelX - estimatedMaxLabelWidth;
 
   if (
     process.env.NODE_ENV !== 'production' &&
-    labelStartX < MIN_LABEL_AREA_LEFT_PADDING
+    labelStartX < CHART_CONSTANTS.MIN_LABEL_AREA_LEFT_PADDING
   ) {
     // eslint-disable-next-line no-console
     console.warn(
       `[HorizontalBarChart] "${title}" 라벨 영역 부족 — ` +
-        `labelStartX=${labelStartX.toFixed(0)} < ${MIN_LABEL_AREA_LEFT_PADDING}. ` +
-        `라벨 max 글자수=${maxLabelChars}. width(${width}) 또는 zeroX(${zeroX}) 키우거나 라벨 줄이세요.`,
+        `labelStartX=${labelStartX.toFixed(0)} < ${CHART_CONSTANTS.MIN_LABEL_AREA_LEFT_PADDING}. ` +
+        `라벨 max 글자수=${maxLabelChars}. width(${width}) 또는 zeroX(${zeroX}) 키우세요.`,
     );
   }
 
-  const dividerExtra =
-    dividerAfter !== undefined ? DIVIDER_GAP * 2 : 0;
+  // ─── 잘림 발생 여부 (캡션 표시용) ───
+  const hasClipped = data.some(
+    (r) => computeBarWidth(r.value, effectiveBaseline, effectiveScale, maxValue).isClipped,
+  );
+
+  const dividerExtra = dividerAfter !== undefined ? CHART_CONSTANTS.DIVIDER_GAP * 2 : 0;
+  const captionExtra = hasClipped ? CHART_CONSTANTS.CLIPPED_CAPTION_RESERVE : 0;
   const height =
-    TOP_PADDING + data.length * ROW_PITCH + BOTTOM_PADDING + dividerExtra;
-  const axisBottom = TOP_PADDING + data.length * ROW_PITCH + dividerExtra - ROW_GAP;
+    CHART_CONSTANTS.TOP_PADDING +
+    data.length * CHART_CONSTANTS.ROW_PITCH +
+    CHART_CONSTANTS.BOTTOM_PADDING +
+    dividerExtra +
+    captionExtra;
+  const axisBottom =
+    CHART_CONSTANTS.TOP_PADDING +
+    data.length * CHART_CONSTANTS.ROW_PITCH +
+    dividerExtra -
+    CHART_CONSTANTS.ROW_GAP;
+
+  // 축 라벨: baseline=0이면 "0%", 그 외에는 baseline 값 표시
+  const axisLabel = effectiveBaseline === 0
+    ? `0${unit}`
+    : `${effectiveBaseline.toFixed(effectiveBaseline % 1 === 0 ? 0 : 1)}${unit}`;
 
   return (
     <svg
@@ -165,37 +232,45 @@ export function HorizontalBarChart({
         {title}
       </text>
 
-      {/* 0% 기준 축선 */}
+      {/* 기준 축선 */}
       <line
-        x1={zeroX}
+        x1={adjustedZeroX}
         y1={40}
-        x2={zeroX}
+        x2={adjustedZeroX}
         y2={axisBottom}
         stroke="#9ca3af"
         strokeWidth={1}
       />
       <text
-        x={zeroX}
+        x={adjustedZeroX}
         y={axisBottom + 20}
         textAnchor="middle"
         fontSize={11}
         fill="#6b7280"
       >
-        0{unit}
+        {axisLabel}
       </text>
 
       {/* 데이터 행 */}
       {data.map((row, i) => {
         const offset = dividerAfter !== undefined && i > dividerAfter
-          ? DIVIDER_GAP * 2
+          ? CHART_CONSTANTS.DIVIDER_GAP * 2
           : 0;
-        const yRect = TOP_PADDING + i * ROW_PITCH + offset;
+        const yRect = CHART_CONSTANTS.TOP_PADDING + i * CHART_CONSTANTS.ROW_PITCH + offset;
         const yLabel = yRect + 14;
-        const isPositive = row.value >= 0;
-        const barWidth = Math.abs(row.value) * scale;
-        const barX = isPositive ? zeroX : zeroX - barWidth;
+
+        const valueDelta = row.value - effectiveBaseline;
+        const isPositive = valueDelta >= 0;
+        const { width: barWidth, isClipped } = computeBarWidth(
+          row.value,
+          effectiveBaseline,
+          effectiveScale,
+          maxValue,
+        );
+        const barX = isPositive ? adjustedZeroX : adjustedZeroX - barWidth;
         const valueLabelX = isPositive ? barX + barWidth + 5 : barX - 5;
         const valueLabelAnchor = isPositive ? 'start' : 'end';
+
         const fill = colorMode === 'gradient'
           ? getGradientFill(row.value)
           : COLORS[row.color ?? 'gray'];
@@ -210,7 +285,7 @@ export function HorizontalBarChart({
               x={groupLabelX}
               y={yLabel}
               textAnchor="end"
-              fontSize={GROUP_LABEL_FONT_SIZE}
+              fontSize={CHART_CONSTANTS.GROUP_LABEL_FONT_SIZE}
               fill="#374151"
             >
               {row.label}
@@ -220,9 +295,21 @@ export function HorizontalBarChart({
               x={barX}
               y={yRect}
               width={barWidth}
-              height={ROW_HEIGHT}
+              height={CHART_CONSTANTS.ROW_HEIGHT}
               fill={fill}
             />
+            {/* 잘림 표시 (▶/◀) */}
+            {isClipped && (
+              <text
+                x={isPositive ? barX + barWidth - 14 : barX + 4}
+                y={yLabel}
+                fontSize={14}
+                fill="#ffffff"
+                fontWeight={700}
+              >
+                {isPositive ? '▶' : '◀'}
+              </text>
+            )}
             {/* 값 라벨 */}
             <text
               x={valueLabelX}
@@ -232,9 +319,10 @@ export function HorizontalBarChart({
               fill={textFill}
               fontWeight={600}
             >
-              {isPositive ? '+' : ''}
+              {isPositive && effectiveBaseline === 0 ? '+' : ''}
               {row.value.toFixed(1)}
               {unit}
+              {isClipped ? '*' : ''}
             </text>
           </g>
         );
@@ -245,9 +333,9 @@ export function HorizontalBarChart({
         <>
           <line
             x1={40}
-            y1={TOP_PADDING + (dividerAfter + 1) * ROW_PITCH + DIVIDER_GAP - 2}
+            y1={CHART_CONSTANTS.TOP_PADDING + (dividerAfter + 1) * CHART_CONSTANTS.ROW_PITCH + CHART_CONSTANTS.DIVIDER_GAP - 2}
             x2={width - 40}
-            y2={TOP_PADDING + (dividerAfter + 1) * ROW_PITCH + DIVIDER_GAP - 2}
+            y2={CHART_CONSTANTS.TOP_PADDING + (dividerAfter + 1) * CHART_CONSTANTS.ROW_PITCH + CHART_CONSTANTS.DIVIDER_GAP - 2}
             stroke="#e5e7eb"
             strokeWidth={1}
             strokeDasharray="4 4"
@@ -255,7 +343,7 @@ export function HorizontalBarChart({
           {dividerText && (
             <text
               x={width / 2}
-              y={TOP_PADDING + (dividerAfter + 1) * ROW_PITCH + DIVIDER_GAP + 10}
+              y={CHART_CONSTANTS.TOP_PADDING + (dividerAfter + 1) * CHART_CONSTANTS.ROW_PITCH + CHART_CONSTANTS.DIVIDER_GAP + 10}
               textAnchor="middle"
               fontSize={11}
               fill="#6b7280"
@@ -264,6 +352,19 @@ export function HorizontalBarChart({
             </text>
           )}
         </>
+      )}
+
+      {/* 잘림 캡션 */}
+      {hasClipped && (
+        <text
+          x={width / 2}
+          y={height - 8}
+          textAnchor="middle"
+          fontSize={10}
+          fill="#9ca3af"
+        >
+          * 차트 영역을 벗어난 값
+        </text>
       )}
     </svg>
   );
