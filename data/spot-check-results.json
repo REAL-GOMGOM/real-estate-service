@@ -1,0 +1,372 @@
+{
+  "checkedAt": "2026-05-09T11:13:39.172Z",
+  "totalChecked": 30,
+  "summary": {
+    "ok": 15,
+    "multi_match": 3,
+    "missing_in_db_present_in_kapt": 0,
+    "missing_in_kapt": 12
+  },
+  "results": [
+    {
+      "target": "잠실엘스",
+      "dbHitCount": 1,
+      "dbHits": [
+        {
+          "id": "A13822004",
+          "name": "잠실엘스아파트",
+          "sigungu": "송파구",
+          "lawdCd": "11710"
+        }
+      ],
+      "skippedHits": [],
+      "status": "ok"
+    },
+    {
+      "target": "헬리오시티",
+      "dbHitCount": 1,
+      "dbHits": [
+        {
+          "id": "A10025850",
+          "name": "헬리오시티아파트",
+          "sigungu": "송파구",
+          "lawdCd": "11710"
+        }
+      ],
+      "skippedHits": [],
+      "status": "ok"
+    },
+    {
+      "target": "은마아파트",
+      "dbHitCount": 0,
+      "dbHits": [],
+      "skippedHits": [],
+      "status": "missing_in_kapt"
+    },
+    {
+      "target": "잠실주공5단지",
+      "dbHitCount": 0,
+      "dbHits": [],
+      "skippedHits": [],
+      "status": "missing_in_kapt"
+    },
+    {
+      "target": "압구정현대",
+      "dbHitCount": 2,
+      "dbHits": [
+        {
+          "id": "A13511201",
+          "name": "압구정현대8차",
+          "sigungu": "강남구",
+          "lawdCd": "11680"
+        },
+        {
+          "id": "A13589802",
+          "name": "압구정현대아파트",
+          "sigungu": "강남구",
+          "lawdCd": "11680"
+        }
+      ],
+      "skippedHits": [],
+      "status": "multi_match"
+    },
+    {
+      "target": "아크로리버파크",
+      "dbHitCount": 1,
+      "dbHits": [
+        {
+          "id": "A10027205",
+          "name": "아크로리버파크",
+          "sigungu": "서초구",
+          "lawdCd": "11650"
+        }
+      ],
+      "skippedHits": [],
+      "status": "ok"
+    },
+    {
+      "target": "반포자이",
+      "dbHitCount": 2,
+      "dbHits": [
+        {
+          "id": "A10026004",
+          "name": "신반포자이아파트",
+          "sigungu": "서초구",
+          "lawdCd": "11650"
+        },
+        {
+          "id": "A13704104",
+          "name": "반포자이",
+          "sigungu": "서초구",
+          "lawdCd": "11650"
+        }
+      ],
+      "skippedHits": [],
+      "status": "multi_match"
+    },
+    {
+      "target": "래미안퍼스티지",
+      "dbHitCount": 1,
+      "dbHits": [
+        {
+          "id": "A13776509",
+          "name": "래미안퍼스티지",
+          "sigungu": "서초구",
+          "lawdCd": "11650"
+        }
+      ],
+      "skippedHits": [],
+      "status": "ok"
+    },
+    {
+      "target": "아크로비스타",
+      "dbHitCount": 1,
+      "dbHits": [
+        {
+          "id": "A13788206",
+          "name": "서초아크로비스타",
+          "sigungu": "서초구",
+          "lawdCd": "11650"
+        }
+      ],
+      "skippedHits": [],
+      "status": "ok"
+    },
+    {
+      "target": "래미안첼리투스",
+      "dbHitCount": 1,
+      "dbHits": [
+        {
+          "id": "A10027908",
+          "name": "래미안첼리투스",
+          "sigungu": "용산구",
+          "lawdCd": "11170"
+        }
+      ],
+      "skippedHits": [],
+      "status": "ok"
+    },
+    {
+      "target": "디에이치자이개포",
+      "dbHitCount": 0,
+      "dbHits": [],
+      "skippedHits": [],
+      "status": "missing_in_kapt"
+    },
+    {
+      "target": "래미안원베일리",
+      "dbHitCount": 1,
+      "dbHits": [
+        {
+          "id": "A10023043",
+          "name": "래미안원베일리",
+          "sigungu": "서초구",
+          "lawdCd": "11650"
+        }
+      ],
+      "skippedHits": [],
+      "status": "ok"
+    },
+    {
+      "target": "개포주공1단지",
+      "dbHitCount": 0,
+      "dbHits": [],
+      "skippedHits": [],
+      "status": "missing_in_kapt"
+    },
+    {
+      "target": "래미안블레스티지",
+      "dbHitCount": 1,
+      "dbHits": [
+        {
+          "id": "A10025675",
+          "name": "래미안블레스티지",
+          "sigungu": "강남구",
+          "lawdCd": "11680"
+        }
+      ],
+      "skippedHits": [],
+      "status": "ok"
+    },
+    {
+      "target": "서초그랑자이",
+      "dbHitCount": 1,
+      "dbHits": [
+        {
+          "id": "A10024240",
+          "name": "서초그랑자이",
+          "sigungu": "서초구",
+          "lawdCd": "11650"
+        }
+      ],
+      "skippedHits": [],
+      "status": "ok"
+    },
+    {
+      "target": "대치우성1차",
+      "dbHitCount": 1,
+      "dbHits": [
+        {
+          "id": "A13583403",
+          "name": "대치우성1차아파트",
+          "sigungu": "강남구",
+          "lawdCd": "11680"
+        }
+      ],
+      "skippedHits": [],
+      "status": "ok"
+    },
+    {
+      "target": "도곡렉슬",
+      "dbHitCount": 1,
+      "dbHits": [
+        {
+          "id": "A13527203",
+          "name": "도곡렉슬",
+          "sigungu": "강남구",
+          "lawdCd": "11680"
+        }
+      ],
+      "skippedHits": [],
+      "status": "ok"
+    },
+    {
+      "target": "목동신시가지7단지",
+      "dbHitCount": 0,
+      "dbHits": [],
+      "skippedHits": [],
+      "status": "missing_in_kapt"
+    },
+    {
+      "target": "분당파크뷰",
+      "dbHitCount": 1,
+      "dbHits": [
+        {
+          "id": "A46275208",
+          "name": "동분당파크뷰",
+          "sigungu": "성남중원구",
+          "lawdCd": "41133"
+        }
+      ],
+      "skippedHits": [],
+      "status": "ok"
+    },
+    {
+      "target": "광교중앙푸르지오",
+      "dbHitCount": 0,
+      "dbHits": [],
+      "skippedHits": [],
+      "status": "missing_in_kapt"
+    },
+    {
+      "target": "판교푸르지오월드마크",
+      "dbHitCount": 1,
+      "dbHits": [
+        {
+          "id": "A10020890",
+          "name": "판교푸르지오월드마크",
+          "sigungu": "성남분당구",
+          "lawdCd": "41135"
+        }
+      ],
+      "skippedHits": [],
+      "status": "ok"
+    },
+    {
+      "target": "동탄2신도시반도유보라",
+      "dbHitCount": 0,
+      "dbHits": [],
+      "skippedHits": [],
+      "status": "missing_in_kapt"
+    },
+    {
+      "target": "위례신도시",
+      "dbHitCount": 0,
+      "dbHits": [],
+      "skippedHits": [],
+      "status": "missing_in_kapt"
+    },
+    {
+      "target": "송도더샵퍼스트파크",
+      "dbHitCount": 3,
+      "dbHits": [
+        {
+          "id": "A10026678",
+          "name": "송도더샵퍼스트파크13단지",
+          "sigungu": "연수구",
+          "lawdCd": "28185"
+        },
+        {
+          "id": "A10026679",
+          "name": "송도더샵퍼스트파크15단지",
+          "sigungu": "연수구",
+          "lawdCd": "28185"
+        },
+        {
+          "id": "A10026681",
+          "name": "송도더샵퍼스트파크14단지",
+          "sigungu": "연수구",
+          "lawdCd": "28185"
+        }
+      ],
+      "skippedHits": [],
+      "status": "multi_match"
+    },
+    {
+      "target": "부천중동위브더스테이트",
+      "dbHitCount": 0,
+      "dbHits": [],
+      "skippedHits": [],
+      "status": "missing_in_kapt"
+    },
+    {
+      "target": "해운대두산위브더제니스",
+      "dbHitCount": 1,
+      "dbHits": [
+        {
+          "id": "A61202007",
+          "name": "해운대두산위브더제니스",
+          "sigungu": "해운대구",
+          "lawdCd": "26350"
+        }
+      ],
+      "skippedHits": [],
+      "status": "ok"
+    },
+    {
+      "target": "대구수성아이파크",
+      "dbHitCount": 1,
+      "dbHits": [
+        {
+          "id": "A10027293",
+          "name": "대구수성아이파크",
+          "sigungu": "수성구",
+          "lawdCd": "27260"
+        }
+      ],
+      "skippedHits": [],
+      "status": "ok"
+    },
+    {
+      "target": "광주봉선롯데캐슬",
+      "dbHitCount": 0,
+      "dbHits": [],
+      "skippedHits": [],
+      "status": "missing_in_kapt"
+    },
+    {
+      "target": "대전둔산크로바",
+      "dbHitCount": 0,
+      "dbHits": [],
+      "skippedHits": [],
+      "status": "missing_in_kapt"
+    },
+    {
+      "target": "부산용호더블유",
+      "dbHitCount": 0,
+      "dbHits": [],
+      "skippedHits": [],
+      "status": "missing_in_kapt"
+    }
+  ]
+}
