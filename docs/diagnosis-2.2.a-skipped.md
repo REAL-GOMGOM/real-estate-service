@@ -4,6 +4,10 @@
 > 사이클: I
 > 작성자: Claude Code (Eric 검토 대기)
 > HEAD 시작 시점: bd26060 (사이클 H Phase 2.4 완료)
+>
+> **상태 업데이트 (2026-05-10, 사이클 J)**: P0 액션 완료. 적재 스크립트 가드 완화 +
+> `METROPOLITAN_SENTINEL` 매핑 적용. prod DB 21,931 → 22,147 backfill 완료. 세종권 검색 정상.
+> 정책: [docs/sentinel-policy.md](./sentinel-policy.md).
 
 ---
 
