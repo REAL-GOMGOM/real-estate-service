@@ -1,3 +1,9 @@
+'use client';
+// 사유: dev warn (console.warn/info)을 브라우저 콘솔 노출 위해 client component 전환
+// 사이클 N 차트 3종 (LineChart, DonutChart, StackedBarChart)과 패턴 일관
+// 번들 영향: 순수 SVG 컴포넌트라 미미
+// 사이클 P Step P-3 (commit 517c059 다음 단계)
+
 /**
  * 가로 막대 차트 — kb-report·시리즈 글 시각자료용
  *
