@@ -93,21 +93,68 @@ function getGradientTextFill(barFill: string): string {
   return barFill;
 }
 
-export function HorizontalBarChart({
-  title,
-  data,
-  unit = '%',
-  dividerAfter,
-  dividerText,
-  width = 640,
-  zeroX = 200,
-  scale = 10,
-  colorMode = 'discrete',
-  baseline,
-  autoBaseline = false,
-  maxValue,
-  autoScale,
-}: HorizontalBarChartProps) {
+// dev warn 패턴 — 사이클 P Step P-1
+const TITLE_UNIT_REGEX = /\(단위[:\s]*([^)]+)\)/;
+// dividerText가 단위 문자열로 보이는 패턴 — "억", "%", "%p", "조 원", "건" 등 5자 이하
+const SHORT_UNIT_PATTERN = /^[%가-힣\sp]{1,5}$/;
+
+export function HorizontalBarChart(props: HorizontalBarChartProps) {
+  const {
+    title,
+    data,
+    unit = '%',
+    dividerAfter,
+    dividerText,
+    width = 640,
+    zeroX = 200,
+    scale = 10,
+    colorMode = 'discrete',
+    baseline,
+    autoBaseline = false,
+    maxValue,
+    autoScale,
+  } = props;
+
+  // ─── dev warn 3종 (prod 빌드에서 dead-code elimination) ───
+  if (process.env.NODE_ENV !== 'production') {
+    // (a) unit 미지정 + title에 "(단위: X)" 포함 → 라벨·제목 단위 불일치 가능
+    if (props.unit === undefined && title) {
+      const titleUnitMatch = title.match(TITLE_UNIT_REGEX);
+      if (titleUnitMatch) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[HorizontalBarChart] title에 "(단위: ${titleUnitMatch[1].trim()})" 포함되어 있지만 ` +
+          `unit prop이 미지정. default "%"가 적용되어 값 라벨이 의도와 불일치할 수 있음. ` +
+          `예시 fix: unit="${titleUnitMatch[1].trim()}"`
+        );
+      }
+    }
+
+    // (b) unit 미지정 + dividerText가 단위 문자열 패턴 → 우회 사용 경고
+    if (props.unit === undefined && dividerText && SHORT_UNIT_PATTERN.test(dividerText)) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[HorizontalBarChart] dividerText="${dividerText}"가 단위 문자열로 보이지만 ` +
+        `unit prop이 미지정. 값 라벨은 default "%"로 표기됨. ` +
+        `dividerText는 분리선 설명용이고 단위는 unit prop로 지정 권장.`
+      );
+    }
+
+    // (c) discrete 모드 + 모든 row.color 미지정 → 단조 흑백 차트 경고
+    const effectiveColorMode = props.colorMode ?? 'discrete';
+    if (
+      effectiveColorMode !== 'gradient' &&
+      data.length > 0 &&
+      data.every((row) => !row.color)
+    ) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[HorizontalBarChart] discrete 모드에서 모든 row의 color가 미지정. ` +
+        `의도된 흑백 차트가 아니면 row.color 명시 또는 colorMode="gradient" 추가 권장.`
+      );
+    }
+  }
+
   // ─── effective baseline 결정 ───
   // autoBaseline > baseline > 0 (default — 기존 동작과 동일)
   const values = data.map((r) => r.value);
