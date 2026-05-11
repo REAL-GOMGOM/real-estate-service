@@ -28,6 +28,18 @@ import {
   computeBarWidth,
   type BarRow,
 } from './HorizontalBarChart.utils';
+import { pickDefaultColor } from '@/lib/chart-colors';
+
+/**
+ * row 색상 결정 — discrete 모드 전용.
+ * - row.color 명시 시 명시값 우선
+ * - 미지정 시 pickDefaultColor(rowIndex, 'category') 자동 할당
+ *   (사이클 N DonutChart·StackedBarChart와 동일 패턴, red → blue → orange → darkBlue → gray 순환)
+ */
+function resolveRowColor(row: BarRow, rowIndex: number): NonNullable<BarRow['color']> {
+  if (row.color) return row.color;
+  return pickDefaultColor(rowIndex, 'category');
+}
 
 interface HorizontalBarChartProps {
   title: string;
@@ -140,7 +152,9 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
       );
     }
 
-    // (c) discrete 모드 + 모든 row.color 미지정 → 단조 흑백 차트 경고
+    // (c) discrete 모드 + 모든 row.color 미지정 → 자동 할당 발동 알림 (info 톤)
+    // 사이클 P-2에서 pickDefaultColor 자동 할당 도입. (c)는 흑백 차트 위험 경고 X.
+    // 작가가 자동 색상을 검토하고 의도와 일치하지 않으면 명시할 수 있도록 알림.
     const effectiveColorMode = props.colorMode ?? 'discrete';
     if (
       effectiveColorMode !== 'gradient' &&
@@ -148,9 +162,10 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
       data.every((row) => !row.color)
     ) {
       // eslint-disable-next-line no-console
-      console.warn(
-        `[HorizontalBarChart] discrete 모드에서 모든 row의 color가 미지정. ` +
-        `의도된 흑백 차트가 아니면 row.color 명시 또는 colorMode="gradient" 추가 권장.`
+      console.info(
+        `[HorizontalBarChart] discrete 모드 모든 row.color 미지정. ` +
+        `pickDefaultColor로 자동 할당 (red, blue, orange, darkBlue, gray 순). ` +
+        `의도와 다르면 row.color 명시 권장.`
       );
     }
   }
@@ -320,7 +335,7 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
 
         const fill = colorMode === 'gradient'
           ? getGradientFill(row.value)
-          : COLORS[row.color ?? 'gray'];
+          : COLORS[resolveRowColor(row, i)];
         const textFill = colorMode === 'gradient'
           ? getGradientTextFill(fill)
           : fill;
