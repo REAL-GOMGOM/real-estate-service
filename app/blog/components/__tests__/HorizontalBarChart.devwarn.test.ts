@@ -111,8 +111,19 @@ describe('HorizontalBarChart dev warn', () => {
     });
   });
 
-  describe('(c) discrete 모드 + 모든 row color 미지정', () => {
-    it('경고 발생 — gradient 또는 row.color 권장', () => {
+  // (c) — 사이클 P-2에서 console.warn → console.info 약화 (자동 할당 발동 알림)
+  describe('(c) discrete 모드 + 모든 row color 미지정 (자동 할당 발동 info)', () => {
+    let infoSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      infoSpy.mockRestore();
+    });
+
+    it('console.info 발생 — pickDefaultColor 자동 할당 안내', () => {
       renderToStaticMarkup(
         createElement(HorizontalBarChart, {
           title: 'M2 광의통화',
@@ -122,11 +133,12 @@ describe('HorizontalBarChart dev warn', () => {
           ],
         }),
       );
-      const calls = warnSpy.mock.calls.flat();
-      expect(calls.some((c) => typeof c === 'string' && c.includes('모든 row의 color가 미지정'))).toBe(true);
+      const calls = infoSpy.mock.calls.flat();
+      expect(calls.some((c) => typeof c === 'string' && c.includes('pickDefaultColor'))).toBe(true);
+      expect(calls.some((c) => typeof c === 'string' && c.includes('자동 할당'))).toBe(true);
     });
 
-    it('일부 row만 color 명시 → 경고 없음 (every가 false)', () => {
+    it('일부 row만 color 명시 → info 미발생 (every가 false)', () => {
       renderToStaticMarkup(
         createElement(HorizontalBarChart, {
           title: '혼재',
@@ -136,11 +148,11 @@ describe('HorizontalBarChart dev warn', () => {
           ],
         }),
       );
-      const calls = warnSpy.mock.calls.flat();
-      expect(calls.some((c) => typeof c === 'string' && c.includes('모든 row의 color가 미지정'))).toBe(false);
+      const calls = infoSpy.mock.calls.flat();
+      expect(calls.some((c) => typeof c === 'string' && c.includes('pickDefaultColor'))).toBe(false);
     });
 
-    it('colorMode="gradient" + 모든 row color 미지정 → 경고 없음 (의도된 패턴)', () => {
+    it('colorMode="gradient" + 모든 row color 미지정 → info 미발생 (gradient 모드)', () => {
       renderToStaticMarkup(
         createElement(HorizontalBarChart, {
           title: '서울 자치구',
@@ -151,8 +163,8 @@ describe('HorizontalBarChart dev warn', () => {
           ],
         }),
       );
-      const calls = warnSpy.mock.calls.flat();
-      expect(calls.some((c) => typeof c === 'string' && c.includes('모든 row의 color가 미지정'))).toBe(false);
+      const calls = infoSpy.mock.calls.flat();
+      expect(calls.some((c) => typeof c === 'string' && c.includes('pickDefaultColor'))).toBe(false);
     });
   });
 });
