@@ -35,7 +35,12 @@ import {
   computeRightLabelWidth,
   type BarRow,
 } from './HorizontalBarChart.utils';
-import { resolveChartColor, warnInvalidChartColor } from '@/lib/chart-colors';
+import {
+  getGradientFill,
+  getGradientTextFill,
+  resolveChartColor,
+  warnInvalidChartColor,
+} from '@/lib/chart-colors';
 
 interface HorizontalBarChartProps {
   title: string;
@@ -67,31 +72,8 @@ interface HorizontalBarChartProps {
   autoScale?: boolean;
 }
 
-/**
- * value 절대값 따라 그라데이션 색상 매핑 (kb-report SVG #2·#3 패턴)
- * 양수 8단계 (red→orange→amber 농도), 음수 5단계 (blue 농도)
- */
-function getGradientFill(value: number): string {
-  if (value >= 16) return '#dc2626';
-  if (value >= 13) return '#ef4444';
-  if (value >= 11) return '#f97316';
-  if (value >= 7)  return '#f59e0b';
-  if (value >= 5)  return '#fbbf24';
-  if (value >= 3)  return '#fcd34d';
-  if (value >= 1.5) return '#fde68a';
-  if (value >= 0)   return '#fef3c7';
-  if (value > -1)   return '#93c5fd';
-  if (value > -2)   return '#60a5fa';
-  if (value > -5)   return '#3b82f6';
-  if (value > -6.5) return '#2563eb';
-  return '#1d4ed8';
-}
-
-/** 옅은 막대 색상이면 텍스트는 더 진한 색상으로 (대비 보장) */
-function getGradientTextFill(barFill: string): string {
-  if (barFill === '#fef3c7' || barFill === '#fde68a') return '#a16207';
-  return barFill;
-}
+// 사이클 S Step S-3: getGradientFill / getGradientTextFill는 lib/chart-colors로 통합.
+// (사이클 N 시점 "completely identical" 주석으로 보장된 중복 제거)
 
 // dev warn 패턴 — 사이클 P Step P-1
 const TITLE_UNIT_REGEX = /\(단위[:\s]*([^)]+)\)/;
