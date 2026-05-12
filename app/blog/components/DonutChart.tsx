@@ -13,7 +13,7 @@
 'use client';
 
 import { useId } from 'react';
-import { CHART_COLORS } from '@/lib/chart-colors';
+import { warnInvalidChartColor } from '@/lib/chart-colors';
 import { CHART_TOKENS } from '@/lib/chart-tokens';
 import {
   computeSlice,
@@ -78,13 +78,17 @@ export function DonutChart({
 
   const computed = computeSliceLayout(data);
 
-  // dev mode 경고 — 음수 슬라이스 사용자 알림
+  // dev mode 경고 — 음수 슬라이스 + 알 수 없는 color 값
   if (process.env.NODE_ENV !== 'production') {
     const hasNeg = data.some((s) => s.value < 0);
     if (hasNeg) {
       // eslint-disable-next-line no-console
       console.warn(`[DonutChart] "${title}" 음수 value 감지 — 0으로 처리됨`);
     }
+    // 사이클 S Step S-1: 알 수 없는 color 값 → 자동 할당 안내
+    data.forEach((slice, idx) => {
+      warnInvalidChartColor('DonutChart', slice.color, `data[${idx}].`);
+    });
   }
 
   // 빈 데이터 placeholder
@@ -150,8 +154,7 @@ export function DonutChart({
 
       {/* 슬라이스 */}
       {computed.map((c) => {
-        const colorKey = resolveSliceColor(c.slice, c.index);
-        const fill = CHART_COLORS[colorKey];
+        const fill = resolveSliceColor(c.slice, c.index);
 
         // highlighted 슬라이스 → 중각 방향으로 offset
         let translate = '';

@@ -6,20 +6,13 @@
  */
 
 import { estimateTextWidth } from '@/lib/chart-tokens';
+import type { ChartColor } from '@/lib/chart-colors';
 
 /**
- * 차트 막대 색상 타입 — 사이클 Q에서 hex 확장.
- * - 5색 키워드: 디자인 일관성 위한 권장 옵션
- * - hex 코드 (`#abc`, `#aabbcc`, `#aabbccdd` 등 3~8자리): 작가 디자인 도구 호환
- *   (예: '#9ca3af')
+ * 차트 막대 색상 타입.
+ * 사이클 Q: hex 도입. 사이클 S Step S-1: lib/chart-colors.ChartColor 알리아싱(4개 차트 통일).
  */
-export type BarColor =
-  | 'red'
-  | 'orange'
-  | 'blue'
-  | 'darkBlue'
-  | 'gray'
-  | `#${string}`;
+export type BarColor = ChartColor;
 
 export interface BarRow {
   label: string;

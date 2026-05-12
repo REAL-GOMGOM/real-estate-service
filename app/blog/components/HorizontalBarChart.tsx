@@ -35,31 +35,7 @@ import {
   computeRightLabelWidth,
   type BarRow,
 } from './HorizontalBarChart.utils';
-import { pickDefaultColor } from '@/lib/chart-colors';
-
-// hex 코드 검증 정규식 (3·4·6·8자리 hex 허용 — RGB, RGBA short/full)
-const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{3,8}$/;
-
-/**
- * row.color 해결 우선순위 (사이클 Q에서 hex 분기 추가):
- * 1. 유효한 hex 코드 (#3~8자리) → 그대로 반환
- * 2. 5색 키워드 → COLORS 매핑
- * 3. 미지정 또는 잘못된 값 → pickDefaultColor 자동 할당 (사이클 P-2)
- *
- * 반환값은 SVG fill 속성에 직접 사용 가능한 string (이미 매핑된 hex 값).
- */
-function resolveRowColor(row: BarRow, rowIndex: number): string {
-  // 1. 유효한 hex 코드
-  if (row.color && HEX_COLOR_REGEX.test(row.color)) {
-    return row.color;
-  }
-  // 2. 5색 키워드
-  if (row.color && row.color in COLORS) {
-    return COLORS[row.color as keyof typeof COLORS];
-  }
-  // 3. 미지정 또는 잘못된 값 → 자동 할당 (P-2)
-  return COLORS[pickDefaultColor(rowIndex, 'category')];
-}
+import { resolveChartColor, warnInvalidChartColor } from '@/lib/chart-colors';
 
 interface HorizontalBarChartProps {
   title: string;
@@ -90,14 +66,6 @@ interface HorizontalBarChartProps {
   /** baseline·maxValue 따라 scale 자동. default: baseline·autoBaseline 또는 maxValue 지정 시 true */
   autoScale?: boolean;
 }
-
-const COLORS: Record<NonNullable<BarRow['color']>, string> = {
-  red:      '#dc2626',
-  orange:   '#ea580c',
-  blue:     '#2563eb',
-  darkBlue: '#1d4ed8',
-  gray:     '#6b7280',
-};
 
 /**
  * value 절대값 따라 그라데이션 색상 매핑 (kb-report SVG #2·#3 패턴)
@@ -190,20 +158,9 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
     }
 
     // (d) 사이클 Q — 알 수 없는 color 값 → 자동 할당 fallback 안내
-    // 키워드(5색)도 hex 코드(#3~8자리)도 아닌 입력 검출.
+    // 사이클 S Step S-1: 공통 헬퍼 warnInvalidChartColor 호출로 통합.
     data.forEach((row, idx) => {
-      if (
-        row.color &&
-        !HEX_COLOR_REGEX.test(row.color) &&
-        !(row.color in COLORS)
-      ) {
-        // eslint-disable-next-line no-console
-        console.warn(
-          `[HorizontalBarChart] data[${idx}].color="${row.color}"이 ` +
-          `유효한 키워드(red, orange, blue, darkBlue, gray)도 hex 코드(예: "#dc2626")도 아닙니다. ` +
-          `자동 할당 적용. 의도된 색상이면 키워드 또는 hex 코드 사용 권장.`
-        );
-      }
+      warnInvalidChartColor('HorizontalBarChart', row.color, `data[${idx}].`);
     });
   }
 
@@ -380,7 +337,7 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
 
         const fill = colorMode === 'gradient'
           ? getGradientFill(row.value)
-          : resolveRowColor(row, i);
+          : resolveChartColor(row.color, i, 'category');
         const textFill = colorMode === 'gradient'
           ? getGradientTextFill(fill)
           : fill;
