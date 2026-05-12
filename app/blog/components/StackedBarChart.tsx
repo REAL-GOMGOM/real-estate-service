@@ -16,13 +16,14 @@
 
 import { useId } from 'react';
 import { CHART_COLORS } from '@/lib/chart-colors';
-import { CHART_TOKENS } from '@/lib/chart-tokens';
+import { CHART_TOKENS, estimateTextWidth } from '@/lib/chart-tokens';
 import {
   normalizeBars,
   resolveSegmentColor,
   computeChartMax,
   buildLegendEntries,
   generateAriaDesc,
+  formatSegmentLabel,
   type StackedBar,
 } from './StackedBarChart.utils';
 
@@ -269,7 +270,7 @@ export function StackedBarChart({
                       fill="#ffffff"
                       fontWeight={600}
                     >
-                      {formatSegmentLabel(nSeg.displayValue, unit)}
+                      {formatSegmentLabel(nSeg.displayValue, unit, percentMode)}
                     </text>
                   )}
                 </g>
@@ -297,13 +298,6 @@ function formatTick(value: number, unit: string): string {
   return `${formatted}${unit}`;
 }
 
-function formatSegmentLabel(value: number, unit: string): string {
-  // 0.5 미만은 0으로 보이는 게 자연스러움
-  if (value < 0.5) return '0';
-  const formatted = Number.isInteger(value) ? String(value) : value.toFixed(1);
-  return `${formatted}${unit}`;
-}
-
 function Legend({
   entries,
   x,
@@ -320,7 +314,7 @@ function Legend({
   const placed: Array<{ label: string; color: string; xAnchor: number }> = [];
   for (let i = entries.length - 1; i >= 0; i--) {
     const e = entries[i];
-    const estW = e.label.length * 7 + DOT + 6;
+    const estW = estimateTextWidth(e.label) + DOT + 6;
     cursor -= estW;
     placed.unshift({ label: e.label, color: e.color, xAnchor: cursor });
     cursor -= GAP;

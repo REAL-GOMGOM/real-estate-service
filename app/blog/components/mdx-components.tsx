@@ -3,6 +3,9 @@ import type { MDXComponents } from 'mdx/types';
 import { HorizontalBarChart } from './HorizontalBarChart';
 import { DemographicShiftBars } from './DemographicShiftBars';
 import { AgeGroupBars } from './AgeGroupBars';
+import { LineChart } from './LineChart';
+import { DonutChart } from './DonutChart';
+import { StackedBarChart } from './StackedBarChart';
 
 /**
  * MDX 렌더 시 사용할 컴포넌트 화이트리스트.
@@ -40,4 +43,7 @@ export const mdxComponents: MDXComponents = {
   HorizontalBarChart,
   DemographicShiftBars,
   AgeGroupBars,
+  LineChart,
+  DonutChart,
+  StackedBarChart,
 };
