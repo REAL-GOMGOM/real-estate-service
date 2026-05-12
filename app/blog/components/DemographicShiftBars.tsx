@@ -8,16 +8,15 @@
  * - 박스 height 40, 행 간격 80px
  * - 가운데 화살표 → x=320 y=180
  * - 우측 박스 옆 변화 마커 ▼▲─ x=600
+ *
+ * 사이클 S Step S-2: 자체 COLORS 제거 → lib/chart-colors.CHART_COLORS 통합.
+ * 키워드 'orange'는 4개 차트의 #ea580c와 톤이 달라(#f97316) 'amberOrange'로 명시 분리.
  */
 
-const COLORS = {
-  yellow: '#fbbf24',
-  orange: '#f97316',
-  red: '#dc2626',
-} as const;
+import { CHART_COLORS } from '@/lib/chart-colors';
 
 const TEXT_ON_LIGHT = '#111827'; // yellow 박스 위 텍스트
-const TEXT_ON_DARK = '#ffffff'; // orange/red 박스 위 텍스트
+const TEXT_ON_DARK = '#ffffff'; // amberOrange/red 박스 위 텍스트
 const SUB_LABEL_FILL = '#6b7280';
 const HEADER_FILL = '#374151';
 const ARROW_FILL = '#9ca3af';
@@ -36,7 +35,8 @@ interface CategoryRow {
   label: string;
   leftValue: number;
   rightValue: number;
-  color: keyof typeof COLORS;
+  /** DemographicShiftBars 전용 3색. amber 톤 'amberOrange'(#f97316)는 표준 'orange'(#ea580c)와 구분. */
+  color: 'yellow' | 'amberOrange' | 'red';
 }
 
 interface DemographicShiftBarsProps {
@@ -106,7 +106,7 @@ export function DemographicShiftBars({
         const leftWidth = row.leftValue * SCALE;
         const rightWidth = row.rightValue * SCALE;
         const rightBoxX = RIGHT_X_END - rightWidth - 2; // 우측 박스 오른쪽 기준
-        const leftBoxFill = COLORS[row.color];
+        const leftBoxFill = CHART_COLORS[row.color];
         const textOnLeft = row.color === 'yellow' ? TEXT_ON_LIGHT : TEXT_ON_DARK;
         const textOnRight = row.color === 'yellow' ? TEXT_ON_LIGHT : TEXT_ON_DARK;
         const delta = getDeltaMark(row.leftValue, row.rightValue);
