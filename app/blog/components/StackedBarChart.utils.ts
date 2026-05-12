@@ -123,6 +123,30 @@ export function buildLegendEntries(bars: StackedBar[]): Array<{
   return labels.filter((x): x is { label: string; index: number } => x !== null);
 }
 
+/**
+ * Segment 값 라벨 포맷 (사이클 N Step 5).
+ * - 0 → '' (segment 자체가 0폭이라 라벨 의미 없음)
+ * - percentMode: 항상 소수점 1자리 (정규화 결과 일관성)
+ * - 절대값 모드: 정수면 정수, 아니면 소수점 1자리
+ *
+ * 기존 `< 0.5 → '0'` 정책은 제거. 정보 손실 방지 + HorizontalBarChart·LineChart 정책 일관.
+ */
+export function formatSegmentLabel(
+  value: number,
+  unit: string | undefined,
+  percentMode: boolean,
+): string {
+  if (value === 0) return '';
+
+  const formatted = percentMode
+    ? value.toFixed(1)
+    : Number.isInteger(value)
+      ? String(value)
+      : value.toFixed(1);
+
+  return unit ? `${formatted}${unit}` : formatted;
+}
+
 /** ariaDesc 자동 생성 — bar 수·세그먼트 개수·예시 1건. */
 export function generateAriaDesc(bars: StackedBar[]): string {
   if (bars.length === 0) return '데이터가 없는 빈 누적 막대 차트';

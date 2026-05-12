@@ -6,6 +6,7 @@ import {
   computeChartMax,
   buildLegendEntries,
   generateAriaDesc,
+  formatSegmentLabel,
   type StackedBar,
   type StackedSegment,
 } from '../StackedBarChart.utils';
@@ -185,6 +186,34 @@ describe('generateAriaDesc', () => {
     expect(desc).toContain('2개 세그먼트');
     expect(desc).toContain('서울');
     expect(desc).toContain('아파트 60');
+  });
+});
+
+describe('formatSegmentLabel (사이클 N Step 5 정책)', () => {
+  it('value 0 → 빈 문자열 (정보 손실 0)', () => {
+    expect(formatSegmentLabel(0, '%', true)).toBe('');
+    expect(formatSegmentLabel(0, '건', false)).toBe('');
+  });
+
+  it('percentMode=true → 항상 소수점 1자리', () => {
+    expect(formatSegmentLabel(0.3, '%', true)).toBe('0.3%');
+    expect(formatSegmentLabel(33.33, '%', true)).toBe('33.3%');
+    expect(formatSegmentLabel(100, '%', true)).toBe('100.0%');
+  });
+
+  it('percentMode=false + 정수 → 정수 그대로', () => {
+    expect(formatSegmentLabel(30, '', false)).toBe('30');
+    expect(formatSegmentLabel(42, '건', false)).toBe('42건');
+  });
+
+  it('percentMode=false + 소수 → 소수점 1자리', () => {
+    expect(formatSegmentLabel(0.7, '%', false)).toBe('0.7%');
+    expect(formatSegmentLabel(12.34, '', false)).toBe('12.3');
+  });
+
+  it('unit 미지정 → 숫자만', () => {
+    expect(formatSegmentLabel(30, undefined, false)).toBe('30');
+    expect(formatSegmentLabel(33.33, undefined, true)).toBe('33.3');
   });
 });
 

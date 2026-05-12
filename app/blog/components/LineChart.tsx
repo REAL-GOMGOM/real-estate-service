@@ -15,7 +15,7 @@
 
 import { useId } from 'react';
 import { CHART_COLORS, getGradientFill, type ColorKey } from '@/lib/chart-colors';
-import { CHART_TOKENS } from '@/lib/chart-tokens';
+import { CHART_TOKENS, estimateTextWidth } from '@/lib/chart-tokens';
 import {
   buildAreaPath,
   buildLinePath,
@@ -366,7 +366,7 @@ function Legend({ series, x, y }: { series: LineSeries[]; x: number; y: number }
   const elements: Array<{ name: string; color: string; dashed?: boolean; xAnchor: number }> = [];
   for (let i = items.length - 1; i >= 0; i--) {
     const item = items[i];
-    const estW = item.name.length * 7 + LEGEND_DOT_SIZE + 6;
+    const estW = estimateTextWidth(item.name) + LEGEND_DOT_SIZE + 6;
     cursor -= estW;
     elements.unshift({ ...item, xAnchor: cursor });
     cursor -= LEGEND_ITEM_GAP;
