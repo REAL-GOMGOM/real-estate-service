@@ -36,15 +36,28 @@ import {
 } from './HorizontalBarChart.utils';
 import { pickDefaultColor } from '@/lib/chart-colors';
 
+// hex 코드 검증 정규식 (3·4·6·8자리 hex 허용 — RGB, RGBA short/full)
+const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{3,8}$/;
+
 /**
- * row 색상 결정 — discrete 모드 전용.
- * - row.color 명시 시 명시값 우선
- * - 미지정 시 pickDefaultColor(rowIndex, 'category') 자동 할당
- *   (사이클 N DonutChart·StackedBarChart와 동일 패턴, red → blue → orange → darkBlue → gray 순환)
+ * row.color 해결 우선순위 (사이클 Q에서 hex 분기 추가):
+ * 1. 유효한 hex 코드 (#3~8자리) → 그대로 반환
+ * 2. 5색 키워드 → COLORS 매핑
+ * 3. 미지정 또는 잘못된 값 → pickDefaultColor 자동 할당 (사이클 P-2)
+ *
+ * 반환값은 SVG fill 속성에 직접 사용 가능한 string (이미 매핑된 hex 값).
  */
-function resolveRowColor(row: BarRow, rowIndex: number): NonNullable<BarRow['color']> {
-  if (row.color) return row.color;
-  return pickDefaultColor(rowIndex, 'category');
+function resolveRowColor(row: BarRow, rowIndex: number): string {
+  // 1. 유효한 hex 코드
+  if (row.color && HEX_COLOR_REGEX.test(row.color)) {
+    return row.color;
+  }
+  // 2. 5색 키워드
+  if (row.color && row.color in COLORS) {
+    return COLORS[row.color as keyof typeof COLORS];
+  }
+  // 3. 미지정 또는 잘못된 값 → 자동 할당 (P-2)
+  return COLORS[pickDefaultColor(rowIndex, 'category')];
 }
 
 interface HorizontalBarChartProps {
@@ -174,6 +187,23 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
         `의도와 다르면 row.color 명시 권장.`
       );
     }
+
+    // (d) 사이클 Q — 알 수 없는 color 값 → 자동 할당 fallback 안내
+    // 키워드(5색)도 hex 코드(#3~8자리)도 아닌 입력 검출.
+    data.forEach((row, idx) => {
+      if (
+        row.color &&
+        !HEX_COLOR_REGEX.test(row.color) &&
+        !(row.color in COLORS)
+      ) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[HorizontalBarChart] data[${idx}].color="${row.color}"이 ` +
+          `유효한 키워드(red, orange, blue, darkBlue, gray)도 hex 코드(예: "#dc2626")도 아닙니다. ` +
+          `자동 할당 적용. 의도된 색상이면 키워드 또는 hex 코드 사용 권장.`
+        );
+      }
+    });
   }
 
   // ─── effective baseline 결정 ───
@@ -341,7 +371,7 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
 
         const fill = colorMode === 'gradient'
           ? getGradientFill(row.value)
-          : COLORS[resolveRowColor(row, i)];
+          : resolveRowColor(row, i);
         const textFill = colorMode === 'gradient'
           ? getGradientTextFill(fill)
           : fill;

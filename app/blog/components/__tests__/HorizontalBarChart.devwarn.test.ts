@@ -167,4 +167,70 @@ describe('HorizontalBarChart dev warn', () => {
       expect(calls.some((c) => typeof c === 'string' && c.includes('pickDefaultColor'))).toBe(false);
     });
   });
+
+  // (d) — 사이클 Q: 알 수 없는 color 값(키워드도 hex도 아님) → 자동 할당 안내
+  describe('(d) 알 수 없는 color 값 → 자동 할당 안내', () => {
+    it('미지원 키워드 → 경고 발생 (색상 문자열 포함)', () => {
+      renderToStaticMarkup(
+        createElement(HorizontalBarChart, {
+          title: '미지원 키워드',
+          unit: '',
+          data: [{ label: 'A', value: 10, color: 'purple' as never }],
+        }),
+      );
+      const calls = warnSpy.mock.calls.flat();
+      expect(calls.some((c) => typeof c === 'string' && c.includes('"purple"'))).toBe(true);
+      expect(calls.some((c) => typeof c === 'string' && c.includes('자동 할당'))).toBe(true);
+    });
+
+    it('잘못된 hex (#xyz) → 경고 발생', () => {
+      renderToStaticMarkup(
+        createElement(HorizontalBarChart, {
+          title: '잘못된 hex',
+          unit: '',
+          data: [{ label: 'A', value: 10, color: '#xyz' as `#${string}` }],
+        }),
+      );
+      const calls = warnSpy.mock.calls.flat();
+      expect(calls.some((c) => typeof c === 'string' && c.includes('"#xyz"'))).toBe(true);
+    });
+
+    it('유효한 hex → 경고 없음', () => {
+      renderToStaticMarkup(
+        createElement(HorizontalBarChart, {
+          title: '유효 hex',
+          unit: '',
+          data: [{ label: 'A', value: 10, color: '#9ca3af' }],
+        }),
+      );
+      const calls = warnSpy.mock.calls.flat();
+      expect(
+        calls.some(
+          (c) =>
+            typeof c === 'string' &&
+            c.includes('유효한 키워드') &&
+            c.includes('hex 코드'),
+        ),
+      ).toBe(false);
+    });
+
+    it('유효한 키워드 → 경고 없음', () => {
+      renderToStaticMarkup(
+        createElement(HorizontalBarChart, {
+          title: '유효 키워드',
+          unit: '',
+          data: [{ label: 'A', value: 10, color: 'red' }],
+        }),
+      );
+      const calls = warnSpy.mock.calls.flat();
+      expect(
+        calls.some(
+          (c) =>
+            typeof c === 'string' &&
+            c.includes('유효한 키워드') &&
+            c.includes('hex 코드'),
+        ),
+      ).toBe(false);
+    });
+  });
 });
