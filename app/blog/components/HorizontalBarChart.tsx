@@ -32,6 +32,7 @@ import {
   computeAutoScale,
   computeAutoZeroX,
   computeBarWidth,
+  computeRightLabelWidth,
   type BarRow,
 } from './HorizontalBarChart.utils';
 import { pickDefaultColor } from '@/lib/chart-colors';
@@ -238,10 +239,18 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
     ? computeAutoZeroX(data, scale, effectiveBaseline, zeroX, zeroXConfig, maxValue)
     : zeroX;
 
+  // ─── 사이클 R: 우측 라벨 fix — max(기본 reserve, 동적 추정) ───
+  // 가장 긴 값 라벨이 viewBox 우측 끝에서 잘리지 않도록 동적 reserve 산정.
+  // 기본 reserve(35) 미만으로 떨어지지 않게 보장 → 회귀 0.
+  const effectiveRightReserve = Math.max(
+    CHART_CONSTANTS.VALUE_LABEL_RESERVE_WIDTH,
+    computeRightLabelWidth(data, unit),
+  );
+
   // ─── effective scale 결정 ───
   const availableWidth = Math.max(
     0,
-    width - provisionalZeroX - CHART_CONSTANTS.VALUE_LABEL_RESERVE_WIDTH,
+    width - provisionalZeroX - effectiveRightReserve,
   );
   const effectiveScale = shouldAutoScale
     ? computeAutoScale(values, effectiveBaseline, availableWidth, maxValue)
