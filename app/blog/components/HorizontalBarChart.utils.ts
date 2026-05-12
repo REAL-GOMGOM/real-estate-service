@@ -5,10 +5,24 @@
  * 단위 테스트 가능한 형태로 함수 4개 export.
  */
 
+/**
+ * 차트 막대 색상 타입 — 사이클 Q에서 hex 확장.
+ * - 5색 키워드: 디자인 일관성 위한 권장 옵션
+ * - hex 코드 (`#abc`, `#aabbcc`, `#aabbccdd` 등 3~8자리): 작가 디자인 도구 호환
+ *   (예: '#9ca3af')
+ */
+export type BarColor =
+  | 'red'
+  | 'orange'
+  | 'blue'
+  | 'darkBlue'
+  | 'gray'
+  | `#${string}`;
+
 export interface BarRow {
   label: string;
   value: number;
-  color?: 'red' | 'orange' | 'blue' | 'darkBlue' | 'gray';
+  color?: BarColor;
 }
 
 /** 차트 레이아웃 명명 상수. 본체에서 이동. */
