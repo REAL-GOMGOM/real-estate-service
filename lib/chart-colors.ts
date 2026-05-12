@@ -6,16 +6,25 @@
  * COLORS / getGradientFill 와 *완전히 동일*. 시각 일관성 보장.
  */
 
-export type ColorKey = 'red' | 'orange' | 'blue' | 'darkBlue' | 'gray';
+/**
+ * 차트 색상 키워드.
+ * - 표준 5색 (red, orange, blue, darkBlue, gray): 4개 차트(HorizontalBar/Donut/Stacked/Line) 공통 권장.
+ * - DemographicShiftBars 전용 토큰 (사이클 S Step S-2):
+ *   · yellow #fbbf24
+ *   · amberOrange #f97316 (기본 orange #ea580c와 톤 구분)
+ *   다른 차트에서도 키워드로 사용 가능하지만 디자인 일관성 위해 5색 권장.
+ */
+export const CHART_COLORS = {
+  red:         '#dc2626',
+  orange:      '#ea580c',
+  blue:        '#2563eb',
+  darkBlue:    '#1d4ed8',
+  gray:        '#6b7280',
+  yellow:      '#fbbf24',
+  amberOrange: '#f97316',
+} as const;
 
-/** 5색 키워드 팔레트 (HorizontalBarChart COLORS와 동일) */
-export const CHART_COLORS: Record<ColorKey, string> = {
-  red:      '#dc2626',
-  orange:   '#ea580c',
-  blue:     '#2563eb',
-  darkBlue: '#1d4ed8',
-  gray:     '#6b7280',
-};
+export type ColorKey = keyof typeof CHART_COLORS;
 
 export type ColorIntent = 'series' | 'category';
 

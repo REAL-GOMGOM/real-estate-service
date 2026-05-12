@@ -16,6 +16,12 @@ describe('CHART_COLORS hex 일관성', () => {
     expect(CHART_COLORS.darkBlue).toBe('#1d4ed8');
     expect(CHART_COLORS.gray).toBe('#6b7280');
   });
+
+  // 사이클 S Step S-2 — DemographicShiftBars 전용 토큰
+  it('yellow #fbbf24 + amberOrange #f97316 (DemographicShiftBars 전용)', () => {
+    expect(CHART_COLORS.yellow).toBe('#fbbf24');
+    expect(CHART_COLORS.amberOrange).toBe('#f97316');
+  });
 });
 
 describe('pickDefaultColor', () => {
@@ -110,6 +116,28 @@ describe('resolveChartColor (4개 차트 공통 헬퍼)', () => {
 
   it('잘못된 키워드 → 자동 할당 fallback', () => {
     expect(resolveChartColor('purple' as never, 0, 'category')).toBe(CHART_COLORS.red);
+  });
+
+  // 사이클 S Step S-2 — yellow/amberOrange 키워드 매핑 + 자동 할당 미포함
+  it('yellow 키워드 → #fbbf24 매핑', () => {
+    expect(resolveChartColor('yellow', 0, 'category')).toBe('#fbbf24');
+    expect(resolveChartColor('yellow', 3, 'series')).toBe('#fbbf24');
+  });
+
+  it('amberOrange 키워드 → #f97316 매핑', () => {
+    expect(resolveChartColor('amberOrange', 0, 'category')).toBe('#f97316');
+    expect(resolveChartColor('amberOrange', 2, 'series')).toBe('#f97316');
+  });
+
+  it('자동 할당은 5색 순환 유지 (yellow/amberOrange 미포함)', () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 20; i++) {
+      seen.add(resolveChartColor(undefined, i, 'category'));
+      seen.add(resolveChartColor(undefined, i, 'series'));
+    }
+    expect(seen.has(CHART_COLORS.yellow)).toBe(false);
+    expect(seen.has(CHART_COLORS.amberOrange)).toBe(false);
+    expect(seen.size).toBe(5); // red, orange, blue, darkBlue, gray만
   });
 });
 
