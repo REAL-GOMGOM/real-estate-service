@@ -1,9 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   CHART_COLORS,
   pickDefaultColor,
   getGradientFill,
   getGradientTextFill,
+  resolveChartColor,
+  warnInvalidChartColor,
 } from '@/lib/chart-colors';
 
 describe('CHART_COLORS hex 일관성', () => {
@@ -77,5 +79,79 @@ describe('getGradientTextFill', () => {
   it('그 외 색상 → 입력값 그대로', () => {
     expect(getGradientTextFill('#dc2626')).toBe('#dc2626');
     expect(getGradientTextFill('#2563eb')).toBe('#2563eb');
+  });
+});
+
+// ─── 사이클 S Step S-1 ───
+describe('resolveChartColor (4개 차트 공통 헬퍼)', () => {
+  it('유효한 hex 코드 → 그대로 반환', () => {
+    expect(resolveChartColor('#9ca3af', 0, 'category')).toBe('#9ca3af');
+    expect(resolveChartColor('#dc2626', 1, 'category')).toBe('#dc2626');
+  });
+
+  it('5색 키워드 → CHART_COLORS 매핑', () => {
+    expect(resolveChartColor('red', 0, 'category')).toBe(CHART_COLORS.red);
+    expect(resolveChartColor('gray', 0, 'category')).toBe(CHART_COLORS.gray);
+  });
+
+  it('미지정 + category intent → CATEGORY_ORDER 순환 (red 시작)', () => {
+    expect(resolveChartColor(undefined, 0, 'category')).toBe(CHART_COLORS.red);
+    expect(resolveChartColor(undefined, 1, 'category')).toBe(CHART_COLORS.blue);
+  });
+
+  it('미지정 + series intent → SERIES_ORDER 순환 (gray 시작)', () => {
+    expect(resolveChartColor(undefined, 0, 'series')).toBe(CHART_COLORS.gray);
+    expect(resolveChartColor(undefined, 1, 'series')).toBe(CHART_COLORS.red);
+  });
+
+  it('잘못된 hex (#xyz) → 자동 할당 fallback', () => {
+    expect(resolveChartColor('#xyz' as `#${string}`, 0, 'category')).toBe(CHART_COLORS.red);
+  });
+
+  it('잘못된 키워드 → 자동 할당 fallback', () => {
+    expect(resolveChartColor('purple' as never, 0, 'category')).toBe(CHART_COLORS.red);
+  });
+});
+
+describe('warnInvalidChartColor (dev warn 통합 헬퍼)', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vi.stubEnv('NODE_ENV', 'development');
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    warnSpy.mockRestore();
+  });
+
+  it('알 수 없는 키워드 → 경고 (컴포넌트명 + context + color 포함)', () => {
+    warnInvalidChartColor('TestChart', 'purple' as never, 'data[0].');
+    const calls = warnSpy.mock.calls.flat();
+    expect(calls.some((c) => typeof c === 'string' && c.includes('[TestChart]'))).toBe(true);
+    expect(calls.some((c) => typeof c === 'string' && c.includes('data[0].color="purple"'))).toBe(true);
+    expect(calls.some((c) => typeof c === 'string' && c.includes('자동 할당'))).toBe(true);
+  });
+
+  it('유효한 키워드 → 경고 없음', () => {
+    warnInvalidChartColor('TestChart', 'red', 'data[0].');
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('유효한 hex → 경고 없음', () => {
+    warnInvalidChartColor('TestChart', '#9ca3af', 'data[0].');
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('undefined → 경고 없음 (정상 자동 할당)', () => {
+    warnInvalidChartColor('TestChart', undefined, 'data[0].');
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('prod 환경 → 경고 없음 (DCE)', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    warnInvalidChartColor('TestChart', 'purple' as never, 'data[0].');
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });

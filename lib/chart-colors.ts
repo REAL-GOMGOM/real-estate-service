@@ -65,3 +65,60 @@ export function pickDefaultColor(index: number, intent: ColorIntent): ColorKey {
   const order = intent === 'series' ? SERIES_ORDER : CATEGORY_ORDER;
   return order[index % order.length];
 }
+
+// ─── 사이클 S Step S-1: 4개 차트(Horizontal/Donut/Stacked/Line) color 통합 ───
+// 사이클 Q에서 HorizontalBarChart에 도입된 hex 지원 패턴을 공통화.
+
+/** hex 코드 검증 정규식 (3·4·5·6·7·8자리. 표준 RGB/RGBA 외 비표준 길이도 허용 — fail-soft) */
+export const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{3,8}$/;
+
+/**
+ * 차트 색상 입력 타입 — 4개 차트 공통.
+ * - ColorKey: 5색 키워드 (디자인 일관성 권장)
+ * - hex 코드 (`#abc`, `#aabbcc`, `#aabbccdd` 등): 자유 색상 (작가 디자인 도구 호환)
+ */
+export type ChartColor = ColorKey | `#${string}`;
+
+/**
+ * 차트 색상 해결 헬퍼 — 4개 차트 본체에서 직접 호출.
+ *
+ * 우선순위:
+ *   1. 유효한 hex 코드 → 그대로 반환
+ *   2. 5색 키워드 → CHART_COLORS 매핑
+ *   3. 미지정 또는 알 수 없는 값 → pickDefaultColor(index, intent) 자동 할당
+ *
+ * 반환값은 SVG fill/stroke에 직접 사용 가능한 hex 문자열.
+ */
+export function resolveChartColor(
+  color: ChartColor | undefined,
+  index: number,
+  intent: ColorIntent,
+): string {
+  if (color && HEX_COLOR_REGEX.test(color)) return color;
+  if (color && color in CHART_COLORS) return CHART_COLORS[color as ColorKey];
+  return CHART_COLORS[pickDefaultColor(index, intent)];
+}
+
+/**
+ * dev 환경에서 알 수 없는 color 값 감지 시 콘솔 경고. prod 빌드에서 DCE.
+ *
+ * @param componentName  로그 prefix (예: 'DonutChart')
+ * @param color          사용자 입력 color 값
+ * @param context        식별 컨텍스트 (예: 'data[0].', 'series[2].')
+ */
+export function warnInvalidChartColor(
+  componentName: string,
+  color: ChartColor | undefined,
+  context: string,
+): void {
+  if (process.env.NODE_ENV === 'production') return;
+  if (!color) return;
+  if (HEX_COLOR_REGEX.test(color)) return;
+  if (color in CHART_COLORS) return;
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[${componentName}] ${context}color="${color}"이 ` +
+    `유효한 키워드(red, orange, blue, darkBlue, gray)도 hex 코드(예: "#dc2626")도 아닙니다. ` +
+    `자동 할당 적용. 의도된 색상이면 키워드 또는 hex 코드 사용 권장.`,
+  );
+}

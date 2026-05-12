@@ -9,12 +9,13 @@
  *   - 모든 bar의 segments[j] (같은 index)는 같은 색상 → 비교 용이
  */
 
-import { pickDefaultColor, type ColorKey } from '@/lib/chart-colors';
+import { resolveChartColor, type ChartColor } from '@/lib/chart-colors';
 
 export interface StackedSegment {
   label: string;
   value: number;
-  color?: ColorKey;
+  /** 사이클 S Step S-1: ColorKey → ChartColor (hex 코드 입력 허용) */
+  color?: ChartColor;
 }
 
 export interface StackedBar {
@@ -87,16 +88,20 @@ export function normalizeBars(
 }
 
 /**
- * 세그먼트 색상 결정 (category intent)
- * - segment.color 명시 시 그대로 사용
- * - 미명시 시 pickDefaultColor(index, 'category') → red 시작
+ * 세그먼트 색상 결정 (category intent) — 사이클 S Step S-1에서 resolveChartColor wrapper로 변환.
+ *
+ * 우선순위:
+ *   1. segment.color hex 코드 → 그대로
+ *   2. segment.color 키워드 → CHART_COLORS 매핑
+ *   3. 미지정/잘못된 값 → pickDefaultColor(index, 'category') — red 시작
+ *
+ * 반환값은 SVG fill에 직접 사용 가능한 hex string.
  */
 export function resolveSegmentColor(
   segment: StackedSegment,
   segmentIndex: number,
-): ColorKey {
-  if (segment.color) return segment.color;
-  return pickDefaultColor(segmentIndex, 'category');
+): string {
+  return resolveChartColor(segment.color, segmentIndex, 'category');
 }
 
 /** 모든 bar의 (정규화 이후) total 중 max 값. y축 도메인. */

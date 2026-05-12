@@ -109,16 +109,19 @@ describe('buildLinePath / buildAreaPath', () => {
   });
 });
 
-describe('resolveSeriesColor', () => {
-  it('series 1개 → blue (단일 시리즈는 강조색)', () => {
-    expect(resolveSeriesColor({ name: 'A', data: [] }, 0, 1)).toBe('blue');
+describe('resolveSeriesColor (사이클 S Step S-1: hex string 반환)', () => {
+  it('series 1개 → blue #2563eb (단일 시리즈 강조색, 사이클 N 결정 유지)', () => {
+    expect(resolveSeriesColor({ name: 'A', data: [] }, 0, 1)).toBe('#2563eb');
   });
-  it('series 2개 → [gray, red]', () => {
-    expect(resolveSeriesColor({ name: 'A', data: [] }, 0, 2)).toBe('gray');
-    expect(resolveSeriesColor({ name: 'B', data: [] }, 1, 2)).toBe('red');
+  it('series 2개 → [gray #6b7280, red #dc2626]', () => {
+    expect(resolveSeriesColor({ name: 'A', data: [] }, 0, 2)).toBe('#6b7280');
+    expect(resolveSeriesColor({ name: 'B', data: [] }, 1, 2)).toBe('#dc2626');
   });
-  it('series.color 명시 → 명시값 우선', () => {
-    expect(resolveSeriesColor({ name: 'A', color: 'darkBlue', data: [] }, 0, 1)).toBe('darkBlue');
+  it('series.color 명시 키워드 → CHART_COLORS hex', () => {
+    expect(resolveSeriesColor({ name: 'A', color: 'darkBlue', data: [] }, 0, 1)).toBe('#1d4ed8');
+  });
+  it('series.color 명시 hex → 그대로 (단일 시리즈에서도 blue fallback 미발동)', () => {
+    expect(resolveSeriesColor({ name: 'A', color: '#9ca3af', data: [] }, 0, 1)).toBe('#9ca3af');
   });
 });
 

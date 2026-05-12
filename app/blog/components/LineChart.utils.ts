@@ -5,7 +5,7 @@
  * autoBaseline 공식은 HorizontalBarChart와 동일 (computeAutoBaseline 재사용).
  */
 
-import { pickDefaultColor, type ColorKey } from '@/lib/chart-colors';
+import { CHART_COLORS, resolveChartColor, type ChartColor } from '@/lib/chart-colors';
 import { computeAutoBaseline } from './HorizontalBarChart.utils';
 
 export type XValue = string | number;
@@ -17,7 +17,8 @@ export interface LinePoint {
 
 export interface LineSeries {
   name:    string;
-  color?:  ColorKey;
+  /** 사이클 S Step S-1: ColorKey → ChartColor (hex 코드 입력 허용) */
+  color?:  ChartColor;
   data:    LinePoint[];
   filled?: boolean;
   dashed?: boolean;
@@ -171,19 +172,22 @@ export function buildAreaPath(
 }
 
 /**
- * 시리즈별 색상 결정 우선순위:
- * 1. series.color 명시 지정 → 명시값
- * 2. 단일 시리즈 → blue (회색 단일은 죽은 차트처럼 보여서 강조색)
- * 3. 다중 시리즈 → pickDefaultColor(i, 'series')
+ * 시리즈별 색상 결정 — 사이클 S Step S-1에서 resolveChartColor wrapper로 변환.
+ *
+ * 우선순위:
+ *   1. series.color 명시 (hex/키워드) → resolveChartColor 처리 (hex 그대로, 키워드 매핑)
+ *   2. 미지정 + 단일 시리즈 → blue 강제 (사이클 N 디자인 결정: 회색 단일은 죽은 차트처럼 보임)
+ *   3. 미지정 + 다중 시리즈 → pickDefaultColor(i, 'series') → gray 시작
+ *
+ * 반환값은 SVG stroke/fill에 직접 사용 가능한 hex string.
  */
 export function resolveSeriesColor(
   series: LineSeries,
   seriesIndex: number,
   totalSeries: number,
-): ColorKey {
-  if (series.color) return series.color;
-  if (totalSeries === 1) return 'blue';
-  return pickDefaultColor(seriesIndex, 'series');
+): string {
+  if (!series.color && totalSeries === 1) return CHART_COLORS.blue;
+  return resolveChartColor(series.color, seriesIndex, 'series');
 }
 
 /**

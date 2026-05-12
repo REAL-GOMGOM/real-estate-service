@@ -15,7 +15,7 @@
 'use client';
 
 import { useId } from 'react';
-import { CHART_COLORS } from '@/lib/chart-colors';
+import { warnInvalidChartColor } from '@/lib/chart-colors';
 import { CHART_TOKENS, estimateTextWidth } from '@/lib/chart-tokens';
 import {
   normalizeBars,
@@ -70,13 +70,23 @@ export function StackedBarChart({
   const safeWidth  = Math.max(0, width);
   const safeHeight = Math.max(0, height);
 
-  // dev mode 경고 — 음수 segment value
+  // dev mode 경고 — 음수 segment value + 알 수 없는 color 값
   if (process.env.NODE_ENV !== 'production') {
     const hasNeg = bars.some((b) => b.segments.some((s) => s.value < 0));
     if (hasNeg) {
       // eslint-disable-next-line no-console
       console.warn(`[StackedBarChart] "${title ?? ''}" 음수 segment value 감지 — 0으로 처리됨`);
     }
+    // 사이클 S Step S-1: 알 수 없는 color 값 → 자동 할당 안내
+    bars.forEach((bar, barIdx) => {
+      bar.segments.forEach((seg, segIdx) => {
+        warnInvalidChartColor(
+          'StackedBarChart',
+          seg.color,
+          `bars[${barIdx}].segments[${segIdx}].`,
+        );
+      });
+    });
   }
 
   const plotArea = {
@@ -180,10 +190,10 @@ export function StackedBarChart({
         <Legend
           entries={legendEntries.map((e) => ({
             ...e,
-            color: CHART_COLORS[resolveSegmentColor(
+            color: resolveSegmentColor(
               bars[0]?.segments[e.index] ?? { label: e.label, value: 0 },
               e.index,
-            )],
+            ),
           }))}
           x={safeWidth - PADDING.right}
           y={44}
@@ -248,8 +258,7 @@ export function StackedBarChart({
               if (nSeg.displayValue <= 0) return null;
               const segHeight = (nSeg.displayValue / safeMax) * plotArea.height;
               const segY = plotArea.y + plotArea.height - ((nSeg.cumOffset + nSeg.displayValue) / safeMax) * plotArea.height;
-              const colorKey = resolveSegmentColor(nSeg.segment, nSeg.index);
-              const fill = CHART_COLORS[colorKey];
+              const fill = resolveSegmentColor(nSeg.segment, nSeg.index);
               return (
                 <g key={`seg-${barIdx}-${nSeg.index}`}>
                   <rect

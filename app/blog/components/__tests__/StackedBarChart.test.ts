@@ -28,24 +28,27 @@ describe('sanitizeSegmentValue', () => {
   });
 });
 
-describe('resolveSegmentColor', () => {
-  it('segment.color 명시 → 명시값 우선', () => {
-    expect(resolveSegmentColor({ label: 'A', value: 10, color: 'darkBlue' }, 0)).toBe('darkBlue');
+describe('resolveSegmentColor (사이클 S Step S-1: hex string 반환)', () => {
+  it('segment.color 명시 키워드 → CHART_COLORS hex', () => {
+    expect(resolveSegmentColor({ label: 'A', value: 10, color: 'darkBlue' }, 0)).toBe('#1d4ed8');
   });
-  it('index 0 → red (category intent)', () => {
-    expect(resolveSegmentColor({ label: 'A', value: 10 }, 0)).toBe('red');
+  it('segment.color 명시 hex → 그대로', () => {
+    expect(resolveSegmentColor({ label: 'A', value: 10, color: '#9ca3af' }, 0)).toBe('#9ca3af');
   });
-  it('index 1 → blue', () => {
-    expect(resolveSegmentColor({ label: 'A', value: 10 }, 1)).toBe('blue');
+  it('index 0 → red #dc2626 (category intent)', () => {
+    expect(resolveSegmentColor({ label: 'A', value: 10 }, 0)).toBe('#dc2626');
   });
-  it('index 2 → orange', () => {
-    expect(resolveSegmentColor({ label: 'A', value: 10 }, 2)).toBe('orange');
+  it('index 1 → blue #2563eb', () => {
+    expect(resolveSegmentColor({ label: 'A', value: 10 }, 1)).toBe('#2563eb');
   });
-  it('index 3 → darkBlue', () => {
-    expect(resolveSegmentColor({ label: 'A', value: 10 }, 3)).toBe('darkBlue');
+  it('index 2 → orange #ea580c', () => {
+    expect(resolveSegmentColor({ label: 'A', value: 10 }, 2)).toBe('#ea580c');
   });
-  it('index 5 → red (5색 순환)', () => {
-    expect(resolveSegmentColor({ label: 'A', value: 10 }, 5)).toBe('red');
+  it('index 3 → darkBlue #1d4ed8', () => {
+    expect(resolveSegmentColor({ label: 'A', value: 10 }, 3)).toBe('#1d4ed8');
+  });
+  it('index 5 → red #dc2626 (5색 순환)', () => {
+    expect(resolveSegmentColor({ label: 'A', value: 10 }, 5)).toBe('#dc2626');
   });
 });
 

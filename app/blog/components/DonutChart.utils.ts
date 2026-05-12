@@ -9,12 +9,13 @@
  * - SVG 좌표 변환에서 -π/2 회전 적용
  */
 
-import { pickDefaultColor, type ColorKey } from '@/lib/chart-colors';
+import { resolveChartColor, type ChartColor } from '@/lib/chart-colors';
 
 export interface DonutSlice {
   label:        string;
   value:        number;
-  color?:       ColorKey;
+  /** 사이클 S Step S-1: ColorKey → ChartColor (hex 코드 입력 허용) */
+  color?:       ChartColor;
   highlighted?: boolean;
 }
 
@@ -147,17 +148,20 @@ export function computeLabelPosition(
 }
 
 /**
- * 슬라이스별 색상 결정:
- * 1. slice.color 명시 → 명시값
- * 2. 미지정 → pickDefaultColor(i, 'category')
- *    DonutChart는 카테고리 분포라 첫 슬라이스가 강조 대상 → red 시작
+ * 슬라이스별 색상 결정 — 사이클 S Step S-1에서 resolveChartColor wrapper로 변환.
+ *
+ * 우선순위:
+ *   1. slice.color hex 코드 → 그대로
+ *   2. slice.color 키워드 → CHART_COLORS 매핑
+ *   3. 미지정/잘못된 값 → pickDefaultColor(index, 'category') — red 시작
+ *
+ * 반환값은 SVG fill에 직접 사용 가능한 hex string.
  */
 export function resolveSliceColor(
   slice: DonutSlice,
   sliceIndex: number,
-): ColorKey {
-  if (slice.color) return slice.color;
-  return pickDefaultColor(sliceIndex, 'category');
+): string {
+  return resolveChartColor(slice.color, sliceIndex, 'category');
 }
 
 /**

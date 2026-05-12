@@ -14,7 +14,7 @@
 'use client';
 
 import { useId } from 'react';
-import { CHART_COLORS, getGradientFill, type ColorKey } from '@/lib/chart-colors';
+import { getGradientFill, warnInvalidChartColor } from '@/lib/chart-colors';
 import { CHART_TOKENS, estimateTextWidth } from '@/lib/chart-tokens';
 import {
   buildAreaPath,
@@ -101,6 +101,13 @@ export function LineChart({
     width:  Math.max(0, safeWidth - PADDING.left - PADDING.right),
     height: Math.max(0, safeHeight - PADDING.top - PADDING.bottom),
   };
+
+  // 사이클 S Step S-1: dev mode 경고 — 알 수 없는 color 값
+  if (process.env.NODE_ENV !== 'production') {
+    series.forEach((s, idx) => {
+      warnInvalidChartColor('LineChart', s.color, `series[${idx}].`);
+    });
+  }
 
   // ─── 빈 데이터 처리 (placeholder) ───
   const hasAnyData = series.some((s) => s.data.length > 0);
@@ -285,8 +292,7 @@ export function LineChart({
       {/* 시리즈 (filled 영역 먼저, 그 위에 선 + 점) */}
       {series.map((s, sIdx) => {
         if (s.data.length === 0) return null;
-        const colorKey = resolveSeriesColor(s, sIdx, series.length);
-        const stroke   = CHART_COLORS[colorKey];
+        const stroke = resolveSeriesColor(s, sIdx, series.length);
 
         const points = s.data.map((p) =>
           mapPointToCoord(p.x, p.y, yDomain, plotArea, xAxisType, xValues, numericMin, numericMax),
@@ -357,10 +363,11 @@ function formatTick(value: number, unit: string): string {
 function Legend({ series, x, y }: { series: LineSeries[]; x: number; y: number }) {
   // 우측 정렬: x는 우측 끝, 시리즈를 끝에서부터 역순으로 배치
   let cursor = x;
-  const items = series.map((s, i) => {
-    const colorKey = resolveSeriesColor(s, i, series.length);
-    return { name: s.name, color: CHART_COLORS[colorKey], dashed: s.dashed };
-  });
+  const items = series.map((s, i) => ({
+    name: s.name,
+    color: resolveSeriesColor(s, i, series.length),
+    dashed: s.dashed,
+  }));
 
   // 단순화: 우측에서 좌측으로 누적 배치 (시리즈명 길이 추정)
   const elements: Array<{ name: string; color: string; dashed?: boolean; xAnchor: number }> = [];
