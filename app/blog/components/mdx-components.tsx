@@ -6,6 +6,9 @@ import { AgeGroupBars } from './AgeGroupBars';
 import { LineChart } from './LineChart';
 import { DonutChart } from './DonutChart';
 import { StackedBarChart } from './StackedBarChart';
+import { AreaChart } from './AreaChart';
+import { ScatterPlot } from './ScatterPlot';
+import { SparkLine } from './SparkLine';
 
 /**
  * MDX 렌더 시 사용할 컴포넌트 화이트리스트.
@@ -46,4 +49,7 @@ export const mdxComponents: MDXComponents = {
   LineChart,
   DonutChart,
   StackedBarChart,
+  AreaChart,
+  ScatterPlot,
+  SparkLine,
 };
