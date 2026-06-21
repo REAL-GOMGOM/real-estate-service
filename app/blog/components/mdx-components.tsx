@@ -9,6 +9,9 @@ import { StackedBarChart } from './StackedBarChart';
 import { AreaChart } from './AreaChart';
 import { ScatterPlot } from './ScatterPlot';
 import { SparkLine } from './SparkLine';
+import { HeatMap } from './HeatMap';
+import { RangeBarChart } from './RangeBarChart';
+import { GaugeChart } from './GaugeChart';
 
 /**
  * MDX 렌더 시 사용할 컴포넌트 화이트리스트.
@@ -52,4 +55,7 @@ export const mdxComponents: MDXComponents = {
   AreaChart,
   ScatterPlot,
   SparkLine,
+  HeatMap,
+  RangeBarChart,
+  GaugeChart,
 };
