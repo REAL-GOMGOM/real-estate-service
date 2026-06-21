@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 import { AreaChart } from '../AreaChart';
@@ -7,17 +7,9 @@ import type { AreaSeries } from '../AreaChart.utils';
 
 /**
  * 사이클 O Phase 1 — AreaChart hex color 지원 검증.
- * StackedBarChart.hexcolor.test 패턴 차용. NODE_ENV=production으로 dev warn 격리.
+ * 통일된 패턴: NODE_ENV stub 없음 (정상 입력이라 dev warn 미발동).
  */
 describe('AreaChart hex color 지원 (사이클 O Phase 1)', () => {
-  beforeEach(() => {
-    vi.stubEnv('NODE_ENV', 'production');
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
   it('hex 코드 직접 → 면적 fill·선 stroke 적용', () => {
     const series: AreaSeries[] = [{
       name:  'A',
