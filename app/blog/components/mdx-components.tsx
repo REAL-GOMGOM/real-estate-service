@@ -59,3 +59,10 @@ export const mdxComponents: MDXComponents = {
   RangeBarChart,
   GaugeChart,
 };
+
+/**
+ * 허용 컴포넌트 이름 목록 — 단일 출처(mdxComponents)에서 파생.
+ * validateMdxStrict(발행 전 검증)가 미등록 컴포넌트 참조를 걸러낼 때 사용.
+ * 목록을 따로 중복 정의하지 않도록 여기서만 export 한다.
+ */
+export const mdxComponentNames = Object.keys(mdxComponents);

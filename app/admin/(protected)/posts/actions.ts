@@ -2,10 +2,15 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { auth } from '@/auth';
 import { getBlogDb } from '@/lib/db/client';
 import { posts } from '@/lib/db/schema';
+import {
+  publishSetValues,
+  setPostPublished,
+  setPostUnpublished,
+} from '@/lib/blog/publish';
 
 /**
  * 글(posts) Server Actions.
@@ -161,13 +166,12 @@ export async function updatePost(
   let result;
   try {
     if (isPublish) {
+      // 본문 수정 + 발행을 단일 쿼리로. 발행 set-값은 공유 로직(publishSetValues) 재사용.
       result = await getBlogDb()
         .update(posts)
         .set({
           ...updateValues,
-          status: 'published',
-          // 최초 발행 시각 보존
-          publishedAt: sql`COALESCE(${posts.publishedAt}, now())`,
+          ...publishSetValues(),
         })
         .where(eq(posts.id, id))
         .returning({ id: posts.id });
@@ -201,14 +205,8 @@ export async function publishPostAction(id: string, _formData: FormData) {
   await requireAdmin();
   if (!UUID_PATTERN.test(id)) return;
 
-  await getBlogDb()
-    .update(posts)
-    .set({
-      status: 'published',
-      // 최초 발행 시각 보존: 이미 값 있으면 유지, 없으면 now()
-      publishedAt: sql`COALESCE(${posts.publishedAt}, now())`,
-    })
-    .where(eq(posts.id, id));
+  // 발행 코어는 공유 로직 재사용 (머신 발행 API와 동일 동작)
+  await setPostPublished(id);
 
   revalidatePath('/admin/posts');
   revalidatePath(`/admin/posts/${id}/edit`);
@@ -223,10 +221,8 @@ export async function unpublishPostAction(id: string, _formData: FormData) {
   await requireAdmin();
   if (!UUID_PATTERN.test(id)) return;
 
-  await getBlogDb()
-    .update(posts)
-    .set({ status: 'draft' })
-    .where(eq(posts.id, id));
+  // 발행취소 코어도 공유 로직 재사용 (published_at 보존)
+  await setPostUnpublished(id);
 
   revalidatePath('/admin/posts');
   revalidatePath(`/admin/posts/${id}/edit`);

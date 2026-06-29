@@ -14,6 +14,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, '.'),
+      // 'server-only' 는 클라이언트 번들 차단용 패키지 — node 테스트에서는 빈 모듈로 대체
+      'server-only': resolve(__dirname, 'test/stubs/server-only.ts'),
     },
   },
   test: {
