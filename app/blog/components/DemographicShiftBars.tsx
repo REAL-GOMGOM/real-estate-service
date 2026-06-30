@@ -24,13 +24,40 @@ const ARROW_FILL = '#9ca3af';
 const DELTA_UP_DOWN_FILL = '#dc2626';
 const DELTA_FLAT_FILL = '#6b7280';
 
-const SCALE = 2.78; // value × SCALE = bar width
+const SCALE = 2.78; // value × SCALE = bar width (default — 0~100 비율 기준)
+/**
+ * Phase 8-3: 자동 정규화 임계.
+ *
+ * 100 × SCALE = 278px (좌측 박스 영역 안전 폭).
+ * dataMax × SCALE이 이 폭을 초과하면 effectiveScale을 자동 축소해
+ * 큰 절댓값(예: 200, 500)이 와도 막대가 viewBox를 벗어나지 않게 한다.
+ *
+ * 회귀 0: dataMax <= 100인 데이터는 effectiveScale === SCALE로 기존 동작 그대로.
+ */
+const MAX_BAR_WIDTH = 278;
 const BOX_HEIGHT = 40;
 const ROW_PITCH = 80; // y 120, 200, 280
 const LEFT_X = 40;
 const RIGHT_X_END = 590; // 우측 박스 right edge (x + width = 590 max)
 const ARROW_X = 320;
 const DELTA_X = 600;
+
+/**
+ * categories 전체에서 절댓값 최대를 구하고, 정규화 필요 여부를 판단해 effectiveScale 반환.
+ * - 빈 배열 또는 모두 0 → SCALE 그대로 (분모 0 회피)
+ * - dataMax × SCALE ≤ MAX_BAR_WIDTH → SCALE 그대로 (회귀 0)
+ * - 그 외 → MAX_BAR_WIDTH / dataMax (자동 축소)
+ */
+function computeEffectiveScale(categories: CategoryRow[]): number {
+  if (categories.length === 0) return SCALE;
+  const allValues = categories.flatMap((c) => [
+    Math.abs(c.leftValue),
+    Math.abs(c.rightValue),
+  ]);
+  const dataMax = Math.max(...allValues);
+  if (dataMax <= 0) return SCALE;
+  return dataMax * SCALE > MAX_BAR_WIDTH ? MAX_BAR_WIDTH / dataMax : SCALE;
+}
 
 interface CategoryRow {
   label: string;
@@ -65,6 +92,9 @@ export function DemographicShiftBars({
   if (!Array.isArray(categories)) {
     return <ChartErrorPlaceholder chartName="DemographicShiftBars" reason="categories prop이 배열이 아닙니다" width={640} height={380} />;
   }
+
+  // Phase 8-3: 큰 절댓값 자동 정규화. 0~100 데이터는 SCALE 그대로 (회귀 0).
+  const effectiveScale = computeEffectiveScale(categories);
 
   const height = caption ? 410 : 380;
 
@@ -109,8 +139,9 @@ export function DemographicShiftBars({
       {/* 카테고리 행 */}
       {categories.map((row, i) => {
         const yRect = 120 + i * ROW_PITCH;
-        const leftWidth = row.leftValue * SCALE;
-        const rightWidth = row.rightValue * SCALE;
+        // Math.max(0, ...): 음수 값이 들어와도 막대 폭은 0 클램프 (SVG width 음수 방지)
+        const leftWidth = Math.max(0, row.leftValue * effectiveScale);
+        const rightWidth = Math.max(0, row.rightValue * effectiveScale);
         const rightBoxX = RIGHT_X_END - rightWidth - 2; // 우측 박스 오른쪽 기준
         const leftBoxFill = CHART_COLORS[row.color];
         const textOnLeft = row.color === 'yellow' ? TEXT_ON_LIGHT : TEXT_ON_DARK;
