@@ -15,6 +15,7 @@
 import { useId } from 'react';
 import { warnInvalidChartColor } from '@/lib/chart-colors';
 import { CHART_TOKENS } from '@/lib/chart-tokens';
+import { ChartErrorPlaceholder } from './ChartErrorPlaceholder';
 import {
   computeSlice,
   computeSliceLayout,
@@ -61,9 +62,15 @@ export function DonutChart({
   centerSubtext,
   ariaDesc,
 }: DonutChartProps) {
+  // React Hooks 규칙: hook은 early return 전
   const chartId = useId();
   const titleId = `${chartId}-title`;
   const descId  = `${chartId}-desc`;
+
+  // Phase 8-1: 비정상 입력 방어
+  if (!Array.isArray(data)) {
+    return <ChartErrorPlaceholder chartName="DonutChart" reason="data prop이 배열이 아닙니다" width={size} height={size} />;
+  }
 
   const safeSize = Math.max(0, size);
   // viewBox는 size + 라벨 외곽 여백. cx, cy는 viewBox 중심.

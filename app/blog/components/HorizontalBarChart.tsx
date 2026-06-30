@@ -41,6 +41,7 @@ import {
   resolveChartColor,
   warnInvalidChartColor,
 } from '@/lib/chart-colors';
+import { ChartErrorPlaceholder } from './ChartErrorPlaceholder';
 
 interface HorizontalBarChartProps {
   title: string;
@@ -96,6 +97,11 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
     maxValue,
     autoScale,
   } = props;
+
+  // Phase 8-1: 비정상 입력 방어 — throw 대신 placeholder
+  if (!Array.isArray(data)) {
+    return <ChartErrorPlaceholder chartName="HorizontalBarChart" reason="data prop이 배열이 아닙니다" width={width} />;
+  }
 
   // ─── dev warn 3종 (prod 빌드에서 dead-code elimination) ───
   if (process.env.NODE_ENV !== 'production') {

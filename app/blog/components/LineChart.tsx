@@ -16,6 +16,7 @@
 import { useId } from 'react';
 import { getGradientFill, warnInvalidChartColor } from '@/lib/chart-colors';
 import { CHART_TOKENS, estimateTextWidth } from '@/lib/chart-tokens';
+import { ChartErrorPlaceholder } from './ChartErrorPlaceholder';
 import {
   buildAreaPath,
   buildLinePath,
@@ -88,9 +89,18 @@ export function LineChart({
   ariaDesc,
   colorMode: _colorMode = 'discrete',
 }: LineChartProps) {
+  // React Hooks 규칙: hook은 early return 전에 호출 (호출 순서 일관 유지)
   const chartId = useId();
   const titleId = `${chartId}-title`;
   const descId  = `${chartId}-desc`;
+
+  // Phase 8-1: 비정상 입력 방어 — throw 대신 placeholder 반환 (페이지 다운 차단)
+  if (!Array.isArray(series)) {
+    return <ChartErrorPlaceholder chartName="LineChart" reason="series prop이 배열이 아닙니다" width={width} height={height} />;
+  }
+  if (series.some((s) => !Array.isArray(s?.data))) {
+    return <ChartErrorPlaceholder chartName="LineChart" reason="series[].data가 배열이 아닙니다" width={width} height={height} />;
+  }
 
   const safeWidth  = Math.max(0, width);
   const safeHeight = Math.max(0, height);

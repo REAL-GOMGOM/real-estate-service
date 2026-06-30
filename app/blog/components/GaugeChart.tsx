@@ -16,6 +16,7 @@
 import { useId } from 'react';
 import { warnInvalidChartColor, type ChartColor } from '@/lib/chart-colors';
 import { CHART_TOKENS } from '@/lib/chart-tokens';
+import { ChartErrorPlaceholder } from './ChartErrorPlaceholder';
 import {
   BACKGROUND_ARC_FILL,
   buildArcPath,
@@ -71,9 +72,16 @@ export function GaugeChart({
   thickness  = DEFAULT_THICKNESS,
   ariaDesc,
 }: GaugeChartProps) {
+  // React Hooks 규칙: hook은 early return 전
   const chartId = useId();
   const titleId = `${chartId}-title`;
   const descId  = `${chartId}-desc`;
+
+  // Phase 8-1: 비정상 입력 방어 — value가 유한수가 아니면 placeholder
+  // (NaN/누락이면 clampValue → NaN 전파로 SVG path 깨짐. 시각 불능 → 명시 placeholder)
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return <ChartErrorPlaceholder chartName="GaugeChart" reason={`value prop이 유한수가 아닙니다 (받은 값: ${String(value)})`} width={width} height={height} />;
+  }
 
   const safeWidth  = Math.max(0, width);
   const safeHeight = Math.max(0, height);

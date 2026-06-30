@@ -16,6 +16,7 @@
 import { useId } from 'react';
 import { warnInvalidChartColor } from '@/lib/chart-colors';
 import { CHART_TOKENS, estimateTextWidth } from '@/lib/chart-tokens';
+import { ChartErrorPlaceholder } from './ChartErrorPlaceholder';
 import {
   buildAreaPath,
   buildLinePath,
@@ -78,9 +79,18 @@ export function AreaChart({
   showLegend,
   ariaDesc,
 }: AreaChartProps) {
+  // React Hooks 규칙: hook은 early return 전에 호출
   const chartId = useId();
   const titleId = `${chartId}-title`;
   const descId  = `${chartId}-desc`;
+
+  // Phase 8-1: 비정상 입력 방어
+  if (!Array.isArray(series)) {
+    return <ChartErrorPlaceholder chartName="AreaChart" reason="series prop이 배열이 아닙니다" width={width} height={height} />;
+  }
+  if (series.some((s) => !Array.isArray(s?.data))) {
+    return <ChartErrorPlaceholder chartName="AreaChart" reason="series[].data가 배열이 아닙니다" width={width} height={height} />;
+  }
 
   const safeWidth  = Math.max(0, width);
   const safeHeight = Math.max(0, height);

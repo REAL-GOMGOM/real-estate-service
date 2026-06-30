@@ -13,6 +13,8 @@
  * - 범례 y=335
  */
 
+import { ChartErrorPlaceholder } from './ChartErrorPlaceholder';
+
 const BEFORE_FILL = '#94a3b8';
 const AFTER_FILL = '#dc2626';
 const AXIS_FILL = '#9ca3af';
@@ -52,6 +54,11 @@ export function AgeGroupBars({
   yMax = 40,
   groups,
 }: AgeGroupBarsProps) {
+  // Phase 8-1: 비정상 입력 방어
+  if (!Array.isArray(groups)) {
+    return <ChartErrorPlaceholder chartName="AgeGroupBars" reason="groups prop이 배열이 아닙니다" width={VIEW_WIDTH} height={360} />;
+  }
+
   const pxPerPercent = PLOT_HEIGHT / yMax; // 5.5 (yMax=40 기준)
   const yLabelStep = yMax / 4; // 10
   const yLabels = [0, yLabelStep, yLabelStep * 2, yLabelStep * 3, yMax];

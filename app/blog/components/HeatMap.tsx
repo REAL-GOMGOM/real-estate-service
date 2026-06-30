@@ -15,6 +15,7 @@
 
 import { useId } from 'react';
 import { CHART_TOKENS } from '@/lib/chart-tokens';
+import { ChartErrorPlaceholder } from './ChartErrorPlaceholder';
 import {
   computeCellLayout,
   formatCellValue,
@@ -62,9 +63,15 @@ export function HeatMap({
   ariaDesc,
   colorScale,
 }: HeatMapProps) {
+  // React Hooks 규칙: hook은 early return 전
   const chartId = useId();
   const titleId = `${chartId}-title`;
   const descId  = `${chartId}-desc`;
+
+  // Phase 8-1: 비정상 입력 방어 — rows/cols/values 중 하나라도 배열 아니면 placeholder
+  if (!Array.isArray(rows) || !Array.isArray(cols) || !Array.isArray(values)) {
+    return <ChartErrorPlaceholder chartName="HeatMap" reason="rows/cols/values 중 배열이 아닌 prop이 있습니다" width={width} height={height} />;
+  }
 
   const safeWidth  = Math.max(0, width);
   // height 미지정 시 행 수 기반 동적 계산

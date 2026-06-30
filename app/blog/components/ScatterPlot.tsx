@@ -16,6 +16,7 @@
 import { useId } from 'react';
 import { warnInvalidChartColor } from '@/lib/chart-colors';
 import { CHART_TOKENS, estimateTextWidth } from '@/lib/chart-tokens';
+import { ChartErrorPlaceholder } from './ChartErrorPlaceholder';
 import {
   computeScatterDomain,
   computeXTicks,
@@ -75,9 +76,18 @@ export function ScatterPlot({
   dotRadius   = 5,
   ariaDesc,
 }: ScatterPlotProps) {
+  // React Hooks 규칙: hook은 early return 전
   const chartId = useId();
   const titleId = `${chartId}-title`;
   const descId  = `${chartId}-desc`;
+
+  // Phase 8-1: 비정상 입력 방어
+  if (!Array.isArray(groups)) {
+    return <ChartErrorPlaceholder chartName="ScatterPlot" reason="groups prop이 배열이 아닙니다" width={width} height={height} />;
+  }
+  if (groups.some((g) => !Array.isArray(g?.dots))) {
+    return <ChartErrorPlaceholder chartName="ScatterPlot" reason="groups[].dots가 배열이 아닙니다" width={width} height={height} />;
+  }
 
   const safeWidth  = Math.max(0, width);
   const safeHeight = Math.max(0, height);

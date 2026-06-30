@@ -14,6 +14,7 @@
  */
 
 import { CHART_COLORS } from '@/lib/chart-colors';
+import { ChartErrorPlaceholder } from './ChartErrorPlaceholder';
 
 const TEXT_ON_LIGHT = '#111827'; // yellow 박스 위 텍스트
 const TEXT_ON_DARK = '#ffffff'; // amberOrange/red 박스 위 텍스트
@@ -60,6 +61,11 @@ export function DemographicShiftBars({
   categories,
   caption,
 }: DemographicShiftBarsProps) {
+  // Phase 8-1: 비정상 입력 방어
+  if (!Array.isArray(categories)) {
+    return <ChartErrorPlaceholder chartName="DemographicShiftBars" reason="categories prop이 배열이 아닙니다" width={640} height={380} />;
+  }
+
   const height = caption ? 410 : 380;
 
   return (

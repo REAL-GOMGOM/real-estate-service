@@ -15,6 +15,7 @@
 import { useId } from 'react';
 import { warnInvalidChartColor } from '@/lib/chart-colors';
 import { CHART_TOKENS } from '@/lib/chart-tokens';
+import { ChartErrorPlaceholder } from './ChartErrorPlaceholder';
 import {
   computeBarGeometry,
   computeMidpoint,
@@ -66,9 +67,15 @@ export function RangeBarChart({
   barHeight    = DEFAULT_BAR_HEIGHT,
   ariaDesc,
 }: RangeBarChartProps) {
+  // React Hooks 규칙: hook은 early return 전
   const chartId = useId();
   const titleId = `${chartId}-title`;
   const descId  = `${chartId}-desc`;
+
+  // Phase 8-1: 비정상 입력 방어
+  if (!Array.isArray(items)) {
+    return <ChartErrorPlaceholder chartName="RangeBarChart" reason="items prop이 배열이 아닙니다" width={width} height={height} />;
+  }
 
   const safeWidth  = Math.max(0, width);
   // height 미지정 시 항목 수 기반 동적

@@ -11,6 +11,7 @@
 
 import { warnInvalidChartColor } from '@/lib/chart-colors';
 import { CHART_TOKENS } from '@/lib/chart-tokens';
+import { ChartErrorPlaceholder } from './ChartErrorPlaceholder';
 import {
   buildSparkArea,
   buildSparkPath,
@@ -46,6 +47,11 @@ export function SparkLine({
   ariaLabel,
   trendColor = true,
 }: SparkLineProps) {
+  // Phase 8-1: 비정상 입력 방어 — SparkLine은 hook 없음 → 첫 줄에 가드 가능
+  if (!Array.isArray(data)) {
+    return <ChartErrorPlaceholder chartName="SparkLine" reason="data prop이 배열이 아닙니다" width={width} height={height} />;
+  }
+
   const safeWidth  = Math.max(0, width);
   const safeHeight = Math.max(0, height);
 
