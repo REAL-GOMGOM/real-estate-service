@@ -157,9 +157,9 @@ describe('warnInvalidChartColor (dev warn 통합 헬퍼)', () => {
   it('알 수 없는 키워드 → 경고 (컴포넌트명 + context + color 포함)', () => {
     warnInvalidChartColor('TestChart', 'purple' as never, 'data[0].');
     const calls = warnSpy.mock.calls.flat();
-    expect(calls.some((c) => typeof c === 'string' && c.includes('[TestChart]'))).toBe(true);
-    expect(calls.some((c) => typeof c === 'string' && c.includes('data[0].color="purple"'))).toBe(true);
-    expect(calls.some((c) => typeof c === 'string' && c.includes('자동 할당'))).toBe(true);
+    expect(calls.some((c: unknown) => typeof c === 'string' && c.includes('[TestChart]'))).toBe(true);
+    expect(calls.some((c: unknown) => typeof c === 'string' && c.includes('data[0].color="purple"'))).toBe(true);
+    expect(calls.some((c: unknown) => typeof c === 'string' && c.includes('자동 할당'))).toBe(true);
   });
 
   it('유효한 키워드 → 경고 없음', () => {

@@ -32,8 +32,8 @@ describe('HorizontalBarChart dev warn', () => {
         }),
       );
       const calls = warnSpy.mock.calls.flat();
-      expect(calls.some((c) => typeof c === 'string' && c.includes('단위: 만 가구'))).toBe(true);
-      expect(calls.some((c) => typeof c === 'string' && c.includes('unit="만 가구"'))).toBe(true);
+      expect(calls.some((c: unknown) => typeof c === 'string' && c.includes('단위: 만 가구'))).toBe(true);
+      expect(calls.some((c: unknown) => typeof c === 'string' && c.includes('unit="만 가구"'))).toBe(true);
     });
 
     it('unit 명시 시 경고 없음', () => {
@@ -45,7 +45,7 @@ describe('HorizontalBarChart dev warn', () => {
         }),
       );
       const calls = warnSpy.mock.calls.flat();
-      expect(calls.some((c) => typeof c === 'string' && c.includes('단위: 만 가구'))).toBe(false);
+      expect(calls.some((c: unknown) => typeof c === 'string' && c.includes('단위: 만 가구'))).toBe(false);
     });
 
     it('title에 "단위:" 패턴 없으면 경고 없음', () => {
@@ -56,7 +56,7 @@ describe('HorizontalBarChart dev warn', () => {
         }),
       );
       const calls = warnSpy.mock.calls.flat();
-      expect(calls.some((c) => typeof c === 'string' && c.includes('단위:'))).toBe(false);
+      expect(calls.some((c: unknown) => typeof c === 'string' && c.includes('단위:'))).toBe(false);
     });
   });
 
@@ -70,7 +70,7 @@ describe('HorizontalBarChart dev warn', () => {
         }),
       );
       const calls = warnSpy.mock.calls.flat();
-      expect(calls.some((c) => typeof c === 'string' && c.includes('dividerText="억"'))).toBe(true);
+      expect(calls.some((c: unknown) => typeof c === 'string' && c.includes('dividerText="억"'))).toBe(true);
     });
 
     it('"%" 단일 dividerText → 경고 발생 (tax-reform 패턴)', () => {
@@ -82,7 +82,7 @@ describe('HorizontalBarChart dev warn', () => {
         }),
       );
       const calls = warnSpy.mock.calls.flat();
-      expect(calls.some((c) => typeof c === 'string' && c.includes('dividerText="%"'))).toBe(true);
+      expect(calls.some((c: unknown) => typeof c === 'string' && c.includes('dividerText="%"'))).toBe(true);
     });
 
     it('긴 설명형 dividerText는 경고 없음', () => {
@@ -94,7 +94,7 @@ describe('HorizontalBarChart dev warn', () => {
         }),
       );
       const calls = warnSpy.mock.calls.flat();
-      expect(calls.some((c) => typeof c === 'string' && c.includes('dividerText='))).toBe(false);
+      expect(calls.some((c: unknown) => typeof c === 'string' && c.includes('dividerText='))).toBe(false);
     });
 
     it('unit 명시 시 dividerText 경고 없음', () => {
@@ -107,7 +107,7 @@ describe('HorizontalBarChart dev warn', () => {
         }),
       );
       const calls = warnSpy.mock.calls.flat();
-      expect(calls.some((c) => typeof c === 'string' && c.includes('dividerText="억"'))).toBe(false);
+      expect(calls.some((c: unknown) => typeof c === 'string' && c.includes('dividerText="억"'))).toBe(false);
     });
   });
 
@@ -134,8 +134,8 @@ describe('HorizontalBarChart dev warn', () => {
         }),
       );
       const calls = infoSpy.mock.calls.flat();
-      expect(calls.some((c) => typeof c === 'string' && c.includes('pickDefaultColor'))).toBe(true);
-      expect(calls.some((c) => typeof c === 'string' && c.includes('자동 할당'))).toBe(true);
+      expect(calls.some((c: unknown) => typeof c === 'string' && c.includes('pickDefaultColor'))).toBe(true);
+      expect(calls.some((c: unknown) => typeof c === 'string' && c.includes('자동 할당'))).toBe(true);
     });
 
     it('일부 row만 color 명시 → info 미발생 (every가 false)', () => {
@@ -149,7 +149,7 @@ describe('HorizontalBarChart dev warn', () => {
         }),
       );
       const calls = infoSpy.mock.calls.flat();
-      expect(calls.some((c) => typeof c === 'string' && c.includes('pickDefaultColor'))).toBe(false);
+      expect(calls.some((c: unknown) => typeof c === 'string' && c.includes('pickDefaultColor'))).toBe(false);
     });
 
     it('colorMode="gradient" + 모든 row color 미지정 → info 미발생 (gradient 모드)', () => {
@@ -164,7 +164,7 @@ describe('HorizontalBarChart dev warn', () => {
         }),
       );
       const calls = infoSpy.mock.calls.flat();
-      expect(calls.some((c) => typeof c === 'string' && c.includes('pickDefaultColor'))).toBe(false);
+      expect(calls.some((c: unknown) => typeof c === 'string' && c.includes('pickDefaultColor'))).toBe(false);
     });
   });
 
@@ -179,8 +179,8 @@ describe('HorizontalBarChart dev warn', () => {
         }),
       );
       const calls = warnSpy.mock.calls.flat();
-      expect(calls.some((c) => typeof c === 'string' && c.includes('"purple"'))).toBe(true);
-      expect(calls.some((c) => typeof c === 'string' && c.includes('자동 할당'))).toBe(true);
+      expect(calls.some((c: unknown) => typeof c === 'string' && c.includes('"purple"'))).toBe(true);
+      expect(calls.some((c: unknown) => typeof c === 'string' && c.includes('자동 할당'))).toBe(true);
     });
 
     it('잘못된 hex (#xyz) → 경고 발생', () => {
@@ -192,7 +192,7 @@ describe('HorizontalBarChart dev warn', () => {
         }),
       );
       const calls = warnSpy.mock.calls.flat();
-      expect(calls.some((c) => typeof c === 'string' && c.includes('"#xyz"'))).toBe(true);
+      expect(calls.some((c: unknown) => typeof c === 'string' && c.includes('"#xyz"'))).toBe(true);
     });
 
     it('유효한 hex → 경고 없음', () => {
@@ -206,7 +206,7 @@ describe('HorizontalBarChart dev warn', () => {
       const calls = warnSpy.mock.calls.flat();
       expect(
         calls.some(
-          (c) =>
+          (c: unknown) =>
             typeof c === 'string' &&
             c.includes('유효한 키워드') &&
             c.includes('hex 코드'),
@@ -225,7 +225,7 @@ describe('HorizontalBarChart dev warn', () => {
       const calls = warnSpy.mock.calls.flat();
       expect(
         calls.some(
-          (c) =>
+          (c: unknown) =>
             typeof c === 'string' &&
             c.includes('유효한 키워드') &&
             c.includes('hex 코드'),

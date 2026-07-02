@@ -171,11 +171,11 @@ describe('Phase 8-1 — 차트 12종 비정상 입력 방어', () => {
 
   it('DemographicShiftBars: categories 누락 → placeholder', () => {
     const html = renderToStaticMarkup(
+      // @ts-expect-error categories 누락
       createElement(DemographicShiftBars, {
         title: 't',
         leftHeader:  { label: 'L', subLabel: 'l' },
         rightHeader: { label: 'R', subLabel: 'r' },
-        // @ts-expect-error categories 누락
       }),
     );
     expect(html).toContain(ERROR_MARKER);
