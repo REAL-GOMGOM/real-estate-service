@@ -129,7 +129,7 @@ async function fetchWithRetry<T>(
       lastError = e;
       if ((e as any)?.noRetry) throw e;
       if (attempt < maxRetries) {
-        console.log('[retry]', attempt + 1, '/', maxRetries, (e as Error)?.message?.slice(0, 80));
+        console.warn('[retry]', attempt + 1, '/', maxRetries, (e as Error)?.message?.slice(0, 80));
         const delay = baseDelayMs * Math.pow(2, attempt) + Math.random() * 200;
         await new Promise((r) => setTimeout(r, delay));
       }
@@ -197,9 +197,7 @@ export async function fetchSudogwonDeals(
     ),
   );
 
-  const t0 = Date.now();
   const { results, failed, total } = await runWithLimit(tasks, CONCURRENCY);
-  console.log('[timing] fetch phase:', Date.now() - t0, 'ms, failed:', failed, '/', total);
 
   const deals: Deal[] = [];
   for (const batch of results) {
