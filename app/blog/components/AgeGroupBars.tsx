@@ -6,7 +6,7 @@
  * - X축 80~600 (520px), Y축 60~280 (220px = yMax%)
  * - 1% = 5.5px (yMax=40 기준)
  * - 그룹폭 90, 막대폭 40, 그룹 간격 60
- * - before #94a3b8 slate, after #dc2626 red
+ * - before #9AA4B8 slate, after #E23B3B red
  * - 그리드 점선 4단계 (10/20/30/40%)
  * - 값 라벨 위쪽 (y_rect - 7)
  * - 그룹 라벨 y=300, 변화 마커 y=315
@@ -15,12 +15,12 @@
 
 import { ChartErrorPlaceholder } from './ChartErrorPlaceholder';
 
-const BEFORE_FILL = '#94a3b8';
-const AFTER_FILL = '#dc2626';
+const BEFORE_FILL = '#9AA4B8';
+const AFTER_FILL = '#E23B3B';
 const AXIS_FILL = '#9ca3af';
 const GRID_FILL = '#e5e7eb';
 const TEXT_FILL = '#374151';
-const SUB_LABEL_FILL = '#6b7280';
+const SUB_LABEL_FILL = '#64708A';
 
 const VIEW_WIDTH = 640;
 const X_START = 80;

@@ -56,7 +56,7 @@ describe('resolveCellColor', () => {
   });
 
   it('값 + colorScale 미지정 → getGradientFill', () => {
-    expect(resolveCellColor(20)).toBe(getGradientFill(20)); // 양수 최대 #dc2626
+    expect(resolveCellColor(20)).toBe(getGradientFill(20)); // 양수 최대 #C92F2F
     expect(resolveCellColor(-3)).toBe(getGradientFill(-3));
     expect(resolveCellColor(0)).toBe(getGradientFill(0));
   });
@@ -75,16 +75,16 @@ describe('resolveCellColor', () => {
 
 describe('resolveCellTextColor', () => {
   it('null 셀(회색) → subLabel 어두운 회색', () => {
-    expect(resolveCellTextColor(NULL_CELL_FILL)).toBe('#6b7280');
+    expect(resolveCellTextColor(NULL_CELL_FILL)).toBe('#64708A');
   });
 
   it('옅은 cream 셀 → 진한 갈색 (getGradientTextFill 위임)', () => {
-    expect(resolveCellTextColor('#fef3c7')).toBe('#a16207');
-    expect(resolveCellTextColor('#fde68a')).toBe('#a16207');
+    expect(resolveCellTextColor('#FCF3DC')).toBe('#8A6A1F');
+    expect(resolveCellTextColor('#F8E7B8')).toBe('#8A6A1F');
   });
 
   it('진한 셀 → 입력값 그대로 (getGradientTextFill 위임)', () => {
-    expect(resolveCellTextColor('#dc2626')).toBe('#dc2626');
+    expect(resolveCellTextColor('#C92F2F')).toBe('#C92F2F');
   });
 });
 

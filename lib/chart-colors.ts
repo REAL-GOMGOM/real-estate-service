@@ -15,13 +15,18 @@
  *   다른 차트에서도 키워드로 사용 가능하지만 디자인 일관성 위해 5색 권장.
  */
 export const CHART_COLORS = {
-  red:         '#dc2626',
-  orange:      '#ea580c',
-  blue:        '#2563eb',
-  darkBlue:    '#1d4ed8',
-  gray:        '#6b7280',
-  yellow:      '#fbbf24',
-  amberOrange: '#f97316',
+  // 사이클 U 리디자인: 시안 팔레트(딥네이비·로열블루) 톤으로 재정의.
+  // 키 이름은 기존 발행 글(MDX) 호환을 위해 유지 — hex만 교체.
+  red:         '#E23B3B',
+  orange:      '#E8663C',
+  blue:        '#1B4DDB',
+  darkBlue:    '#14213D',
+  gray:        '#8A94A8',
+  yellow:      '#EBC15C',
+  amberOrange: '#F0A24B',
+  // 사이클 U 신설 (시안 액센트 — 기존 글 영향 없음, 추가만)
+  rose:        '#E5687A',
+  green:       '#6FC08A',
 } as const;
 
 export type ColorKey = keyof typeof CHART_COLORS;
@@ -45,24 +50,24 @@ const CATEGORY_ORDER: ColorKey[] = ['red', 'blue', 'orange', 'darkBlue', 'gray']
  * 양수 8단계 (red→amber 농도), 음수 5단계 (blue 농도).
  */
 export function getGradientFill(value: number): string {
-  if (value >= 16) return '#dc2626';
-  if (value >= 13) return '#ef4444';
-  if (value >= 11) return '#f97316';
-  if (value >= 7)  return '#f59e0b';
-  if (value >= 5)  return '#fbbf24';
-  if (value >= 3)  return '#fcd34d';
-  if (value >= 1.5) return '#fde68a';
-  if (value >= 0)   return '#fef3c7';
-  if (value > -1)   return '#93c5fd';
-  if (value > -2)   return '#60a5fa';
-  if (value > -5)   return '#3b82f6';
-  if (value > -6.5) return '#2563eb';
-  return '#1d4ed8';
+  if (value >= 16) return '#C92F2F';
+  if (value >= 13) return '#E23B3B';
+  if (value >= 11) return '#E8663C';
+  if (value >= 7)  return '#F0A24B';
+  if (value >= 5)  return '#EBC15C';
+  if (value >= 3)  return '#F2D48A';
+  if (value >= 1.5) return '#F8E7B8';
+  if (value >= 0)   return '#FCF3DC';
+  if (value > -1)   return '#B9CBF5';
+  if (value > -2)   return '#8FACEE';
+  if (value > -5)   return '#5B82E8';
+  if (value > -6.5) return '#2E5CE0';
+  return '#1B4DDB';
 }
 
 /** 옅은 막대 색상이면 텍스트는 더 진한 색상으로 (대비 보장) */
 export function getGradientTextFill(barFill: string): string {
-  if (barFill === '#fef3c7' || barFill === '#fde68a') return '#a16207';
+  if (barFill === '#FCF3DC' || barFill === '#F8E7B8') return '#8A6A1F';
   return barFill;
 }
 

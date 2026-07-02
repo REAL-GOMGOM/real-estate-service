@@ -19,11 +19,11 @@
  * - 라벨 잘림 자동 대응: zeroX가 부족하면 자동 확장 (축소 X)
  *
  * 색상 팔레트(사전정의):
- * - red    #dc2626 (서울 상승)
- * - orange #ea580c (경기 상승)
- * - blue   #2563eb (하락)
- * - darkBlue #1d4ed8 (하락 강조)
- * - gray   #6b7280 (중립)
+ * - red    #E23B3B (서울 상승)
+ * - orange #E8663C (경기 상승)
+ * - blue   #1B4DDB (하락)
+ * - darkBlue #14213D (하락 강조)
+ * - gray   #8A94A8 (중립)
  */
 
 import {
@@ -311,7 +311,7 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
         y={axisBottom + 20}
         textAnchor="middle"
         fontSize={11}
-        fill="#6b7280"
+        fill="#64708A"
       >
         {axisLabel}
       </text>
@@ -411,7 +411,7 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
               y={CHART_CONSTANTS.TOP_PADDING + (dividerAfter + 1) * CHART_CONSTANTS.ROW_PITCH + CHART_CONSTANTS.DIVIDER_GAP + 10}
               textAnchor="middle"
               fontSize={11}
-              fill="#6b7280"
+              fill="#64708A"
             >
               {dividerText}
             </text>
