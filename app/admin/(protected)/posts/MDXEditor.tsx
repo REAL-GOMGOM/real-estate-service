@@ -156,7 +156,11 @@ export function MDXEditor({
           value={value}
           onChange={(v) => onChange(v ?? '')}
           height={500}
-          preview="live"
+          // Phase 8 임시 조치(cycle T): live preview는 react-markdown 기반이라 JSX 차트를 렌더 못 함
+          // → 작가가 정상 글을 "깨짐"으로 오해. 편집 전용으로 전환.
+          // 검수는 서명 토큰 미리보기(/preview/[id])와 어드민 상세가 담당하므로 기능 손실 없음.
+          // TODO: 백로그 8-5(어드민 미리보기 MDX 컴파일러 통합) 완료 시 preview="live"로 revert
+          preview="edit"
           previewOptions={{
             // 미리보기는 react-markdown 기반 — raw HTML 처리에 rehype-raw 필요
             // (발행 렌더러는 MDX native라 rehype-raw 미사용)
