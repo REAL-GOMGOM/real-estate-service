@@ -47,3 +47,6 @@ data/*.db-wal
 data/raw/
 data/processed/
 .env*.local
+
+# DB 마이그레이션 원문 백업 (커밋 금지 — 글 전문 포함)
+scripts/backup/
