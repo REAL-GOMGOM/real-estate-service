@@ -6,7 +6,7 @@ interface Props {
 }
 
 export function RegionCTA({ region }: Props) {
-  const kakaoUrl = process.env.NEXT_PUBLIC_KAKAO_OPENCHAT_URL;
+  const telegramUrl = process.env.NEXT_PUBLIC_TELEGRAM_CHANNEL_URL;
   const mapUrl = `/location-map?highlight=${region.id}`;
 
   return (
@@ -23,9 +23,9 @@ export function RegionCTA({ region }: Props) {
           입지지도에서 {region.name} 보기 →
         </Link>
 
-        {kakaoUrl && (
+        {telegramUrl && (
           <a
-            href={kakaoUrl}
+            href={telegramUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center justify-center px-6 py-3 rounded-lg border font-medium transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2"
@@ -34,7 +34,7 @@ export function RegionCTA({ region }: Props) {
               color: 'var(--text-primary)',
             }}
           >
-            내집 오픈카톡방 참여 →
+            내집 텔레그램 채널 참여 →
           </a>
         )}
       </div>
