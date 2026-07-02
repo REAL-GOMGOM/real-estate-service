@@ -3,14 +3,14 @@
 import { BRAND } from '@/lib/design-tokens';
 import { Reveal } from '@/components/shared/Reveal';
 
-// 텔레그램 채널 배너 (컴포넌트/파일명 rename은 리디자인 사이클에서 처리)
-export function KakaoBanner() {
+// 텔레그램 채널 배너
+export function TelegramBanner() {
   const url = process.env.NEXT_PUBLIC_TELEGRAM_CHANNEL_URL;
 
   if (!url) return null;
 
   return (
-    <section className="py-16" style={{ backgroundColor: '#FBF7F1' }}>
+    <section className="py-16" style={{ backgroundColor: '#F1F4FA' }}>
       <div style={{ maxWidth: 'var(--container-default)', margin: '0 auto', padding: '0 var(--page-padding)' }}>
         <Reveal>
           <a
@@ -19,7 +19,7 @@ export function KakaoBanner() {
             rel="noopener noreferrer"
             className="block rounded-3xl p-8 md:p-10 transition-all duration-300 hover:shadow-lg group"
             style={{
-              background: 'linear-gradient(135deg, #2AABEE 0%, #229ED9 100%)',
+              background: 'linear-gradient(135deg, #2AABEE 0%, #1B4DDB 100%)',
               border: '1px solid rgba(0,0,0,0.05)',
             }}
           >
@@ -79,7 +79,7 @@ export function KakaoBanner() {
                 className="flex-shrink-0 inline-flex items-center gap-2 px-6 py-3 rounded-full font-semibold transition-all group-hover:scale-105"
                 style={{
                   backgroundColor: 'white',
-                  color: '#229ED9',
+                  color: '#1B4DDB',
                   fontSize: 15,
                   boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                 }}

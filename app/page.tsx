@@ -7,7 +7,7 @@ import { CoreServices } from '@/components/landing/CoreServices';
 import { TopLocations } from '@/components/landing/TopLocations';
 import { SubscriptionList } from '@/components/landing/SubscriptionList';
 import { ValueProps } from '@/components/landing/ValueProps';
-import { KakaoBanner } from '@/components/landing/KakaoBanner';
+import { TelegramBanner } from '@/components/landing/TelegramBanner';
 import { VisitorStatsSlim } from '@/components/landing/VisitorStatsSlim';
 import { MOCK_TICKER, MOCK_DISTRICTS, MOCK_TOP_LOCATIONS } from '@/lib/mock-data';
 import { toSubscription } from '@/lib/adapters';
@@ -55,8 +55,8 @@ export default async function HomePage() {
       {/* 6. SubscriptionList */}
       <SubscriptionList items={subscriptions} />
 
-      {/* 7. KakaoBanner */}
-      <KakaoBanner />
+      {/* 7. TelegramBanner */}
+      <TelegramBanner />
 
       {/* 8. VisitorStatsSlim — Footer 직전 */}
       <Suspense fallback={<VisitorStatsSlim initialStats={FALLBACK_STATS} />}>
