@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import './globals.css';
-import { KakaoFloatingButton } from '@/components/shared/KakaoFloatingButton';
+import { TelegramFloatingButton } from '@/components/shared/TelegramFloatingButton';
 import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics';
 import { CookieConsent } from '@/components/analytics/CookieConsent';
 import { AdSenseLoader } from '@/components/shared/AdSenseLoader';
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
   verification: {
     other: { 'naver-site-verification': '794ff6d4d4f358c239962451d25e8f040d10603f' },
   },
-  other: { 'theme-color': '#C4654A' },
+  other: { 'theme-color': '#1B4DDB' },
 };
 
 export default function RootLayout({
@@ -50,7 +50,7 @@ export default function RootLayout({
       </head>
       <body>
         {children}
-        <KakaoFloatingButton />
+        <TelegramFloatingButton />
         <GoogleAnalytics />
         <CookieConsent />
         <AdSenseLoader />
