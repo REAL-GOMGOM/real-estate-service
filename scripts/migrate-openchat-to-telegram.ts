@@ -26,15 +26,21 @@ import { posts } from '../lib/db/schema';
 const OLD_URL = 'https://open.kakao.com/o/gJO6RLsi';
 const NEW_URL = 'https://t.me/realMyzip';
 
-// 순서 중요: 문장 전체 → 라벨 잔여 변형 → URL
+// 순서 중요: 문장 전체 → 라벨 잔여 변형 → 수동 작성 카톡 박스 라벨 → URL
 const TEXT_REPLACEMENTS: Array<[string, string]> = [
   [
     '💬 부동산 궁금증은 오픈채팅방에서 함께 나눠요 → [내집 오픈채팅 바로가기]',
     '📢 실거래 신고가·시장 분석 소식을 가장 빠르게 → [내집 텔레그램 채널 바로가기]',
   ],
   ['[내집 오픈채팅 바로가기]', '[내집 텔레그램 채널 바로가기]'],
+  // 수동/스킬 작성 변형: [내집(My.ZIP) 오픈카톡방 →] / [내집 오픈카톡방 →] / **내집(My.ZIP)** 오픈카톡방 →]
+  // 링크 라벨 말미 패턴만 치환해 본문 서술 문장은 건드리지 않는다.
+  ['오픈카톡방 →]', '텔레그램 채널 →]'],
   [OLD_URL, NEW_URL],
 ];
+
+// 링크는 교체됐지만 본문 서술에 카톡 관련 문구가 남는 경우 수동 검토용으로 알림만.
+const KAKAO_WORD_PATTERN = /오픈카톡|오픈채팅|카카오톡/g;
 
 const SNIPPET_RADIUS = 80;
 
@@ -103,6 +109,12 @@ async function main() {
       console.log(`  잔존: ${snippetAround(next, 'open.kakao.com')}`);
       manual.push({ id: post.id, slug: post.slug });
     } else {
+      const wordHits = next.match(KAKAO_WORD_PATTERN);
+      if (wordHits && wordHits.length > 0) {
+        console.log(
+          `  ℹ️ 카톡 관련 서술 문구 ${wordHits.length}건 잔존 (링크·라벨은 교체됨, 문구만 수동 검토): ${snippetAround(next, wordHits[0])}`,
+        );
+      }
       updatable.push({ id: post.id, slug: post.slug, next, count });
     }
   }
