@@ -2,6 +2,7 @@ import { compileMDX } from 'next-mdx-remote/rsc';
 import remarkGfm from 'remark-gfm';
 import { preprocessMdxContent } from './preprocessor';
 import { mdxComponentNames } from '@/app/blog/components/mdx-components';
+import { evalStaticEstree, validateChartProps, UNSTATIC } from './validate-chart-props';
 
 /**
  * MDX 본문 발행 전 검증 게이트.
@@ -49,22 +50,39 @@ export async function validateMdx(content: string): Promise<MdxValidationResult>
  * ============================================================ */
 
 /**
- * 최소 mdast 노드 형태 (JSX 노드 이름 수집용).
+ * 최소 mdast 노드 형태 (JSX 노드 이름·속성 수집용).
  * remark-mdx 가 파싱한 트리에서 mdxJsxFlowElement/mdxJsxTextElement 노드를 본다.
  */
+type MdastAttribute = {
+  type?: string;
+  name?: string;
+  value?:
+    | string
+    | null
+    | { type?: string; value?: string; data?: { estree?: unknown } };
+};
+
 type MdastNode = {
   type?: string;
   name?: string | null;
+  attributes?: MdastAttribute[];
   children?: MdastNode[];
 };
 
+/** 수집된 JSX 사용 정보 — 이름 + 정적 평가된 props (spread 사용 시 UNSTATIC) */
+type JsxUsage = {
+  name: string;
+  props: Record<string, unknown> | typeof UNSTATIC;
+};
+
 /**
- * 트리를 재귀 순회하며 JSX 요소 이름을 수집하는 remark 플러그인.
+ * 트리를 재귀 순회하며 JSX 요소 이름·속성을 수집하는 remark 플러그인.
  *
  * 실제 렌더(부수효과·성능 우려)를 시도하는 대신, 컴파일 파이프라인에 끼워넣어
- * 파서가 만든 AST 에서 사용된 컴포넌트명을 그대로 추출한다 → 부수효과 없음.
+ * 파서가 만든 AST 에서 사용된 컴포넌트명과 props 리터럴을 그대로 추출한다.
+ * 8-5: props는 estree 정적 평가로 값까지 복원 (리터럴 아닌 표현식은 UNSTATIC).
  */
-function collectJsxNames(sink: Set<string>) {
+function collectJsxUsages(sink: JsxUsage[]) {
   return function plugin() {
     return function transformer(tree: MdastNode) {
       walk(tree);
@@ -76,13 +94,38 @@ function collectJsxNames(sink: Set<string>) {
           node.type === 'mdxJsxTextElement') &&
         typeof node.name === 'string'
       ) {
-        sink.add(node.name);
+        sink.push({ name: node.name, props: extractProps(node.attributes) });
       }
       if (Array.isArray(node?.children)) {
         for (const child of node.children) walk(child);
       }
     }
   };
+}
+
+function extractProps(
+  attributes: MdastAttribute[] | undefined,
+): Record<string, unknown> | typeof UNSTATIC {
+  const props: Record<string, unknown> = {};
+  for (const attr of attributes ?? []) {
+    // spread({...expr}) — 어떤 prop이 들어올지 알 수 없음 → 전체 fail-open
+    if (attr.type === 'mdxJsxExpressionAttribute') return UNSTATIC;
+    if (attr.type !== 'mdxJsxAttribute' || typeof attr.name !== 'string') continue;
+
+    const v = attr.value;
+    if (v === null || v === undefined) {
+      props[attr.name] = true; // <Chart autoScale /> 축약형
+    } else if (typeof v === 'string') {
+      props[attr.name] = v;
+    } else if (v.type === 'mdxJsxAttributeValueExpression') {
+      props[attr.name] = evalStaticEstree(
+        (v.data?.estree ?? null) as Parameters<typeof evalStaticEstree>[0],
+      );
+    } else {
+      props[attr.name] = UNSTATIC;
+    }
+  }
+  return props;
 }
 
 /**
@@ -102,7 +145,7 @@ export async function validateMdxStrict(
     return { ok: false, error: '본문이 비어 있습니다' };
   }
 
-  const used = new Set<string>();
+  const usages: JsxUsage[] = [];
   try {
     await compileMDX({
       source: preprocessMdxContent(content),
@@ -110,8 +153,8 @@ export async function validateMdxStrict(
         blockJS: false,
         mdxOptions: {
           format: 'mdx',
-          // collectJsxNames 플러그인을 끼워 컴파일 중 컴포넌트명 수집
-          remarkPlugins: [remarkGfm, collectJsxNames(used)],
+          // collectJsxUsages 플러그인을 끼워 컴파일 중 컴포넌트명·props 수집
+          remarkPlugins: [remarkGfm, collectJsxUsages(usages)],
         },
       },
     });
@@ -122,14 +165,29 @@ export async function validateMdxStrict(
 
   const allowed = new Set(mdxComponentNames);
   // 대문자로 시작 = 컴포넌트 / 멤버표현식(Foo.Bar 포함) → 화이트리스트 대조
-  const unknown = [...used].filter(
-    (name) => /^[A-Z]/.test(name) && !allowed.has(name),
-  );
+  const unknown = [
+    ...new Set(usages.map((u) => u.name)),
+  ].filter((name) => /^[A-Z]/.test(name) && !allowed.has(name));
 
   if (unknown.length > 0) {
     return {
       ok: false,
       error: `미등록 컴포넌트 참조: ${unknown.join(', ')}`,
+    };
+  }
+
+  // ─── 8-5: 차트 required props 검증 (가드 8-1 기준의 발행 전 차단) ───
+  const propErrors: string[] = [];
+  for (const usage of usages) {
+    const err = validateChartProps(usage.name, usage.props);
+    if (err) propErrors.push(err);
+  }
+  if (propErrors.length > 0) {
+    // 중복 제거 후 최대 3건까지 안내 (텔레그램 메시지 가독성)
+    const uniq = [...new Set(propErrors)];
+    return {
+      ok: false,
+      error: `차트 props 오류: ${uniq.slice(0, 3).join(' / ')}${uniq.length > 3 ? ` 외 ${uniq.length - 3}건` : ''}`,
     };
   }
 
