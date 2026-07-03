@@ -1,13 +1,13 @@
 'use client';
 
 const LEGEND_ITEMS = [
-  { label: '-1.5%↓', color: '#1E40AF' },
+  { label: '-1.5%↓', color: '#1636A8' },
   { label: '-0.5%',  color: 'var(--accent)' },
-  { label: '-0.1%',  color: '#93C5FD' },
+  { label: '-0.1%',  color: '#B9CBF5' },
   { label: '보합',   color: 'var(--text-muted)' },
-  { label: '+0.1%',  color: '#FCA5A5' },
-  { label: '+0.5%',  color: '#F87171' },
-  { label: '+1.5%↑', color: '#DC2626' },
+  { label: '+0.1%',  color: '#F4B6B6' },
+  { label: '+0.5%',  color: '#E85D5D' },
+  { label: '+1.5%↑', color: '#C92F2F' },
 ];
 
 export default function MapLegend() {

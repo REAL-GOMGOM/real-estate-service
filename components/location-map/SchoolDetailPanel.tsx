@@ -38,18 +38,18 @@ const LEVEL_LABELS: Record<string, string> = {
 };
 
 const LEVEL_COLORS: Record<string, string> = {
-  elementary: '#22C55E',
+  elementary: '#6FC08A',
   middle: 'var(--accent)',
-  high: '#F97316',
+  high: '#F0A24B',
 };
 
 function gradeColor(grade: string | null): string {
   switch (grade) {
-    case '1': return '#22C55E';
-    case '2': return '#86EFAC';
-    case '3': return '#F59E0B';
-    case '4': return '#FB923C';
-    case '5': return '#EF4444';
+    case '1': return '#6FC08A';
+    case '2': return '#A8D9BC';
+    case '3': return '#EBC15C';
+    case '4': return '#F0A24B';
+    case '5': return '#E23B3B';
     default: return 'var(--text-dim)';
   }
 }
@@ -192,7 +192,7 @@ export default function SchoolDetailPanel({ school, nearbySchools, onClose, embe
       {school.school_level === 'middle' && school.autonomous_high_rate != null && (
         <div style={{ marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
-            <Award size={14} style={{ color: '#F59E0B' }} />
+            <Award size={14} style={{ color: '#EBC15C' }} />
             <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
               특목·자사고 진학률
             </p>
@@ -219,7 +219,7 @@ export default function SchoolDetailPanel({ school, nearbySchools, onClose, embe
                 <span style={{
                   fontSize: '14px', fontWeight: 700,
                   fontFamily: 'Roboto Mono, monospace',
-                  color: (item.rate ?? 0) > 0 ? '#F59E0B' : 'var(--text-dim)',
+                  color: (item.rate ?? 0) > 0 ? '#EBC15C' : 'var(--text-dim)',
                 }}>
                   {item.rate != null ? `${item.rate}%` : '-'}
                 </span>

@@ -23,8 +23,8 @@ interface Props {
 }
 
 function TrendIcon({ trend }: { trend: LocationScore['trend'] }) {
-  if (trend === 'up')   return <TrendingUp   size={12} style={{ color: '#22C55E' }} />;
-  if (trend === 'down') return <TrendingDown size={12} style={{ color: '#EF4444' }} />;
+  if (trend === 'up')   return <TrendingUp   size={12} style={{ color: 'var(--up-color)' }} />;
+  if (trend === 'down') return <TrendingDown size={12} style={{ color: 'var(--down-color)' }} />;
   return <Minus size={12} style={{ color: 'var(--text-dim)' }} />;
 }
 
@@ -102,20 +102,20 @@ export default function LocationSidebar({
           style={{
             width: '100%', padding: '9px 12px', borderRadius: '10px', cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            border: `1px solid ${showToheoOnly ? '#EF4444' : 'var(--border)'}`,
-            backgroundColor: showToheoOnly ? 'rgba(239,68,68,0.1)' : 'var(--border-light)',
+            border: `1px solid ${showToheoOnly ? 'var(--danger)' : 'var(--border)'}`,
+            backgroundColor: showToheoOnly ? 'rgba(226,59,59,0.10)' : 'var(--border-light)',
             transition: 'all 0.15s',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-            <div style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#EF4444', flexShrink: 0 }} />
+            <div style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: 'var(--danger)', flexShrink: 0 }} />
             <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>토허제 지역만 보기</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
             <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>{toheoCount}개</span>
             <div style={{
               width: '32px', height: '18px', borderRadius: '999px',
-              backgroundColor: showToheoOnly ? '#EF4444' : 'var(--border)',
+              backgroundColor: showToheoOnly ? 'var(--danger)' : 'var(--border)',
               position: 'relative', transition: 'background 0.2s', flexShrink: 0,
             }}>
               <div style={{
@@ -153,7 +153,7 @@ export default function LocationSidebar({
             </div>
           ))}
           <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginTop: '3px', paddingTop: '6px', borderTop: '1px solid var(--border-light)' }}>
-            <div style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: '#EF4444', flexShrink: 0 }} />
+            <div style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: 'var(--danger)', flexShrink: 0 }} />
             <span style={{ fontSize: '11px', color: 'var(--text-dim)', minWidth: '65px' }}>빨간 점</span>
             <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>토지거래허가구역</span>
           </div>
@@ -192,7 +192,7 @@ export default function LocationSidebar({
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{loc.name}</p>
                   {loc.isToheo && (
-                    <div style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#EF4444', flexShrink: 0 }} />
+                    <div style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: 'var(--danger)', flexShrink: 0 }} />
                   )}
                 </div>
                 <p style={{ fontSize: '10px', color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{loc.district}</p>
