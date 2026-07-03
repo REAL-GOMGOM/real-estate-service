@@ -9,10 +9,8 @@ export function formatKoreanPrice(
 
   if (compact) {
     if (uk >= 10000) {
-      const jo = Math.floor(uk / 10000);
-      const remainUk = uk % 10000;
-      if (remainUk === 0) return `${jo}조`;
-      return `${jo}조 ${(remainUk / 10000 * 10000 / 10000).toFixed(1)}억`.replace(/\.0억$/, '억');
+      // 사이클 U 수정: 잔여 억을 "조 소수"로 오표기하던 버그 해소 (1조 5,000억 → '1.5조')
+      return `${(uk / 10000).toFixed(1)}조`.replace(/\.0조$/, '조');
     }
     if (uk > 0) {
       const decimal = man > 0 ? (man / 10000).toFixed(1) : '';

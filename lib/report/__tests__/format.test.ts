@@ -1,10 +1,7 @@
 /**
  * report/format 특성테스트 (Y5) — 가격·퍼센트 표기 현재 동작 고정.
  *
- * ⚠️ 알려진 특성(버그 후보, 의도 확인 전 고정만):
- *   compact 모드 조 단위에서 남는 억이 "조 단위 소수"로 계산되어 억으로 표기됨.
- *   예) 1조 5,000억 → '1조 0.5억' (기대했을 표기: '1조 5,000억' 또는 '1.5조')
- *   수정 시 이 테스트를 의도적으로 갱신할 것.
+ * 사이클 U에서 compact 조 단위 오표기 버그('1조 0.5억')를 '1.5조'로 의도 수정 — 테스트 갱신됨.
  */
 import { describe, it, expect } from 'vitest';
 import { formatKoreanPrice, formatPercent } from '../format';
@@ -49,9 +46,9 @@ describe('formatKoreanPrice — compact 모드', () => {
     expect(formatKoreanPrice(9_999, { compact: true })).toBe('1만');
   });
 
-  it('⚠️ 특성: 조 단위 잔여 억이 조 소수로 잘못 표기됨 (버그 후보 — 고정만)', () => {
-    expect(formatKoreanPrice(1_500_000_000_000, { compact: true })).toBe('1조 0.5억');
-    expect(formatKoreanPrice(1_234_500_000_000, { compact: true })).toBe('1조 0.2억');
+  it('조 단위는 소수 1자리 조 표기 (사이클 U 버그 수정: 구 "1조 0.5억" 오표기 해소)', () => {
+    expect(formatKoreanPrice(1_500_000_000_000, { compact: true })).toBe('1.5조');
+    expect(formatKoreanPrice(1_234_500_000_000, { compact: true })).toBe('1.2조');
     expect(formatKoreanPrice(1_000_000_000_000, { compact: true })).toBe('1조');
   });
 });
