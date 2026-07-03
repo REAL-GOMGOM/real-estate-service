@@ -1,33 +1,30 @@
 import { Suspense } from 'react';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
-import { Hero } from '@/components/landing/Hero';
-import { QuickAccess } from '@/components/landing/QuickAccess';
-import { TodayReport } from '@/components/landing/TodayReport';
-import { CoreServices } from '@/components/landing/CoreServices';
-import { TopLocations } from '@/components/landing/TopLocations';
+import { CompactHero } from '@/components/landing/CompactHero';
+import { FilterRail } from '@/components/landing/FilterRail';
+import { DealFeed } from '@/components/landing/DealFeed';
+import { RightRail } from '@/components/landing/RightRail';
 import { SubscriptionList } from '@/components/landing/SubscriptionList';
-import { ValueProps } from '@/components/landing/ValueProps';
 import { TelegramBanner } from '@/components/landing/TelegramBanner';
 import { VisitorStatsSlim } from '@/components/landing/VisitorStatsSlim';
-import { MOCK_TICKER, MOCK_DISTRICTS } from '@/lib/mock-data';
+import { MOCK_DISTRICTS, MOCK_DEALS } from '@/lib/mock-data';
 import { getTopLocations } from '@/lib/region-data';
 import { toSubscription } from '@/lib/adapters';
 import { fetchSubscriptions } from '@/lib/subscription-api';
 import { getStats } from '@/lib/visitor-tracking';
-import type { TickerItem } from '@/components/landing/LiveTicker';
 
 const FALLBACK_STATS = { today: 0, active24h: 0, total: 0 };
-
-async function HeroSection({ ticker }: { ticker: TickerItem[] }) {
-  return <Hero ticker={ticker} />;
-}
 
 async function VisitorStatsSlimSection() {
   const stats = await getStats();
   return <VisitorStatsSlim initialStats={stats} />;
 }
 
+/**
+ * 사이클 U 메인 — 시안 1a (피드 우선형).
+ * 컴팩트 히어로 + 3컬럼(필터 레일 / 실거래 카드 피드 / 다크 리포트·TOP5 레일).
+ */
 export default async function HomePage() {
   const allItems = await fetchSubscriptions().catch(() => []);
   const subscriptions = allItems
@@ -39,39 +36,29 @@ export default async function HomePage() {
     <main>
       <Header />
 
-      {/* 1. Hero — 사이클 U 다크 네이비 (티커 스트립 포함) */}
-      <Hero ticker={MOCK_TICKER} />
+      {/* 1. 컴팩트 히어로 (시안 1a) */}
+      <CompactHero />
 
-      {/* 1.5 Quick Access — 히어로 밖 독립 섹션 (사이클 U) */}
+      {/* 2. 3컬럼 본문 — 필터 레일 / 실거래 피드 / 우측 레일 */}
       <section
+        className="mx-auto grid grid-cols-1 lg:grid-cols-[236px_minmax(0,1fr)_268px] gap-5"
         style={{
-          maxWidth: 'var(--container-default)',
-          margin: '0 auto',
-          padding: '28px var(--page-padding) 0',
+          maxWidth: '1280px',
+          padding: '24px var(--page-padding) 32px',
         }}
       >
-        <QuickAccess />
+        <FilterRail />
+        <DealFeed deals={MOCK_DEALS} />
+        <RightRail districts={MOCK_DISTRICTS} topLocations={getTopLocations(5)} />
       </section>
 
-      {/* 2. ValueProps — 상단 이동 */}
-      <ValueProps />
-
-      {/* 3. TodayReport */}
-      <TodayReport districts={MOCK_DISTRICTS} />
-
-      {/* 4. CoreServices */}
-      <CoreServices />
-
-      {/* 5. TopLocations — 실데이터 (location-scores 2026-07) */}
-      <TopLocations items={getTopLocations(5)} />
-
-      {/* 6. SubscriptionList */}
+      {/* 3. 청약 일정 */}
       <SubscriptionList items={subscriptions} />
 
-      {/* 7. TelegramBanner */}
+      {/* 4. 텔레그램 채널 배너 */}
       <TelegramBanner />
 
-      {/* 8. VisitorStatsSlim — Footer 직전 */}
+      {/* 5. 방문자 통계 — Footer 직전 */}
       <Suspense fallback={<VisitorStatsSlim initialStats={FALLBACK_STATS} />}>
         <VisitorStatsSlimSection />
       </Suspense>
