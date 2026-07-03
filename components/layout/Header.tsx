@@ -79,7 +79,7 @@ export default function Header() {
           </Link>
 
           {/* 데스크탑 네비게이션 (중앙) */}
-          <nav style={{ alignItems: 'center', gap: '18px', position: 'absolute', left: '50%', transform: 'translateX(-50%)' }} className="hidden lg:flex">
+          <nav style={{ alignItems: 'center', gap: '22px', position: 'absolute', left: '50%', transform: 'translateX(-50%)' }} className="hidden lg:flex">
             {NAV_ITEMS.map((item) => {
               if (item.children) {
                 const groupActive = isChildActive(item.children, pathname);
@@ -93,8 +93,8 @@ export default function Header() {
                     <button
                       style={{
                         display: 'flex', alignItems: 'center', gap: '3px',
-                        fontSize: '13.5px', fontWeight: groupActive ? 600 : 500,
-                        color: groupActive ? 'var(--accent)' : 'var(--text-muted)',
+                        fontSize: '14px', fontWeight: groupActive ? 700 : 600,
+                        color: groupActive ? 'var(--accent)' : 'var(--text-secondary)',
                         paddingBottom: '2px',
                         transition: 'color 0.15s',
                         background: 'none', border: 'none', cursor: 'pointer',
@@ -123,7 +123,7 @@ export default function Header() {
                             backgroundColor: 'var(--bg-card)',
                             border: '1px solid var(--border)',
                             borderRadius: '12px',
-                            boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+                            boxShadow: 'var(--shadow-lg)',
                             padding: '8px',
                             minWidth: '240px',
                           }}
@@ -175,8 +175,8 @@ export default function Header() {
                   key={item.href}
                   href={item.href}
                   style={{
-                    fontSize: '13.5px', fontWeight: active ? 600 : 500,
-                    color: active ? 'var(--accent)' : 'var(--text-muted)',
+                    fontSize: '14px', fontWeight: active ? 700 : 600,
+                    color: active ? 'var(--accent)' : 'var(--text-secondary)',
                     textDecoration: 'none',
                     borderBottomWidth: '2px', borderBottomStyle: 'solid',
                     borderBottomColor: active ? 'var(--accent)' : 'transparent',
