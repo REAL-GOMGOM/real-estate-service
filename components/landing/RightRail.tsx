@@ -1,10 +1,15 @@
 import Link from 'next/link';
-import type { District } from './TodayReport';
 
 /**
  * 사이클 U 메인 우측 레일 — 시안 1a.
  * 다크 네이비 TODAY'S REPORT 패널 + LOCATION SCORE TOP5 카드.
  */
+export interface District {
+  name: string;
+  price: number;
+  change: number;
+}
+
 interface TopLocationItem {
   rank: number;
   name: string;
