@@ -10,7 +10,8 @@ import { SubscriptionList } from '@/components/landing/SubscriptionList';
 import { ValueProps } from '@/components/landing/ValueProps';
 import { TelegramBanner } from '@/components/landing/TelegramBanner';
 import { VisitorStatsSlim } from '@/components/landing/VisitorStatsSlim';
-import { MOCK_TICKER, MOCK_DISTRICTS, MOCK_TOP_LOCATIONS } from '@/lib/mock-data';
+import { MOCK_TICKER, MOCK_DISTRICTS } from '@/lib/mock-data';
+import { getTopLocations } from '@/lib/region-data';
 import { toSubscription } from '@/lib/adapters';
 import { fetchSubscriptions } from '@/lib/subscription-api';
 import { getStats } from '@/lib/visitor-tracking';
@@ -61,8 +62,8 @@ export default async function HomePage() {
       {/* 4. CoreServices */}
       <CoreServices />
 
-      {/* 5. TopLocations */}
-      <TopLocations items={MOCK_TOP_LOCATIONS} />
+      {/* 5. TopLocations — 실데이터 (location-scores 2026-07) */}
+      <TopLocations items={getTopLocations(5)} />
 
       {/* 6. SubscriptionList */}
       <SubscriptionList items={subscriptions} />

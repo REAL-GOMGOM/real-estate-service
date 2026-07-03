@@ -23,6 +23,22 @@ export async function getAllRegionIds(): Promise<string[]> {
   return scores.map((s) => s.id);
 }
 
+/**
+ * 입지 점수 상위 지역 (점수 낮을수록 우수) — 랜딩 LOCATION SCORE TOP N.
+ * 사이클 U: mock 제거, location-scores.json에서 직접 도출 (데이터 갱신 시 자동 반영).
+ */
+export function getTopLocations(limit = 5): Array<{
+  rank: number;
+  name: string;
+  score: number;
+  id: string;
+}> {
+  return [...scores]
+    .sort((a, b) => a.score - b.score)
+    .slice(0, limit)
+    .map((s, i) => ({ rank: i + 1, name: s.name, score: s.score, id: s.id }));
+}
+
 /** id로 단일 지역 상세 조회 */
 export async function getRegionById(
   id: string,

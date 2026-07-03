@@ -25,7 +25,7 @@ const LEGEND = [
 
 export function TopLocations({ items }: TopLocationsProps) {
   return (
-    <section style={{ backgroundColor: '#FBF7F1', padding: 'clamp(40px, 8vw, 80px) 0' }}>
+    <section style={{ backgroundColor: 'var(--bg-secondary)', padding: 'clamp(40px, 8vw, 80px) 0' }}>
       <div style={{ maxWidth: 'var(--container-default)', margin: '0 auto', padding: '0 var(--page-padding)' }}>
         <div className="grid grid-cols-1 md:grid-cols-5 gap-12 items-start">
           {/* 좌측: 헤더 + CTA + 범례 */}
