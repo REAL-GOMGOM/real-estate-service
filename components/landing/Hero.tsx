@@ -3,9 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search } from 'lucide-react';
-import { BRAND } from '@/lib/design-tokens';
 import { useRotatingPlaceholder } from '@/hooks/useRotatingPlaceholder';
-import { QuickAccess } from './QuickAccess';
 import { LiveTicker, type TickerItem } from './LiveTicker';
 
 interface HeroProps {
@@ -14,6 +12,10 @@ interface HeroProps {
 
 const TAGS = ['강남구', '분당', '마포구', '용산구', '청약 일정'];
 
+/**
+ * 사이클 U 메인 히어로 — 시안 스크린 12 기준.
+ * 다크 네이비 배경 + 좌정렬 카피 + 검색 박스 + 하단 LIVE 티커 스트립.
+ */
 export function Hero({ ticker }: HeroProps) {
   const placeholder = useRotatingPlaceholder();
   const router = useRouter();
@@ -36,172 +38,143 @@ export function Hero({ ticker }: HeroProps) {
     <section
       className="relative overflow-hidden"
       style={{
-        paddingTop: '80px',
-        paddingBottom: '48px',
-        backgroundColor: BRAND.bg,
+        paddingTop: '64px',
+        background: 'linear-gradient(160deg, #0E1830 0%, #14213D 50%, #0E2A66 100%)',
       }}
     >
-      {/* 배경 glow */}
-      <div className="absolute inset-0 pointer-events-none" aria-hidden>
-        <div
-          className="absolute rounded-full blur-3xl"
-          style={{
-            top: '10%',
-            right: '15%',
-            width: '500px',
-            height: '500px',
-            backgroundColor: BRAND.terracotta,
-            opacity: 0.08,
-          }}
-        />
-        <div
-          className="absolute rounded-full blur-3xl"
-          style={{
-            bottom: '20%',
-            left: '10%',
-            width: '400px',
-            height: '400px',
-            backgroundColor: BRAND.amber,
-            opacity: 0.07,
-          }}
-        />
-        <div
-          className="absolute rounded-full blur-3xl"
-          style={{
-            top: '40%',
-            left: '50%',
-            width: '350px',
-            height: '350px',
-            backgroundColor: BRAND.sage,
-            opacity: 0.06,
-          }}
-        />
-      </div>
-
       <div
         className="relative z-10 mx-auto"
-        style={{
-          maxWidth: '720px',
-          padding: '0 var(--page-padding)',
-        }}
+        style={{ maxWidth: 'var(--container-default)', padding: '0 var(--page-padding)' }}
       >
-        {/* 라이브 인디케이터 */}
-        <div className="flex justify-center mb-6">
+        <div style={{ maxWidth: '720px', padding: 'clamp(36px, 6vw, 52px) 0 30px' }}>
+          {/* 라이브 인디케이터 */}
           <div
-            className="inline-flex items-center gap-2 rounded-full px-4 py-2"
+            className="inline-flex items-center gap-2 rounded-full"
             style={{
-              backgroundColor: `${BRAND.terracotta}10`,
-              border: `1px solid ${BRAND.terracotta}25`,
+              backgroundColor: 'rgba(255,255,255,0.1)',
+              color: '#CFE0FF',
+              fontWeight: 700,
+              fontSize: '12px',
+              padding: '5px 12px',
+              marginBottom: '18px',
             }}
           >
             <span className="relative flex">
-              <span
-                className="w-2 h-2 rounded-full"
-                style={{ backgroundColor: BRAND.terracotta }}
-              />
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#5AE0A0' }} />
               <span
                 className="absolute inset-0 w-2 h-2 rounded-full animate-ping"
-                style={{ backgroundColor: BRAND.terracotta, opacity: 0.6 }}
+                style={{ backgroundColor: '#5AE0A0', opacity: 0.6 }}
               />
             </span>
-            <span className="text-xs font-medium" style={{ color: BRAND.terracottaText }}>
-              {dataMonth ? `${dataMonth} 실거래 데이터 실시간 반영 중` : '실거래 데이터 실시간 반영 중'}
-            </span>
+            {dataMonth ? `${dataMonth} 실거래 데이터 실시간 반영 중` : '실거래 데이터 실시간 반영 중'}
           </div>
-        </div>
 
-        {/* 대형 타이틀 */}
-        <h1
-          className="text-center mb-4"
-          style={{
-            fontSize: 'clamp(40px, 6vw, 72px)',
-            fontWeight: 800,
-            lineHeight: 1.15,
-            letterSpacing: '-0.035em',
-            color: BRAND.ink,
-          }}
-        >
-          부동산의 모든 답을,
-          <br />
-          <span style={{ color: BRAND.terracotta }}>한 곳에 압축</span>
-        </h1>
-
-        {/* 서브카피 */}
-        <p
-          className="text-center mx-auto mb-8"
-          style={{
-            maxWidth: '36rem',
-            fontSize: '17px',
-            lineHeight: 1.7,
-            color: BRAND.inkSoft,
-          }}
-        >
-          집값이 궁금할 때, 투자할 지 고민될 때, 우리 동네 뭐가 생기는지 알고 싶을 때
-          <br />
-          <strong style={{ fontWeight: 700, color: '#C4654A' }}>내집(My.ZIP)</strong>이 모든 답을 쉽게 전해드립니다.
-        </p>
-
-        {/* 검색바 */}
-        <div className="relative mb-4 mx-auto" style={{ maxWidth: '480px' }}>
-          <button
-            type="button"
-            onClick={() => handleSubmit()}
-            className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center"
-            style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, color: BRAND.inkSoft }}
-            aria-label="검색"
-          >
-            <Search size={18} />
-          </button>
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') { e.preventDefault(); handleSubmit(); }
-            }}
-            placeholder={placeholder}
-            className="w-full rounded-full border py-3.5 pl-11 pr-5 text-sm outline-none transition-colors duration-200"
+          {/* 대형 타이틀 */}
+          <h1
             style={{
-              borderColor: BRAND.line,
-              backgroundColor: '#FFFFFF',
-              color: BRAND.ink,
+              margin: '0 0 12px',
+              fontSize: 'clamp(34px, 5vw, 46px)',
+              fontWeight: 800,
+              lineHeight: 1.15,
+              letterSpacing: '-1px',
+              color: '#FFFFFF',
             }}
-            onFocus={(e) => {
-              e.currentTarget.style.borderColor = BRAND.terracotta;
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.borderColor = BRAND.line;
-            }}
-          />
-        </div>
+          >
+            집값이 궁금할 때,
+            <br />
+            가장 먼저 여는 곳
+          </h1>
 
-        {/* 태그 칩 */}
-        <div className="flex flex-wrap justify-center gap-2 mb-8">
-          {TAGS.map((tag) => (
-            <button
-              key={tag}
-              type="button"
-              onClick={() => handleSubmit(tag)}
-              className="rounded-full px-3 py-1 text-xs font-medium cursor-pointer transition-opacity hover:opacity-80"
+          {/* 서브카피 */}
+          <p
+            style={{
+              margin: '0 0 22px',
+              fontSize: '16px',
+              lineHeight: 1.6,
+              color: '#B9C8E8',
+              maxWidth: '34rem',
+            }}
+          >
+            공식 실거래가·입지 점수·청약 일정을 한 화면에.
+            <br />
+            주요 거래를 요약하고 출처까지 바로 확인하세요.
+          </p>
+
+          {/* 검색 박스 */}
+          <div
+            className="flex items-center gap-2"
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: '12px',
+              padding: '6px 6px 6px 16px',
+              maxWidth: '440px',
+              marginBottom: '16px',
+            }}
+          >
+            <Search size={17} style={{ color: '#9AA4B8', flexShrink: 0 }} aria-hidden />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); handleSubmit(); }
+              }}
+              placeholder={placeholder}
+              aria-label="단지명·지역 검색"
+              className="w-full outline-none"
               style={{
-                backgroundColor: `${BRAND.terracotta}08`,
-                color: BRAND.terracottaText,
-                border: `1px solid ${BRAND.terracotta}15`,
+                border: 'none',
+                fontSize: '14px',
+                color: '#14213D',
+                backgroundColor: 'transparent',
+                minWidth: 0,
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => handleSubmit()}
+              className="cursor-pointer transition-opacity hover:opacity-90"
+              style={{
+                border: 'none',
+                backgroundColor: '#1B4DDB',
+                color: '#FFFFFF',
+                fontWeight: 700,
+                fontSize: '13px',
+                padding: '9px 18px',
+                borderRadius: '9px',
+                flexShrink: 0,
               }}
             >
-              #{tag}
+              검색
             </button>
-          ))}
-        </div>
+          </div>
 
-        {/* Quick Access */}
-        <div className="mb-6">
-          <QuickAccess />
+          {/* 태그 칩 */}
+          <div className="flex flex-wrap gap-2" style={{ paddingBottom: '34px' }}>
+            {TAGS.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => handleSubmit(tag)}
+                className="rounded-full cursor-pointer transition-opacity hover:opacity-80"
+                style={{
+                  padding: '5px 12px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  backgroundColor: 'rgba(255,255,255,0.08)',
+                  color: '#CFE0FF',
+                  border: '1px solid rgba(255,255,255,0.14)',
+                }}
+              >
+                #{tag}
+              </button>
+            ))}
+          </div>
         </div>
-
-        {/* Live Ticker */}
-        <LiveTicker items={ticker} />
       </div>
+
+      {/* 하단 LIVE 티커 스트립 (풀폭) */}
+      <LiveTicker items={ticker} />
     </section>
   );
 }

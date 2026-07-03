@@ -1,8 +1,5 @@
 'use client';
 
-import { MapPin } from 'lucide-react';
-import { BRAND } from '@/lib/design-tokens';
-
 export interface TickerItem {
   region: string;
   apt: string;
@@ -15,15 +12,21 @@ interface LiveTickerProps {
   items: TickerItem[];
 }
 
+/**
+ * 사이클 U — 다크 히어로 하단 LIVE 티커 스트립 (시안 스크린 12).
+ * 레드 LIVE 블록 + 무한 스크롤 트랙. 히어로(다크 네이비) 전용 스타일.
+ */
 export function LiveTicker({ items }: LiveTickerProps) {
   const doubled = items.length > 0 ? [...items, ...items] : [];
 
   return (
     <div
-      className="rounded-2xl border overflow-hidden"
-      style={{ backgroundColor: '#FFFFFF', borderColor: BRAND.line }}
+      className="flex items-stretch overflow-hidden"
+      style={{
+        backgroundColor: 'rgba(6,17,42,0.5)',
+        borderTop: '1px solid rgba(255,255,255,0.08)',
+      }}
     >
-      {/* 티커 keyframes */}
       <style>{`
         @keyframes naezipTicker {
           0% { transform: translateX(0); }
@@ -38,102 +41,59 @@ export function LiveTicker({ items }: LiveTickerProps) {
         }
       `}</style>
 
-      {/* Header */}
+      {/* LIVE 뱃지 블록 */}
       <div
-        className="flex items-center justify-between px-4 py-2.5 border-b"
-        style={{ borderColor: BRAND.line }}
+        className="flex items-center gap-1.5 shrink-0"
+        style={{
+          padding: '11px 18px',
+          backgroundColor: '#E23B3B',
+          color: '#FFFFFF',
+          fontSize: '12px',
+          fontWeight: 800,
+          letterSpacing: '0.5px',
+        }}
       >
-        <div className="flex items-center gap-2">
-          <span className="relative flex">
-            <span
-              className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: BRAND.danger }}
-            />
-            <span
-              className="absolute inset-0 w-2 h-2 rounded-full animate-ping"
-              style={{ backgroundColor: BRAND.danger, opacity: 0.6 }}
-            />
-          </span>
-          <span className="text-xs font-semibold" style={{ color: BRAND.ink }}>
-            LIVE
-          </span>
-          <span className="text-xs" style={{ color: BRAND.inkSoft }}>
-            · 최근 실거래
-          </span>
-        </div>
-        <div className="hidden md:flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: BRAND.sage }} />
-          <span className="text-xs" style={{ color: BRAND.sageText }}>
-            15분 전 업데이트
-          </span>
-        </div>
+        <span className="relative flex">
+          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#FFFFFF' }} />
+          <span
+            className="absolute inset-0 w-1.5 h-1.5 rounded-full animate-ping"
+            style={{ backgroundColor: '#FFFFFF', opacity: 0.7 }}
+          />
+        </span>
+        LIVE
       </div>
 
-      {/* Body — 무한 스크롤 */}
-      <div className="relative py-3">
-        {/* 좌측 페이드 마스크 */}
-        <div
-          className="absolute left-0 top-0 bottom-0 w-16 z-10 pointer-events-none"
-          style={{
-            background: 'linear-gradient(to right, #FFFFFF, transparent)',
-          }}
-        />
-        {/* 우측 페이드 마스크 */}
-        <div
-          className="absolute right-0 top-0 bottom-0 w-16 z-10 pointer-events-none"
-          style={{
-            background: 'linear-gradient(to left, #FFFFFF, transparent)',
-          }}
-        />
-
+      {/* 스크롤 트랙 */}
+      <div className="relative flex-1 overflow-hidden whitespace-nowrap">
         {items.length === 0 ? (
-          <div className="text-center py-2 text-sm" style={{ color: BRAND.inkSoft }}>
+          <div style={{ padding: '11px 18px', fontSize: '13px', color: '#C9D6F0' }}>
             최신 실거래 데이터를 불러오는 중...
           </div>
         ) : (
-          <div className="overflow-hidden">
-            <div className="naezip-ticker-track flex items-center gap-6 px-4">
-              {doubled.map((item, i) => (
-                <div
-                  key={`${item.region}-${item.apt}-${i}`}
-                  className="flex items-center gap-1.5 shrink-0"
-                >
-                  <MapPin size={13} style={{ color: BRAND.inkSoft }} />
-                  <span className="text-sm" style={{ color: BRAND.ink }}>
-                    {item.region}
-                  </span>
-                  <span className="text-xs" style={{ color: BRAND.inkSoft }}>·</span>
-                  <span className="text-sm" style={{ color: BRAND.ink }}>
-                    {item.apt}
-                  </span>
-                  <span className="text-xs" style={{ color: BRAND.inkSoft }}>·</span>
-                  <span
-                    className="font-bold"
-                    style={{ fontSize: '15px', color: BRAND.terracotta }}
-                  >
-                    {item.price}
-                  </span>
-                  <span className="text-xs" style={{ color: BRAND.inkSoft }}>
-                    {item.area}
-                  </span>
-                  <span className="text-xs" style={{ color: BRAND.sageText }}>
-                    {item.time}
-                  </span>
-                </div>
-              ))}
-            </div>
+          <div className="naezip-ticker-track inline-flex items-center" style={{ padding: '11px 0' }}>
+            {doubled.map((item, i) => (
+              <span
+                key={`${item.region}-${item.apt}-${i}`}
+                className="shrink-0"
+                style={{ margin: '0 22px', fontSize: '13px', color: '#C9D6F0' }}
+              >
+                {item.region} · {item.apt}{' '}
+                <b style={{ color: '#FFFFFF', fontWeight: 700 }}>{item.price}</b>{' '}
+                <span style={{ color: 'rgba(201,214,240,0.65)', fontSize: '12px' }}>
+                  {item.area} · {item.time}
+                </span>
+              </span>
+            ))}
           </div>
         )}
       </div>
 
-      {/* Footer */}
+      {/* 출처 (데스크탑) */}
       <div
-        className="px-4 py-2 border-t text-center"
-        style={{ borderColor: BRAND.line, backgroundColor: `${BRAND.paper}66` }}
+        className="hidden lg:flex items-center shrink-0"
+        style={{ padding: '11px 18px', fontSize: '11px', color: 'rgba(201,214,240,0.55)' }}
       >
-        <span className="text-xs" style={{ color: BRAND.inkSoft }}>
-          데이터 출처 · 국토교통부 · 한국부동산원 · NEIS
-        </span>
+        출처 국토교통부 · 한국부동산원
       </div>
     </div>
   );

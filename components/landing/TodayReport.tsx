@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import { BRAND } from '@/lib/design-tokens';
 import { Reveal } from '@/components/shared/Reveal';
@@ -24,7 +25,7 @@ export function TodayReport({ districts }: TodayReportProps) {
             <div>
               <span
                 className="text-xs font-semibold uppercase tracking-wider"
-                style={{ color: BRAND.sageText }}
+                style={{ color: 'var(--accent-text)' }}
               >
                 TODAY&apos;S REPORT
               </span>
@@ -37,21 +38,29 @@ export function TodayReport({ districts }: TodayReportProps) {
                   color: BRAND.ink,
                 }}
               >
-                오늘의 수도권 실거래
+                지역별 한눈에
               </h2>
               <p className="text-sm" style={{ color: BRAND.inkSoft }}>
-                국토교통부 실거래가 공개시스템 기반
+                국토교통부 실거래가 공개시스템 기반 · 평균 매매가
               </p>
             </div>
+            <Link
+              href="/price-map"
+              className="mt-3 md:mt-0 text-sm font-bold transition-opacity hover:opacity-80"
+              style={{ color: 'var(--accent)' }}
+            >
+              변동률 지도 →
+            </Link>
           </div>
         </Reveal>
 
         {/* 카드 그리드 */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {districts.map((d, i) => {
+            // 한국 컨벤션: 상승 레드 · 하락 블루 (사이클 U)
             const isUp = d.change >= 0;
-            const accentColor = isUp ? BRAND.terracotta : BRAND.sageText;
-            const cardBg = isUp ? '#FBEFEA' : '#ECF2ED';
+            const accentColor = isUp ? 'var(--up-color)' : 'var(--down-color)';
+            const cardBg = isUp ? 'var(--up-bg)' : 'var(--down-bg)';
             const Icon = isUp ? TrendingUp : TrendingDown;
             const sign = isUp ? '+' : '';
 
@@ -97,7 +106,7 @@ export function TodayReport({ districts }: TodayReportProps) {
                   {/* Progress bar */}
                   <div
                     className="h-1.5 rounded-full overflow-hidden"
-                    style={{ backgroundColor: `${accentColor}15` }}
+                    style={{ backgroundColor: cardBg }}
                   >
                     <div
                       className="h-full rounded-full transition-all duration-700 ease-out"
