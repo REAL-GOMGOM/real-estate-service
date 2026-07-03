@@ -38,8 +38,8 @@ export function RegionSortToggle({ sortBy, sortDir, onChange }: Props) {
               onClick={() => handleClick(value)}
               className="px-3 py-1 rounded-md text-xs transition-colors flex items-center gap-1"
               style={{
-                backgroundColor: isActive ? BRAND.paper : 'transparent',
-                color: isActive ? BRAND.terracotta : BRAND.inkSoft,
+                backgroundColor: isActive ? BRAND.surfaceDeep : 'transparent',
+                color: isActive ? BRAND.primary : BRAND.inkSoft,
                 fontWeight: isActive ? 600 : 400,
               }}
             >

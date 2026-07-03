@@ -18,7 +18,7 @@ export function RegionCard({
   isHighlight = false,
   subLabel,
 }: RegionCardProps) {
-  const accentColor = isHighlight ? BRAND.terracotta : BRAND.sage;
+  const accentColor = isHighlight ? BRAND.primary : BRAND.success;
   const progressWidth = Math.max(100 - score * 30, 20);
 
   const content = (
@@ -27,7 +27,7 @@ export function RegionCard({
       style={{
         backgroundColor: '#FFFFFF',
         border: isHighlight
-          ? `2px solid ${BRAND.terracotta}`
+          ? `2px solid ${BRAND.primary}`
           : `1px solid ${BRAND.line}`,
       }}
     >
@@ -35,7 +35,7 @@ export function RegionCard({
         <div
           className="flex items-center justify-center w-12 h-12 rounded-xl text-base font-bold shrink-0"
           style={{
-            backgroundColor: isHighlight ? BRAND.terracotta : BRAND.paper,
+            backgroundColor: isHighlight ? BRAND.primary : BRAND.surfaceDeep,
             color: isHighlight ? '#FFFFFF' : BRAND.inkSoft,
           }}
         >
@@ -68,7 +68,7 @@ export function RegionCard({
       <span
         className="text-xl font-bold shrink-0"
         style={{
-          color: isHighlight ? BRAND.terracotta : BRAND.ink,
+          color: isHighlight ? BRAND.primary : BRAND.ink,
           fontVariantNumeric: 'tabular-nums',
           minWidth: '48px',
           textAlign: 'right',
@@ -84,7 +84,7 @@ export function RegionCard({
       <Link
         href={href}
         className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 rounded-2xl"
-        style={{ '--tw-ring-color': BRAND.terracotta } as React.CSSProperties}
+        style={{ '--tw-ring-color': BRAND.primary } as React.CSSProperties}
         aria-label={`${name} 입지 분석 보기, 점수 ${score.toFixed(1)}`}
       >
         {content}

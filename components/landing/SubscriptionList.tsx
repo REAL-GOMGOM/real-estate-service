@@ -19,8 +19,8 @@ interface SubscriptionListProps {
 }
 
 const STATUS_COLORS: Record<Subscription['status'], string> = {
-  '청약 중': BRAND.terracotta,
-  '청약 예정': BRAND.sage,
+  '청약 중': BRAND.primary,
+  '청약 예정': BRAND.success,
   '청약 마감': BRAND.inkSoft,
 };
 
@@ -34,7 +34,7 @@ export function SubscriptionList({ items }: SubscriptionListProps) {
             <div>
               <span
                 className="text-xs font-semibold uppercase tracking-wider"
-                style={{ color: BRAND.terracottaText }}
+                style={{ color: BRAND.primaryText }}
               >
                 SUBSCRIPTION
               </span>
@@ -53,7 +53,7 @@ export function SubscriptionList({ items }: SubscriptionListProps) {
             <Link
               href="/subscription"
               className="hidden md:flex items-center gap-1 text-sm font-semibold mt-4 md:mt-0 group"
-              style={{ color: BRAND.terracottaText }}
+              style={{ color: BRAND.primaryText }}
             >
               전체 일정 보기
               <ArrowRight size={15} className="transition-transform duration-200 group-hover:translate-x-1" />
@@ -132,7 +132,7 @@ export function SubscriptionList({ items }: SubscriptionListProps) {
                     <Row
                       label="경쟁률"
                       value={sub.comp}
-                      valueColor={isComp ? BRAND.terracotta : undefined}
+                      valueColor={isComp ? BRAND.primary : undefined}
                       bold={isComp}
                     />
                   </div>

@@ -14,9 +14,9 @@ const CARDS: readonly {
   pulse?: boolean;
   sub?: string;
 }[] = [
-  { key: 'today', label: '오늘 방문', color: BRAND.terracotta, duration: 1600 },
-  { key: 'active24h', label: '지난 24시간 활성', color: BRAND.sage, duration: 2000 },
-  { key: 'total', label: '누적 방문자', color: BRAND.amber, duration: 1200, pulse: true, sub: '(2026.4부터)' },
+  { key: 'today', label: '오늘 방문', color: BRAND.primary, duration: 1600 },
+  { key: 'active24h', label: '지난 24시간 활성', color: BRAND.success, duration: 2000 },
+  { key: 'total', label: '누적 방문자', color: BRAND.warning, duration: 1200, pulse: true, sub: '(2026.4부터)' },
 ];
 
 interface Props {

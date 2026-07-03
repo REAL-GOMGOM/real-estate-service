@@ -32,9 +32,9 @@ export function RegionHubTabs({ selected, onSelect, counts }: Props) {
             onClick={() => onSelect(region)}
             className="px-3.5 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors flex-shrink-0"
             style={{
-              backgroundColor: isActive ? BRAND.terracotta : '#FFFFFF',
+              backgroundColor: isActive ? BRAND.primary : '#FFFFFF',
               color: isActive ? '#FFFFFF' : BRAND.inkSoft,
-              border: `1px solid ${isActive ? BRAND.terracotta : BRAND.line}`,
+              border: `1px solid ${isActive ? BRAND.primary : BRAND.line}`,
             }}
           >
             {region} <span className="opacity-70 text-xs ml-1">{count}</span>
