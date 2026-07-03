@@ -83,7 +83,7 @@
   /* ── 차트 ── */
   --chart-grid: rgba(0,0,0,0.06);
   --chart-tooltip-bg: #FFFFFF;
-  --chart-tooltip-border: #E8E3DD;
+  --chart-tooltip-border: #E4E9F2;
 
   /* ── Typography Scale (사이트 전체 톤에 맞춤) ── */
   --font-display: clamp(28px, 4.5vw, 40px);

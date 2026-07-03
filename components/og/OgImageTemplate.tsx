@@ -9,11 +9,11 @@ import type { RegionDetail } from '@/lib/types';
 
 const COLORS = {
   bg: '#FAFAFA',
-  accent: '#C4654A',
-  ink: '#2A2420',
-  inkSoft: '#5C524B',
-  paper: '#F4EDE5',
-  line: '#E8DED2',
+  accent: '#1B4DDB',
+  ink: '#14213D',
+  inkSoft: '#48536B',
+  paper: '#EAEEF6',
+  line: '#E4E9F2',
 } as const;
 
 function getLevelLabel(score: number): string {

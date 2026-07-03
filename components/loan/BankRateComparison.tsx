@@ -297,7 +297,7 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
                       position: 'absolute', top: 6, right: 6,
                       fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
                       backgroundColor: 'var(--success-bg, rgba(61,107,68,0.12))',
-                      color: 'var(--success, #3D6B44)',
+                      color: 'var(--success, #2E7A4C)',
                     }}>
                       최저 공시
                     </span>
@@ -406,7 +406,7 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
         <div style={{
           padding: 20, borderRadius: 14, marginBottom: 24,
           backgroundColor: 'var(--bg-card)',
-          border: result.feasible ? '2px solid var(--success, #3D6B44)' : '2px solid var(--danger, #B93E32)',
+          border: result.feasible ? '2px solid var(--success, #2E7A4C)' : '2px solid var(--danger, #C92F2F)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
             {result.feasible
