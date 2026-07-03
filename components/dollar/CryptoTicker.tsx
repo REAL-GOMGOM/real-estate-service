@@ -77,7 +77,7 @@ export default function CryptoTicker({
       label: `${baseYear}년 USD/KRW`,
       value: `₩${baseRate.toLocaleString()}`,
       sub:   '기준년도 연평균',
-      color: '#F59E0B',
+      color: '#F0A24B',
       bg:    'rgba(245,158,11,0.07)',
       bd:    'rgba(245,158,11,0.18)',
       live:  false,
@@ -88,9 +88,9 @@ export default function CryptoTicker({
       label: `${compareYear}년 USD/KRW`,
       value: `₩${compareRate.toLocaleString()}`,
       sub:   `${weakened ? '▲' : '▼'} ${Math.abs(rateChange).toFixed(1)}% (${weakened ? '원화 약세' : '원화 강세'})`,
-      color: weakened ? '#F87171' : '#22C55E',
-      bg:    weakened ? 'rgba(248,113,113,0.07)' : 'rgba(34,197,94,0.07)',
-      bd:    weakened ? 'rgba(248,113,113,0.18)'  : 'rgba(34,197,94,0.18)',
+      color: weakened ? '#E85D5D' : '#2E7A4C',
+      bg:    weakened ? 'rgba(232,93,93,0.07)' : 'rgba(111,192,138,0.07)',
+      bd:    weakened ? 'rgba(232,93,93,0.18)'  : 'rgba(111,192,138,0.18)',
       live:  false,
     },
     // ── 비트코인 ──
@@ -100,7 +100,7 @@ export default function CryptoTicker({
       label: 'BTC / USD',
       value: data?.btcUsd != null ? `$${data.btcUsd.toLocaleString()}` : '—',
       sub:   '실시간',
-      color: '#F97316',
+      color: '#E8663C',
       bg:    'rgba(249,115,22,0.07)',
       bd:    'rgba(249,115,22,0.2)',
       live:  true,
@@ -113,7 +113,7 @@ export default function CryptoTicker({
         ? `₩${(data.btcKrw / 100_000_000).toFixed(1)}억`
         : '—',
       sub:   '실시간',
-      color: '#F97316',
+      color: '#E8663C',
       bg:    'rgba(249,115,22,0.07)',
       bd:    'rgba(249,115,22,0.2)',
       live:  true,
@@ -132,7 +132,7 @@ export default function CryptoTicker({
         const usd  = data.goldUsdPerGram != null ? ` · $${data.goldUsdPerGram}/g` : '';
         return `한돈 ₩${don.toLocaleString()}${usd}`;
       })(),
-      color: '#FBBF24',
+      color: '#EBC15C',
       bg:    'rgba(251,191,36,0.07)',
       bd:    'rgba(251,191,36,0.2)',
       live:  true,

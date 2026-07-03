@@ -16,11 +16,11 @@
 import { CHART_COLORS } from '@/lib/chart-colors';
 import { ChartErrorPlaceholder } from './ChartErrorPlaceholder';
 
-const TEXT_ON_LIGHT = '#111827'; // yellow 박스 위 텍스트
+const TEXT_ON_LIGHT = '#14213D'; // yellow 박스 위 텍스트
 const TEXT_ON_DARK = '#ffffff'; // amberOrange/red 박스 위 텍스트
 const SUB_LABEL_FILL = '#64708A';
 const HEADER_FILL = '#374151';
-const ARROW_FILL = '#9ca3af';
+const ARROW_FILL = '#9AA4B8';
 const DELTA_UP_DOWN_FILL = '#E23B3B';
 const DELTA_FLAT_FILL = '#64708A';
 
@@ -115,7 +115,7 @@ export function DemographicShiftBars({
         textAnchor="middle"
         fontSize={14}
         fontWeight={600}
-        fill="#111827"
+        fill="#14213D"
       >
         {title}
       </text>

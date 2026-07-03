@@ -97,7 +97,7 @@ export default function ApartmentSelector({
               <span style={{
                 display: 'flex', alignItems: 'center', gap: '3px',
                 padding: '2px 7px', borderRadius: '999px', fontSize: '10px', fontWeight: 700,
-                backgroundColor: 'rgba(249,115,22,0.15)', color: '#F97316',
+                backgroundColor: 'rgba(249,115,22,0.15)', color: '#E8663C',
                 border: '1px solid rgba(249,115,22,0.3)',
               }}>
                 <AlertTriangle size={9} />토허제
@@ -166,7 +166,7 @@ export default function ApartmentSelector({
                   cursor: 'pointer',
                   border: active ? '1px solid var(--accent-border)' : toheo ? '1px solid rgba(249,115,22,0.25)' : '1px solid var(--border)',
                   backgroundColor: active ? 'var(--accent-bg)' : toheo ? 'rgba(249,115,22,0.07)' : 'var(--border-light)',
-                  color: active ? 'var(--accent)' : toheo ? '#FB923C' : 'var(--text-muted)',
+                  color: active ? 'var(--accent)' : toheo ? '#F0A24B' : 'var(--text-muted)',
                 }}
               >
                 {d.replace(/^(서울|경기|인천|부산|대구|울산)\s/, '')}
@@ -287,10 +287,10 @@ export default function ApartmentSelector({
                 </p>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '2px', justifyContent: 'flex-end' }}>
                   {apt.priceChange >= 0
-                    ? <TrendingUp size={10} style={{ color: '#22C55E' }} />
-                    : <TrendingDown size={10} style={{ color: '#EF4444' }} />
+                    ? <TrendingUp size={10} style={{ color: '#2E7A4C' }} />
+                    : <TrendingDown size={10} style={{ color: '#E23B3B' }} />
                   }
-                  <span style={{ fontSize: '10px', fontWeight: 600, color: apt.priceChange >= 0 ? '#22C55E' : '#EF4444' }}>
+                  <span style={{ fontSize: '10px', fontWeight: 600, color: apt.priceChange >= 0 ? '#2E7A4C' : '#E23B3B' }}>
                     {apt.priceChange >= 0 ? '+' : ''}{apt.priceChange.toFixed(1)}%
                   </span>
                 </div>

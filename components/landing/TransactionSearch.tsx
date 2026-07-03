@@ -238,7 +238,7 @@ export default function TransactionSearch() {
                         {fmt억(apt.latestPrice)}
                       </p>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: up ? '#22C55E' : '#F87171' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: up ? '#2E7A4C' : '#E85D5D' }}>
                       {up ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                       <span style={{ fontSize: '13px', fontWeight: 600, fontFamily: 'Roboto Mono, monospace' }}>
                         {up ? '+' : ''}{apt.changeRate.toFixed(1)}%

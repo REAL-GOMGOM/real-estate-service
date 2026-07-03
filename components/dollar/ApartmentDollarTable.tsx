@@ -36,8 +36,8 @@ function fmtGold(manwon: number, goldKrwPerGram: number): string {
 // ── 변동률 뱃지 ────────────────────────────────────
 function ChangeBadge({ pct }: { pct: number }) {
   const up    = pct >= 0;
-  const color = up ? '#4ADE80' : '#F87171';
-  const bg    = up ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)';
+  const color = up ? '#6FC08A' : '#E85D5D';
+  const bg    = up ? 'rgba(74,222,128,0.12)' : 'rgba(232,93,93,0.12)';
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: '2px',
@@ -235,12 +235,12 @@ export default function ApartmentDollarTable({ entries, baseYear, compareYear, o
                 <span style={{ fontSize: '12px', color: 'var(--text-dim)', marginLeft: '8px' }}>{entry.district}</span>
                 <div style={{ display: 'flex', gap: '6px', marginTop: '6px', flexWrap: 'wrap' }}>
                   {dollarGain && (
-                    <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(34,197,94,0.12)', color: '#22C55E' }}>
+                    <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(111,192,138,0.12)', color: '#2E7A4C' }}>
                       달러 환산 이익
                     </span>
                   )}
                   {dollarLoss && (
-                    <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(248,113,113,0.12)', color: '#F87171' }}>
+                    <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(232,93,93,0.12)', color: '#E85D5D' }}>
                       달러 환산 손실
                     </span>
                   )}
@@ -250,7 +250,7 @@ export default function ApartmentDollarTable({ entries, baseYear, compareYear, o
                     </span>
                   )}
                   {btcLoss && (
-                    <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(249,115,22,0.12)', color: '#FB923C' }}>
+                    <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(249,115,22,0.12)', color: '#F0A24B' }}>
                       BTC 환산 손실
                     </span>
                   )}
@@ -260,7 +260,7 @@ export default function ApartmentDollarTable({ entries, baseYear, compareYear, o
                     </span>
                   )}
                   {goldLoss && (
-                    <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(251,191,36,0.12)', color: '#FBBF24' }}>
+                    <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(251,191,36,0.12)', color: '#EBC15C' }}>
                       금 환산 손실
                     </span>
                   )}
@@ -287,7 +287,7 @@ export default function ApartmentDollarTable({ entries, baseYear, compareYear, o
               baseYear={baseYear} compareYear={compareYear}
             />
             <AssetRow
-              icon="₿" label="비트" accent="#FB923C"
+              icon="₿" label="비트" accent="#F0A24B"
               baseVal={baseBtc    !== null ? fmtBtc(basePriceKrw!,    baseBtcKrw!)    : (baseBtcKrw    === null ? 'BTC 미존재' : '—')}
               compareVal={compareBtc !== null ? fmtBtc(comparePriceKrw!, compareBtcKrw!) : (compareBtcKrw === null ? 'BTC 미존재' : '—')}
               pct={btcPct}
@@ -295,7 +295,7 @@ export default function ApartmentDollarTable({ entries, baseYear, compareYear, o
               unavailable={btcUnavail}
             />
             <AssetRow
-              icon="Au" label="금" accent="#FBBF24"
+              icon="Au" label="금" accent="#EBC15C"
               baseVal={baseGrams    !== null ? fmtGold(basePriceKrw!,    baseGoldKrwPerGram!)    : '—'}
               compareVal={compareGrams !== null ? fmtGold(comparePriceKrw!, compareGoldKrwPerGram!) : '—'}
               pct={goldPct}

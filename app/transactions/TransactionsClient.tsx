@@ -144,7 +144,7 @@ function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () =
               {newHigh && (
                 <span style={{
                   fontSize: '11px', fontWeight: 700, padding: '3px 9px', borderRadius: '6px',
-                  backgroundColor: '#EF4444', color: 'var(--text-primary)',
+                  backgroundColor: '#E23B3B', color: 'var(--text-primary)',
                 }}>
                   신고가
                 </span>
@@ -220,7 +220,7 @@ function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () =
                   {maxPrice > 0 && (
                     <ReferenceLine
                       y={maxPrice}
-                      stroke="rgba(239,68,68,0.3)"
+                      stroke="rgba(226,59,59,0.3)"
                       strokeDasharray="4 4"
                     />
                   )}
@@ -276,13 +276,13 @@ function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () =
                     </td>
                     <td style={{
                       padding: '11px 12px', fontSize: '14px', fontWeight: 700,
-                      color: isMax ? '#EF4444' : 'var(--text-primary)',
+                      color: isMax ? '#E23B3B' : 'var(--text-primary)',
                       fontFamily: 'Roboto Mono, monospace', whiteSpace: 'nowrap',
                     }}>
                       {isMax && (
                         <span style={{
                           fontSize: '10px', fontWeight: 700, padding: '1px 5px', borderRadius: '4px',
-                          backgroundColor: '#EF4444', color: 'var(--text-primary)', marginRight: '5px',
+                          backgroundColor: '#E23B3B', color: 'var(--text-primary)', marginRight: '5px',
                           verticalAlign: 'middle',
                         }}>
                           신고가
@@ -292,7 +292,7 @@ function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () =
                     </td>
                     <td style={{
                       padding: '11px 12px', fontSize: '12px', whiteSpace: 'nowrap',
-                      color: ratio !== null ? (ratio >= 100 ? '#EF4444' : ratio >= 90 ? '#F59E0B' : 'var(--text-dim)') : 'var(--text-dim)',
+                      color: ratio !== null ? (ratio >= 100 ? '#E23B3B' : ratio >= 90 ? '#F0A24B' : 'var(--text-dim)') : 'var(--text-dim)',
                     }}>
                       {ratio !== null ? `${ratio.toFixed(1)}%` : '—'}
                     </td>
@@ -342,7 +342,7 @@ function AptCard({ apt, onClick }: { apt: AptGroup; onClick: () => void }) {
         {newHigh && (
           <span style={{
             fontSize: '11px', fontWeight: 700, padding: '3px 8px', borderRadius: '6px',
-            backgroundColor: 'rgba(239,68,68,0.14)', color: '#EF4444', flexShrink: 0,
+            backgroundColor: 'rgba(226,59,59,0.14)', color: '#E23B3B', flexShrink: 0,
           }}>
             신고가
           </span>
@@ -533,7 +533,7 @@ export default function TransactionsClient() {
                       <div style={{ marginBottom: '12px' }}>
                         <span style={{ fontSize: '13px', color: 'var(--text-dim)' }}>
                           신고가{' '}
-                          <strong style={{ color: '#EF4444' }}>{region.newHighs}</strong>건
+                          <strong style={{ color: '#E23B3B' }}>{region.newHighs}</strong>건
                         </span>
                       </div>
                     )}
@@ -605,7 +605,7 @@ export default function TransactionsClient() {
             </span>
             {newHighCnt > 0 && (
               <span style={{ fontSize: '14px', color: 'var(--text-dim)' }}>
-                신고가&nbsp;<strong style={{ color: '#EF4444' }}>{newHighCnt}</strong>건
+                신고가&nbsp;<strong style={{ color: '#E23B3B' }}>{newHighCnt}</strong>건
                 <span style={{ fontSize: '11px', color: 'var(--text-dim)', marginLeft: '4px' }}>(조회 기간 내)</span>
               </span>
             )}

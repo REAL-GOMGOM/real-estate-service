@@ -42,7 +42,7 @@ export default function GapChart({ result }: GapChartProps) {
             <Line yAxisId="price" type="monotone" dataKey={result.complexB.name} stroke="#6FC08A" strokeWidth={2} dot={{ r: 2 }} />
           )}
           <Bar yAxisId="gap" dataKey="gap" fill="#EBC15C" opacity={0.4} barSize={12} name="갭" />
-          <ReferenceLine yAxisId="gap" y={Math.round(result.historicalAvgGap / 10000 * 10) / 10} stroke="#EF4444" strokeDasharray="5 5" label={{ value: '평균 갭', fill: '#EF4444', fontSize: 10 }} />
+          <ReferenceLine yAxisId="gap" y={Math.round(result.historicalAvgGap / 10000 * 10) / 10} stroke="#E23B3B" strokeDasharray="5 5" label={{ value: '평균 갭', fill: '#E23B3B', fontSize: 10 }} />
         </ComposedChart>
       </ResponsiveContainer>
     );

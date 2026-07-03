@@ -172,16 +172,16 @@ export default function DollarPageClient() {
         <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
           <span style={{ fontSize: '11px', color: 'var(--text-dim)', marginRight: '4px' }}>변동 뱃지:</span>
           {/* 달러 */}
-          <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(34,197,94,0.12)', color: '#22C55E' }}>달러 환산 이익</span>
-          <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(248,113,113,0.12)', color: '#F87171' }}>달러 환산 손실</span>
+          <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(111,192,138,0.12)', color: '#2E7A4C' }}>달러 환산 이익</span>
+          <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(232,93,93,0.12)', color: '#E85D5D' }}>달러 환산 손실</span>
           <span style={{ width: '1px', height: '14px', backgroundColor: 'var(--border)', display: 'inline-block' }} />
           {/* BTC */}
           <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(45,212,191,0.12)', color: '#2DD4BF' }}>BTC 환산 이익</span>
-          <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(249,115,22,0.12)', color: '#FB923C' }}>BTC 환산 손실</span>
+          <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(249,115,22,0.12)', color: '#F0A24B' }}>BTC 환산 손실</span>
           <span style={{ width: '1px', height: '14px', backgroundColor: 'var(--border)', display: 'inline-block' }} />
           {/* 금 */}
           <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(163,230,53,0.12)', color: '#A3E635' }}>금 환산 이익</span>
-          <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(251,191,36,0.12)', color: '#FBBF24' }}>금 환산 손실</span>
+          <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(251,191,36,0.12)', color: '#EBC15C' }}>금 환산 손실</span>
         </div>
 
         {/* 비교 테이블 */}

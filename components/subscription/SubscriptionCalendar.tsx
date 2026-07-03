@@ -10,9 +10,9 @@ interface Props {
 }
 
 const SUPPLY_COLORS: Record<SupplyDate['type'], string> = {
-  special:   '#EF4444', // red
-  first:     '#22C55E', // green
-  second:    '#F97316', // orange
+  special:   '#E23B3B', // red
+  first:     '#2E7A4C', // green
+  second:    '#E8663C', // orange
   unranked:  '#A855F7', // purple
   arbitrary: '#EAB308', // yellow (사이클 E 신규)
   illegal:   '#6B7280', // gray   (사이클 E 신규)
@@ -149,7 +149,7 @@ export default function SubscriptionCalendar({ items, onSelect }: Props) {
           <div key={w} style={{
             padding: isMobile ? '6px 0' : '8px 0', textAlign: 'center',
             fontSize: isMobile ? '11px' : '12px', fontWeight: 600,
-            color: i === 0 ? '#E74C3C' : i === 6 ? '#3B82F6' : 'var(--text-dim)',
+            color: i === 0 ? '#E74C3C' : i === 6 ? '#5B82E8' : 'var(--text-dim)',
             backgroundColor: 'var(--bg-card)', boxSizing: 'border-box',
           }}>
             {w}
@@ -193,7 +193,7 @@ export default function SubscriptionCalendar({ items, onSelect }: Props) {
                 fontSize: isMobile ? '11px' : '12px', fontWeight: isToday ? 800 : 500,
                 fontFamily: 'Roboto Mono, monospace',
                 backgroundColor: isToday ? 'var(--accent)' : 'transparent',
-                color: isToday ? '#fff' : dayOfWeek === 0 ? '#E74C3C' : dayOfWeek === 6 ? '#3B82F6' : 'var(--text-secondary)',
+                color: isToday ? '#fff' : dayOfWeek === 0 ? '#E74C3C' : dayOfWeek === 6 ? '#5B82E8' : 'var(--text-secondary)',
               }}>
                 {day}
               </span>

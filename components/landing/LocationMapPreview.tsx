@@ -17,8 +17,8 @@ const REGIONS = [
 ] as const;
 
 function TrendIcon({ trend }: { trend: LocationScore['trend'] }) {
-  if (trend === 'up') return <TrendingUp size={14} style={{ color: '#22C55E' }} />;
-  if (trend === 'down') return <TrendingDown size={14} style={{ color: '#EF4444' }} />;
+  if (trend === 'up') return <TrendingUp size={14} style={{ color: '#2E7A4C' }} />;
+  if (trend === 'down') return <TrendingDown size={14} style={{ color: '#E23B3B' }} />;
   return <Minus size={14} style={{ color: 'var(--text-dim)' }} />;
 }
 
@@ -55,7 +55,7 @@ export default function LocationMapPreview() {
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
-            <span style={{ display: 'inline-block', padding: '4px 12px', borderRadius: '999px', fontSize: '12px', fontWeight: 500, backgroundColor: 'rgba(34,197,94,0.12)', color: '#22C55E', marginBottom: '16px' }}>
+            <span style={{ display: 'inline-block', padding: '4px 12px', borderRadius: '999px', fontSize: '12px', fontWeight: 500, backgroundColor: 'rgba(111,192,138,0.12)', color: '#2E7A4C', marginBottom: '16px' }}>
               {updateMonth ? `${updateMonth} 업데이트` : '업데이트'}
             </span>
             <h2 style={{ fontSize: 'clamp(26px, 4vw, 38px)', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '20px', lineHeight: 1.3 }}>
@@ -67,7 +67,7 @@ export default function LocationMapPreview() {
             </p>
             <Link
               href="/location-map"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '14px 28px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, backgroundColor: '#22C55E', color: 'white', textDecoration: 'none' }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '14px 28px', borderRadius: '12px', fontSize: '15px', fontWeight: 600, backgroundColor: '#2E7A4C', color: 'white', textDecoration: 'none' }}
             >
               전체 지도 보기
               <ArrowRight size={16} />
@@ -140,10 +140,10 @@ export default function LocationMapPreview() {
             {/* 점수 범례 */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginTop: '20px', paddingTop: '20px', borderTop: '1px solid var(--border-light)' }}>
               {[
-                { color: '#22C55E', label: '1.0~1.9 최우수' },
+                { color: '#2E7A4C', label: '1.0~1.9 최우수' },
                 { color: '#86EFAC', label: '2.0~2.9 우수' },
-                { color: '#F59E0B', label: '3.0~3.9 보통' },
-                { color: '#EF4444', label: '4.0 이상 일반' },
+                { color: '#F0A24B', label: '3.0~3.9 보통' },
+                { color: '#E23B3B', label: '4.0 이상 일반' },
               ].map((item) => (
                 <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: item.color, flexShrink: 0 }} />

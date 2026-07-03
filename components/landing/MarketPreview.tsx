@@ -52,7 +52,7 @@ function Sparkline({ data, isUp }: { data: number[]; isUp: boolean }) {
   // 채움 영역: 라인 경로 → 우하단 → 좌하단 → 닫기
   const fillPath = `${linePath} L ${pts[pts.length - 1][0]},${H - PAD} L ${pts[0][0]},${H - PAD} Z`;
 
-  const color = isUp ? '#22C55E' : '#EF4444';
+  const color = isUp ? '#2E7A4C' : '#E23B3B';
   const gradId = `grad-${isUp ? 'up' : 'dn'}`;
 
   return (
@@ -110,7 +110,7 @@ export default function MarketPreview() {
                     {item.currentPrice}억
                   </p>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', borderRadius: '10px', fontSize: '13px', fontWeight: 600, backgroundColor: item.isUp ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)', color: item.isUp ? '#22C55E' : '#EF4444' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', borderRadius: '10px', fontSize: '13px', fontWeight: 600, backgroundColor: item.isUp ? 'rgba(111,192,138,0.12)' : 'rgba(226,59,59,0.12)', color: item.isUp ? '#2E7A4C' : '#E23B3B' }}>
                   {item.isUp ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
                   {item.isUp ? '+' : ''}{item.changeRate}%
                 </div>

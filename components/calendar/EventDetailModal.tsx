@@ -53,7 +53,7 @@ export default function EventDetailModal({ event, onClose }: EventDetailModalPro
                 <span style={{
                   marginLeft: '6px', padding: '2px 6px', borderRadius: '4px',
                   fontSize: '10px', fontWeight: 700,
-                  backgroundColor: 'rgba(239,68,68,0.15)', color: '#EF4444',
+                  backgroundColor: 'rgba(226,59,59,0.15)', color: '#E23B3B',
                 }}>
                   중요
                 </span>

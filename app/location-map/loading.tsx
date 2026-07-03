@@ -9,8 +9,8 @@ export default function Loading() {
     }}>
       <div style={{
         width: "40px", height: "40px", borderRadius: "50%",
-        border: "3px solid #e5e5e5",
-        borderTopColor: "#22C55E",
+        border: "3px solid #E4E9F2",
+        borderTopColor: "#2E7A4C",
         animation: "spin 0.8s linear infinite",
       }} />
       <p style={{ fontSize: "14px", color: "#888", fontWeight: 500 }}>

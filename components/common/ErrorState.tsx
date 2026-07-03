@@ -32,7 +32,7 @@ export default function ErrorState({
         backgroundColor: 'rgba(239, 68, 68, 0.1)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        <AlertTriangle size={24} style={{ color: '#EF4444' }} />
+        <AlertTriangle size={24} style={{ color: '#E23B3B' }} />
       </div>
       <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
         {message}
@@ -44,7 +44,7 @@ export default function ErrorState({
       )}
       {showMaintenanceHint && isMaintenanceTime() && (
         <p style={{
-          fontSize: '12px', color: '#F59E0B',
+          fontSize: '12px', color: '#F0A24B',
           padding: '8px 16px', borderRadius: '8px',
           backgroundColor: 'rgba(245, 158, 11, 0.1)',
           border: '1px solid rgba(245, 158, 11, 0.2)',

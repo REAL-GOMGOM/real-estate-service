@@ -244,7 +244,7 @@ export function AptAutocomplete({
             <li style={dropdownMessageStyle}>검색 결과가 없습니다</li>
           )}
           {state.kind === 'error' && (
-            <li style={{ ...dropdownMessageStyle, color: '#EF4444' }}>
+            <li style={{ ...dropdownMessageStyle, color: '#E23B3B' }}>
               검색 실패. 다시 시도해주세요.
             </li>
           )}

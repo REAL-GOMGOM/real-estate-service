@@ -12,7 +12,7 @@ interface Props {
 
 const STATUS_CONFIG = {
   upcoming: { label: '청약 예정', color: 'var(--accent)', bg: 'var(--accent-bg)' },
-  ongoing:  { label: '청약 중',   color: '#22C55E', bg: 'rgba(34,197,94,0.12)'  },
+  ongoing:  { label: '청약 중',   color: '#2E7A4C', bg: 'rgba(111,192,138,0.12)'  },
   closed:   { label: '청약 마감', color: 'var(--text-dim)', bg: 'rgba(100,116,139,0.12)'},
 };
 
@@ -80,7 +80,7 @@ export default function SubscriptionTable({ items, onSelect }: Props) {
                 <span style={{
                   fontSize: '13px', fontWeight: 800, flexShrink: 0,
                   fontFamily: 'Roboto Mono, monospace',
-                  color: item.status === 'ongoing' ? '#22C55E' : 'var(--accent)',
+                  color: item.status === 'ongoing' ? '#2E7A4C' : 'var(--accent)',
                 }}>
                   {dday}
                 </span>
@@ -108,8 +108,8 @@ export default function SubscriptionTable({ items, onSelect }: Props) {
               </div>
               {item.competitionRate !== null ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                  <Users size={11} style={{ color: '#22C55E', flexShrink: 0 }} />
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#22C55E', whiteSpace: 'nowrap' }}>
+                  <Users size={11} style={{ color: '#2E7A4C', flexShrink: 0 }} />
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: '#2E7A4C', whiteSpace: 'nowrap' }}>
                     {item.competitionRate}:1
                   </span>
                 </div>
@@ -118,7 +118,7 @@ export default function SubscriptionTable({ items, onSelect }: Props) {
               )}
               <span style={{
                 fontSize: '13px', fontWeight: 700,
-                fontFamily: 'Roboto Mono, monospace', color: '#F59E0B', whiteSpace: 'nowrap',
+                fontFamily: 'Roboto Mono, monospace', color: '#F0A24B', whiteSpace: 'nowrap',
               }}>
                 {formatPrice(item.minPrice)} ~ {formatPrice(item.maxPrice)}
               </span>

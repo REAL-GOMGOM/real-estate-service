@@ -43,7 +43,7 @@ export default function SubscriptionClientPage({ items }: Props) {
     const closed   = items.filter((i) => i.status === 'closed');
     return [
       { label: '전체',     value: items.length,    color: 'var(--text-primary)', range: dateRange(items) },
-      { label: '청약 중',  value: ongoing.length,  color: '#22C55E',             range: dateRange(ongoing) },
+      { label: '청약 중',  value: ongoing.length,  color: '#2E7A4C',             range: dateRange(ongoing) },
       { label: '청약 예정', value: upcoming.length, color: 'var(--accent)',       range: dateRange(upcoming) },
       { label: '청약 마감', value: closed.length,   color: 'var(--text-dim)',     range: dateRange(closed) },
     ];

@@ -13,7 +13,7 @@ interface Props {
 
 const STATUS_CONFIG = {
   upcoming: { label: '청약 예정', color: 'var(--accent)', bg: 'var(--accent-bg)' },
-  ongoing:  { label: '청약 중',   color: '#22C55E', bg: 'rgba(34,197,94,0.12)'  },
+  ongoing:  { label: '청약 중',   color: '#2E7A4C', bg: 'rgba(111,192,138,0.12)'  },
   closed:   { label: '청약 마감', color: 'var(--text-dim)', bg: 'rgba(100,116,139,0.12)'},
 };
 
@@ -89,7 +89,7 @@ export default function SubscriptionPreview({ items }: Props) {
                     <span style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                       {item.competitionRate !== null ? `경쟁률 ${item.competitionRate}:1` : '경쟁률 미발표'}
                     </span>
-                    <span style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'Roboto Mono, monospace', color: '#F59E0B', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 700, fontFamily: 'Roboto Mono, monospace', color: '#F0A24B', whiteSpace: 'nowrap' }}>
                       {formatPrice(item.minPrice)} ~ {formatPrice(item.maxPrice)}
                     </span>
                   </div>

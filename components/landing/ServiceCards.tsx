@@ -18,7 +18,7 @@ const SERVICES = [
     title: '입지 점수 지도',
     description: '매월 업데이트되는 서울 전역 입지 점수를 지도 위에서 확인하세요. 상승·하락 트렌드와 함께 최적의 입지를 찾아보세요.',
     href: '/location-map',
-    color: '#22C55E',
+    color: '#2E7A4C',
     badge: '26년 3월 업데이트',
   },
   {
@@ -26,7 +26,7 @@ const SERVICES = [
     title: '청약 정보',
     description: '수도권 청약 일정, 경쟁률, 분양가 정보를 한 곳에서 확인하세요. 관심 단지를 설정하고 마감일 알림을 받으세요.',
     href: '/subscription',
-    color: '#F59E0B',
+    color: '#F0A24B',
     badge: '일정 관리',
   },
 ];

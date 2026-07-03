@@ -17,7 +17,7 @@ import { ChartErrorPlaceholder } from './ChartErrorPlaceholder';
 
 const BEFORE_FILL = '#9AA4B8';
 const AFTER_FILL = '#E23B3B';
-const AXIS_FILL = '#9ca3af';
+const AXIS_FILL = '#9AA4B8';
 const GRID_FILL = '#e5e7eb';
 const TEXT_FILL = '#374151';
 const SUB_LABEL_FILL = '#64708A';
@@ -74,7 +74,7 @@ export function AgeGroupBars({
       }}
     >
       {/* 제목 */}
-      <text x={VIEW_WIDTH / 2} y={24} textAnchor="middle" fontSize={14} fontWeight={600} fill="#111827">
+      <text x={VIEW_WIDTH / 2} y={24} textAnchor="middle" fontSize={14} fontWeight={600} fill="#14213D">
         {title}
       </text>
 

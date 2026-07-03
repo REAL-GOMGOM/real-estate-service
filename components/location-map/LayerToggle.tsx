@@ -17,9 +17,9 @@ export const MAP_LAYERS: MapLayer[] = [
   // { key: 'childcare',  label: '어린이집', icon: '👶', color: '#EC4899', group: 'infra' },
   // { key: 'kindergarten', label: '유치원', icon: '🎒', color: '#A855F7', group: 'infra' },
   // { key: 'library',    label: '도서관', icon: '📚', color: '#06B6D4', group: 'infra' },
-  // { key: 'academy',    label: '학원가', icon: '✏️', color: '#F59E0B', group: 'infra' },
+  // { key: 'academy',    label: '학원가', icon: '✏️', color: '#F0A24B', group: 'infra' },
   // { key: 'subway',     label: '지하철', icon: '🚇', color: '#6366F1', group: 'infra' },
-  // { key: 'redevelopment', label: '재개발', icon: '🏗️', color: '#EF4444', group: 'infra' },
+  // { key: 'redevelopment', label: '재개발', icon: '🏗️', color: '#E23B3B', group: 'infra' },
 ];
 
 interface LayerToggleProps {

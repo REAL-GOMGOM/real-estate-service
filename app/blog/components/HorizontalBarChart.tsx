@@ -292,7 +292,7 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
         textAnchor="middle"
         fontSize={14}
         fontWeight={600}
-        fill="#111827"
+        fill="#14213D"
       >
         {title}
       </text>
@@ -303,7 +303,7 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
         y1={40}
         x2={adjustedZeroX}
         y2={axisBottom}
-        stroke="#9ca3af"
+        stroke="#9AA4B8"
         strokeWidth={1}
       />
       <text
@@ -426,7 +426,7 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
           y={height - 8}
           textAnchor="middle"
           fontSize={10}
-          fill="#9ca3af"
+          fill="#9AA4B8"
         >
           * 차트 영역을 벗어난 값
         </text>

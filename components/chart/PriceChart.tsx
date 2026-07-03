@@ -42,7 +42,7 @@ function CustomTooltip({ active, payload, label }: any) {
       <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '8px' }}>{label}</p>
       {count && (
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', marginBottom: '4px' }}>
-          <span style={{ fontSize: '12px', color: '#8B5CF6' }}>매매물량</span>
+          <span style={{ fontSize: '12px', color: '#8FACEE' }}>매매물량</span>
           <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>
             {count.value}개
           </span>
@@ -50,7 +50,7 @@ function CustomTooltip({ active, payload, label }: any) {
       )}
       {avgPrice && (
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', marginBottom: '4px' }}>
-          <span style={{ fontSize: '12px', color: '#F97316' }}>매호가(평균)</span>
+          <span style={{ fontSize: '12px', color: '#E8663C' }}>매호가(평균)</span>
           <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>
             {toEok(avgPrice.value)}
           </span>
@@ -58,7 +58,7 @@ function CustomTooltip({ active, payload, label }: any) {
       )}
       {minPrice && (
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px' }}>
-          <span style={{ fontSize: '12px', color: '#EF4444' }}>매호가(저)</span>
+          <span style={{ fontSize: '12px', color: '#E23B3B' }}>매호가(저)</span>
           <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>
             {toEok(minPrice.value)}
           </span>
@@ -73,9 +73,9 @@ function CustomLegend() {
   return (
     <div style={{ display: 'flex', gap: '16px', justifyContent: 'flex-end', marginBottom: '8px' }}>
       {[
-        { color: '#8B5CF6', label: '매매물량', dashed: false, bar: true },
-        { color: '#F97316', label: '매호가(평균)', dashed: false, bar: false },
-        { color: '#EF4444', label: '매호가(저)',   dashed: true,  bar: false },
+        { color: '#8FACEE', label: '매매물량', dashed: false, bar: true },
+        { color: '#E8663C', label: '매호가(평균)', dashed: false, bar: false },
+        { color: '#E23B3B', label: '매호가(저)',   dashed: true,  bar: false },
       ].map((item) => (
         <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
           {item.bar ? (
@@ -175,21 +175,21 @@ export default function PriceChart({ data }: Props) {
           <Line
             yAxisId="price"
             dataKey="avgPrice"
-            stroke="#F97316"
+            stroke="#E8663C"
             strokeWidth={2}
-            dot={{ fill: '#F97316', r: 3, strokeWidth: 0 }}
-            activeDot={{ r: 5, fill: '#F97316' }}
+            dot={{ fill: '#E8663C', r: 3, strokeWidth: 0 }}
+            activeDot={{ r: 5, fill: '#E8663C' }}
           />
 
           {/* 최저가 라인 */}
           <Line
             yAxisId="price"
             dataKey="minPrice"
-            stroke="#EF4444"
+            stroke="#E23B3B"
             strokeWidth={1.5}
             strokeDasharray="4 3"
             dot={false}
-            activeDot={{ r: 4, fill: '#EF4444' }}
+            activeDot={{ r: 4, fill: '#E23B3B' }}
           />
         </ComposedChart>
       </ResponsiveContainer>
