@@ -197,9 +197,22 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
     0,
     width - provisionalZeroX - effectiveRightReserve,
   );
+
+  // ─── 오버플로 가드 (2026-07-03 실사고: 용적률 300% × scale 10 = 3,000px > viewBox) ───
+  // autoScale 미사용 + 최대 막대 폭이 가용 폭을 초과하면 scale을 자동 축소한다.
+  // 발동 조건이 "초과 시에만"이라 정상 범위의 기존 발행 글은 계산 결과가 동일 (회귀 0).
+  // DemographicShiftBars 8-3 정규화와 동일 패턴.
+  const maxAbsDelta = values.length > 0
+    ? Math.max(...values.map((v) => Math.abs(v - effectiveBaseline)))
+    : 0;
+  const overflowClampedScale =
+    !shouldAutoScale && maxAbsDelta > 0 && maxAbsDelta * scale > availableWidth
+      ? availableWidth / maxAbsDelta
+      : null;
+
   const effectiveScale = shouldAutoScale
     ? computeAutoScale(values, effectiveBaseline, availableWidth, maxValue)
-    : scale;
+    : (overflowClampedScale ?? scale);
 
   // autoScale일 때 scale 변경 → 음수 막대 영역도 변함 → zeroX 재보정
   const adjustedZeroX = useAutoLayout && shouldAutoScale
