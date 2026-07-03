@@ -305,16 +305,17 @@ async function main() {
     console.log('🔄 --force 모드: 기존 해설 무시, 전체 재생성\n');
   }
 
-  // 기존 insights (--force가 아닐 때만 재사용)
+  // 기존 insights — 항상 로드.
+  // FORCE는 "대상의 재생성 여부"에만 영향을 주고, 저장 시 병합(비대상 보존)에는
+  // 기존 데이터가 반드시 필요하다 (2026-07-03 사고: --sample+--force가 파일을
+  // 표본 2건으로 덮어쓴 회귀 방지).
   let existing: Record<string, LocationInsight> = {};
-  if (!FORCE) {
-    try {
-      const existingRaw = await fs.readFile(outPath, 'utf-8');
-      const existingArr: LocationInsight[] = JSON.parse(existingRaw);
-      existing = Object.fromEntries(existingArr.map((i) => [i.id, i]));
-    } catch {
-      console.log('기존 insights 파일 없음, 전체 생성 시작\n');
-    }
+  try {
+    const existingRaw = await fs.readFile(outPath, 'utf-8');
+    const existingArr: LocationInsight[] = JSON.parse(existingRaw);
+    existing = Object.fromEntries(existingArr.map((i) => [i.id, i]));
+  } catch {
+    console.log('기존 insights 파일 없음, 전체 생성 시작\n');
   }
 
   const results: LocationInsight[] = [];
@@ -353,7 +354,14 @@ async function main() {
     await new Promise((r) => setTimeout(r, 200));
   }
 
-  await fs.writeFile(outPath, JSON.stringify(results, null, 2), 'utf-8');
+  // 저장: 부분 실행(--sample/--limit)이어도 기존 해설과 병합해 전체 보존.
+  // 순서는 location-scores 기준 (scores에 없는 잔존 id는 자연 제거).
+  const merged = new Map<string, LocationInsight>(Object.entries(existing));
+  for (const r of results) merged.set(r.id, r);
+  const output = all
+    .map((l) => merged.get(l.id))
+    .filter((i): i is LocationInsight => Boolean(i));
+  await fs.writeFile(outPath, JSON.stringify(output, null, 2), 'utf-8');
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`\n${'─'.repeat(40)}`);
@@ -361,7 +369,7 @@ async function main() {
   console.log(`   신규 생성: ${generated}개`);
   console.log(`   재사용: ${skipped}개`);
   console.log(`   실패: ${failed}개`);
-  console.log(`   저장: ${outPath}`);
+  console.log(`   저장: ${outPath} (전체 ${output.length}개 보존)`);
 }
 
 main().catch(console.error);
