@@ -4,7 +4,7 @@ import SubscriptionClientPage from '@/components/subscription/page';
 import { fetchSubscriptions } from '@/lib/subscription-api';
 
 export default async function SubscriptionPage() {
-  let items = await fetchSubscriptions().catch(() => []);
+  const items = await fetchSubscriptions().catch(() => []);
 
   return (
     <>

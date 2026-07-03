@@ -109,7 +109,7 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
     if (props.unit === undefined && title) {
       const titleUnitMatch = title.match(TITLE_UNIT_REGEX);
       if (titleUnitMatch) {
-        // eslint-disable-next-line no-console
+         
         console.warn(
           `[HorizontalBarChart] title에 "(단위: ${titleUnitMatch[1].trim()})" 포함되어 있지만 ` +
           `unit prop이 미지정. default "%"가 적용되어 값 라벨이 의도와 불일치할 수 있음. ` +
@@ -120,7 +120,7 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
 
     // (b) unit 미지정 + dividerText가 단위 문자열 패턴 → 우회 사용 경고
     if (props.unit === undefined && dividerText && SHORT_UNIT_PATTERN.test(dividerText)) {
-      // eslint-disable-next-line no-console
+       
       console.warn(
         `[HorizontalBarChart] dividerText="${dividerText}"가 단위 문자열로 보이지만 ` +
         `unit prop이 미지정. 값 라벨은 default "%"로 표기됨. ` +
@@ -137,7 +137,7 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
       data.length > 0 &&
       data.every((row) => !row.color)
     ) {
-      // eslint-disable-next-line no-console
+       
       console.info(
         `[HorizontalBarChart] discrete 모드 모든 row.color 미지정. ` +
         `pickDefaultColor로 자동 할당 (red, blue, orange, darkBlue, gray 순). ` +
@@ -243,7 +243,7 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
     process.env.NODE_ENV !== 'production' &&
     labelStartX < CHART_CONSTANTS.MIN_LABEL_AREA_LEFT_PADDING
   ) {
-    // eslint-disable-next-line no-console
+     
     console.warn(
       `[HorizontalBarChart] "${title}" 라벨 영역 부족 — ` +
         `labelStartX=${labelStartX.toFixed(0)} < ${CHART_CONSTANTS.MIN_LABEL_AREA_LEFT_PADDING}. ` +

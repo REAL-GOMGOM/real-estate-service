@@ -144,7 +144,7 @@ function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () =
               {newHigh && (
                 <span style={{
                   fontSize: '11px', fontWeight: 700, padding: '3px 9px', borderRadius: '6px',
-                  backgroundColor: '#E23B3B', color: 'var(--text-primary)',
+                  backgroundColor: '#E23B3B', color: '#FFFFFF',
                 }}>
                   신고가
                 </span>
@@ -282,7 +282,7 @@ function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () =
                       {isMax && (
                         <span style={{
                           fontSize: '10px', fontWeight: 700, padding: '1px 5px', borderRadius: '4px',
-                          backgroundColor: '#E23B3B', color: 'var(--text-primary)', marginRight: '5px',
+                          backgroundColor: '#E23B3B', color: '#FFFFFF', marginRight: '5px',
                           verticalAlign: 'middle',
                         }}>
                           신고가

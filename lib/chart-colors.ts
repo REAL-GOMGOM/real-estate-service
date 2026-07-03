@@ -129,7 +129,7 @@ export function warnInvalidChartColor(
   if (!color) return;
   if (HEX_COLOR_REGEX.test(color)) return;
   if (color in CHART_COLORS) return;
-  // eslint-disable-next-line no-console
+   
   console.warn(
     `[${componentName}] ${context}color="${color}"이 ` +
     `유효한 키워드(red, orange, blue, darkBlue, gray)도 hex 코드(예: "#dc2626")도 아닙니다. ` +

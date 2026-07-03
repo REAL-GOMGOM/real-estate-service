@@ -26,7 +26,7 @@ export default function BlogPostError({
 }) {
   // dev 환경에서는 콘솔에 원본 에러 노출 (작가 디버깅 보조)
   if (process.env.NODE_ENV !== 'production') {
-    // eslint-disable-next-line no-console
+     
     console.error('[blog/[slug]/error] 글 렌더 중 예외:', error);
   }
 

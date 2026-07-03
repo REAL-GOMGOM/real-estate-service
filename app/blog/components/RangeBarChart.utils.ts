@@ -77,7 +77,7 @@ export function computeRangeDomain(
 
   const range = dataMax - dataMin;
   const pad   = range * AUTO_PADDING_RATIO;
-  let min = domainMin ?? dataMin - pad;
+  const min = domainMin ?? dataMin - pad;
   let max = domainMax ?? dataMax + pad;
 
   // 사용자 값 뒤집힘 보호
