@@ -9,8 +9,9 @@ import {
   LAST_UPDATED,
 } from '@/lib/loan-products';
 import { Calculator, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Info, Landmark, Building2, Search, X, Loader2 } from 'lucide-react';
-import { DISTRICT_CODE, findDistrictByLawdCd } from '@/lib/district-codes';
+import { findDistrictByLawdCd } from '@/lib/district-codes';
 import { AptAutocomplete, type ApartmentSearchResult } from '@/components/search/AptAutocomplete';
+import RateTrendCard from './RateTrendCard';
 import {
   DTI_LIMIT_POLICY,
   DTI_LIMIT_BANK,
@@ -218,7 +219,7 @@ export default function LoanSimulator() {
             }}
           >
             <Landmark size={15} />
-            정책대출
+            정부대출
           </button>
           <button
             onClick={() => setActiveTab('bank')}
@@ -233,13 +234,15 @@ export default function LoanSimulator() {
             }}
           >
             <Building2 size={15} />
-            시중은행
+            은행대출
           </button>
         </div>
 
         {activeTab === 'bank' && <BankRateComparison onSwitchToPolicy={() => setActiveTab('policy')} />}
 
         {activeTab === 'policy' && (<>
+        {/* 기준금리 추이 — 정부대출 금리 방향 참고 */}
+        <RateTrendCard variant="base" />
         {/* ── 기본 정보 ── */}
         <Section title="기본 정보">
           {/* 단지 검색 */}
@@ -682,7 +685,7 @@ export default function LoanSimulator() {
                 const dtiLimit = activeTab === 'policy' ? DTI_LIMIT_POLICY : DTI_LIMIT_BANK;
                 const status = classifyRatio(result.dti, dtiLimit);
                 const captionText = activeTab === 'policy'
-                  ? `DTI ${dtiLimit}% 한도 · 정책대출 기준`
+                  ? `DTI ${dtiLimit}% 한도 · 정부대출 기준`
                   : `DTI ${dtiLimit}% 가이드 · 현행 심사는 DSR 우선`;
                 const textColor =
                   status === 'danger' ? 'var(--danger)' :

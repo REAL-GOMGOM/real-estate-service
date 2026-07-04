@@ -1,421 +1,112 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { X } from 'lucide-react';
-import ErrorState from '@/components/common/ErrorState';
-import {
-  ScatterChart, Scatter, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, CartesianGrid, ReferenceLine,
-} from 'recharts';
-import { DISTRICT_CODE, findDistrictByLawdCd } from '@/lib/district-codes';
+import { TxErrorState, TxEmptyState } from '@/components/shared/TxStates';
+import { AnalysisPromoBar } from '@/components/shared/AnalysisPromoBar';
+import { findDistrictByLawdCd } from '@/lib/district-codes';
 import { DISTRICT_GROUPS } from '@/lib/district-groups';
 import { matchesQuery } from '@/lib/search-utils';
 import Header from '@/components/layout/Header';
 import { AptAutocomplete, type ApartmentSearchResult } from '@/components/search/AptAutocomplete';
+import { type AptGroup, type DistrictStat, detectNewHigh } from './types';
+import AptCard from './components/AptCard';
+import AptDetailModal from './components/AptDetailModal';
+import RegionPickerModal from './components/RegionPickerModal';
+import DistrictChips from './components/DistrictChips';
+
+/**
+ * 실거래 조회 클라이언트 — 사이클 W (아실형 개편)
+ *
+ * summary(시도 카드) → 구 선택 모달 → detail(구 칩 + 아실형 단지 카드).
+ * 정렬(거래량·최신·가격) + 신고가만 + 면적 필터.
+ */
 
 function findGroupIndexOfDistrict(district: string): number {
   return DISTRICT_GROUPS.findIndex((g) => g.districts.includes(district));
 }
 
-interface Transaction {
-  aptName:      string;
-  district:     string;
-  area:         number;
-  floor:        number;
-  price:        number;
-  pricePerArea: number;
-  date:         string;
-}
-
-interface AptGroup {
-  id:           string;
-  name:         string;
-  district:     string;
-  areas:        number[];
-  transactions: Transaction[];
-}
-
-// ── 헬퍼 ────────────────────────────────────────
-function fmtPrice(manwon: number) {
-  if (manwon >= 10000) return `${(manwon / 10000).toFixed(1)}억`;
-  return `${manwon.toLocaleString()}만`;
-}
-function avgByArea(txs: Transaction[], target: number, tol = 6): number | null {
-  const m = txs.filter((t) => Math.abs(t.area - target) <= tol);
-  if (!m.length) return null;
-  return Math.round(m.reduce((s, t) => s + t.price, 0) / m.length);
-}
-function detectNewHigh(apt: AptGroup): boolean {
-  if (apt.transactions.length < 2) return false;
-  const sorted = [...apt.transactions].sort((a, b) => b.date.localeCompare(a.date));
-  const latest = sorted[0];
-  const same   = apt.transactions.filter((t) => Math.abs(t.area - latest.area) <= 6);
-  return same.length > 1 && latest.price >= Math.max(...same.map((t) => t.price));
-}
 function todayLabel(d: Date) {
   const day = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
   return `${d.getMonth() + 1}.${d.getDate()}(${day})`;
 }
 
-// ── 통계 카드 ────────────────────────────────────
-function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div style={{
-      padding: '14px 16px', borderRadius: '12px',
-      backgroundColor: 'var(--border-light)',
-      border: '1px solid var(--border)',
-    }}>
-      <p style={{ fontSize: '11px', color: 'var(--text-dim)', marginBottom: '6px' }}>{label}</p>
-      <p style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>{value}</p>
-      {sub && <p style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '3px' }}>{sub}</p>}
-    </div>
-  );
+/** 11a 타이틀 밴드용 — 2026.07.05(일) 형식 */
+function fullDateLabel(d: Date) {
+  const day = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}.${mm}.${dd}(${day})`;
 }
 
-// ── 차트 커스텀 툴팁 ─────────────────────────────
-function ChartTooltip({ active, payload }: any) {
-  if (!active || !payload?.length) return null;
-  const d = payload[0].payload;
-  return (
-    <div style={{
-      padding: '8px 12px', borderRadius: '8px',
-      backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-hover)',
-      fontSize: '12px',
-    }}>
-      <p style={{ color: 'var(--text-muted)', marginBottom: '2px' }}>{d.date} · {d.area}㎡</p>
-      <p style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{fmtPrice(d.price)}</p>
-    </div>
-  );
+const TX_TYPE_TABS = ['매매', '분양권', '전세', '월세'];
+
+type SortKey = 'volume' | 'date' | 'price';
+
+interface SummaryRegion {
+  label:          string;
+  estimatedCount: number;
+  newHighs:       number;
+  avg59:          number | null;
+  avg84:          number | null;
+  firstDistrict:  string;
 }
 
-// ── 상세 모달 ────────────────────────────────────
-function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () => void; months: number }) {
-  const [selArea, setSelArea] = useState<number | null>(null);
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: 'volume', label: '거래많은순' },
+  { key: 'date',   label: '최신순' },
+  { key: 'price',  label: '높은가격순' },
+];
 
-  const sorted     = [...apt.transactions].sort((a, b) => b.date.localeCompare(a.date));
-  const uniqueAreas = [...new Set(apt.transactions.map((t) => t.area))].sort((a, b) => a - b);
+const AREA_OPTIONS: { key: string; label: string }[] = [
+  { key: 'all', label: '전체 면적' },
+  { key: '59',  label: '59㎡' },
+  { key: '84',  label: '84㎡' },
+];
 
-  const filtered = selArea !== null
-    ? sorted.filter((t) => Math.abs(t.area - selArea) <= 6)
-    : sorted;
-
-  const latest   = filtered[0];
-  const avgPrice = filtered.length ? Math.round(filtered.reduce((s, t) => s + t.price, 0) / filtered.length) : 0;
-  const maxTx    = filtered.reduce<Transaction | null>((m, t) => (!m || t.price > m.price ? t : m), null);
-  const maxPrice = maxTx?.price ?? 0;
-  const newHigh  = detectNewHigh(apt);
-
-  // 차트용 데이터 — 오래된 것부터
-  const chartData = [...filtered]
-    .reverse()
-    .map((t, i) => ({ x: i, price: t.price, date: t.date, area: t.area }));
-
-  return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed', inset: 0, zIndex: 200,
-        backgroundColor: 'rgba(0,0,0,0.75)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '24px',
-        backdropFilter: 'blur(4px)',
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: '100%', maxWidth: '700px', maxHeight: '90vh',
-          backgroundColor: 'var(--bg-primary)',
-          borderRadius: '20px',
-          border: '1px solid var(--border)',
-          overflowY: 'auto',
-          boxShadow: '0 24px 80px rgba(0,0,0,0.6)',
-        }}
-      >
-        {/* 모달 헤더 */}
-        <div style={{
-          padding: '24px 24px 0',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-        }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-              <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)' }}>{apt.name}</h2>
-              {newHigh && (
-                <span style={{
-                  fontSize: '11px', fontWeight: 700, padding: '3px 9px', borderRadius: '6px',
-                  backgroundColor: '#E23B3B', color: '#FFFFFF',
-                }}>
-                  신고가
-                </span>
-              )}
-            </div>
-            <p style={{ fontSize: '13px', color: 'var(--text-dim)' }}>{apt.district}</p>
-          </div>
-          <button
-            onClick={onClose}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-dim)', padding: '4px' }}
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* 면적 필터 */}
-        <div style={{ padding: '16px 24px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <button
-            onClick={() => setSelArea(null)}
-            style={{
-              padding: '6px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: 600,
-              backgroundColor: selArea === null ? 'var(--accent)' : 'var(--border-light)',
-              color:           selArea === null ? 'var(--text-primary)'  : 'var(--text-muted)',
-              border: 'none', cursor: 'pointer',
-            }}
-          >
-            전체
-          </button>
-          {uniqueAreas.map((area) => (
-            <button
-              key={area}
-              onClick={() => setSelArea(selArea === area ? null : area)}
-              style={{
-                padding: '6px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: 600,
-                backgroundColor: selArea === area ? 'var(--accent)' : 'var(--border-light)',
-                color:           selArea === area ? 'var(--text-primary)'  : 'var(--text-muted)',
-                border: 'none', cursor: 'pointer',
-              }}
-            >
-              {area}㎡ · {Math.round(area / 3.3058)}평
-            </button>
-          ))}
-        </div>
-
-        {/* 통계 카드 3개 */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', padding: '0 24px 20px' }}>
-          <StatCard label="최근 실거래가" value={latest ? fmtPrice(latest.price) : '—'} sub={latest?.date} />
-          <StatCard label={`${months}개월 평균`}  value={filtered.length ? fmtPrice(avgPrice) : '—'} />
-          <StatCard label="최고 실거래가"  value={maxTx ? fmtPrice(maxPrice) : '—'} sub={maxTx?.date} />
-        </div>
-
-        {/* 가격 차트 */}
-        {chartData.length > 1 && (
-          <div style={{ padding: '0 24px 20px' }}>
-            <div style={{
-              borderRadius: '12px', padding: '16px 8px 8px',
-              backgroundColor: 'var(--bg-overlay)',
-              border: '1px solid var(--border-light)',
-            }}>
-              <ResponsiveContainer width="100%" height={160}>
-                <ScatterChart margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" />
-                  <XAxis dataKey="x" hide />
-                  <YAxis
-                    dataKey="price"
-                    tickFormatter={(v) => fmtPrice(v)}
-                    tick={{ fontSize: 11, fill: 'var(--text-dim)' }}
-                    width={52}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip content={<ChartTooltip />} />
-                  {maxPrice > 0 && (
-                    <ReferenceLine
-                      y={maxPrice}
-                      stroke="rgba(226,59,59,0.3)"
-                      strokeDasharray="4 4"
-                    />
-                  )}
-                  <Scatter data={chartData} fill="var(--accent)" opacity={0.85} />
-                </ScatterChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        )}
-
-        {/* 거래 내역 테이블 */}
-        <div style={{ borderTop: '1px solid var(--border)' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-            <colgroup>
-              <col style={{ width: '22%' }} />
-              <col style={{ width: '16%' }} />
-              <col style={{ width: '8%' }} />
-              <col style={{ width: '22%' }} />
-              <col style={{ width: '18%' }} />
-              <col style={{ width: '14%' }} />
-            </colgroup>
-            <thead>
-              <tr style={{ backgroundColor: 'var(--bg-tertiary)' }}>
-                {['계약일', '면적', '층', '거래가', '고점대비', '평당가'].map((h) => (
-                  <th key={h} style={{
-                    padding: '10px 12px', fontSize: '11px', fontWeight: 700,
-                    color: 'var(--text-strong)', textAlign: 'left', whiteSpace: 'nowrap',
-                  }}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((tx, i) => {
-                const ratio = maxPrice > 0 ? (tx.price / maxPrice) * 100 : null;
-                const isMax = tx.price === maxPrice && i === filtered.findIndex((t) => t.price === maxPrice);
-                return (
-                  <tr
-                    key={i}
-                    style={{ borderTop: '1px solid var(--border-light)' }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(59,130,246,0.06)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '')}
-                  >
-                    <td style={{ padding: '11px 12px', fontSize: '13px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                      {tx.date}
-                    </td>
-                    <td style={{ padding: '11px 12px', fontSize: '13px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                      {tx.area}㎡
-                    </td>
-                    <td style={{ padding: '11px 12px', fontSize: '13px', color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>
-                      {tx.floor}층
-                    </td>
-                    <td style={{
-                      padding: '11px 12px', fontSize: '14px', fontWeight: 700,
-                      color: isMax ? '#E23B3B' : 'var(--text-primary)',
-                      fontFamily: 'Roboto Mono, monospace', whiteSpace: 'nowrap',
-                    }}>
-                      {isMax && (
-                        <span style={{
-                          fontSize: '10px', fontWeight: 700, padding: '1px 5px', borderRadius: '4px',
-                          backgroundColor: '#E23B3B', color: '#FFFFFF', marginRight: '5px',
-                          verticalAlign: 'middle',
-                        }}>
-                          신고가
-                        </span>
-                      )}
-                      {fmtPrice(tx.price)}
-                    </td>
-                    <td style={{
-                      padding: '11px 12px', fontSize: '12px', whiteSpace: 'nowrap',
-                      color: ratio !== null ? (ratio >= 100 ? '#E23B3B' : ratio >= 90 ? '#F0A24B' : 'var(--text-dim)') : 'var(--text-dim)',
-                    }}>
-                      {ratio !== null ? `${ratio.toFixed(1)}%` : '—'}
-                    </td>
-                    <td style={{
-                      padding: '11px 12px', fontSize: '12px', color: 'var(--text-dim)',
-                      fontFamily: 'Roboto Mono, monospace', whiteSpace: 'nowrap',
-                    }}>
-                      {fmtPrice(tx.pricePerArea)}/평
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── 아파트 카드 ──────────────────────────────────
-function AptCard({ apt, onClick }: { apt: AptGroup; onClick: () => void }) {
-  const sorted  = [...apt.transactions].sort((a, b) => b.date.localeCompare(a.date));
-  const latest  = sorted[0];
-  const newHigh = detectNewHigh(apt);
-  const avg59   = avgByArea(apt.transactions, 59);
-  const avg84   = avgByArea(apt.transactions, 84);
-
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        padding: '20px', borderRadius: '16px',
-        backgroundColor: 'var(--bg-card)',
-        border: '1px solid var(--border)',
-        cursor: 'pointer', transition: 'border-color 0.15s',
-      }}
-      onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(59,130,246,0.35)')}
-      onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
-    >
-      {/* 단지명 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '14px' }}>
-        <div>
-          <p style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '3px' }}>{apt.name}</p>
-          <p style={{ fontSize: '11px', color: 'var(--text-dim)' }}>{apt.district} · {apt.transactions.length}건</p>
-        </div>
-        {newHigh && (
-          <span style={{
-            fontSize: '11px', fontWeight: 700, padding: '3px 8px', borderRadius: '6px',
-            backgroundColor: 'rgba(226,59,59,0.14)', color: '#E23B3B', flexShrink: 0,
-          }}>
-            신고가
-          </span>
-        )}
-      </div>
-
-      {/* 최근 거래가 */}
-      <p style={{
-        fontSize: '26px', fontWeight: 800, color: 'var(--text-primary)',
-        fontFamily: 'Roboto Mono, monospace', marginBottom: '4px', lineHeight: 1,
-      }}>
-        {fmtPrice(latest.price)}
-      </p>
-      <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '14px' }}>
-        {latest.area}㎡ · {latest.floor}층 · {latest.date}
-      </p>
-
-      {/* 면적별 평균 */}
-      {(avg59 || avg84) && (
-        <div style={{
-          display: 'flex', gap: '14px',
-          paddingTop: '12px', borderTop: '1px solid var(--border-light)',
-        }}>
-          {avg59 && (
-            <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
-              59㎡&nbsp;
-              <strong style={{ color: 'var(--text-secondary)', fontFamily: 'Roboto Mono, monospace' }}>{fmtPrice(avg59)}</strong>
-            </span>
-          )}
-          {avg84 && (
-            <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
-              84㎡&nbsp;
-              <strong style={{ color: 'var(--text-secondary)', fontFamily: 'Roboto Mono, monospace' }}>{fmtPrice(avg84)}</strong>
-            </span>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── 메인 ──────────────────────────────────────────
 export default function TransactionsClient() {
-  const searchParams = useSearchParams();
+  const searchParams  = useSearchParams();
   const districtParam = searchParams.get('district');
+  const queryParam    = searchParams.get('q');
 
-  const [today,      setToday]      = useState(new Date(0));
+  const [today, setToday] = useState(new Date(0));
   useEffect(() => { setToday(new Date()); }, []);
-  const [district,   setDistrict]   = useState('강남구');
-  const [groupIdx,   setGroupIdx]   = useState(() => Math.max(0, findGroupIndexOfDistrict('강남구')));
-  const [months,     setMonths]     = useState(6);
-  const [query,      setQuery]      = useState('');
-  const [groups,     setGroups]     = useState<AptGroup[]>([]);
-  const [loading,    setLoading]    = useState(false);
-  const [error,      setError]      = useState<string | null>(null);
-  const [fetched,    setFetched]    = useState('');
-  const [activeApt,  setActiveApt]  = useState<AptGroup | null>(null);
 
-  const [viewMode, setViewMode] = useState<'summary' | 'detail'>(
-    districtParam ? 'detail' : 'summary'
-  );
-  const [summaryData, setSummaryData] = useState<any[]>([]);
+  const [district,  setDistrict]  = useState(districtParam || '강남구');
+  const [groupIdx,  setGroupIdx]  = useState(() => Math.max(0, findGroupIndexOfDistrict(districtParam || '강남구')));
+  const [months,    setMonths]    = useState(6);
+  const [query,     setQuery]     = useState(queryParam ?? '');
+  const [groups,    setGroups]    = useState<AptGroup[]>([]);
+  const [loading,   setLoading]   = useState(false);
+  const [error,     setError]     = useState<string | null>(null);
+  const [fetched,   setFetched]   = useState('');
+  const [activeApt, setActiveApt] = useState<AptGroup | null>(null);
+
+  const [viewMode, setViewMode] = useState<'summary' | 'detail'>(districtParam ? 'detail' : 'summary');
+  const [summaryData, setSummaryData] = useState<SummaryRegion[]>([]);
   const [summaryLoading, setSummaryLoading] = useState(true);
 
-  // districtParam이 있으면 바로 해당 지역 detail 뷰로 진입
+  // 구 선택 모달 (아실형) — 열려 있으면 해당 시도 그룹
+  const [picker, setPicker] = useState<{ label: string; districts: string[] } | null>(null);
+
+  // 구별 칩 통계 — 그룹 단위 캐시
+  const [districtStats, setDistrictStats] = useState<Record<string, DistrictStat[]>>({});
+
+  // 정렬·필터
+  const [sortKey,     setSortKey]     = useState<SortKey>('volume');
+  const [newHighOnly, setNewHighOnly] = useState(false);
+  const [areaFilter,  setAreaFilter]  = useState('all');
+
+  // 딥링크 — district(+q) 로 바로 detail 진입
   useEffect(() => {
     if (districtParam) {
       setDistrict(districtParam);
       setGroupIdx(Math.max(0, findGroupIndexOfDistrict(districtParam)));
+      if (queryParam) setQuery(queryParam);
       setViewMode('detail');
       setFetched('');
     }
-  }, [districtParam]);
+  }, [districtParam, queryParam]);
 
   const load = useCallback(async (d: string, m: number) => {
     const key = `${d}-${m}`;
@@ -437,9 +128,9 @@ export default function TransactionsClient() {
 
   useEffect(() => {
     if (viewMode === 'detail') load(district, months);
-  }, [district, months, viewMode]);
+  }, [district, months, viewMode, load]);
 
-  // 시도별 요약 데이터 fetch
+  // 시도별 요약
   useEffect(() => {
     if (viewMode !== 'summary') return;
     setSummaryLoading(true);
@@ -452,9 +143,55 @@ export default function TransactionsClient() {
       .catch(() => setSummaryLoading(false));
   }, [viewMode]);
 
-  const filtered   = query.trim() ? groups.filter((g) => matchesQuery(g.name, query.trim())) : groups;
+  // 구별 칩 통계 — detail 진입 시 그룹 단위로 1회 조회
+  const groupLabel = DISTRICT_GROUPS[groupIdx]?.label ?? '';
+  useEffect(() => {
+    if (viewMode !== 'detail' || !groupLabel || districtStats[groupLabel]) return;
+    fetch(`/api/transactions/districts?group=${encodeURIComponent(groupLabel)}`)
+      .then(r => r.json())
+      .then(json => {
+        if (Array.isArray(json.districts)) {
+          setDistrictStats(prev => ({ ...prev, [groupLabel]: json.districts }));
+        }
+      })
+      .catch(() => { /* 칩은 구명만으로 폴백 렌더 */ });
+  }, [viewMode, groupLabel, districtStats]);
+
+  // 검색·필터·정렬 파이프라인
+  const filtered = useMemo(() => {
+    let list = query.trim() ? groups.filter((g) => matchesQuery(g.name, query.trim())) : groups;
+
+    if (newHighOnly) list = list.filter(detectNewHigh);
+
+    if (areaFilter !== 'all') {
+      const target = parseInt(areaFilter);
+      list = list.filter((g) => g.areas.some((a) => Math.abs(a - target) <= 4));
+    }
+
+    const latestOf = (g: AptGroup) =>
+      g.transactions.reduce((m, t) => (t.date > m ? t.date : m), '');
+    const latestPriceOf = (g: AptGroup) => {
+      const sorted = [...g.transactions].sort((a, b) => b.date.localeCompare(a.date));
+      return sorted[0]?.price ?? 0;
+    };
+
+    return [...list].sort((a, b) => {
+      if (sortKey === 'date')  return latestOf(b).localeCompare(latestOf(a));
+      if (sortKey === 'price') return latestPriceOf(b) - latestPriceOf(a);
+      return b.transactions.length - a.transactions.length;
+    });
+  }, [groups, query, newHighOnly, areaFilter, sortKey]);
+
   const totalTx    = filtered.reduce((s, g) => s + g.transactions.length, 0);
   const newHighCnt = filtered.filter(detectNewHigh).length;
+
+  const enterDistrict = (d: string) => {
+    setGroupIdx(Math.max(0, findGroupIndexOfDistrict(d)));
+    setDistrict(d);
+    setViewMode('detail');
+    setFetched('');
+    setPicker(null);
+  };
 
   return (
     <>
@@ -462,48 +199,111 @@ export default function TransactionsClient() {
     <main style={{ minHeight: '100vh', backgroundColor: 'var(--bg-primary)', paddingTop: '64px' }}>
       <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '48px 24px' }}>
 
-        {/* 헤더 */}
-        <div style={{ marginBottom: '6px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
-            <h1 style={{ fontSize: 'clamp(20px, 3vw, 30px)', fontWeight: 800, color: 'var(--text-primary)' }}>
-              최신 실거래
-            </h1>
-            <span style={{
-              padding: '4px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
-              backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-muted)',
-            }}>
-              {today.getFullYear() > 2000 ? todayLabel(today) : '—'}
-            </span>
+        {/* 헤더 — 11a 타이틀 밴드 (summary) / 간결 헤더 (detail) */}
+        {viewMode === 'summary' ? (
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '20px', marginBottom: '4px', flexWrap: 'wrap' }}>
+            <div>
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: '7px',
+                backgroundColor: '#FDECEC', color: '#E23B3B',
+                fontWeight: 700, fontSize: '12px', padding: '5px 11px',
+                borderRadius: '99px', marginBottom: '12px',
+              }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#E23B3B', display: 'inline-block' }} />
+                오늘 아침 공개
+              </div>
+              <h1 style={{ margin: '0 0 6px', fontSize: 'clamp(22px, 3vw, 29px)', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.6px' }}>
+                오늘 공개된 최신 실거래
+              </h1>
+              <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>
+                {today.getFullYear() > 2000 ? fullDateLabel(today) : '—'} · 국토교통부 실거래가 공개시스템 기준
+              </p>
+            </div>
+            {!summaryLoading && summaryData.length > 0 && (
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', justifyContent: 'flex-end' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--text-dim)' }}>총</span>
+                  <span style={{ fontSize: '26px', fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>
+                    {summaryData.reduce((s, r) => s + r.estimatedCount, 0).toLocaleString()}
+                  </span>
+                  <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-muted)' }}>건</span>
+                </div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#E23B3B', marginTop: '2px' }}>
+                  신고가 {summaryData.reduce((s, r) => s + r.newHighs, 0)}건 🔥
+                </div>
+              </div>
+            )}
           </div>
-          <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '4px' }}>국토교통부 실거래가 공개시스템 데이터를 기반으로 전국 아파트 매매 거래를 조회합니다.</p>
-          <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>출처: 국토교통부</p>
-        </div>
+        ) : (
+          <div style={{ marginBottom: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
+              <h1 style={{ fontSize: 'clamp(20px, 3vw, 30px)', fontWeight: 800, color: 'var(--text-primary)' }}>
+                최신 실거래
+              </h1>
+              <span style={{
+                padding: '4px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
+                backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-muted)',
+              }}>
+                {today.getFullYear() > 2000 ? todayLabel(today) : '—'}
+              </span>
+            </div>
+            <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>출처: 국토교통부 실거래가 공개시스템</p>
+          </div>
+        )}
 
         {/* 시도별 요약 카드 뷰 */}
         {viewMode === 'summary' && (
           <>
+            {/* 거래 유형 탭 — 매매만 오픈, 나머지 준비 중 */}
+            <div style={{ display: 'flex', gap: '6px', marginTop: '18px', borderBottom: '1px solid var(--border)' }}>
+              {TX_TYPE_TABS.map((t, i) => (
+                <span
+                  key={t}
+                  aria-disabled={i !== 0}
+                  title={i !== 0 ? '준비 중' : undefined}
+                  style={{
+                    backgroundColor: i === 0 ? 'var(--accent)' : 'var(--bg-tertiary)',
+                    color: i === 0 ? '#FFFFFF' : 'var(--text-dim)',
+                    fontSize: '13px', fontWeight: i === 0 ? 700 : 600,
+                    padding: '9px 18px', borderRadius: '10px 10px 0 0',
+                    cursor: i === 0 ? 'default' : 'not-allowed',
+                  }}
+                >
+                  {t}
+                </span>
+              ))}
+            </div>
+
+            {/* 섹션 헤더 */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '20px 0 14px' }}>
+              <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)' }}>시/도별 거래 현황</span>
+              <span style={{ fontSize: '12.5px', color: 'var(--text-dim)' }}>거래량순 · 평균가는 전용면적 기준</span>
+            </div>
             {summaryLoading ? (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
-                {[...Array(5)].map((_, i) => (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px', marginTop: '20px' }}>
+                {[...Array(6)].map((_, i) => (
                   <div key={i} style={{
-                    height: '160px', borderRadius: '16px',
+                    height: '150px', borderRadius: '16px',
                     backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-light)',
                     animation: 'pulse 1.5s ease-in-out infinite',
                   }} />
                 ))}
+                <style>{`@keyframes pulse{0%,100%{opacity:.3}50%{opacity:.6}}`}</style>
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
-                {summaryData.map((region) => (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '12px' }}>
+                {[...summaryData]
+                  .sort((a, b) => b.estimatedCount - a.estimatedCount)
+                  .map((region, i) => (
                   <button
                     key={region.label}
                     onClick={() => {
-                      setDistrict(region.firstDistrict);
-                      setViewMode('detail');
-                      setFetched('');
+                      // 아실형 — 카드 클릭 시 구 선택 모달
+                      const group = DISTRICT_GROUPS.find((g) => g.label === region.label);
+                      if (group) setPicker({ label: group.label, districts: group.districts });
                     }}
                     style={{
-                      padding: '20px', borderRadius: '16px',
+                      padding: '15px 16px', borderRadius: '14px',
                       backgroundColor: 'var(--bg-card)',
                       border: '1px solid var(--border)',
                       cursor: 'pointer', textAlign: 'left',
@@ -511,37 +311,43 @@ export default function TransactionsClient() {
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.borderColor = 'var(--accent)';
-                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(20,33,61,0.08)';
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.borderColor = 'var(--border)';
                       e.currentTarget.style.boxShadow = 'none';
                     }}
                   >
-                    {/* 상단: 시도명 + 거래건수 */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                      <span style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)' }}>
-                        {region.label}
+                    {/* 랭킹 뱃지 + 시도명 (11a) */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                      <span style={{
+                        width: '20px', height: '20px', borderRadius: '6px',
+                        backgroundColor: i < 3 ? 'var(--accent)' : '#EEF2F8',
+                        color: i < 3 ? '#FFFFFF' : '#9AA4B8',
+                        fontSize: '11px', fontWeight: 800,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        {i + 1}
                       </span>
-                      <span style={{ fontSize: '20px', fontWeight: 800, fontFamily: 'Roboto Mono, monospace', color: 'var(--text-primary)' }}>
-                        {region.estimatedCount.toLocaleString()}건
+                      <span style={{ fontSize: '15.5px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                        {region.label}
                       </span>
                     </div>
 
-                    {/* 신고가 */}
-                    {region.newHighs > 0 && (
-                      <div style={{ marginBottom: '12px' }}>
-                        <span style={{ fontSize: '13px', color: 'var(--text-dim)' }}>
-                          신고가{' '}
-                          <strong style={{ color: '#E23B3B' }}>{region.newHighs}</strong>건
+                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '10px' }}>
+                      <span style={{ fontSize: '20px', fontWeight: 800, fontFamily: 'Roboto Mono, monospace', color: 'var(--text-primary)' }}>
+                        {region.estimatedCount.toLocaleString()}<span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-muted)' }}>건</span>
+                      </span>
+                      {region.newHighs > 0 && (
+                        <span style={{ fontSize: '12px', fontWeight: 700, color: '#E23B3B' }}>
+                          신고가 {region.newHighs}
                         </span>
-                      </div>
-                    )}
+                      )}
+                    </div>
 
-                    {/* 하단: 평균가 */}
                     <div style={{
-                      display: 'flex', gap: '14px',
-                      paddingTop: '12px', borderTop: '1px solid var(--border-light)',
+                      display: 'flex', gap: '12px',
+                      paddingTop: '10px', borderTop: '1px solid var(--border-light)',
                     }}>
                       {region.avg59 && (
                         <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
@@ -565,13 +371,16 @@ export default function TransactionsClient() {
               </div>
             )}
 
-            <p style={{ marginTop: '16px', fontSize: '11px', color: 'var(--text-dim)' }}>
-              ※ 대표 구 기준 추정치입니다. 지역을 클릭하면 상세 거래를 확인할 수 있습니다.
+            <p style={{ margin: '16px 0 20px', fontSize: '11px', color: 'var(--text-dim)' }}>
+              ※ 대표 구 기준 추정치입니다. 지역을 클릭해 구를 선택하면 상세 거래를 확인할 수 있습니다.
             </p>
+
+            {/* 조회를 넘어 분석까지 — 내집만의 기능 프로모 */}
+            <AnalysisPromoBar />
           </>
         )}
 
-        {/* detail 뷰: 뒤로가기 + 기존 상세 */}
+        {/* detail 뷰 */}
         {viewMode === 'detail' && (
           <>
         <button
@@ -597,64 +406,77 @@ export default function TransactionsClient() {
           </button>
         </div>
 
-        {/* 통계 바 */}
-        {!loading && filtered.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
-            <span style={{ fontSize: '15px', color: 'var(--text-muted)' }}>
-              총&nbsp;<strong style={{ color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>{totalTx.toLocaleString()}</strong>건
-            </span>
-            {newHighCnt > 0 && (
-              <span style={{ fontSize: '14px', color: 'var(--text-dim)' }}>
-                신고가&nbsp;<strong style={{ color: '#E23B3B' }}>{newHighCnt}</strong>건
-                <span style={{ fontSize: '11px', color: 'var(--text-dim)', marginLeft: '4px' }}>(조회 기간 내)</span>
-              </span>
+        {/* 구별 칩 (아실형 — 건수·신고가) */}
+        <DistrictChips
+          districts={DISTRICT_GROUPS[groupIdx]?.districts ?? []}
+          stats={districtStats[groupLabel] ?? null}
+          active={district}
+          onPick={(d) => { setDistrict(d); setFetched(''); }}
+        />
+
+        {/* 통계 바 + 정렬·필터 */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: '12px', flexWrap: 'wrap', marginBottom: '20px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            {!loading && filtered.length > 0 && (
+              <>
+                <span style={{ fontSize: '15px', color: 'var(--text-muted)' }}>
+                  총&nbsp;<strong style={{ color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>{totalTx.toLocaleString()}</strong>건
+                </span>
+                {newHighCnt > 0 && (
+                  <span style={{ fontSize: '14px', color: 'var(--text-dim)' }}>
+                    신고가&nbsp;<strong style={{ color: 'var(--up-color, #C92F2F)' }}>{newHighCnt}</strong>건
+                  </span>
+                )}
+              </>
             )}
           </div>
-        )}
 
-        {/* 시도 탭 */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }} role="tablist" aria-label="지역 선택">
-          {DISTRICT_GROUPS.map((g, i) => {
-            const isActive = i === groupIdx;
-            return (
-              <button
-                key={g.label}
-                role="tab"
-                aria-selected={isActive}
-                onClick={() => {
-                  setGroupIdx(i);
-                  const first = g.districts[0];
-                  if (first) { setDistrict(first); setFetched(''); }
-                }}
-                style={{
-                  padding: '6px 14px', borderRadius: '999px', fontSize: '13px', fontWeight: 500,
-                  backgroundColor: isActive ? 'var(--accent)' : 'var(--bg-card)',
-                  color: isActive ? '#FFFFFF' : 'var(--text-muted)',
-                  border: `1px solid ${isActive ? 'var(--accent)' : 'var(--border)'}`,
-                  cursor: 'pointer', transition: 'background-color 0.15s, color 0.15s',
-                }}
-              >
-                {g.label}
-              </button>
-            );
-          })}
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <select
+              value={areaFilter}
+              onChange={(e) => setAreaFilter(e.target.value)}
+              aria-label="면적 필터"
+              style={{
+                padding: '8px 12px', borderRadius: '10px', fontSize: '13px', fontWeight: 600,
+                backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)',
+                border: '1px solid var(--border)', cursor: 'pointer', outline: 'none',
+              }}
+            >
+              {AREA_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+            </select>
+            <select
+              value={sortKey}
+              onChange={(e) => setSortKey(e.target.value as SortKey)}
+              aria-label="정렬"
+              style={{
+                padding: '8px 12px', borderRadius: '10px', fontSize: '13px', fontWeight: 600,
+                backgroundColor: 'var(--ink, #14213D)', color: '#FFFFFF',
+                border: '1px solid var(--ink, #14213D)', cursor: 'pointer', outline: 'none',
+              }}
+            >
+              {SORT_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+            </select>
+            <button
+              onClick={() => setNewHighOnly((v) => !v)}
+              aria-pressed={newHighOnly}
+              style={{
+                padding: '8px 14px', borderRadius: '10px', fontSize: '13px', fontWeight: 600,
+                backgroundColor: newHighOnly ? 'var(--up-color, #C92F2F)' : 'var(--bg-card)',
+                color: newHighOnly ? '#FFFFFF' : 'var(--text-muted)',
+                border: `1px solid ${newHighOnly ? 'var(--up-color, #C92F2F)' : 'var(--border)'}`,
+                cursor: 'pointer',
+              }}
+            >
+              신고가
+            </button>
+          </div>
         </div>
 
-        {/* 구/시 드롭다운 + 기간 필터 */}
+        {/* 기간 필터 + 검색 */}
         <div style={{ display: 'flex', gap: '10px', marginBottom: '28px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <select
-            value={district}
-            onChange={(e) => { setDistrict(e.target.value); setFetched(''); }}
-            aria-label="구/시 선택"
-            style={{
-              padding: '10px 14px', borderRadius: '10px', fontSize: '14px', fontWeight: 500,
-              backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)',
-              border: '1px solid var(--border)', cursor: 'pointer', outline: 'none',
-            }}
-          >
-            {DISTRICT_GROUPS[groupIdx]?.districts.map((d) => <option key={d} value={d}>{d}</option>)}
-          </select>
-
           {([
             { label: '3개월',  value: 3  },
             { label: '6개월',  value: 6  },
@@ -668,7 +490,7 @@ export default function TransactionsClient() {
               style={{
                 padding: '10px 18px', borderRadius: '10px', fontSize: '13px', fontWeight: 600,
                 backgroundColor: months === value ? 'var(--accent)' : 'var(--bg-card)',
-                color:           months === value ? 'var(--text-primary)'  : 'var(--text-dim)',
+                color:           months === value ? '#FFFFFF'       : 'var(--text-dim)',
                 border: `1px solid ${months === value ? 'var(--accent)' : 'var(--border)'}`,
                 cursor: 'pointer',
               }}
@@ -692,11 +514,9 @@ export default function TransactionsClient() {
           </div>
         </div>
 
-        {/* 에러 상태 */}
+        {/* 에러 상태 — 최종 디자인 10c */}
         {error && !loading && (
-          <ErrorState
-            message="실거래 데이터를 불러오지 못했습니다"
-            detail={error}
+          <TxErrorState
             onRetry={() => { setError(null); setFetched(''); load(district, months); }}
           />
         )}
@@ -704,10 +524,10 @@ export default function TransactionsClient() {
         {/* 카드 그리드 */}
         {loading ? (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
               {[...Array(8)].map((_, i) => (
                 <div key={i} style={{
-                  height: '156px', borderRadius: '16px',
+                  height: '220px', borderRadius: '16px',
                   backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-light)',
                   animation: 'pulse 1.5s ease-in-out infinite',
                 }} />
@@ -715,12 +535,12 @@ export default function TransactionsClient() {
             </div>
             <style>{`@keyframes pulse{0%,100%{opacity:.3}50%{opacity:.6}}`}</style>
           </>
-        ) : filtered.length === 0 ? (
-          <div style={{ padding: '80px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '14px' }}>
-            {query ? `"${query}" 검색 결과 없음` : '거래 데이터 없음'}
-          </div>
+        ) : filtered.length === 0 && !error ? (
+          <TxEmptyState
+            onReset={() => { setQuery(''); setNewHighOnly(false); setAreaFilter('all'); setMonths(6); setFetched(''); }}
+          />
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
             {filtered.map((apt) => (
               <AptCard key={apt.id} apt={apt} onClick={() => setActiveApt(apt)} />
             ))}
@@ -728,13 +548,23 @@ export default function TransactionsClient() {
         )}
 
         <p style={{ marginTop: '24px', fontSize: '11px', color: 'var(--text-dim)', lineHeight: 1.8 }}>
-          ※ 매매 계약일 기준 · 신고가는 조회 기간 내 동일 면적 최고가 기준
+          ※ 매매 계약일 기준 · 신고가는 조회 기간 내 동일 면적 최고가 기준 · 전고점은 조회 기간 내 대표 면적 최고가
         </p>
           </>
         )}
       </div>
 
-      {/* 상세 모달 */}
+      {/* 구 선택 모달 */}
+      {picker && (
+        <RegionPickerModal
+          label={picker.label}
+          districts={picker.districts}
+          onPick={enterDistrict}
+          onClose={() => setPicker(null)}
+        />
+      )}
+
+      {/* 단지 상세 모달 */}
       {activeApt && (
         <AptDetailModal
           apt={activeApt}

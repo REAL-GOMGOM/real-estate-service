@@ -3,7 +3,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   RefreshCw, Building2, AlertTriangle, CheckCircle, Info, ChevronDown, ChevronUp,
+  Search, Loader2, X,
 } from 'lucide-react';
+import { AptAutocomplete, type ApartmentSearchResult } from '@/components/search/AptAutocomplete';
+import { findDistrictByLawdCd } from '@/lib/district-codes';
+import RateTrendCard from './RateTrendCard';
 import {
   simulateBankLoan,
   BankLoanInput,
@@ -99,6 +103,31 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
   const [noticeOpen, setNoticeOpen] = useState(true);
   const [compareOpen, setCompareOpen] = useState(false);
 
+  // 단지 검색 — 최근 3개월 실거래 평균가를 매매가에 적용 (정부대출 탭과 동일 UX)
+  const [showSearch, setShowSearch] = useState(false);
+  const [priceLoading, setPriceLoading] = useState(false);
+  const [selectedApt, setSelectedApt] = useState<{ name: string; district: string; count: number; avg: number } | null>(null);
+
+  async function handleSelectApt(apt: ApartmentSearchResult) {
+    const district = findDistrictByLawdCd(apt.lawdCd) ?? apt.sigungu;
+    setPriceLoading(true);
+    setSelectedApt({ name: apt.name, district, count: 0, avg: 0 });
+    try {
+      const res = await fetch(`/api/transactions?aptId=${encodeURIComponent(apt.id)}&months=3`);
+      const json = await res.json();
+      const txns: { price: number }[] | undefined = json?.data?.[0]?.transactions;
+      if (txns && txns.length > 0) {
+        const avg = Math.round(txns.reduce((a, t) => a + t.price, 0) / txns.length);
+        setHousePrice(avg);
+        setSelectedApt({ name: apt.name, district, count: txns.length, avg });
+      }
+    } catch { /* 조회 실패 시 매매가 유지 */ }
+    finally {
+      setPriceLoading(false);
+      setShowSearch(false);
+    }
+  }
+
   async function fetchRates() {
     setLoading(true);
     try {
@@ -147,7 +176,7 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
     return simulateBankLoan(input);
   }, [selectedRateRange, selectedBank, selectedProduct, housePrice, deposit, income, existingDebt, loanTerm, rateType, repaymentType, regulation]);
 
-  // 정책대출 비교 (디딤돌 일반)
+  // 정부대출 비교 (디딤돌 일반)
   const policyResult = useMemo(() => {
     if (!compareOpen) return null;
     const input: LoanInput = {
@@ -197,11 +226,11 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
             <RefreshCw size={14} /> 다시 시도
           </button>
           {onSwitchToPolicy && (
-            <button onClick={onSwitchToPolicy} style={secondaryBtn}>정책대출 보기</button>
+            <button onClick={onSwitchToPolicy} style={secondaryBtn}>정부대출 보기</button>
           )}
         </div>
         <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 14, marginBottom: 0 }}>
-          정책대출 시뮬레이션은 정상 이용 가능합니다
+          정부대출 시뮬레이션은 정상 이용 가능합니다
         </p>
       </div>
     );
@@ -246,10 +275,78 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
         )}
       </div>
 
+      {/* COFIX 금리 추이 — 변동금리 기준지표 */}
+      <RateTrendCard variant="cofix" />
+
       {/* 기본 정보 */}
       <Section title="기본 정보">
         <div style={{ marginBottom: 16 }}>
-          <LabelRow label="매매가" value={fmtWon(housePrice)} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <LabelRow label="매매가" value={fmtWon(housePrice)} />
+            <button
+              onClick={() => setShowSearch(!showSearch)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 500,
+                backgroundColor: showSearch ? 'var(--accent)' : 'var(--border-light)',
+                color: showSearch ? '#fff' : 'var(--text-muted)',
+                border: 'none', cursor: 'pointer', transition: 'all 0.15s',
+                flexShrink: 0,
+              }}
+            >
+              <Search size={12} />
+              단지 검색
+            </button>
+          </div>
+
+          {showSearch && (
+            <div style={{
+              padding: 14, borderRadius: 12, marginBottom: 12,
+              backgroundColor: 'var(--border-light)', border: '1px solid var(--border)',
+            }}>
+              <AptAutocomplete
+                placeholder="단지명 입력 (예: 잠실엘스)"
+                onSelect={handleSelectApt}
+              />
+            </div>
+          )}
+
+          {selectedApt && (
+            <div style={{
+              marginBottom: 12, padding: '14px 18px', borderRadius: 12,
+              backgroundColor: 'var(--accent-bg)',
+              borderLeft: '4px solid var(--accent)',
+              position: 'relative',
+            }}>
+              <button
+                onClick={() => setSelectedApt(null)}
+                aria-label="선택 해제"
+                style={{
+                  position: 'absolute', top: 10, right: 10,
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'var(--text-dim)', padding: 2,
+                }}
+              >
+                <X size={14} />
+              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{selectedApt.name}</span>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{selectedApt.district}</span>
+              </div>
+              {priceLoading ? (
+                <Loader2 size={14} style={{ color: 'var(--accent)', animation: 'spin 1s linear infinite' }} />
+              ) : selectedApt.count > 0 ? (
+                <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', margin: 0 }}>
+                  최근 3개월 {selectedApt.count}건 평균 {fmtWon(selectedApt.avg)} 적용 중
+                </p>
+              ) : (
+                <p style={{ fontSize: 12, color: 'var(--text-dim)', margin: 0 }}>
+                  최근 3개월 실거래가 없어 매매가를 직접 입력해주세요
+                </p>
+              )}
+            </div>
+          )}
+
           <input type="number" value={housePrice} onChange={(e) => setHousePrice(Math.max(0, Number(e.target.value) || 0))} step={1000} style={inputStyle} />
         </div>
         <div style={{ marginBottom: 16 }}>
@@ -485,7 +582,7 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
             </div>
           )}
 
-          {/* 정책대출 비교 버튼 */}
+          {/* 정부대출 비교 버튼 */}
           <button
             onClick={() => setCompareOpen(!compareOpen)}
             style={{
@@ -497,20 +594,20 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             }}
           >
-            💡 정책대출과 비교하기
+            💡 정부대출과 비교하기
             {compareOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
         </div>
       )}
 
-      {/* 정책대출 비교 패널 */}
+      {/* 정부대출 비교 패널 */}
       {compareOpen && result && policyResult && (
         <div style={{
           padding: 20, borderRadius: 14, marginBottom: 24,
           backgroundColor: 'var(--bg-card)', border: '1px solid var(--accent)',
         }}>
           <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 14px' }}>
-            정책대출 vs 시중은행 비교
+            정부대출 vs 은행대출 비교
           </h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
             <CompareCol
@@ -538,7 +635,7 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
               backgroundColor: 'var(--accent-bg)',
             }}>
               <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)', margin: 0, lineHeight: 1.5 }}>
-                💡 정책대출 조건 충족 시 월{' '}
+                💡 정부대출 조건 충족 시 월{' '}
                 {fmt(Math.max(0, Math.round(result.monthlyPaymentMin - policyResult.monthlyPayment)))}
                 ~{fmt(Math.max(0, Math.round(result.monthlyPaymentMax - policyResult.monthlyPayment)))}만원 절약
               </p>
@@ -546,13 +643,13 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
           )}
 
           <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.6 }}>
-            ※ 정책대출(디딤돌)은 소득·자산·무주택 요건이 있습니다.
+            ※ 정부대출(디딤돌)은 소득·자산·무주택 요건이 있습니다.
             <br />
-            정책대출 탭에서 자격 여부를 확인하세요.
+            정부대출 탭에서 자격 여부를 확인하세요.
           </p>
           {onSwitchToPolicy && (
             <button onClick={onSwitchToPolicy} style={{ ...secondaryBtn, width: '100%', justifyContent: 'center' }}>
-              정책대출 탭으로 이동 →
+              정부대출 탭으로 이동 →
             </button>
           )}
         </div>
