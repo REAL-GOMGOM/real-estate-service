@@ -93,6 +93,13 @@ function ChartTooltip({ active, payload }: any) {
 function AptDetailModal({ apt, onClose, months }: { apt: AptGroup; onClose: () => void; months: number }) {
   const [selArea, setSelArea] = useState<number | null>(null);
 
+  // 모달 열림 중 배경 페이지 스크롤 잠금 (스크롤바 이중 노출 방지)
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
   const sorted     = [...apt.transactions].sort((a, b) => b.date.localeCompare(a.date));
   const uniqueAreas = [...new Set(apt.transactions.map((t) => t.area))].sort((a, b) => a - b);
 
@@ -498,6 +505,9 @@ export default function TransactionsClient() {
                   <button
                     key={region.label}
                     onClick={() => {
+                      // 시도 탭·드롭다운이 클릭한 시도를 따라가도록 groupIdx 동기화
+                      // (미동기화 시 "경기 클릭 → 서울 활성" 불일치 발생)
+                      setGroupIdx(Math.max(0, findGroupIndexOfDistrict(region.firstDistrict)));
                       setDistrict(region.firstDistrict);
                       setViewMode('detail');
                       setFetched('');
