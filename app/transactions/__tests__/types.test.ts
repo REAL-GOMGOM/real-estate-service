@@ -94,30 +94,35 @@ describe('representativeArea', () => {
   });
 });
 
-describe('sparkSeries (사이클 Z — 월평균 스무딩)', () => {
-  it('월평균 4개 이상이면 월평균 시리즈 사용', () => {
+describe('sparkSeries (사이클 Z — silgga 형 시간축 시리즈)', () => {
+  it('개별 거래를 시간 비례 t(0~1) 로 반환', () => {
     const g = group([
       tx({ price: 100000, date: '2026-01-10' }),
-      tx({ price: 110000, date: '2026-01-20' }),
       tx({ price: 120000, date: '2026-02-10' }),
-      tx({ price: 130000, date: '2026-03-10' }),
-      tx({ price: 140000, date: '2026-04-10' }),
+      tx({ price: 140000, date: '2026-03-10' }),
     ]);
     const s = sparkSeries(g)!;
-    // 1월은 (100000+110000)/2 = 105000 으로 평균됨
-    expect(s.prices).toEqual([105000, 120000, 130000, 140000]);
+    expect(s.points).toHaveLength(3);
+    expect(s.points[0].t).toBe(0);
+    expect(s.points[2].t).toBe(1);
+    expect(s.points[1].t).toBeGreaterThan(0.4);
+    expect(s.points[1].t).toBeLessThan(0.6);
     expect(s.rising).toBe(true);
   });
-  it('월 수가 적으면 개별 거래 사용', () => {
+  it('하락 시리즈 rising=false', () => {
     const g = group([
       tx({ price: 120000, date: '2026-05-01' }),
       tx({ price: 110000, date: '2026-06-01' }),
     ]);
-    const s = sparkSeries(g)!;
-    expect(s.prices).toEqual([120000, 110000]);
-    expect(s.rising).toBe(false);
+    expect(sparkSeries(g)!.rising).toBe(false);
   });
-  it('거래 1건이면 null', () => {
+  it('다른 면적 거래는 제외, 거래 1건이면 null', () => {
     expect(sparkSeries(group([tx({})]))).toBeNull();
+    const g = group([
+      tx({ price: 200000, area: 135, date: '2026-05-01' }),
+      tx({ price: 110000, area: 84,  date: '2026-06-01' }),
+    ]);
+    // 대표면적(84 또는 135 중 다수) 기준 1건뿐 → null
+    expect(sparkSeries(g)).toBeNull();
   });
 });

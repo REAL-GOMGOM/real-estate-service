@@ -73,30 +73,34 @@ export function detectNewHigh(apt: AptGroup): boolean {
 }
 
 /**
- * 스파크라인용 가격 시리즈 — 대표 면적 거래를 시간순으로.
- * 월평균 포인트가 4개 이상이면 월평균(스무딩 효과), 아니면 개별 거래.
- * 층·타입 편차로 인한 지그재그를 줄여 "현실적인" 흐름을 보여준다.
+ * 스파크라인 시리즈 — 아실 스타일 (개별 거래를 시간축 비례로).
+ * t 는 0~1 정규화된 계약일 위치. 거래 밀집·공백이 그대로 드러나
+ * 실제 시세 차트처럼 보인다. 포인트가 적으면 (5개 미만) 곡선 스무딩 권장.
  */
-export function sparkSeries(apt: AptGroup): { prices: number[]; rising: boolean } | null {
+export interface SparkPoint { t: number; price: number }
+
+export function sparkSeries(apt: AptGroup): { points: SparkPoint[]; rising: boolean } | null {
   const repArea = representativeArea(apt);
   const txs = apt.transactions
-    .filter((t) => Math.abs(t.area - repArea) <= 6)
+    .filter((tr) => Math.abs(tr.area - repArea) <= 6)
     .sort((a, b) => a.date.localeCompare(b.date));
   if (txs.length < 2) return null;
 
-  const byMonth = new Map<string, number[]>();
-  txs.forEach((t) => {
-    const ym = t.date.slice(0, 7);
-    if (!byMonth.has(ym)) byMonth.set(ym, []);
-    byMonth.get(ym)!.push(t.price);
-  });
+  const toTime = (date: string): number => {
+    const [y, m, d] = date.split('-').map((v) => parseInt(v));
+    return new Date(y, (m ?? 1) - 1, d ?? 15).getTime();
+  };
 
-  const monthly = [...byMonth.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([, prices]) => Math.round(prices.reduce((s, v) => s + v, 0) / prices.length));
+  const t0 = toTime(txs[0].date);
+  const tN = toTime(txs[txs.length - 1].date);
+  const span = tN - t0 || 1;
 
-  const prices = monthly.length >= 4 ? monthly : txs.map((t) => t.price);
-  return { prices, rising: prices[prices.length - 1] >= prices[0] };
+  const points = txs.map((tr) => ({
+    t: (toTime(tr.date) - t0) / span,
+    price: tr.price,
+  }));
+
+  return { points, rising: points[points.length - 1].price >= points[0].price };
 }
 
 /** 거래 최다 대표 면적 (카드 라인차트·평균가 기준) */

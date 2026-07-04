@@ -24,23 +24,23 @@ interface AptCardProps {
   onClick: () => void;
 }
 
-/** 대표 면적 거래 → 스무딩 좌표 (월평균 기반, sparkSeries 공용 로직) */
+/** 대표 면적 거래 → 시간축 비례 좌표 (silgga 스타일, sparkSeries 공용) */
 function buildSparkline(apt: AptGroup, width: number, height: number) {
   const series = sparkSeries(apt);
   if (!series) return null;
 
-  const { prices, rising } = series;
+  const prices = series.points.map((p) => p.price);
   const min = Math.min(...prices);
   const max = Math.max(...prices);
   const span = max - min || 1;
   const pad = 5;
 
-  const coords: Pt[] = prices.map((p, i) => ({
-    x: pad + (i / (prices.length - 1)) * (width - pad * 2),
-    y: pad + (1 - (p - min) / span) * (height - pad * 2),
+  const coords: Pt[] = series.points.map((p) => ({
+    x: pad + p.t * (width - pad * 2),
+    y: pad + (1 - (p.price - min) / span) * (height - pad * 2),
   }));
 
-  return { coords, rising, count: prices.length };
+  return { coords, rising: series.rising, count: coords.length };
 }
 
 export default function AptCard({ apt, onClick }: AptCardProps) {
@@ -163,9 +163,11 @@ export default function AptCard({ apt, onClick }: AptCardProps) {
               aria-label={`${apt.name} 가격 추이 (거래 ${spark.count}건)`}
             >
               <path
-                d={smoothPath(spark.coords)}
+                d={spark.count >= 5
+                  ? `M${spark.coords.map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' L')}`
+                  : smoothPath(spark.coords)}
                 fill="none"
-                stroke={spark.rising ? 'var(--up-color, #C92F2F)' : 'var(--down-color, #1636A8)'}
+                stroke="#3D4E6E"
                 strokeWidth="1.6"
                 strokeLinejoin="round"
                 strokeLinecap="round"
@@ -174,7 +176,7 @@ export default function AptCard({ apt, onClick }: AptCardProps) {
                 cx={spark.coords[spark.coords.length - 1].x}
                 cy={spark.coords[spark.coords.length - 1].y}
                 r="2.6"
-                fill={spark.rising ? 'var(--up-color, #C92F2F)' : 'var(--down-color, #1636A8)'}
+                fill="#3D4E6E"
               />
             </svg>
           )}

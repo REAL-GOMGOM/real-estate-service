@@ -6,7 +6,7 @@ import {
   type AptGroup,
   fmtPrice, fmtContractDate, detectNewHigh, sparkSeries,
 } from '@/lib/tx-shared';
-import { smoothPath, smoothAreaPath, type Pt } from '@/lib/svg-smooth';
+import { smoothPath, type Pt } from '@/lib/svg-smooth';
 import { TxErrorState, TxEmptyState } from '@/components/shared/TxStates';
 
 /**
@@ -38,20 +38,20 @@ interface DealFeedProps {
   district: string;
 }
 
-/** 대표 면적 실거래 이력 → 스무딩 좌표 (0~100 × 0~56, 월평균 기반) */
+/** 대표 면적 실거래 이력 → 시간축 비례 좌표 (0~100 × 0~56, silgga 스타일) */
 function buildSpark(group: AptGroup): { pts: Pt[]; up: boolean } | null {
   const series = sparkSeries(group);
   if (!series) return null;
 
-  const { prices, rising } = series;
+  const prices = series.points.map((p) => p.price);
   const min = Math.min(...prices);
   const max = Math.max(...prices);
   const span = max - min || 1;
-  const pts: Pt[] = prices.map((p, i) => ({
-    x: (i / (prices.length - 1)) * 100,
-    y: 7 + (1 - (p - min) / span) * 42,
+  const pts: Pt[] = series.points.map((p) => ({
+    x: 3 + p.t * 94,
+    y: 7 + (1 - (p.price - min) / span) * 42,
   }));
-  return { pts, up: rising };
+  return { pts, up: series.rising };
 }
 
 /** AptGroup[] → 최근 계약 순 피드 아이템 */
@@ -93,10 +93,14 @@ function toFeedDeals(groups: AptGroup[], limit: number): FeedDeal[] {
     .slice(0, limit);
 }
 
-function SparkThumb({ pts, up }: { pts: Pt[]; up: boolean }) {
-  const color = up ? 'var(--up-color)' : 'var(--down-color)';
-  const fill = up ? 'rgba(201,47,47,0.08)' : 'rgba(27,77,219,0.08)';
+function SparkThumb({ pts }: { pts: Pt[] }) {
+  // silgga 스타일 — 방향 색 없이 잔잔한 다크 라인. 포인트 적으면 곡선 보정.
+  const line = pts.length >= 5
+    ? `M${pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L')}`
+    : smoothPath(pts);
+  const first = pts[0];
   const last = pts[pts.length - 1];
+  const area = `${line} L${last.x.toFixed(1)},56 L${first.x.toFixed(1)},56 Z`;
 
   return (
     <div
@@ -108,16 +112,16 @@ function SparkThumb({ pts, up }: { pts: Pt[]; up: boolean }) {
       }}
     >
       <svg viewBox="0 0 100 56" preserveAspectRatio="none" style={{ width: '100%', height: '100%', display: 'block' }}>
-        <path d={smoothAreaPath(pts, 100, 56)} fill={fill} />
+        <path d={area} fill="rgba(61,78,110,0.08)" />
         <path
-          d={smoothPath(pts)}
+          d={line}
           fill="none"
-          stroke={color}
-          strokeWidth="2.4"
+          stroke="#3D4E6E"
+          strokeWidth="1.7"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-        {last && <circle cx={last.x} cy={last.y} r="3.2" fill={color} />}
+        {last && <circle cx={last.x} cy={last.y} r="2.6" fill="#3D4E6E" />}
       </svg>
     </div>
   );
@@ -228,8 +232,8 @@ export function DealFeed({ district }: DealFeedProps) {
 
   useEffect(() => {
     let cancelled = false;
-    // 12개월 — 스파크라인 월평균 포인트 확보 (피드 카드 자체는 최신 계약 순)
-    fetch(`/api/transactions?district=${encodeURIComponent(district)}&months=12`)
+    // 36개월 — silgga 형 시세 차트 밀도 확보 (피드 카드 자체는 최신 계약 순)
+    fetch(`/api/transactions?district=${encodeURIComponent(district)}&months=36`)
       .then((r) => r.json())
       .then((json) => {
         if (cancelled) return;
@@ -305,7 +309,7 @@ export function DealFeed({ district }: DealFeedProps) {
           <article>
             <div className="flex gap-4">
               {deal.spark.length > 1 ? (
-                <SparkThumb pts={deal.spark} up={deal.sparkUp} />
+                <SparkThumb pts={deal.spark} />
               ) : (
                 <div
                   aria-hidden
