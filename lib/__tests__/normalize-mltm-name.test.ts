@@ -39,6 +39,12 @@ describe('후행 동(棟) 제거', () => {
     expect(normalizeMLTMName('우방1차 103동')).toBe('우방1차');
   });
 
+  it('범위 동 표기 제거 (2026-07 리포트 실사례)', () => {
+    expect(normalizeMLTMName('현대1차101동~106동')).toBe('현대1차');
+    expect(normalizeMLTMName('삼호1동~3동')).toBe('삼호');
+    expect(normalizeMLTMName('선경1차(1동-7동)')).toBe('선경1차');
+  });
+
   it('지명의 ~동은 오탐하지 않음 (숫자 없이 동으로 끝나는 이름)', () => {
     expect(normalizeMLTMName('신동아')).toBe('신동아');
     expect(normalizeMLTMName('이동미주')).toBe('이동미주');
