@@ -2,13 +2,12 @@ import { Suspense } from 'react';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { CompactHero } from '@/components/landing/CompactHero';
-import { FilterRail } from '@/components/landing/FilterRail';
-import { DealFeed } from '@/components/landing/DealFeed';
+import { FeedSection } from '@/components/landing/FeedSection';
 import { RightRail } from '@/components/landing/RightRail';
 import { SubscriptionList } from '@/components/landing/SubscriptionList';
 import { TelegramBanner } from '@/components/landing/TelegramBanner';
 import { VisitorStatsSlim } from '@/components/landing/VisitorStatsSlim';
-import { MOCK_DISTRICTS, MOCK_DEALS } from '@/lib/mock-data';
+import { MOCK_DISTRICTS } from '@/lib/mock-data';
 import { getTopLocations } from '@/lib/region-data';
 import { toSubscription } from '@/lib/adapters';
 import { fetchSubscriptions } from '@/lib/subscription-api';
@@ -39,18 +38,10 @@ export default async function HomePage() {
       {/* 1. 컴팩트 히어로 (시안 1a) */}
       <CompactHero />
 
-      {/* 2. 3컬럼 본문 — 필터 레일 / 실거래 피드 / 우측 레일 */}
-      <section
-        className="mx-auto grid grid-cols-1 lg:grid-cols-[236px_minmax(0,1fr)_268px] gap-5"
-        style={{
-          maxWidth: '1280px',
-          padding: '24px var(--page-padding) 32px',
-        }}
-      >
-        <FilterRail />
-        <DealFeed deals={MOCK_DEALS} />
-        <RightRail districts={MOCK_DISTRICTS} topLocations={getTopLocations(5)} />
-      </section>
+      {/* 2. 3컬럼 본문 — 필터 레일 / 실거래 피드(실데이터) / 우측 레일 */}
+      <FeedSection
+        rightRail={<RightRail districts={MOCK_DISTRICTS} topLocations={getTopLocations(5)} />}
+      />
 
       {/* 3. 청약 일정 */}
       <SubscriptionList items={subscriptions} />

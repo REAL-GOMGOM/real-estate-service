@@ -1,6 +1,5 @@
 'use client';
 
-import { BRAND } from '@/lib/design-tokens';
 import { Reveal } from '@/components/shared/Reveal';
 
 // 텔레그램 채널 배너
