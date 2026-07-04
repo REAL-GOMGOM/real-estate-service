@@ -33,16 +33,17 @@ export function publishSetValues() {
 
 /**
  * id 글을 published 로 전환.
- * @returns 전환된 글의 { id, slug }, 대상이 없으면 null
+ * @returns 전환된 글의 { id, slug, title, excerpt }, 대상이 없으면 null
+ *          (title·excerpt는 발행 직후 텔레그램 채널 공지 등 브로드캐스트용)
  */
 export async function setPostPublished(
   id: string,
-): Promise<{ id: string; slug: string } | null> {
+): Promise<{ id: string; slug: string; title: string; excerpt: string | null } | null> {
   const rows = await getBlogDb()
     .update(posts)
     .set(publishSetValues())
     .where(eq(posts.id, id))
-    .returning({ id: posts.id, slug: posts.slug });
+    .returning({ id: posts.id, slug: posts.slug, title: posts.title, excerpt: posts.excerpt });
 
   return rows[0] ?? null;
 }
