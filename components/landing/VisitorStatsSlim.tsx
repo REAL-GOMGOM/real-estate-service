@@ -17,7 +17,7 @@ export function VisitorStatsSlim({ initialStats }: Props) {
         <div className="flex items-center gap-2">
           <span
             className="inline-block w-1.5 h-1.5 rounded-full"
-            style={{ backgroundColor: BRAND.terracotta }}
+            style={{ backgroundColor: BRAND.primary }}
           />
           <span style={{ color: BRAND.inkSoft }}>오늘 방문</span>
           <span className="font-semibold tabular-nums" style={{ color: BRAND.ink }}>
@@ -28,7 +28,7 @@ export function VisitorStatsSlim({ initialStats }: Props) {
         <div className="flex items-center gap-2">
           <span
             className="inline-block w-1.5 h-1.5 rounded-full"
-            style={{ backgroundColor: BRAND.sage }}
+            style={{ backgroundColor: BRAND.success }}
           />
           <span style={{ color: BRAND.inkSoft }}>지난 24시간</span>
           <span className="font-semibold tabular-nums" style={{ color: BRAND.ink }}>
@@ -39,7 +39,7 @@ export function VisitorStatsSlim({ initialStats }: Props) {
         <div className="flex items-center gap-2">
           <span
             className="inline-block w-1.5 h-1.5 rounded-full"
-            style={{ backgroundColor: BRAND.amber }}
+            style={{ backgroundColor: BRAND.warning }}
           />
           <span style={{ color: BRAND.inkSoft }}>누적</span>
           <span className="font-semibold tabular-nums" style={{ color: BRAND.ink }}>

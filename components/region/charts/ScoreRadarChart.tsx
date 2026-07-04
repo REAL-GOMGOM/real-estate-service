@@ -53,8 +53,8 @@ export function ScoreRadarChart({ metrics }: Props) {
           <Radar
             name="지표"
             dataKey="value"
-            stroke={BRAND.terracotta}
-            fill={BRAND.terracotta}
+            stroke={BRAND.primary}
+            fill={BRAND.primary}
             fillOpacity={0.25}
           />
           <Tooltip

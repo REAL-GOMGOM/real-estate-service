@@ -25,9 +25,9 @@ interface Props {
 const CITY_LEVEL_THRESHOLD = 10;
 
 const SCHOOL_COLORS: Record<string, string> = {
-  elementary: '#22C55E',
+  elementary: '#6FC08A',
   middle: 'var(--accent)',
-  high: '#F97316',
+  high: '#F0A24B',
 };
 
 const SCHOOL_LABELS: Record<string, string> = {
@@ -39,7 +39,7 @@ const SCHOOL_LABELS: Record<string, string> = {
 function createMarkerElement(loc: LocationScore, onClick: () => void): HTMLDivElement {
   const color      = getScoreColor(loc.score);
   const trendIcon  = loc.trend === 'up' ? '▲' : loc.trend === 'down' ? '▼' : '—';
-  const trendColor = loc.trend === 'up' ? '#22C55E' : loc.trend === 'down' ? '#EF4444' : 'var(--text-dim)';
+  const trendColor = loc.trend === 'up' ? 'var(--up-color)' : loc.trend === 'down' ? 'var(--down-color)' : 'var(--text-dim)';
 
   const wrapper = document.createElement('div');
   wrapper.style.cssText = 'display:inline-flex;flex-direction:column;align-items:center;cursor:pointer;';
@@ -66,7 +66,7 @@ function createMarkerElement(loc: LocationScore, onClick: () => void): HTMLDivEl
     dot.style.cssText = `
       position: absolute; top: -3px; right: -3px;
       width: 7px; height: 7px; border-radius: 50%;
-      background: #EF4444;
+      background: var(--danger);
       border: 1.5px solid var(--bg-card);
     `;
     box.appendChild(dot);

@@ -98,7 +98,7 @@ function VolumeCard({ item }: { item: VolumeItem }) {
         <p style={nameStyle}>{item.aptName}</p>
         <p style={subStyle}>{item.district} · 평균 {item.avgPriceFormatted}</p>
       </div>
-      <p style={{ ...priceStyle, color: '#F59E0B' }}>
+      <p style={{ ...priceStyle, color: '#F0A24B' }}>
         {item.count}<span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--text-dim)' }}>건</span>
       </p>
     </div>
@@ -114,8 +114,8 @@ function NewHighCard({ item }: { item: NewHighItem }) {
         <p style={subStyle}>{item.district} · 이전 {formatPrice(item.prevHigh)}</p>
       </div>
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
-        <p style={{ ...priceStyle, color: '#22C55E' }}>{formatPrice(item.price)}</p>
-        <p style={{ fontSize: '11px', color: '#22C55E', fontFamily: 'Roboto Mono, monospace' }}>{item.diffFormatted} ({item.diffPercent}%)</p>
+        <p style={{ ...priceStyle, color: '#2E7A4C' }}>{formatPrice(item.price)}</p>
+        <p style={{ fontSize: '11px', color: '#2E7A4C', fontFamily: 'Roboto Mono, monospace' }}>{item.diffFormatted} ({item.diffPercent}%)</p>
       </div>
     </div>
   );
@@ -123,7 +123,7 @@ function NewHighCard({ item }: { item: NewHighItem }) {
 
 function PriceChangeCard({ item }: { item: PriceChangeItem }) {
   const isUp = item.direction === 'up';
-  const color = isUp ? '#22C55E' : item.direction === 'down' ? '#EF4444' : 'var(--text-dim)';
+  const color = isUp ? '#2E7A4C' : item.direction === 'down' ? '#E23B3B' : 'var(--text-dim)';
   return (
     <div style={rowStyle}>
       <RankBadge rank={item.rank} />

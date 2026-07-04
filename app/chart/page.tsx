@@ -237,13 +237,13 @@ function ChartContent() {
                 <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>데이터 불러오는 중...</span>
               )}
               {apiError && (
-                <span style={{ fontSize: '12px', color: '#EF4444' }}>API 오류: {apiError}</span>
+                <span style={{ fontSize: '12px', color: '#E23B3B' }}>API 오류: {apiError}</span>
               )}
               <span style={{
                 padding: '4px 10px', borderRadius: '6px', fontSize: '11px',
-                backgroundColor: apiData ? 'rgba(34,197,94,0.12)' : 'var(--border-light)',
-                color: apiData ? '#22C55E' : 'var(--text-dim)',
-                border: `1px solid ${apiData ? 'rgba(34,197,94,0.25)' : 'var(--border-light)'}`,
+                backgroundColor: apiData ? 'rgba(111,192,138,0.12)' : 'var(--border-light)',
+                color: apiData ? '#2E7A4C' : 'var(--text-dim)',
+                border: `1px solid ${apiData ? 'rgba(111,192,138,0.25)' : 'var(--border-light)'}`,
               }}>
                 {apiData ? `${activeDistrict} 실거래가` : '목업 데이터'}
               </span>
@@ -275,8 +275,8 @@ function ChartContent() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', marginBottom: '24px' }}>
                   {[
                     { label: '최근 거래가', value: fmt(stats.latest),   color: 'var(--text-primary)' },
-                    { label: '전월 대비',   value: `${stats.change >= 0 ? '+' : ''}${stats.change.toFixed(1)}%`, color: stats.change >= 0 ? '#22C55E' : '#EF4444' },
-                    { label: '최고가',      value: fmt(stats.maxPrice), color: '#F59E0B' },
+                    { label: '전월 대비',   value: `${stats.change >= 0 ? '+' : ''}${stats.change.toFixed(1)}%`, color: stats.change >= 0 ? '#2E7A4C' : '#E23B3B' },
+                    { label: '최고가',      value: fmt(stats.maxPrice), color: '#F0A24B' },
                     { label: '최저가',      value: fmt(stats.minPrice), color: 'var(--text-muted)' },
                     { label: '총 거래',     value: `${stats.count}건`,  color: 'var(--accent)' },
                   ].map((s) => (

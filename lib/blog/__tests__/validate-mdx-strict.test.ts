@@ -13,8 +13,9 @@ describe('validateMdxStrict', () => {
   });
 
   it('등록된 컴포넌트(LineChart) 사용 통과', async () => {
+    // 8-5 props 게이트 도입으로 fixture를 유효 props로 갱신 (의도: 화이트리스트 통과 확인)
     const result = await validateMdxStrict(
-      '본문\n\n<LineChart data={[]} />\n\n끝',
+      '본문\n\n<LineChart title="t" series={[{ name: "A", data: [{ x: 1, y: 2 }] }]} />\n\n끝',
     );
     expect(result.ok).toBe(true);
   });
@@ -35,7 +36,7 @@ describe('validateMdxStrict', () => {
 
   it('등록+미등록 혼용 시 미등록만 보고', async () => {
     const result = await validateMdxStrict(
-      '<LineChart data={[]} />\n\n<EvilWidget />',
+      '<LineChart title="t" series={[]} />\n\n<EvilWidget />',
     );
     expect(result.ok).toBe(false);
     if (!result.ok) {

@@ -74,15 +74,15 @@ export default function GapGuidePage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px' }}>
               <div style={{ padding: '16px', borderRadius: '12px', backgroundColor: 'var(--btn-bg)', textAlign: 'center' }}>
                 <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '4px' }}>갭 (투자금)</p>
-                <p style={{ fontSize: '24px', fontWeight: 800, color: '#D4A853', fontFamily: 'Roboto Mono, monospace' }}>{fmtPrice(gap)}</p>
+                <p style={{ fontSize: '24px', fontWeight: 800, color: '#EBC15C', fontFamily: 'Roboto Mono, monospace' }}>{fmtPrice(gap)}</p>
               </div>
               <div style={{ padding: '16px', borderRadius: '12px', backgroundColor: 'var(--btn-bg)', textAlign: 'center' }}>
                 <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '4px' }}>전세가율</p>
-                <p style={{ fontSize: '24px', fontWeight: 800, color: rentRatio >= 70 ? 'var(--success-text, #3D6B44)' : 'var(--danger-text, #B93E32)', fontFamily: 'Roboto Mono, monospace' }}>{rentRatio}%</p>
+                <p style={{ fontSize: '24px', fontWeight: 800, color: rentRatio >= 70 ? 'var(--success-text, #2E7A4C)' : 'var(--danger-text, #C92F2F)', fontFamily: 'Roboto Mono, monospace' }}>{rentRatio}%</p>
               </div>
-              <div style={{ padding: '16px', borderRadius: '12px', backgroundColor: rentRatio >= 70 ? 'var(--success-bg, #E8F0E9)' : 'var(--danger-bg, #FDE8E6)', textAlign: 'center' }}>
+              <div style={{ padding: '16px', borderRadius: '12px', backgroundColor: rentRatio >= 70 ? 'var(--success-bg, #E9F6EE)' : 'var(--danger-bg, #FDECEC)', textAlign: 'center' }}>
                 <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '4px' }}>판정</p>
-                <p style={{ fontSize: '18px', fontWeight: 800, color: rentRatio >= 70 ? 'var(--success-text, #3D6B44)' : 'var(--danger-text, #B93E32)' }}>
+                <p style={{ fontSize: '18px', fontWeight: 800, color: rentRatio >= 70 ? 'var(--success-text, #2E7A4C)' : 'var(--danger-text, #C92F2F)' }}>
                   {rentRatio >= 80 ? '매우 적합' : rentRatio >= 70 ? '적합' : rentRatio >= 60 ? '주의' : '비추천'}
                 </p>
               </div>
@@ -128,8 +128,8 @@ export default function GapGuidePage() {
           </div>
 
           {/* 리스크 */}
-          <div style={{ padding: '24px', borderRadius: '16px', backgroundColor: 'var(--danger-bg, #FDE8E6)', border: '1px solid var(--danger-text, #B93E32)30', marginBottom: '32px' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--danger-text, #B93E32)', marginBottom: '16px' }}>
+          <div style={{ padding: '24px', borderRadius: '16px', backgroundColor: 'var(--danger-bg, #FDECEC)', border: '1px solid var(--danger-text, #C92F2F)30', marginBottom: '32px' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--danger-text, #C92F2F)', marginBottom: '16px' }}>
               <AlertTriangle size={18} style={{ verticalAlign: 'middle', marginRight: '6px' }} />
               갭투자 리스크
             </h2>
@@ -139,8 +139,8 @@ export default function GapGuidePage() {
               { risk: '금리 변동', desc: '금리 상승 → 전세 수요 감소 → 전세가 하락' },
               { risk: '세금', desc: '다주택자 취득세·양도세 중과로 실질 수익 감소' },
             ].map((r) => (
-              <div key={r.risk} style={{ display: 'flex', gap: '12px', padding: '10px 0', borderBottom: '1px solid var(--danger-text, #B93E32)15' }}>
-                <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--danger-text, #B93E32)', minWidth: '80px' }}>{r.risk}</span>
+              <div key={r.risk} style={{ display: 'flex', gap: '12px', padding: '10px 0', borderBottom: '1px solid var(--danger-text, #C92F2F)15' }}>
+                <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--danger-text, #C92F2F)', minWidth: '80px' }}>{r.risk}</span>
                 <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>{r.desc}</span>
               </div>
             ))}

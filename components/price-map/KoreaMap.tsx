@@ -34,13 +34,13 @@ const SHORT_NAMES: Record<string, string> = {
 };
 
 function rateToColor(rate: number): string {
-  if (rate <= -1.5) return '#1E40AF';
-  if (rate <= -0.5) return '#60A5FA';
-  if (rate <= -0.1) return '#93C5FD';
+  if (rate <= -1.5) return '#1636A8';
+  if (rate <= -0.5) return '#5B82E8';
+  if (rate <= -0.1) return '#B9CBF5';
   if (rate < 0.1)   return 'var(--text-dim)';
-  if (rate < 0.25)  return '#FCA5A5';
-  if (rate < 0.5)   return '#F87171';
-  return '#DC2626';
+  if (rate < 0.25)  return '#F4B6B6';
+  if (rate < 0.5)   return '#E85D5D';
+  return '#C92F2F';
 }
 
 interface GeoFeature {

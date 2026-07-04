@@ -49,7 +49,7 @@ export default function CalendarGrid({ year, month, events, activeCategories, on
             style={{
               padding: '6px 0', textAlign: 'center',
               fontSize: '11px', fontWeight: 600,
-              color: i === 0 ? '#EF4444' : i === 6 ? 'var(--accent)' : 'var(--text-dim)',
+              color: i === 0 ? '#E23B3B' : i === 6 ? 'var(--accent)' : 'var(--text-dim)',
               backgroundColor: 'var(--bg-overlay)',
             }}
           >
@@ -87,7 +87,7 @@ export default function CalendarGrid({ year, month, events, activeCategories, on
                 color: cell.isToday
                   ? 'var(--accent)'
                   : cell.dayOfWeek === 0
-                    ? '#EF4444'
+                    ? '#E23B3B'
                     : cell.dayOfWeek === 6
                       ? 'var(--accent)'
                       : 'var(--text-secondary)',

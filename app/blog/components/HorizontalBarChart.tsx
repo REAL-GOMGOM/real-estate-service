@@ -19,11 +19,11 @@
  * - 라벨 잘림 자동 대응: zeroX가 부족하면 자동 확장 (축소 X)
  *
  * 색상 팔레트(사전정의):
- * - red    #dc2626 (서울 상승)
- * - orange #ea580c (경기 상승)
- * - blue   #2563eb (하락)
- * - darkBlue #1d4ed8 (하락 강조)
- * - gray   #6b7280 (중립)
+ * - red    #E23B3B (서울 상승)
+ * - orange #E8663C (경기 상승)
+ * - blue   #1B4DDB (하락)
+ * - darkBlue #14213D (하락 강조)
+ * - gray   #8A94A8 (중립)
  */
 
 import {
@@ -109,7 +109,7 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
     if (props.unit === undefined && title) {
       const titleUnitMatch = title.match(TITLE_UNIT_REGEX);
       if (titleUnitMatch) {
-        // eslint-disable-next-line no-console
+         
         console.warn(
           `[HorizontalBarChart] title에 "(단위: ${titleUnitMatch[1].trim()})" 포함되어 있지만 ` +
           `unit prop이 미지정. default "%"가 적용되어 값 라벨이 의도와 불일치할 수 있음. ` +
@@ -120,7 +120,7 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
 
     // (b) unit 미지정 + dividerText가 단위 문자열 패턴 → 우회 사용 경고
     if (props.unit === undefined && dividerText && SHORT_UNIT_PATTERN.test(dividerText)) {
-      // eslint-disable-next-line no-console
+       
       console.warn(
         `[HorizontalBarChart] dividerText="${dividerText}"가 단위 문자열로 보이지만 ` +
         `unit prop이 미지정. 값 라벨은 default "%"로 표기됨. ` +
@@ -137,7 +137,7 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
       data.length > 0 &&
       data.every((row) => !row.color)
     ) {
-      // eslint-disable-next-line no-console
+       
       console.info(
         `[HorizontalBarChart] discrete 모드 모든 row.color 미지정. ` +
         `pickDefaultColor로 자동 할당 (red, blue, orange, darkBlue, gray 순). ` +
@@ -243,7 +243,7 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
     process.env.NODE_ENV !== 'production' &&
     labelStartX < CHART_CONSTANTS.MIN_LABEL_AREA_LEFT_PADDING
   ) {
-    // eslint-disable-next-line no-console
+     
     console.warn(
       `[HorizontalBarChart] "${title}" 라벨 영역 부족 — ` +
         `labelStartX=${labelStartX.toFixed(0)} < ${CHART_CONSTANTS.MIN_LABEL_AREA_LEFT_PADDING}. ` +
@@ -292,7 +292,7 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
         textAnchor="middle"
         fontSize={14}
         fontWeight={600}
-        fill="#111827"
+        fill="#14213D"
       >
         {title}
       </text>
@@ -303,7 +303,7 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
         y1={40}
         x2={adjustedZeroX}
         y2={axisBottom}
-        stroke="#9ca3af"
+        stroke="#9AA4B8"
         strokeWidth={1}
       />
       <text
@@ -311,7 +311,7 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
         y={axisBottom + 20}
         textAnchor="middle"
         fontSize={11}
-        fill="#6b7280"
+        fill="#64708A"
       >
         {axisLabel}
       </text>
@@ -411,7 +411,7 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
               y={CHART_CONSTANTS.TOP_PADDING + (dividerAfter + 1) * CHART_CONSTANTS.ROW_PITCH + CHART_CONSTANTS.DIVIDER_GAP + 10}
               textAnchor="middle"
               fontSize={11}
-              fill="#6b7280"
+              fill="#64708A"
             >
               {dividerText}
             </text>
@@ -426,7 +426,7 @@ export function HorizontalBarChart(props: HorizontalBarChartProps) {
           y={height - 8}
           textAnchor="middle"
           fontSize={10}
-          fill="#9ca3af"
+          fill="#9AA4B8"
         >
           * 차트 영역을 벗어난 값
         </text>

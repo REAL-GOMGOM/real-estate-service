@@ -10,19 +10,19 @@
  * - 우측 박스 옆 변화 마커 ▼▲─ x=600
  *
  * 사이클 S Step S-2: 자체 COLORS 제거 → lib/chart-colors.CHART_COLORS 통합.
- * 키워드 'orange'는 4개 차트의 #ea580c와 톤이 달라(#f97316) 'amberOrange'로 명시 분리.
+ * 키워드 'orange'는 4개 차트의 #E8663C와 톤이 달라(#F0A24B) 'amberOrange'로 명시 분리.
  */
 
 import { CHART_COLORS } from '@/lib/chart-colors';
 import { ChartErrorPlaceholder } from './ChartErrorPlaceholder';
 
-const TEXT_ON_LIGHT = '#111827'; // yellow 박스 위 텍스트
+const TEXT_ON_LIGHT = '#14213D'; // yellow 박스 위 텍스트
 const TEXT_ON_DARK = '#ffffff'; // amberOrange/red 박스 위 텍스트
-const SUB_LABEL_FILL = '#6b7280';
+const SUB_LABEL_FILL = '#64708A';
 const HEADER_FILL = '#374151';
-const ARROW_FILL = '#9ca3af';
-const DELTA_UP_DOWN_FILL = '#dc2626';
-const DELTA_FLAT_FILL = '#6b7280';
+const ARROW_FILL = '#9AA4B8';
+const DELTA_UP_DOWN_FILL = '#E23B3B';
+const DELTA_FLAT_FILL = '#64708A';
 
 const SCALE = 2.78; // value × SCALE = bar width (default — 0~100 비율 기준)
 /**
@@ -63,7 +63,7 @@ interface CategoryRow {
   label: string;
   leftValue: number;
   rightValue: number;
-  /** DemographicShiftBars 전용 3색. amber 톤 'amberOrange'(#f97316)는 표준 'orange'(#ea580c)와 구분. */
+  /** DemographicShiftBars 전용 3색. amber 톤 'amberOrange'(#F0A24B)는 표준 'orange'(#E8663C)와 구분. */
   color: 'yellow' | 'amberOrange' | 'red';
 }
 
@@ -115,7 +115,7 @@ export function DemographicShiftBars({
         textAnchor="middle"
         fontSize={14}
         fontWeight={600}
-        fill="#111827"
+        fill="#14213D"
       >
         {title}
       </text>

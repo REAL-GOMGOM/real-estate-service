@@ -126,8 +126,8 @@ function GapContent() {
   };
 
   const signalConfig = {
-    undervalued: { label: '저평가', color: 'var(--success-text, #3D6B44)', bg: 'var(--success-bg, #E8F0E9)', icon: TrendingUp },
-    overvalued: { label: '고평가', color: 'var(--danger-text, #B93E32)', bg: 'var(--danger-bg, #FDE8E6)', icon: TrendingDown },
+    undervalued: { label: '저평가', color: 'var(--success-text, #2E7A4C)', bg: 'var(--success-bg, #E9F6EE)', icon: TrendingUp },
+    overvalued: { label: '고평가', color: 'var(--danger-text, #C92F2F)', bg: 'var(--danger-bg, #FDECEC)', icon: TrendingDown },
     normal: { label: '정상', color: 'var(--text-muted)', bg: 'var(--btn-bg)', icon: Minus },
   };
 
@@ -176,7 +176,7 @@ function GapContent() {
         </button>
 
         {error && (
-          <div style={{ padding: '14px', borderRadius: '12px', backgroundColor: 'var(--danger-bg, #FDE8E6)', color: 'var(--danger-text, #B93E32)', fontSize: '14px', marginBottom: '20px' }}>
+          <div style={{ padding: '14px', borderRadius: '12px', backgroundColor: 'var(--danger-bg, #FDECEC)', color: 'var(--danger-text, #C92F2F)', fontSize: '14px', marginBottom: '20px' }}>
             {error}
           </div>
         )}
@@ -197,8 +197,8 @@ function GapContent() {
                   {[
                     { label: '매매가', value: `${(result.latestPrice / 10000).toFixed(1)}억`, color: 'var(--text-strong)' },
                     { label: '전세가', value: `${(result.rentAvg / 10000).toFixed(1)}억`, color: 'var(--accent)' },
-                    { label: '갭 (투자금)', value: `${((result.investmentGap || 0) / 10000).toFixed(1)}억`, color: '#D4A853' },
-                    { label: '전세가율', value: `${result.rentRatio}%`, color: (result.rentRatio || 0) >= 70 ? 'var(--success-text, #3D6B44)' : 'var(--danger-text, #B93E32)' },
+                    { label: '갭 (투자금)', value: `${((result.investmentGap || 0) / 10000).toFixed(1)}억`, color: '#EBC15C' },
+                    { label: '전세가율', value: `${result.rentRatio}%`, color: (result.rentRatio || 0) >= 70 ? 'var(--success-text, #2E7A4C)' : 'var(--danger-text, #C92F2F)' },
                   ].map((item) => (
                     <div key={item.label} style={{ padding: '14px', borderRadius: '12px', backgroundColor: 'var(--btn-bg)', textAlign: 'center' }}>
                       <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '4px' }}>{item.label}</p>
@@ -233,10 +233,10 @@ function GapContent() {
                 </div>
 
                 {/* 전세가율 판정 */}
-                <div style={{ marginTop: '16px', padding: '12px 16px', borderRadius: '10px', backgroundColor: (result.rentRatio || 0) >= 70 ? 'var(--success-bg, #E8F0E9)' : 'var(--danger-bg, #FDE8E6)', fontSize: '13px' }}>
+                <div style={{ marginTop: '16px', padding: '12px 16px', borderRadius: '10px', backgroundColor: (result.rentRatio || 0) >= 70 ? 'var(--success-bg, #E9F6EE)' : 'var(--danger-bg, #FDECEC)', fontSize: '13px' }}>
                   {(result.rentRatio || 0) >= 70
-                    ? <span style={{ color: 'var(--success-text, #3D6B44)' }}>전세가율 {result.rentRatio}% — 갭투자 적합 구간 (투자금 {((result.investmentGap || 0) / 10000).toFixed(1)}억)</span>
-                    : <span style={{ color: 'var(--danger-text, #B93E32)' }}>전세가율 {result.rentRatio}% — 갭이 커서 높은 투자금 필요 ({((result.investmentGap || 0) / 10000).toFixed(1)}억)</span>
+                    ? <span style={{ color: 'var(--success-text, #2E7A4C)' }}>전세가율 {result.rentRatio}% — 갭투자 적합 구간 (투자금 {((result.investmentGap || 0) / 10000).toFixed(1)}억)</span>
+                    : <span style={{ color: 'var(--danger-text, #C92F2F)' }}>전세가율 {result.rentRatio}% — 갭이 커서 높은 투자금 필요 ({((result.investmentGap || 0) / 10000).toFixed(1)}억)</span>
                   }
                 </div>
 
@@ -267,7 +267,7 @@ function GapContent() {
 
             {/* 데이터 경고 */}
             {result.dataWarning && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', borderRadius: '10px', backgroundColor: 'var(--warning-bg, #FFF3D6)', fontSize: '13px', color: 'var(--warning-text, #8B6914)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', borderRadius: '10px', backgroundColor: 'var(--warning-bg, #FBF3DC)', fontSize: '13px', color: 'var(--warning-text, #8A6A1F)' }}>
                 <AlertTriangle size={16} />
                 {result.dataWarning}
               </div>

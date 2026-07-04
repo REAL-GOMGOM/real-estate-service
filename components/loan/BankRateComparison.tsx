@@ -185,7 +185,7 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
         padding: 32, borderRadius: 16, textAlign: 'center',
         backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
       }}>
-        <AlertTriangle size={36} style={{ color: 'var(--warning, #c89632)', marginBottom: 12 }} />
+        <AlertTriangle size={36} style={{ color: 'var(--warning, #8A6A1F)', marginBottom: 12 }} />
         <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-strong)', margin: '0 0 8px' }}>
           데이터를 불러올 수 없습니다
         </h2>
@@ -226,7 +226,7 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
             background: 'none', border: 'none', cursor: 'pointer', padding: 0,
           }}
         >
-          <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: 'var(--warning, #c89632)' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: 'var(--warning, #8A6A1F)' }}>
             <AlertTriangle size={16} /> 공시 금리 안내
           </span>
           {noticeOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -297,7 +297,7 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
                       position: 'absolute', top: 6, right: 6,
                       fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
                       backgroundColor: 'var(--success-bg, rgba(61,107,68,0.12))',
-                      color: 'var(--success, #3D6B44)',
+                      color: 'var(--success, #2E7A4C)',
                     }}>
                       최저 공시
                     </span>
@@ -339,7 +339,7 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
             ))}
           </div>
           {rateType === 'variable' && (
-            <p style={{ fontSize: 11, color: 'var(--warning, #c89632)', margin: '6px 0 0' }}>
+            <p style={{ fontSize: 11, color: 'var(--warning, #8A6A1F)', margin: '6px 0 0' }}>
               ⚠️ 변동금리: 스트레스 DSR {STRESS_RATE}%p 가산 적용
             </p>
           )}
@@ -406,7 +406,7 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
         <div style={{
           padding: 20, borderRadius: 14, marginBottom: 24,
           backgroundColor: 'var(--bg-card)',
-          border: result.feasible ? '2px solid var(--success, #3D6B44)' : '2px solid var(--danger, #B93E32)',
+          border: result.feasible ? '2px solid var(--success, #2E7A4C)' : '2px solid var(--danger, #C92F2F)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
             {result.feasible
@@ -478,7 +478,7 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
               backgroundColor: 'var(--warning-bg, rgba(200,150,50,0.08))',
             }}>
               {result.warnings.map((w, i) => (
-                <p key={i} style={{ fontSize: 12, color: 'var(--warning, #c89632)', margin: i > 0 ? '4px 0 0' : 0 }}>
+                <p key={i} style={{ fontSize: 12, color: 'var(--warning, #8A6A1F)', margin: i > 0 ? '4px 0 0' : 0 }}>
                   ⚠️ {w}
                 </p>
               ))}

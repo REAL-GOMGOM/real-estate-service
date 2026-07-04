@@ -56,8 +56,8 @@ function fmtRate(n: number): string {
 }
 
 function rateColor(n: number): string {
-  if (n > 0.01) return '#EF4444';
-  if (n < -0.01) return '#3B82F6';
+  if (n > 0.01) return '#E23B3B';
+  if (n < -0.01) return '#5B82E8';
   return 'var(--text-muted)';
 }
 
@@ -313,7 +313,7 @@ function TemperatureGauge({ data }: { data: PriceChangeData }) {
             {/* 게이지 바 */}
             <div style={{
               height: 8, borderRadius: 4, position: 'relative',
-              background: 'linear-gradient(to right, #3B82F6, #9CA3AF 50%, #EF4444)',
+              background: 'linear-gradient(to right, #5B82E8, #9CA3AF 50%, #E23B3B)',
             }}>
               <div style={{
                 position: 'absolute', top: -3,

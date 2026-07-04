@@ -129,7 +129,7 @@ function PriceMapContent() {
                     <span style={{
                       fontSize: '20px', fontWeight: 700,
                       fontFamily: 'Roboto Mono, monospace',
-                      color: selectedRegion.change_rate >= 0 ? '#F87171' : 'var(--accent)',
+                      color: selectedRegion.change_rate >= 0 ? '#E85D5D' : 'var(--accent)',
                     }}>
                       {selectedRegion.change_rate >= 0 ? '+' : ''}{selectedRegion.change_rate.toFixed(2)}%
                     </span>
@@ -172,7 +172,7 @@ function PriceMapContent() {
                     <span style={{
                       fontSize: '13px', fontWeight: 700, textAlign: 'right',
                       fontFamily: 'Roboto Mono, monospace',
-                      color: r.change_rate >= 0 ? '#F87171' : 'var(--accent)',
+                      color: r.change_rate >= 0 ? '#E85D5D' : 'var(--accent)',
                     }}>
                       {r.change_rate >= 0 ? '▲' : '▼'} {Math.abs(r.change_rate).toFixed(2)}%
                     </span>

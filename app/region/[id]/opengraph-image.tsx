@@ -51,7 +51,7 @@ export default async function Image({ params }: PageProps) {
             justifyContent: 'center',
             fontSize: '60px',
             fontFamily: 'system-ui',
-            color: '#2A2420',
+            color: '#14213D',
           }}
         >
           내집 — 지역을 찾을 수 없습니다

@@ -4,85 +4,86 @@
 @plugin "@tailwindcss/typography";
 
 /* ══════════════════════════════════════
-   내집(NAEZIP) 디자인 시스템
+   내집(NAEZIP) 디자인 시스템 — 사이클 U
+   딥네이비 · 로열블루 (시안 2026-07)
    가독성 최우선 · WCAG AA 대비 검증
    ══════════════════════════════════════ */
 
 :root {
-  /* ── 메인 브랜드 (테라코타) ── */
-  --accent: #C4654A;
-  --accent-hover: #A8503A;
-  --accent-text: #9E4A35;
-  --accent-bg: #FDF3EF;
-  --accent-border: rgba(196,101,74,0.25);
-  --accent-light: #F5DDD5;
+  /* ── 메인 브랜드 (로열블루) ── */
+  --accent: #1B4DDB;
+  --accent-hover: #1636A8;
+  --accent-text: #1636A8;
+  --accent-bg: #E8EEFF;
+  --accent-border: rgba(27,77,219,0.25);
+  --accent-light: #D6E0FA;
 
-  /* ── 보조 (세이지 그린) ── */
-  --success: #6B8F71;
-  --success-text: #3D6B44;
-  --success-bg: #E8F0E9;
+  /* ── 보조 (그린) ── */
+  --success: #6FC08A;
+  --success-text: #2E7A4C;
+  --success-bg: #E9F6EE;
 
-  /* ── 포인트 (골드) ── */
-  --warning: #D4A853;
-  --warning-text: #8B6914;
-  --warning-bg: #FFF3D6;
+  /* ── 포인트 (앰버 옐로) ── */
+  --warning: #EBC15C;
+  --warning-text: #8A6A1F;
+  --warning-bg: #FBF3DC;
 
-  /* ── 하락/위험 ── */
-  --danger: #D4574A;
-  --danger-text: #B93E32;
-  --danger-bg: #FDE8E6;
+  /* ── 위험 (레드) ── */
+  --danger: #E23B3B;
+  --danger-text: #C92F2F;
+  --danger-bg: #FDECEC;
 
-  /* ── 배경 ── */
-  --bg-primary: #FAFAFA;
-  --bg-secondary: #FAF6F1;
-  --bg-tertiary: #F5F0EB;
+  /* ── 배경 (블루 틴트 서피스) ── */
+  --bg-primary: #F6F8FC;
+  --bg-secondary: #F1F4FA;
+  --bg-tertiary: #EAEEF6;
   --bg-card: #FFFFFF;
-  --bg-card-hover: #FAF6F1;
-  --bg-overlay: rgba(0,0,0,0.03);
+  --bg-card-hover: #F6F8FC;
+  --bg-overlay: rgba(20,33,61,0.04);
   --bg-header: rgba(255,255,255,0.95);
 
-  /* ── 텍스트 (가독성 핵심) ── */
-  --text-primary: #1A1714;
-  --text-strong: #0D0B09;
-  --text-secondary: #1A1714;
-  --text-muted: #5C534A;
-  --text-dim: #8C8279;
+  /* ── 텍스트 (네이비 잉크, 가독성 핵심) ── */
+  --text-primary: #1C2A4A;
+  --text-strong: #0E1830;
+  --text-secondary: #48536B;
+  --text-muted: #64708A;
+  --text-dim: #8A94A8;
 
   /* ── 보더 ── */
-  --border: #E8E3DD;
-  --border-light: #F0EBE5;
-  --border-hover: #D4CFC8;
+  --border: #E4E9F2;
+  --border-light: #EAEEF6;
+  --border-hover: #C9D3E4;
 
   /* ── 버튼 ── */
-  --btn-bg: #F5F0EB;
-  --btn-bg-hover: #EBE5DE;
-  --btn-border: #E8E3DD;
-  --btn-text: #5C534A;
+  --btn-bg: #F1F4FA;
+  --btn-bg-hover: #E4E9F2;
+  --btn-border: #E4E9F2;
+  --btn-text: #48536B;
 
-  /* ── 그림자 ── */
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
-  --shadow-md: 0 2px 8px rgba(0,0,0,0.08);
-  --shadow-lg: 0 4px 20px rgba(0,0,0,0.12);
+  /* ── 그림자 (네이비 틴트) ── */
+  --shadow-sm: 0 1px 3px rgba(20,33,61,0.08);
+  --shadow-md: 0 2px 8px rgba(20,33,61,0.10);
+  --shadow-lg: 0 4px 20px rgba(20,33,61,0.14);
 
   /* ── 스크롤바 ── */
-  --scrollbar-track: #F5F0EB;
-  --scrollbar-thumb: #D4CFC8;
-  --scrollbar-hover: #8C8279;
+  --scrollbar-track: #F1F4FA;
+  --scrollbar-thumb: #C9D3E4;
+  --scrollbar-hover: #8A94A8;
 
-  /* ── 상승/하락 ── */
-  --up-color: #3D6B44;
-  --down-color: #B93E32;
-  --up-bg: #E8F0E9;
-  --down-bg: #FDE8E6;
+  /* ── 상승/하락 (한국 컨벤션: 상승 레드 · 하락 블루) ── */
+  --up-color: #C92F2F;
+  --down-color: #1636A8;
+  --up-bg: #FDECEC;
+  --down-bg: #E8EEFF;
 
   /* ── 그라데이션 ── */
-  --gradient-main: linear-gradient(135deg, #C4654A 0%, #A8503A 100%);
-  --gradient-dark: linear-gradient(135deg, #3D3530 0%, #1A1714 100%);
+  --gradient-main: linear-gradient(135deg, #2AABEE 0%, #1B4DDB 100%);
+  --gradient-dark: linear-gradient(135deg, #1C2A4A 0%, #0E1830 100%);
 
   /* ── 차트 ── */
   --chart-grid: rgba(0,0,0,0.06);
   --chart-tooltip-bg: #FFFFFF;
-  --chart-tooltip-border: #E8E3DD;
+  --chart-tooltip-border: #E4E9F2;
 
   /* ── Typography Scale (사이트 전체 톤에 맞춤) ── */
   --font-display: clamp(28px, 4.5vw, 40px);

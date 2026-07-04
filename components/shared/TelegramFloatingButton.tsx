@@ -3,8 +3,8 @@
 import { useState } from 'react';
 import { BRAND } from '@/lib/design-tokens';
 
-// 텔레그램 채널 플로팅 버튼 (컴포넌트/파일명 rename은 리디자인 사이클에서 처리)
-export function KakaoFloatingButton() {
+// 텔레그램 채널 플로팅 버튼
+export function TelegramFloatingButton() {
   const [hovered, setHovered] = useState(false);
   const url = process.env.NEXT_PUBLIC_TELEGRAM_CHANNEL_URL;
 
@@ -42,7 +42,7 @@ export function KakaoFloatingButton() {
       <div
         className="w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 motion-reduce:transition-none group-focus-visible:ring-4 group-focus-visible:ring-offset-2 group-focus-visible:ring-black"
         style={{
-          backgroundColor: '#229ED9',
+          backgroundColor: '#1B4DDB',
           boxShadow: hovered
             ? '0 8px 24px rgba(0,0,0,0.2)'
             : '0 4px 12px rgba(0,0,0,0.12)',

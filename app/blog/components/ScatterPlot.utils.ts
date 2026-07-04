@@ -76,7 +76,7 @@ export function computeScatterDomain(
 
   const range = dataMax - dataMin;
   const pad   = range * AUTO_PADDING_RATIO;
-  let min = userMin ?? dataMin - pad;
+  const min = userMin ?? dataMin - pad;
   let max = userMax ?? dataMax + pad;
 
   // 사용자 값이 도메인을 뒤집은 경우 보호

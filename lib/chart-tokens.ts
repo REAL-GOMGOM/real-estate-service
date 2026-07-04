@@ -11,11 +11,11 @@ export const CHART_TOKENS = {
     /** 차트 제목 */
     title:    '#111827',
     /** 축 라벨, 카테고리명 */
-    header:   '#374151',
+    header:   '#2C3A5A',
     /** 보조 라벨, 캡션 */
-    subLabel: '#6b7280',
+    subLabel: '#64708A',
     /** 축선 */
-    axis:     '#9ca3af',
+    axis:     '#9AA4B8',
     /** 그리드 */
     grid:     '#e5e7eb',
   },

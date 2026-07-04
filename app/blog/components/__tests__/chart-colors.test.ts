@@ -9,18 +9,25 @@ import {
 } from '@/lib/chart-colors';
 
 describe('CHART_COLORS hex 일관성', () => {
-  it('HorizontalBarChart의 COLORS와 동일 hex (회귀 안전망)', () => {
-    expect(CHART_COLORS.red).toBe('#dc2626');
-    expect(CHART_COLORS.orange).toBe('#ea580c');
-    expect(CHART_COLORS.blue).toBe('#2563eb');
-    expect(CHART_COLORS.darkBlue).toBe('#1d4ed8');
-    expect(CHART_COLORS.gray).toBe('#6b7280');
+  // 사이클 U 리디자인 팔레트 — 키 유지, hex 재정의 (회귀 안전망)
+  it('표준 5색 hex 고정 (사이클 U 시안 톤)', () => {
+    expect(CHART_COLORS.red).toBe('#E23B3B');
+    expect(CHART_COLORS.orange).toBe('#E8663C');
+    expect(CHART_COLORS.blue).toBe('#1B4DDB');
+    expect(CHART_COLORS.darkBlue).toBe('#14213D');
+    expect(CHART_COLORS.gray).toBe('#8A94A8');
   });
 
-  // 사이클 S Step S-2 — DemographicShiftBars 전용 토큰
-  it('yellow #fbbf24 + amberOrange #f97316 (DemographicShiftBars 전용)', () => {
-    expect(CHART_COLORS.yellow).toBe('#fbbf24');
-    expect(CHART_COLORS.amberOrange).toBe('#f97316');
+  // 사이클 S Step S-2 — DemographicShiftBars 전용 토큰 (사이클 U hex)
+  it('yellow #EBC15C + amberOrange #F0A24B (DemographicShiftBars 전용)', () => {
+    expect(CHART_COLORS.yellow).toBe('#EBC15C');
+    expect(CHART_COLORS.amberOrange).toBe('#F0A24B');
+  });
+
+  // 사이클 U 신설 2색 — 기존 글 영향 없는 추가 키
+  it('rose #E5687A + green #6FC08A (사이클 U 신설)', () => {
+    expect(CHART_COLORS.rose).toBe('#E5687A');
+    expect(CHART_COLORS.green).toBe('#6FC08A');
   });
 });
 
@@ -57,34 +64,34 @@ describe('pickDefaultColor', () => {
 });
 
 describe('getGradientFill', () => {
-  it('양수 8단계 임계값', () => {
-    expect(getGradientFill(20)).toBe('#dc2626');
-    expect(getGradientFill(13)).toBe('#ef4444');
-    expect(getGradientFill(11)).toBe('#f97316');
-    expect(getGradientFill(7)).toBe('#f59e0b');
-    expect(getGradientFill(5)).toBe('#fbbf24');
-    expect(getGradientFill(3)).toBe('#fcd34d');
-    expect(getGradientFill(1.5)).toBe('#fde68a');
-    expect(getGradientFill(0)).toBe('#fef3c7');
+  it('양수 8단계 임계값 (사이클 U 레드·앰버 농도)', () => {
+    expect(getGradientFill(20)).toBe('#C92F2F');
+    expect(getGradientFill(13)).toBe('#E23B3B');
+    expect(getGradientFill(11)).toBe('#E8663C');
+    expect(getGradientFill(7)).toBe('#F0A24B');
+    expect(getGradientFill(5)).toBe('#EBC15C');
+    expect(getGradientFill(3)).toBe('#F2D48A');
+    expect(getGradientFill(1.5)).toBe('#F8E7B8');
+    expect(getGradientFill(0)).toBe('#FCF3DC');
   });
 
-  it('음수 5단계 임계값', () => {
-    expect(getGradientFill(-0.5)).toBe('#93c5fd');
-    expect(getGradientFill(-1.5)).toBe('#60a5fa');
-    expect(getGradientFill(-3)).toBe('#3b82f6');
-    expect(getGradientFill(-6)).toBe('#2563eb');
-    expect(getGradientFill(-10)).toBe('#1d4ed8');
+  it('음수 5단계 임계값 (사이클 U 브랜드 블루 농도)', () => {
+    expect(getGradientFill(-0.5)).toBe('#B9CBF5');
+    expect(getGradientFill(-1.5)).toBe('#8FACEE');
+    expect(getGradientFill(-3)).toBe('#5B82E8');
+    expect(getGradientFill(-6)).toBe('#2E5CE0');
+    expect(getGradientFill(-10)).toBe('#1B4DDB');
   });
 });
 
 describe('getGradientTextFill', () => {
-  it('cream 계열(#fef3c7, #fde68a) → 진한 갈색(#a16207)', () => {
-    expect(getGradientTextFill('#fef3c7')).toBe('#a16207');
-    expect(getGradientTextFill('#fde68a')).toBe('#a16207');
+  it('옅은 크림 계열(#FCF3DC, #F8E7B8) → 진한 앰버 텍스트(#8A6A1F)', () => {
+    expect(getGradientTextFill('#FCF3DC')).toBe('#8A6A1F');
+    expect(getGradientTextFill('#F8E7B8')).toBe('#8A6A1F');
   });
   it('그 외 색상 → 입력값 그대로', () => {
-    expect(getGradientTextFill('#dc2626')).toBe('#dc2626');
-    expect(getGradientTextFill('#2563eb')).toBe('#2563eb');
+    expect(getGradientTextFill('#E23B3B')).toBe('#E23B3B');
+    expect(getGradientTextFill('#1B4DDB')).toBe('#1B4DDB');
   });
 });
 
@@ -119,17 +126,23 @@ describe('resolveChartColor (4개 차트 공통 헬퍼)', () => {
   });
 
   // 사이클 S Step S-2 — yellow/amberOrange 키워드 매핑 + 자동 할당 미포함
-  it('yellow 키워드 → #fbbf24 매핑', () => {
-    expect(resolveChartColor('yellow', 0, 'category')).toBe('#fbbf24');
-    expect(resolveChartColor('yellow', 3, 'series')).toBe('#fbbf24');
+  it('yellow 키워드 → #EBC15C 매핑', () => {
+    expect(resolveChartColor('yellow', 0, 'category')).toBe('#EBC15C');
+    expect(resolveChartColor('yellow', 3, 'series')).toBe('#EBC15C');
   });
 
-  it('amberOrange 키워드 → #f97316 매핑', () => {
-    expect(resolveChartColor('amberOrange', 0, 'category')).toBe('#f97316');
-    expect(resolveChartColor('amberOrange', 2, 'series')).toBe('#f97316');
+  it('amberOrange 키워드 → #F0A24B 매핑', () => {
+    expect(resolveChartColor('amberOrange', 0, 'category')).toBe('#F0A24B');
+    expect(resolveChartColor('amberOrange', 2, 'series')).toBe('#F0A24B');
   });
 
-  it('자동 할당은 5색 순환 유지 (yellow/amberOrange 미포함)', () => {
+  // 사이클 U — 신설 rose/green 키워드 매핑
+  it('rose·green 키워드 → 신설 hex 매핑 (사이클 U)', () => {
+    expect(resolveChartColor('rose', 0, 'category')).toBe('#E5687A');
+    expect(resolveChartColor('green', 0, 'category')).toBe('#6FC08A');
+  });
+
+  it('자동 할당은 5색 순환 유지 (yellow/amberOrange/rose/green 미포함)', () => {
     const seen = new Set<string>();
     for (let i = 0; i < 20; i++) {
       seen.add(resolveChartColor(undefined, i, 'category'));
@@ -137,6 +150,8 @@ describe('resolveChartColor (4개 차트 공통 헬퍼)', () => {
     }
     expect(seen.has(CHART_COLORS.yellow)).toBe(false);
     expect(seen.has(CHART_COLORS.amberOrange)).toBe(false);
+    expect(seen.has(CHART_COLORS.rose)).toBe(false);
+    expect(seen.has(CHART_COLORS.green)).toBe(false);
     expect(seen.size).toBe(5); // red, orange, blue, darkBlue, gray만
   });
 });

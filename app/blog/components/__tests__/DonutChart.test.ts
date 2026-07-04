@@ -109,16 +109,16 @@ describe('computeMidVector + computeLabelPosition', () => {
 
 describe('resolveSliceColor (사이클 S Step S-1: hex string 반환)', () => {
   it('slice.color 명시 키워드 → CHART_COLORS hex', () => {
-    expect(resolveSliceColor({ label: 'A', value: 50, color: 'darkBlue' }, 0)).toBe('#1d4ed8');
+    expect(resolveSliceColor({ label: 'A', value: 50, color: 'darkBlue' }, 0)).toBe('#14213D');
   });
   it('slice.color 명시 hex → 그대로', () => {
     expect(resolveSliceColor({ label: 'A', value: 50, color: '#9ca3af' }, 0)).toBe('#9ca3af');
   });
-  it('index 0 → red #dc2626 (category intent, 강조 친화)', () => {
-    expect(resolveSliceColor({ label: 'A', value: 50 }, 0)).toBe('#dc2626');
+  it('index 0 → red #E23B3B (category intent, 강조 친화)', () => {
+    expect(resolveSliceColor({ label: 'A', value: 50 }, 0)).toBe('#E23B3B');
   });
-  it('index 5 → red #dc2626 (5색 순환)', () => {
-    expect(resolveSliceColor({ label: 'A', value: 50 }, 5)).toBe('#dc2626');
+  it('index 5 → red #E23B3B (5색 순환)', () => {
+    expect(resolveSliceColor({ label: 'A', value: 50 }, 5)).toBe('#E23B3B');
   });
 });
 

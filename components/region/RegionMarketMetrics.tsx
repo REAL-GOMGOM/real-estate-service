@@ -34,7 +34,7 @@ function getChangeColor(value: number | null | undefined): string {
 
 function getPopulationColor(value: number | null | undefined): string {
   if (value === null || value === undefined) return 'var(--text-muted)';
-  if (value > 0) return BRAND.sageText;
+  if (value > 0) return BRAND.successText;
   if (value < 0) return BRAND.danger;
   return 'var(--text-muted)';
 }

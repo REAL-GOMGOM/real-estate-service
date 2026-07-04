@@ -333,7 +333,7 @@ export default function LoanSimulator() {
             </div>
             {/* 자동 입력 안내 */}
             {selectedApt && selectedApt.count > 0 && (
-              <p style={{ fontSize: 12, marginBottom: 6, margin: '0 0 6px' , color: priceEdited ? 'var(--text-muted)' : '#22C55E' }}>
+              <p style={{ fontSize: 12, marginBottom: 6, margin: '0 0 6px' , color: priceEdited ? 'var(--text-muted)' : '#2E7A4C' }}>
                 {priceEdited
                   ? '\u270F\uFE0F 매매가가 직접 입력 값으로 변경되었습니다'
                   : `\u2705 ${selectedApt.name}의 최근 3개월 실거래 평균가(${fmtWon(selectedApt.avg)})가 자동 입력되었습니다. 직접 수정도 가능합니다.`}
@@ -591,7 +591,7 @@ export default function LoanSimulator() {
                 체증식은 초기 부담이 적고 소득 증가에 맞춰 상환액이 늘어나는 방식입니다
               </p>
               {isDidimdol && (
-                <p style={{ fontSize: 11, color: 'var(--warning, #c89632)', marginTop: 4, marginBottom: 0 }}>
+                <p style={{ fontSize: 11, color: 'var(--warning, #8A6A1F)', marginTop: 4, marginBottom: 0 }}>
                   * 디딤돌 체증식은 고정금리만 가능합니다
                 </p>
               )}
@@ -662,12 +662,12 @@ export default function LoanSimulator() {
                     : 'var(--border-light)',
               }}>
                 <Info size={14} style={{
-                  color: result.dsr > 40 ? 'var(--danger)' : result.dsr > 30 ? 'var(--warning, #c89632)' : 'var(--text-muted)',
+                  color: result.dsr > 40 ? 'var(--danger)' : result.dsr > 30 ? 'var(--warning, #8A6A1F)' : 'var(--text-muted)',
                   flexShrink: 0,
                 }} />
                 <span style={{
                   fontSize: 13,
-                  color: result.dsr > 40 ? 'var(--danger)' : result.dsr > 30 ? 'var(--warning, #c89632)' : 'var(--text-secondary)',
+                  color: result.dsr > 40 ? 'var(--danger)' : result.dsr > 30 ? 'var(--warning, #8A6A1F)' : 'var(--text-secondary)',
                 }}>
                   DSR <strong style={{ fontFamily: MONO }}>{result.dsr}%</strong>
                   <span style={{ fontSize: 11, color: 'var(--text-dim)', marginLeft: 6 }}>
@@ -686,7 +686,7 @@ export default function LoanSimulator() {
                   : `DTI ${dtiLimit}% 가이드 · 현행 심사는 DSR 우선`;
                 const textColor =
                   status === 'danger' ? 'var(--danger)' :
-                  status === 'warning' ? 'var(--warning, #c89632)' :
+                  status === 'warning' ? 'var(--warning, #8A6A1F)' :
                   'var(--text-secondary)';
                 const bgColor =
                   status === 'danger' ? 'var(--danger-bg, rgba(185, 62, 50, 0.08))' :
@@ -694,7 +694,7 @@ export default function LoanSimulator() {
                   'var(--border-light)';
                 const iconColor =
                   status === 'danger' ? 'var(--danger)' :
-                  status === 'warning' ? 'var(--warning, #c89632)' :
+                  status === 'warning' ? 'var(--warning, #8A6A1F)' :
                   'var(--text-muted)';
                 return (
                   <div style={{
@@ -949,8 +949,8 @@ function RepaymentDesc({ type }: { type: string }) {
       transition: 'opacity 0.2s',
     }}>
       <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 6px' }}>{info.desc}</p>
-      <p style={{ fontSize: 12, color: '#22C55E', margin: '0 0 2px' }}>&#x2705; {info.pros}</p>
-      <p style={{ fontSize: 12, color: '#EF4444', margin: 0 }}>&#x26A0;&#xFE0F; {info.cons}</p>
+      <p style={{ fontSize: 12, color: '#2E7A4C', margin: '0 0 2px' }}>&#x2705; {info.pros}</p>
+      <p style={{ fontSize: 12, color: '#E23B3B', margin: 0 }}>&#x26A0;&#xFE0F; {info.cons}</p>
     </div>
   );
 }

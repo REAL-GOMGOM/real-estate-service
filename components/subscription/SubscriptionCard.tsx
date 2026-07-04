@@ -10,7 +10,7 @@ interface Props {
 
 const STATUS_CONFIG = {
   upcoming: { label: '청약 예정', color: 'var(--accent)', bg: 'var(--accent-bg)' },
-  ongoing:  { label: '청약 중',   color: '#22C55E', bg: 'rgba(34,197,94,0.12)'  },
+  ongoing:  { label: '청약 중',   color: '#2E7A4C', bg: 'rgba(111,192,138,0.12)'  },
   closed:   { label: '청약 마감', color: 'var(--text-dim)', bg: 'rgba(100,116,139,0.12)'},
 };
 
@@ -55,7 +55,7 @@ export default function SubscriptionCard({ item }: Props) {
           <span style={{
             fontSize: '12px', fontWeight: 700,
             fontFamily: 'Roboto Mono, monospace',
-            color: item.status === 'ongoing' ? '#22C55E' : 'var(--accent)',
+            color: item.status === 'ongoing' ? '#2E7A4C' : 'var(--accent)',
           }}>
             {dday}
           </span>
@@ -104,7 +104,7 @@ export default function SubscriptionCard({ item }: Props) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
           <Users size={12} style={{ color: 'var(--text-dim)' }} />
           {item.competitionRate !== null ? (
-            <span style={{ fontSize: '13px', fontWeight: 700, color: '#22C55E' }}>
+            <span style={{ fontSize: '13px', fontWeight: 700, color: '#2E7A4C' }}>
               {item.competitionRate}:1
             </span>
           ) : (
@@ -112,10 +112,10 @@ export default function SubscriptionCard({ item }: Props) {
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <TrendingUp size={12} style={{ color: '#F59E0B' }} />
+          <TrendingUp size={12} style={{ color: '#F0A24B' }} />
           <span style={{
             fontSize: '13px', fontWeight: 700,
-            fontFamily: 'Roboto Mono, monospace', color: '#F59E0B',
+            fontFamily: 'Roboto Mono, monospace', color: '#F0A24B',
           }}>
             {formatPrice(item.minPrice)} ~ {formatPrice(item.maxPrice)}
           </span>

@@ -50,7 +50,14 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
   revalidatePublic(id);
 
   const publishedUrl = `/blog/${published.slug}`;
-  return NextResponse.json({ id: published.id, slug: published.slug, publishedUrl });
+  return NextResponse.json({
+    id: published.id,
+    slug: published.slug,
+    publishedUrl,
+    // 발행 후속 브로드캐스트(텔레그램 채널 공지 등)용
+    title: published.title,
+    excerpt: published.excerpt,
+  });
 }
 
 /**

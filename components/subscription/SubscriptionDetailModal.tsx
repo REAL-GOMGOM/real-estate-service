@@ -12,7 +12,7 @@ interface Props {
 
 const STATUS_CONFIG = {
   upcoming: { label: '청약 예정', color: 'var(--accent)', bg: 'var(--accent-bg)' },
-  ongoing:  { label: '청약 중',   color: '#22C55E', bg: 'rgba(34,197,94,0.12)'  },
+  ongoing:  { label: '청약 중',   color: '#2E7A4C', bg: 'rgba(111,192,138,0.12)'  },
   closed:   { label: '청약 마감', color: 'var(--text-dim)', bg: 'rgba(100,116,139,0.12)'},
 };
 
@@ -110,7 +110,7 @@ export default function SubscriptionDetailModal({ item, onClose }: Props) {
               {sc.label}
             </span>
             {dday && (
-              <span style={{ fontSize: '13px', fontWeight: 800, fontFamily: 'Roboto Mono, monospace', color: item.status === 'ongoing' ? '#22C55E' : 'var(--accent)' }}>
+              <span style={{ fontSize: '13px', fontWeight: 800, fontFamily: 'Roboto Mono, monospace', color: item.status === 'ongoing' ? '#2E7A4C' : 'var(--accent)' }}>
                 {dday}
               </span>
             )}
@@ -157,7 +157,7 @@ export default function SubscriptionDetailModal({ item, onClose }: Props) {
 
           <Row icon={<TrendingUp size={15} />} label="분양가">
             {item.minPrice || item.maxPrice ? (
-              <span style={{ fontFamily: 'Roboto Mono, monospace', fontWeight: 700, color: '#F59E0B' }}>
+              <span style={{ fontFamily: 'Roboto Mono, monospace', fontWeight: 700, color: '#F0A24B' }}>
                 {formatPrice(item.minPrice)} ~ {formatPrice(item.maxPrice)}
               </span>
             ) : (
@@ -213,7 +213,7 @@ export default function SubscriptionDetailModal({ item, onClose }: Props) {
                       textAlign: 'right',
                       fontWeight: 700,
                       fontFamily: 'Roboto Mono, monospace',
-                      color: entry.rate >= 10 ? '#22C55E' : entry.rate >= 1 ? '#F59E0B' : 'var(--text-dim)',
+                      color: entry.rate >= 10 ? '#2E7A4C' : entry.rate >= 1 ? '#F0A24B' : 'var(--text-dim)',
                     }}>
                       {entry.rate.toFixed(1)}:1
                     </span>

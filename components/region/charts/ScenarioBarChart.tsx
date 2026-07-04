@@ -73,7 +73,7 @@ export function ScenarioBarChart({ scenarios }: Props) {
           />
           <Bar
             dataKey="displayValue"
-            fill={BRAND.terracotta}
+            fill={BRAND.primary}
             radius={[4, 4, 0, 0]}
             maxBarSize={60}
             minPointSize={8}

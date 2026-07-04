@@ -84,7 +84,7 @@ export function StackedBarChart({
   if (process.env.NODE_ENV !== 'production') {
     const hasNeg = bars.some((b) => b.segments.some((s) => s.value < 0));
     if (hasNeg) {
-      // eslint-disable-next-line no-console
+       
       console.warn(`[StackedBarChart] "${title ?? ''}" 음수 segment value 감지 — 0으로 처리됨`);
     }
     // 사이클 S Step S-1: 알 수 없는 color 값 → 자동 할당 안내

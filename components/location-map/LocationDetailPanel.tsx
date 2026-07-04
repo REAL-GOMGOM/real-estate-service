@@ -105,9 +105,9 @@ export default function LocationDetailPanel({ location, onClose, embedded }: Pro
           border: '1px solid rgba(249,115,22,0.25)',
           marginBottom: '16px',
         }}>
-          <AlertTriangle size={14} style={{ color: '#F97316', flexShrink: 0 }} />
+          <AlertTriangle size={14} style={{ color: '#E8663C', flexShrink: 0 }} />
           <div>
-            <p style={{ fontSize: '11px', fontWeight: 700, color: '#F97316' }}>토지거래허가구역</p>
+            <p style={{ fontSize: '11px', fontWeight: 700, color: '#E8663C' }}>토지거래허가구역</p>
             <p style={{ fontSize: '10px', color: 'var(--text-muted)' }}>적용기간 ~{location.toheoUntil}</p>
           </div>
         </div>
@@ -148,13 +148,13 @@ export default function LocationDetailPanel({ location, onClose, embedded }: Pro
         <div style={{ textAlign: 'right' }}>
           <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>전월 대비</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}>
-            {isUp   && <TrendingUp   size={16} style={{ color: '#22C55E' }} />}
-            {isDown && <TrendingDown size={16} style={{ color: '#EF4444' }} />}
+            {isUp   && <TrendingUp   size={16} style={{ color: 'var(--up-color)' }} />}
+            {isDown && <TrendingDown size={16} style={{ color: 'var(--down-color)' }} />}
             {!isUp && !isDown && <Minus size={16} style={{ color: 'var(--text-dim)' }} />}
             <span style={{
               fontSize: '16px', fontWeight: 700,
               fontFamily: 'Roboto Mono, monospace',
-              color: isUp ? '#22C55E' : isDown ? '#EF4444' : 'var(--text-dim)',
+              color: isUp ? 'var(--up-color)' : isDown ? 'var(--down-color)' : 'var(--text-dim)',
             }}>
               {isUp ? '+' : ''}{scoreDiff}
             </span>
@@ -170,7 +170,7 @@ export default function LocationDetailPanel({ location, onClose, embedded }: Pro
           {
             label: '트렌드',
             value: location.trend === 'up' ? '상승 ▲' : location.trend === 'down' ? '하락 ▼' : '보합 —',
-            color: location.trend === 'up' ? '#22C55E' : location.trend === 'down' ? '#EF4444' : 'var(--text-dim)',
+            color: location.trend === 'up' ? 'var(--up-color)' : location.trend === 'down' ? 'var(--down-color)' : 'var(--text-dim)',
           },
           ...(location.region ? [{ label: '권역', value: location.region }] : []),
         ].map((item) => (

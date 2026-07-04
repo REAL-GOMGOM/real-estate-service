@@ -43,15 +43,12 @@ interface LineChartProps {
   baseline?:    number;
   autoBaseline?: boolean;
   maxValue?:    number;
-  autoScale?:   boolean;
   showGrid?:    boolean;
   showLegend?:  boolean;
   showDots?:    boolean;
   /** value 절대값 기반 점 색상 (선은 시리즈 색상). default false */
   gradientDots?: boolean;
   ariaDesc?:    string;
-  /** color 미지정 시리즈에 대한 fallback colorMode. 현재는 series 모드만 지원. */
-  colorMode?:   'discrete' | 'gradient';
 }
 
 const PADDING = {
@@ -81,13 +78,11 @@ export function LineChart({
   baseline,
   autoBaseline  = false,
   maxValue,
-  autoScale: _autoScale,
   showGrid      = true,
   showLegend,
   showDots      = true,
   gradientDots  = false,
   ariaDesc,
-  colorMode: _colorMode = 'discrete',
 }: LineChartProps) {
   // React Hooks 규칙: hook은 early return 전에 호출 (호출 순서 일관 유지)
   const chartId = useId();
