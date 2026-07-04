@@ -1,48 +1,19 @@
 'use client';
 
 import Link from 'next/link';
-import { KOREA_REGIONS } from '@/lib/korea-map-paths';
+import MiniKoreaMap from './MiniKoreaMap';
 
 /**
- * 메인 좌측 필터 레일 — 사이클 W.
- * 지도 미리보기를 실제 17개 시도 실루엣(korea-map-paths)으로 교체,
+ * 메인 좌측 필터 레일 — 사이클 Z.
+ * 지도 미리보기를 실제 시도 지형(provinces GeoJSON)으로 렌더,
  * 지역 칩은 피드 지역 상태(FeedSection)와 연동.
  */
 
 const REGION_CHIPS = ['강남구', '서초구', '송파구', '마포구', '용산구'];
 
-// 미리보기에서 강조할 수도권 시도 코드 (서울 11 · 인천 28 · 경기 41)
-const HIGHLIGHT_CODES = new Set(['11', '28', '41']);
-
 interface FilterRailProps {
   active: string;
   onPick: (district: string) => void;
-}
-
-function MiniKoreaMap() {
-  return (
-    <svg
-      viewBox="60 240 700 760"
-      preserveAspectRatio="xMidYMid meet"
-      style={{ width: '100%', height: '100%', display: 'block' }}
-      aria-hidden
-    >
-      {KOREA_REGIONS.map((r) => {
-        const highlighted = HIGHLIGHT_CODES.has(r.code);
-        return (
-          <path
-            key={r.code}
-            d={r.path}
-            fill={highlighted ? 'var(--accent)' : '#C9D6EE'}
-            opacity={highlighted ? 0.88 : 0.75}
-            stroke="#FFFFFF"
-            strokeWidth="6"
-            strokeLinejoin="round"
-          />
-        );
-      })}
-    </svg>
-  );
 }
 
 export function FilterRail({ active, onPick }: FilterRailProps) {

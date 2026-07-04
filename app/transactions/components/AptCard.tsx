@@ -5,8 +5,9 @@ import { Share2 } from 'lucide-react';
 import {
   type AptGroup,
   fmtPrice, fmtPriceFull, fmtContractDate,
-  detectNewHigh, representativeArea,
+  detectNewHigh, representativeArea, sparkSeries,
 } from '../types';
+import { smoothPath, type Pt } from '@/lib/svg-smooth';
 
 /**
  * 아실형 단지 카드 — 사이클 W
@@ -23,29 +24,23 @@ interface AptCardProps {
   onClick: () => void;
 }
 
-/** 대표 면적 거래를 시간순 정렬해 SVG 좌표로 변환 */
+/** 대표 면적 거래 → 스무딩 좌표 (월평균 기반, sparkSeries 공용 로직) */
 function buildSparkline(apt: AptGroup, width: number, height: number) {
-  const repArea = representativeArea(apt);
-  const points = apt.transactions
-    .filter((t) => Math.abs(t.area - repArea) <= 6)
-    .sort((a, b) => a.date.localeCompare(b.date));
+  const series = sparkSeries(apt);
+  if (!series) return null;
 
-  if (points.length < 2) return null;
-
-  const prices = points.map((p) => p.price);
+  const { prices, rising } = series;
   const min = Math.min(...prices);
   const max = Math.max(...prices);
   const span = max - min || 1;
-  const pad = 4;
+  const pad = 5;
 
-  const coords = points.map((p, i) => {
-    const x = pad + (i / (points.length - 1)) * (width - pad * 2);
-    const y = pad + (1 - (p.price - min) / span) * (height - pad * 2);
-    return { x, y };
-  });
+  const coords: Pt[] = prices.map((p, i) => ({
+    x: pad + (i / (prices.length - 1)) * (width - pad * 2),
+    y: pad + (1 - (p - min) / span) * (height - pad * 2),
+  }));
 
-  const rising = prices[prices.length - 1] >= prices[0];
-  return { coords, rising, count: points.length };
+  return { coords, rising, count: prices.length };
 }
 
 export default function AptCard({ apt, onClick }: AptCardProps) {
@@ -167,8 +162,8 @@ export default function AptCard({ apt, onClick }: AptCardProps) {
               style={{ flexShrink: 0 }}
               aria-label={`${apt.name} 가격 추이 (거래 ${spark.count}건)`}
             >
-              <polyline
-                points={spark.coords.map((c) => `${c.x},${c.y}`).join(' ')}
+              <path
+                d={smoothPath(spark.coords)}
                 fill="none"
                 stroke={spark.rising ? 'var(--up-color, #C92F2F)' : 'var(--down-color, #1636A8)'}
                 strokeWidth="1.6"

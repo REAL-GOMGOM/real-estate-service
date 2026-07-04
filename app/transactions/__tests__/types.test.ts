@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   fmtPrice, fmtPriceFull, fmtContractDate,
-  detectNewHigh, representativeArea,
+  detectNewHigh, representativeArea, sparkSeries,
   type AptGroup, type Transaction,
 } from '../types';
 
@@ -91,5 +91,33 @@ describe('representativeArea', () => {
   });
   it('거래 없으면 0', () => {
     expect(representativeArea(group([]))).toBe(0);
+  });
+});
+
+describe('sparkSeries (사이클 Z — 월평균 스무딩)', () => {
+  it('월평균 4개 이상이면 월평균 시리즈 사용', () => {
+    const g = group([
+      tx({ price: 100000, date: '2026-01-10' }),
+      tx({ price: 110000, date: '2026-01-20' }),
+      tx({ price: 120000, date: '2026-02-10' }),
+      tx({ price: 130000, date: '2026-03-10' }),
+      tx({ price: 140000, date: '2026-04-10' }),
+    ]);
+    const s = sparkSeries(g)!;
+    // 1월은 (100000+110000)/2 = 105000 으로 평균됨
+    expect(s.prices).toEqual([105000, 120000, 130000, 140000]);
+    expect(s.rising).toBe(true);
+  });
+  it('월 수가 적으면 개별 거래 사용', () => {
+    const g = group([
+      tx({ price: 120000, date: '2026-05-01' }),
+      tx({ price: 110000, date: '2026-06-01' }),
+    ]);
+    const s = sparkSeries(g)!;
+    expect(s.prices).toEqual([120000, 110000]);
+    expect(s.rising).toBe(false);
+  });
+  it('거래 1건이면 null', () => {
+    expect(sparkSeries(group([tx({})]))).toBeNull();
   });
 });

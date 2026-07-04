@@ -72,6 +72,33 @@ export function detectNewHigh(apt: AptGroup): boolean {
   return same.length > 1 && latest.price >= Math.max(...same.map((t) => t.price));
 }
 
+/**
+ * 스파크라인용 가격 시리즈 — 대표 면적 거래를 시간순으로.
+ * 월평균 포인트가 4개 이상이면 월평균(스무딩 효과), 아니면 개별 거래.
+ * 층·타입 편차로 인한 지그재그를 줄여 "현실적인" 흐름을 보여준다.
+ */
+export function sparkSeries(apt: AptGroup): { prices: number[]; rising: boolean } | null {
+  const repArea = representativeArea(apt);
+  const txs = apt.transactions
+    .filter((t) => Math.abs(t.area - repArea) <= 6)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (txs.length < 2) return null;
+
+  const byMonth = new Map<string, number[]>();
+  txs.forEach((t) => {
+    const ym = t.date.slice(0, 7);
+    if (!byMonth.has(ym)) byMonth.set(ym, []);
+    byMonth.get(ym)!.push(t.price);
+  });
+
+  const monthly = [...byMonth.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([, prices]) => Math.round(prices.reduce((s, v) => s + v, 0) / prices.length));
+
+  const prices = monthly.length >= 4 ? monthly : txs.map((t) => t.price);
+  return { prices, rising: prices[prices.length - 1] >= prices[0] };
+}
+
 /** 거래 최다 대표 면적 (카드 라인차트·평균가 기준) */
 export function representativeArea(apt: AptGroup): number {
   const counts = new Map<number, number>();

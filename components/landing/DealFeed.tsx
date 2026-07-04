@@ -4,8 +4,9 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import {
   type AptGroup,
-  fmtPrice, fmtContractDate, detectNewHigh, representativeArea,
+  fmtPrice, fmtContractDate, detectNewHigh, sparkSeries,
 } from '@/lib/tx-shared';
+import { smoothPath, smoothAreaPath, type Pt } from '@/lib/svg-smooth';
 import { TxErrorState, TxEmptyState } from '@/components/shared/TxStates';
 
 /**
@@ -29,7 +30,7 @@ interface FeedDeal {
   prevPrice: number | null;
   prevDate:  string | null;
   high:     boolean;
-  spark:    string;          // 0~100 × 0~56 좌표계 폴리라인
+  spark:    Pt[];            // 0~100 × 0~56 좌표계 (월평균 스무딩)
   sparkUp:  boolean;
 }
 
@@ -37,25 +38,20 @@ interface DealFeedProps {
   district: string;
 }
 
-/** 대표 면적 실거래 이력 → SVG 폴리라인 좌표 (0~100 × 0~56) */
-function buildSpark(group: AptGroup): { points: string; up: boolean } | null {
-  const repArea = representativeArea(group);
-  const pts = group.transactions
-    .filter((t) => Math.abs(t.area - repArea) <= 6)
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .map((t) => t.price);
+/** 대표 면적 실거래 이력 → 스무딩 좌표 (0~100 × 0~56, 월평균 기반) */
+function buildSpark(group: AptGroup): { pts: Pt[]; up: boolean } | null {
+  const series = sparkSeries(group);
+  if (!series) return null;
 
-  if (pts.length < 2) return null;
-
-  const min = Math.min(...pts);
-  const max = Math.max(...pts);
+  const { prices, rising } = series;
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
   const span = max - min || 1;
-  const coords = pts.map((p, i) => {
-    const x = (i / (pts.length - 1)) * 100;
-    const y = 6 + (1 - (p - min) / span) * 44;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
-  return { points: coords.join(' '), up: pts[pts.length - 1] >= pts[0] };
+  const pts: Pt[] = prices.map((p, i) => ({
+    x: (i / (prices.length - 1)) * 100,
+    y: 7 + (1 - (p - min) / span) * 42,
+  }));
+  return { pts, up: rising };
 }
 
 /** AptGroup[] → 최근 계약 순 피드 아이템 */
@@ -87,7 +83,7 @@ function toFeedDeals(groups: AptGroup[], limit: number): FeedDeal[] {
       prevPrice: prev?.price ?? null,
       prevDate:  prev?.date ?? null,
       high:     detectNewHigh(g),
-      spark:    spark?.points ?? '',
+      spark:    spark?.pts ?? [],
       sparkUp:  spark?.up ?? true,
     });
   }
@@ -97,12 +93,10 @@ function toFeedDeals(groups: AptGroup[], limit: number): FeedDeal[] {
     .slice(0, limit);
 }
 
-function SparkThumb({ points, up }: { points: string; up: boolean }) {
+function SparkThumb({ pts, up }: { pts: Pt[]; up: boolean }) {
   const color = up ? 'var(--up-color)' : 'var(--down-color)';
   const fill = up ? 'rgba(201,47,47,0.08)' : 'rgba(27,77,219,0.08)';
-  const pts = points.split(' ').map((p) => p.split(',').map(Number));
   const last = pts[pts.length - 1];
-  const areaPath = `M${pts.map((p) => p.join(',')).join(' L')} L100,56 L0,56 Z`;
 
   return (
     <div
@@ -114,16 +108,16 @@ function SparkThumb({ points, up }: { points: string; up: boolean }) {
       }}
     >
       <svg viewBox="0 0 100 56" preserveAspectRatio="none" style={{ width: '100%', height: '100%', display: 'block' }}>
-        <path d={areaPath} fill={fill} />
-        <polyline
-          points={points}
+        <path d={smoothAreaPath(pts, 100, 56)} fill={fill} />
+        <path
+          d={smoothPath(pts)}
           fill="none"
           stroke={color}
-          strokeWidth="2.5"
+          strokeWidth="2.4"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-        {last && <circle cx={last[0]} cy={last[1]} r="3.4" fill={color} />}
+        {last && <circle cx={last.x} cy={last.y} r="3.2" fill={color} />}
       </svg>
     </div>
   );
@@ -234,7 +228,8 @@ export function DealFeed({ district }: DealFeedProps) {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/transactions?district=${encodeURIComponent(district)}&months=3`)
+    // 12개월 — 스파크라인 월평균 포인트 확보 (피드 카드 자체는 최신 계약 순)
+    fetch(`/api/transactions?district=${encodeURIComponent(district)}&months=12`)
       .then((r) => r.json())
       .then((json) => {
         if (cancelled) return;
@@ -309,8 +304,8 @@ export function DealFeed({ district }: DealFeedProps) {
         >
           <article>
             <div className="flex gap-4">
-              {deal.spark ? (
-                <SparkThumb points={deal.spark} up={deal.sparkUp} />
+              {deal.spark.length > 1 ? (
+                <SparkThumb pts={deal.spark} up={deal.sparkUp} />
               ) : (
                 <div
                   aria-hidden
