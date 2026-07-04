@@ -4,10 +4,35 @@ import { DISTRICT_CODE, findDistrictByLawdCd } from '@/lib/district-codes';
 import { matchesQuery } from '@/lib/search-utils';
 import { getBlogDb } from '@/lib/db/client';
 import { apartments } from '@/lib/db/schema';
+import { normalizeMLTMName } from '@/lib/normalize-mltm-name';
 
 const BASE_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade';
 
 const APT_NAME_MAX_LEN = 50;
+
+interface TxRow {
+  aptName:      string;
+  district:     string;
+  dong:         string;
+  area:         number;
+  floor:        number;
+  price:        number;
+  pricePerArea: number;
+  date:         string;
+  buildYear:    number | null;
+  dealType:     'buy';
+}
+
+interface AptGroupRow {
+  id:           string;
+  name:         string;
+  district:     string;
+  dong:         string | null;
+  buildYear:    number | null;
+  households:   number | null;
+  areas:        number[];
+  transactions: TxRow[];
+}
 
 function escapeLike(input: string): string {
   return input.replace(/[\\%_]/g, (ch) => `\\${ch}`);
@@ -141,7 +166,7 @@ export async function GET(req: NextRequest) {
       monthList.map((yyyymm) => fetchAllPages(apiKey, lawdCd, yyyymm))
     );
 
-    const transactions: any[] = [];
+    const transactions: TxRow[] = [];
 
     responses.forEach((xml) => {
       const items = xml.match(/<item>([\s\S]*?)<\/item>/g) ?? [];
@@ -154,30 +179,39 @@ export async function GET(req: NextRequest) {
         const aptNm = get('aptNm');
         const year  = get('dealYear');
         const month = get('dealMonth').padStart(2, '0');
+        const day   = get('dealDay').padStart(2, '0');
         const floor = parseInt(get('floor')) || 1;
+        const dong      = get('umdNm');                       // 법정동 (예: 부곡동)
+        const buildYear = parseInt(get('buildYear')) || null; // 건축년도 (입주연차 계산용)
 
         if (!price || !area || !aptNm || !year) return;
 
         transactions.push({
           aptName:      aptNm,
           district,
+          dong,
           area:         Math.round(area),
           floor,
           price,
           pricePerArea: Math.round(price / area),
-          date:         year + '-' + month,
+          // 계약일 — 일 단위까지 (아실형 카드 "26.06.26 계약" 표기용)
+          date:         year + '-' + month + (day !== '00' ? '-' + day : ''),
+          buildYear,
           dealType:     'buy',
         });
       });
     });
 
-    const grouped: Record<string, any> = {};
+    const grouped: Record<string, AptGroupRow> = {};
     transactions.forEach((tx) => {
       if (!grouped[tx.aptName]) {
         grouped[tx.aptName] = {
           id:           tx.aptName.replace(/\s/g, '-'),
           name:         tx.aptName,
           district,
+          dong:         tx.dong || null,
+          buildYear:    tx.buildYear,
+          households:   null,
           areas:        [],
           transactions: [],
         };
@@ -186,14 +220,48 @@ export async function GET(req: NextRequest) {
       if (!grouped[tx.aptName].areas.includes(tx.area)) {
         grouped[tx.aptName].areas.push(tx.area);
       }
+      if (!grouped[tx.aptName].buildYear && tx.buildYear) {
+        grouped[tx.aptName].buildYear = tx.buildYear;
+      }
     });
+
+    // 단지 마스터 조인 — lawdCd 일괄 조회 후 정제명·별칭 매칭 (세대수 부여).
+    // 조인 실패는 fail-open: 카드에서 세대수만 생략되고 조회는 정상 동작.
+    try {
+      const db = getBlogDb();
+      const masterRows = await db
+        .select({
+          name:            apartments.name,
+          aliases:         apartments.aliases,
+          totalHouseholds: apartments.totalHouseholds,
+        })
+        .from(apartments)
+        .where(eq(apartments.lawdCd, lawdCd));
+
+      const masterByName = new Map<string, number | null>();
+      for (const row of masterRows) {
+        if (!masterByName.has(row.name)) masterByName.set(row.name, row.totalHouseholds);
+        for (const alias of row.aliases ?? []) {
+          if (!masterByName.has(alias)) masterByName.set(alias, row.totalHouseholds);
+        }
+      }
+
+      Object.values(grouped).forEach((apt) => {
+        const matched =
+          masterByName.get(apt.name) ??
+          masterByName.get(normalizeMLTMName(apt.name));
+        if (matched != null) apt.households = matched;
+      });
+    } catch (e) {
+      console.error('[transactions API] 마스터 조인 실패 (fail-open):', e);
+    }
 
     const aptName = resolvedAptName;
 
     const result = Object.values(grouped)
-      .filter((apt: any) => apt.transactions.length >= 1)
-      .filter((apt: any) => !aptName || matchesQuery(apt.name, aptName))
-      .sort((a: any, b: any) => b.transactions.length - a.transactions.length)
+      .filter((apt) => apt.transactions.length >= 1)
+      .filter((apt) => !aptName || matchesQuery(apt.name, aptName))
+      .sort((a, b) => b.transactions.length - a.transactions.length)
       .slice(0, aptName ? 100 : 60);
 
     return NextResponse.json({ data: result, district, months, total: transactions.length });
