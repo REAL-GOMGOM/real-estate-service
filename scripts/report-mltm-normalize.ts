@@ -1,5 +1,9 @@
 import { config } from 'dotenv';
+import { homedir } from 'node:os';
+import path from 'node:path';
 config({ path: '.env.local' });
+// MOLIT_API_KEY는 봇 환경에 있음 — 폴백 로드 (이미 설정된 키는 덮어쓰지 않음)
+config({ path: path.join(homedir(), '.openclaw', '.env') });
 
 import { neon } from '@neondatabase/serverless';
 import { normalizeMLTMName } from '../lib/normalize-mltm-name';
