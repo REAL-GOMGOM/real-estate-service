@@ -85,6 +85,7 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: Tooltip
 
 export default function AptDetailModal({ apt, onClose, months }: AptDetailModalProps) {
   const [selArea, setSelArea] = useState<number | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
 
   // 모달 열림 중 배경 페이지 스크롤 잠금 (스크롤바 이중 노출 방지)
   useEffect(() => {
@@ -366,6 +367,52 @@ export default function AptDetailModal({ apt, onClose, months }: AptDetailModalP
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* 하단 액션 — 네이버 지도 + 공유 (최종 디자인 시안) */}
+        <div style={{ padding: '16px 24px 22px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '9px' }}>
+          <a
+            href={`https://map.naver.com/p/search/${encodeURIComponent(`${apt.district} ${apt.name}`)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
+              border: '1px solid #D3E8DA', backgroundColor: '#F3FBF6', color: '#1F8A5B',
+              fontWeight: 700, fontSize: '12.5px', padding: '10px', borderRadius: '11px',
+              textDecoration: 'none',
+            }}
+          >
+            <span style={{
+              width: '17px', height: '17px', borderRadius: '5px', backgroundColor: '#03C75A',
+              color: '#FFFFFF', fontSize: '10.5px', fontWeight: 800,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              N
+            </span>
+            네이버 지도에서 위치·로드뷰 보기 ↗
+          </a>
+          <button
+            onClick={async () => {
+              const url = `${window.location.origin}/transactions?district=${encodeURIComponent(apt.district)}&q=${encodeURIComponent(apt.name)}`;
+              const text = `${apt.name} 최근 실거래 ${latest ? fmtPrice(latest.price) : ''} · 내집 My.ZIP`;
+              try {
+                if (navigator.share) {
+                  await navigator.share({ title: apt.name, text, url });
+                } else {
+                  await navigator.clipboard.writeText(`${text}\n${url}`);
+                  setShareCopied(true);
+                  setTimeout(() => setShareCopied(false), 1500);
+                }
+              } catch { /* 공유 취소 무시 */ }
+            }}
+            style={{
+              border: 0, backgroundColor: 'var(--accent)', color: '#FFFFFF',
+              fontWeight: 800, fontSize: '14px', padding: '14px', borderRadius: '12px',
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >
+            {shareCopied ? '✓ 링크 복사됨' : '↗ 공유하기'}
+          </button>
         </div>
       </div>
     </div>

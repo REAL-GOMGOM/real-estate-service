@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
-import ErrorState from '@/components/common/ErrorState';
+import { TxErrorState, TxEmptyState } from '@/components/shared/TxStates';
+import { AnalysisPromoBar } from '@/components/shared/AnalysisPromoBar';
 import { findDistrictByLawdCd } from '@/lib/district-codes';
 import { DISTRICT_GROUPS } from '@/lib/district-groups';
 import { matchesQuery } from '@/lib/search-utils';
@@ -29,6 +30,16 @@ function todayLabel(d: Date) {
   const day = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
   return `${d.getMonth() + 1}.${d.getDate()}(${day})`;
 }
+
+/** 11a 타이틀 밴드용 — 2026.07.05(일) 형식 */
+function fullDateLabel(d: Date) {
+  const day = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}.${mm}.${dd}(${day})`;
+}
+
+const TX_TYPE_TABS = ['매매', '분양권', '전세', '월세'];
 
 type SortKey = 'volume' | 'date' | 'price';
 
@@ -188,26 +199,86 @@ export default function TransactionsClient() {
     <main style={{ minHeight: '100vh', backgroundColor: 'var(--bg-primary)', paddingTop: '64px' }}>
       <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '48px 24px' }}>
 
-        {/* 헤더 */}
-        <div style={{ marginBottom: '6px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
-            <h1 style={{ fontSize: 'clamp(20px, 3vw, 30px)', fontWeight: 800, color: 'var(--text-primary)' }}>
-              최신 실거래
-            </h1>
-            <span style={{
-              padding: '4px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
-              backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-muted)',
-            }}>
-              {today.getFullYear() > 2000 ? todayLabel(today) : '—'}
-            </span>
+        {/* 헤더 — 11a 타이틀 밴드 (summary) / 간결 헤더 (detail) */}
+        {viewMode === 'summary' ? (
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '20px', marginBottom: '4px', flexWrap: 'wrap' }}>
+            <div>
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: '7px',
+                backgroundColor: '#FDECEC', color: '#E23B3B',
+                fontWeight: 700, fontSize: '12px', padding: '5px 11px',
+                borderRadius: '99px', marginBottom: '12px',
+              }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#E23B3B', display: 'inline-block' }} />
+                오늘 아침 공개
+              </div>
+              <h1 style={{ margin: '0 0 6px', fontSize: 'clamp(22px, 3vw, 29px)', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.6px' }}>
+                오늘 공개된 최신 실거래
+              </h1>
+              <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>
+                {today.getFullYear() > 2000 ? fullDateLabel(today) : '—'} · 국토교통부 실거래가 공개시스템 기준
+              </p>
+            </div>
+            {!summaryLoading && summaryData.length > 0 && (
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', justifyContent: 'flex-end' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--text-dim)' }}>총</span>
+                  <span style={{ fontSize: '26px', fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>
+                    {summaryData.reduce((s, r) => s + r.estimatedCount, 0).toLocaleString()}
+                  </span>
+                  <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-muted)' }}>건</span>
+                </div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#E23B3B', marginTop: '2px' }}>
+                  신고가 {summaryData.reduce((s, r) => s + r.newHighs, 0)}건 🔥
+                </div>
+              </div>
+            )}
           </div>
-          <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '4px' }}>국토교통부 실거래가 공개시스템 데이터를 기반으로 전국 아파트 매매 거래를 조회합니다.</p>
-          <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>출처: 국토교통부</p>
-        </div>
+        ) : (
+          <div style={{ marginBottom: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
+              <h1 style={{ fontSize: 'clamp(20px, 3vw, 30px)', fontWeight: 800, color: 'var(--text-primary)' }}>
+                최신 실거래
+              </h1>
+              <span style={{
+                padding: '4px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
+                backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-muted)',
+              }}>
+                {today.getFullYear() > 2000 ? todayLabel(today) : '—'}
+              </span>
+            </div>
+            <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>출처: 국토교통부 실거래가 공개시스템</p>
+          </div>
+        )}
 
         {/* 시도별 요약 카드 뷰 */}
         {viewMode === 'summary' && (
           <>
+            {/* 거래 유형 탭 — 매매만 오픈, 나머지 준비 중 */}
+            <div style={{ display: 'flex', gap: '6px', marginTop: '18px', borderBottom: '1px solid var(--border)' }}>
+              {TX_TYPE_TABS.map((t, i) => (
+                <span
+                  key={t}
+                  aria-disabled={i !== 0}
+                  title={i !== 0 ? '준비 중' : undefined}
+                  style={{
+                    backgroundColor: i === 0 ? 'var(--accent)' : 'var(--bg-tertiary)',
+                    color: i === 0 ? '#FFFFFF' : 'var(--text-dim)',
+                    fontSize: '13px', fontWeight: i === 0 ? 700 : 600,
+                    padding: '9px 18px', borderRadius: '10px 10px 0 0',
+                    cursor: i === 0 ? 'default' : 'not-allowed',
+                  }}
+                >
+                  {t}
+                </span>
+              ))}
+            </div>
+
+            {/* 섹션 헤더 */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '20px 0 14px' }}>
+              <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)' }}>시/도별 거래 현황</span>
+              <span style={{ fontSize: '12.5px', color: 'var(--text-dim)' }}>거래량순 · 평균가는 전용면적 기준</span>
+            </div>
             {summaryLoading ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px', marginTop: '20px' }}>
                 {[...Array(6)].map((_, i) => (
@@ -220,8 +291,10 @@ export default function TransactionsClient() {
                 <style>{`@keyframes pulse{0%,100%{opacity:.3}50%{opacity:.6}}`}</style>
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px', marginTop: '20px' }}>
-                {summaryData.map((region) => (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '12px' }}>
+                {[...summaryData]
+                  .sort((a, b) => b.estimatedCount - a.estimatedCount)
+                  .map((region, i) => (
                   <button
                     key={region.label}
                     onClick={() => {
@@ -230,7 +303,7 @@ export default function TransactionsClient() {
                       if (group) setPicker({ label: group.label, districts: group.districts });
                     }}
                     style={{
-                      padding: '20px', borderRadius: '16px',
+                      padding: '15px 16px', borderRadius: '14px',
                       backgroundColor: 'var(--bg-card)',
                       border: '1px solid var(--border)',
                       cursor: 'pointer', textAlign: 'left',
@@ -245,27 +318,36 @@ export default function TransactionsClient() {
                       e.currentTarget.style.boxShadow = 'none';
                     }}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                      <span style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)' }}>
-                        {region.label}
+                    {/* 랭킹 뱃지 + 시도명 (11a) */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                      <span style={{
+                        width: '20px', height: '20px', borderRadius: '6px',
+                        backgroundColor: i < 3 ? 'var(--accent)' : '#EEF2F8',
+                        color: i < 3 ? '#FFFFFF' : '#9AA4B8',
+                        fontSize: '11px', fontWeight: 800,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        {i + 1}
                       </span>
-                      <span style={{ fontSize: '20px', fontWeight: 800, fontFamily: 'Roboto Mono, monospace', color: 'var(--text-primary)' }}>
-                        {region.estimatedCount.toLocaleString()}건
+                      <span style={{ fontSize: '15.5px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                        {region.label}
                       </span>
                     </div>
 
-                    {region.newHighs > 0 && (
-                      <div style={{ marginBottom: '12px' }}>
-                        <span style={{ fontSize: '13px', color: 'var(--text-dim)' }}>
-                          신고가{' '}
-                          <strong style={{ color: 'var(--up-color, #C92F2F)' }}>{region.newHighs}</strong>건
+                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '10px' }}>
+                      <span style={{ fontSize: '20px', fontWeight: 800, fontFamily: 'Roboto Mono, monospace', color: 'var(--text-primary)' }}>
+                        {region.estimatedCount.toLocaleString()}<span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-muted)' }}>건</span>
+                      </span>
+                      {region.newHighs > 0 && (
+                        <span style={{ fontSize: '12px', fontWeight: 700, color: '#E23B3B' }}>
+                          신고가 {region.newHighs}
                         </span>
-                      </div>
-                    )}
+                      )}
+                    </div>
 
                     <div style={{
-                      display: 'flex', gap: '14px',
-                      paddingTop: '12px', borderTop: '1px solid var(--border-light)',
+                      display: 'flex', gap: '12px',
+                      paddingTop: '10px', borderTop: '1px solid var(--border-light)',
                     }}>
                       {region.avg59 && (
                         <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
@@ -289,9 +371,12 @@ export default function TransactionsClient() {
               </div>
             )}
 
-            <p style={{ marginTop: '16px', fontSize: '11px', color: 'var(--text-dim)' }}>
+            <p style={{ margin: '16px 0 20px', fontSize: '11px', color: 'var(--text-dim)' }}>
               ※ 대표 구 기준 추정치입니다. 지역을 클릭해 구를 선택하면 상세 거래를 확인할 수 있습니다.
             </p>
+
+            {/* 조회를 넘어 분석까지 — 내집만의 기능 프로모 */}
+            <AnalysisPromoBar />
           </>
         )}
 
@@ -429,11 +514,9 @@ export default function TransactionsClient() {
           </div>
         </div>
 
-        {/* 에러 상태 */}
+        {/* 에러 상태 — 최종 디자인 10c */}
         {error && !loading && (
-          <ErrorState
-            message="실거래 데이터를 불러오지 못했습니다"
-            detail={error}
+          <TxErrorState
             onRetry={() => { setError(null); setFetched(''); load(district, months); }}
           />
         )}
@@ -452,10 +535,10 @@ export default function TransactionsClient() {
             </div>
             <style>{`@keyframes pulse{0%,100%{opacity:.3}50%{opacity:.6}}`}</style>
           </>
-        ) : filtered.length === 0 ? (
-          <div style={{ padding: '80px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '14px' }}>
-            {query ? `"${query}" 검색 결과 없음` : '조건에 맞는 거래 없음'}
-          </div>
+        ) : filtered.length === 0 && !error ? (
+          <TxEmptyState
+            onReset={() => { setQuery(''); setNewHighOnly(false); setAreaFilter('all'); setMonths(6); setFetched(''); }}
+          />
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
             {filtered.map((apt) => (

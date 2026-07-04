@@ -6,6 +6,7 @@ import {
   type AptGroup,
   fmtPrice, fmtContractDate, detectNewHigh, representativeArea,
 } from '@/lib/tx-shared';
+import { TxErrorState, TxEmptyState } from '@/components/shared/TxStates';
 
 /**
  * 메인 실거래 카드 피드 — 사이클 W (실데이터).
@@ -229,6 +230,7 @@ export function DealFeed({ district }: DealFeedProps) {
   // 결과에 조회 지역을 함께 저장 — 로딩 여부를 파생값으로 계산
   // (effect 안 동기 setState 없이 지역 전환 시 자동으로 스켈레톤 복귀)
   const [result, setResult] = useState<FeedResult | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -243,7 +245,7 @@ export function DealFeed({ district }: DealFeedProps) {
         setResult({ district, deals: [], error: true });
       });
     return () => { cancelled = true; };
-  }, [district]);
+  }, [district, retryKey]);
 
   const loading = result === null || result.district !== district;
   const deals   = loading ? [] : result.deals;
@@ -286,18 +288,11 @@ export function DealFeed({ district }: DealFeedProps) {
         </>
       )}
 
-      {/* 에러 / 빈 상태 */}
-      {!loading && (error || deals.length === 0) && (
-        <div
-          style={{
-            padding: '48px 24px', textAlign: 'center', borderRadius: '14px',
-            backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
-            color: 'var(--text-dim)', fontSize: '13px',
-          }}
-        >
-          {error ? '실거래 데이터를 불러오지 못했습니다' : `${district} 최근 3개월 거래가 없습니다`}
-        </div>
+      {/* 에러 / 빈 상태 — 최종 디자인 10b·10c */}
+      {!loading && error && (
+        <TxErrorState onRetry={() => { setResult(null); setRetryKey((k) => k + 1); }} />
       )}
+      {!loading && !error && deals.length === 0 && <TxEmptyState />}
 
       {/* 카드 스트림 — 클릭 시 해당 단지 상세 딥링크 */}
       {!loading && deals.map((deal) => (
