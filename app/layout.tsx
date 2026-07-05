@@ -31,6 +31,7 @@ export const metadata: Metadata = {
   },
   manifest: '/manifest.json',
   verification: {
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
     other: { 'naver-site-verification': '794ff6d4d4f358c239962451d25e8f040d10603f' },
   },
   other: { 'theme-color': '#1B4DDB' },
@@ -47,6 +48,28 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: `document.documentElement.removeAttribute('data-theme');localStorage.removeItem('theme');` }} />
       </head>
       <body>
+        {/* 구조화 데이터 — 브랜드 검색·사이트링크 시그널 (사이클 Z4) */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify([
+              {
+                '@context': 'https://schema.org',
+                '@type': 'WebSite',
+                name: '내집 My.ZIP',
+                alternateName: ['내집', 'My.ZIP', 'naezipkorea'],
+                url: 'https://www.naezipkorea.com',
+              },
+              {
+                '@context': 'https://schema.org',
+                '@type': 'Organization',
+                name: '내집 My.ZIP',
+                url: 'https://www.naezipkorea.com',
+                logo: 'https://www.naezipkorea.com/icon.png',
+              },
+            ]),
+          }}
+        />
         {children}
         <TelegramFloatingButton />
         <GoogleAnalytics />

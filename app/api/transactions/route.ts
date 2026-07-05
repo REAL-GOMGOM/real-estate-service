@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { fetchMolitXml } from '@/lib/molit-fetch';
 import { eq, ilike, sql } from 'drizzle-orm';
 import { DISTRICT_CODE, findDistrictByLawdCd } from '@/lib/district-codes';
 import { matchesQuery } from '@/lib/search-utils';
@@ -61,7 +62,7 @@ async function fetchAllPages(apiKey: string, lawdCd: string, yyyymm: string): Pr
     return BASE_URL + '?serviceKey=' + apiKey + '&' + params.toString();
   };
 
-  const firstPage = await fetch(makeUrl(1), { next: { revalidate: 86400 } }).then(r => r.text());
+  const firstPage = await fetchMolitXml(makeUrl(1), 86400);
 
   const totalMatch = firstPage.match(/<totalCount>(\d+)<\/totalCount>/);
   const totalCount = totalMatch ? parseInt(totalMatch[1]) : 0;
@@ -71,7 +72,7 @@ async function fetchAllPages(apiKey: string, lawdCd: string, yyyymm: string): Pr
   const totalPages = Math.min(Math.ceil(totalCount / 1000), 3);
   const additionalPages = await Promise.all(
     Array.from({ length: totalPages - 1 }, (_, i) =>
-      fetch(makeUrl(i + 2), { next: { revalidate: 86400 } }).then(r => r.text())
+      fetchMolitXml(makeUrl(i + 2), 86400)
     )
   );
 

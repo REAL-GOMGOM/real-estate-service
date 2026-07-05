@@ -8,6 +8,7 @@ import {
 } from '@/lib/tx-shared';
 import { smoothPath, type Pt } from '@/lib/svg-smooth';
 import { TxErrorState, TxEmptyState } from '@/components/shared/TxStates';
+import { buildShareImage } from '@/lib/share-image';
 
 /**
  * 메인 실거래 카드 피드 — 사이클 W (실데이터).
@@ -157,6 +158,36 @@ function SharePopover({ deal }: { deal: FeedDeal }) {
     }
   };
 
+  const saveImage = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const blob = await buildShareImage({
+        apt: deal.apt,
+        location: `${deal.district}${deal.dong ? ' ' + deal.dong : ''}`,
+        price: fmtPrice(deal.price),
+        delta: deal.delta !== null && deal.delta !== 0
+          ? `${deal.up ? '▲' : '▼'} ${fmtPrice(Math.abs(deal.delta))}` : '',
+        up: deal.up,
+        meta: `${deal.area}㎡ · ${Math.round(deal.area / 3.3058)}평 · ${deal.floor}층 · ${fmtContractDate(deal.date)} 계약`,
+        spark: deal.spark,
+        high: deal.high,
+      });
+      if (!blob) return;
+      const file = new File([blob], `${deal.apt}-실거래.png`, { type: 'image/png' });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: deal.apt });
+      } else {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${deal.apt}-실거래.png`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+      setOpen(false);
+    } catch { /* 공유 취소 무시 */ }
+  };
+
   return (
     <div ref={ref} className="relative" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
       <button
@@ -209,6 +240,18 @@ function SharePopover({ deal }: { deal: FeedDeal }) {
             }}
           >
             {done === 'text' ? '✓ 내용 복사됨' : '📋 거래 내용 복사'}
+          </button>
+          <button
+            type="button"
+            onClick={saveImage}
+            style={{
+              textAlign: 'left', fontSize: '12.5px', fontWeight: 600,
+              color: 'var(--text-primary)',
+              padding: '8px 10px', borderRadius: '7px',
+              background: 'none', border: 'none', cursor: 'pointer',
+            }}
+          >
+            🖼 이미지로 저장
           </button>
         </div>
       )}
@@ -373,18 +416,9 @@ export function DealFeed({ district }: DealFeedProps) {
               </div>
             </div>
             <div
-              className="flex items-center justify-between"
+              className="flex items-center justify-end"
               style={{ marginTop: '13px', paddingTop: '12px', borderTop: '1px solid var(--border-light)' }}
             >
-              <span
-                className="inline-flex items-center gap-1"
-                style={{
-                  fontSize: '11.5px', fontWeight: 700, color: 'var(--accent)',
-                  backgroundColor: 'var(--btn-bg)', padding: '5px 10px', borderRadius: '8px',
-                }}
-              >
-                출처 국토부 ↗
-              </span>
               <SharePopover deal={deal} />
             </div>
           </article>

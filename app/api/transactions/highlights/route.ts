@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { fetchMolitXml } from '@/lib/molit-fetch';
 import { DISTRICT_CODE } from '@/lib/district-codes';
 import { DISTRICT_GROUPS } from '@/lib/district-groups';
 
@@ -74,9 +75,7 @@ export async function GET() {
         LAWD_CD: lawdCd, DEAL_YMD: yyyymm, numOfRows: '1000', pageNo: '1',
       });
       try {
-        const xml = await fetch(BASE_URL + '?serviceKey=' + apiKey + '&' + params.toString(), {
-          next: { revalidate: 21600 },
-        }).then((r) => r.text());
+        const xml = await fetchMolitXml(BASE_URL + '?serviceKey=' + apiKey + '&' + params.toString(), 21600);
         all.push(...parseDeals(xml, district));
       } catch {
         // 개별 구 실패 fail-open

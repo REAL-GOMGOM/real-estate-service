@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { fetchMolitXml } from '@/lib/molit-fetch';
 import { DISTRICT_CODE } from '@/lib/district-codes';
 import { DISTRICT_GROUPS } from '@/lib/district-groups';
 
@@ -73,7 +74,7 @@ export async function GET(req: NextRequest) {
       const url = BASE_URL + '?serviceKey=' + apiKey + '&' + params.toString();
 
       try {
-        const xml = await fetch(url, { next: { revalidate: 21600 } }).then((r) => r.text());
+        const xml = await fetchMolitXml(url, 21600);
         const total = parseInt(xml.match(/<totalCount>(\d+)<\/totalCount>/)?.[1] ?? '0');
         return { district, count: total, newHighs: countNewHighs(xml) };
       } catch {

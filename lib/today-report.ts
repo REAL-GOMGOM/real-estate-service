@@ -1,4 +1,5 @@
 import 'server-only';
+import { fetchMolitXml } from '@/lib/molit-fetch';
 import { DISTRICT_CODE } from '@/lib/district-codes';
 
 /**
@@ -74,9 +75,7 @@ export async function getTodayReport(): Promise<TodayReportRow[] | null> {
             LAWD_CD: lawdCd, DEAL_YMD: yyyymm, numOfRows: '1000', pageNo: '1',
           });
           try {
-            const xml = await fetch(BASE_URL + '?serviceKey=' + apiKey + '&' + params.toString(), {
-              next: { revalidate: 3600 },
-            }).then((r) => r.text());
+            const xml = await fetchMolitXml(BASE_URL + '?serviceKey=' + apiKey + '&' + params.toString(), 3600);
             deals.push(...parse84(xml));
           } catch { /* 개별 월 실패 무시 */ }
         })

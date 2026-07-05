@@ -49,7 +49,8 @@ export function CompactHero() {
             letterSpacing: '-0.8px',
           }}
         >
-          부동산의 모든 답을, 한 곳에 압축
+          부동산의 모든 답을, 한 곳에 압축{' '}
+          <span style={{ color: 'var(--accent)', whiteSpace: 'nowrap' }}>— 내집(My.ZIP)</span>
         </h1>
         <p style={{ margin: 0, fontSize: '15px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
           국토교통부·한국부동산원 공식 데이터를 가공 없이. 지역을 고르면 최근 실거래가 카드로 흐릅니다.
