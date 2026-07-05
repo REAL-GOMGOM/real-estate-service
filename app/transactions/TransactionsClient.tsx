@@ -299,9 +299,8 @@ export default function TransactionsClient() {
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '12px' }}>
                 {[...summaryData]
-                  .sort((a, b) => (dailyMeta
-                    ? (b.todayCount ?? 0) - (a.todayCount ?? 0)
-                    : b.estimatedCount - a.estimatedCount))
+                  .sort((a, b) =>
+                    (b.todayCount ?? b.estimatedCount) - (a.todayCount ?? a.estimatedCount))
                   .map((region, i) => (
                   <button
                     key={region.label}
@@ -344,11 +343,11 @@ export default function TransactionsClient() {
 
                     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '10px' }}>
                       <span style={{ fontSize: '20px', fontWeight: 800, fontFamily: 'Roboto Mono, monospace', color: 'var(--text-primary)' }}>
-                        {(dailyMeta ? (region.todayCount ?? 0) : region.estimatedCount).toLocaleString()}<span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-muted)' }}>건</span>
+                        {(region.todayCount !== undefined ? region.todayCount : region.estimatedCount).toLocaleString()}<span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-muted)' }}>건{region.todayCount === undefined && dailyMeta ? ' (월)' : ''}</span>
                       </span>
-                      {(dailyMeta ? (region.todayNewHighs ?? 0) : region.newHighs) > 0 && (
+                      {(region.todayCount !== undefined ? (region.todayNewHighs ?? 0) : region.newHighs) > 0 && (
                         <span style={{ fontSize: '12px', fontWeight: 700, color: '#E23B3B' }}>
-                          신고가 {dailyMeta ? region.todayNewHighs : region.newHighs}
+                          신고가 {region.todayCount !== undefined ? region.todayNewHighs : region.newHighs}
                         </span>
                       )}
                     </div>
