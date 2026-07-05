@@ -51,10 +51,13 @@ const tdStyle: React.CSSProperties = {
 };
 
 function SectionCard({
-  emoji, title, sub, headers, onSave, children,
+  emoji, title, sub, headers, onSave, cardView, children,
 }: {
   emoji: string; title: string; sub: string;
-  headers: string[]; onSave?: () => Promise<void>; children: React.ReactNode;
+  headers: string[]; onSave?: () => Promise<void>;
+  /** true 면 테이블 래핑 없이 children(카드 그리드)을 그대로 렌더 */
+  cardView?: boolean;
+  children: React.ReactNode;
 }) {
   return (
     <section style={{
@@ -68,17 +71,66 @@ function SectionCard({
         <span style={{ fontSize: '12px', color: 'var(--text-dim)', flex: 1 }}>{sub}</span>
         {onSave && <SaveImageButton onSave={onSave} />}
       </div>
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ backgroundColor: 'var(--bg-tertiary)' }}>
-              {headers.map((h) => <th key={h} style={thStyle}>{h}</th>)}
-            </tr>
-          </thead>
-          <tbody>{children}</tbody>
-        </table>
-      </div>
+      {cardView ? (
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 250px), 1fr))',
+          gap: '10px', padding: '4px 18px 18px',
+        }}>
+          {children}
+        </div>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+                {headers.map((h) => <th key={h} style={thStyle}>{h}</th>)}
+              </tr>
+            </thead>
+            <tbody>{children}</tbody>
+          </table>
+        </div>
+      )}
     </section>
+  );
+}
+
+/** 카드뷰 개별 딜 카드 — 표의 한 행을 카드로 (모바일 가독) */
+function DealMiniCard({
+  district, apt, meta, price, priceColor, extra,
+}: {
+  district: string; apt: string; meta: string;
+  price: string; priceColor?: string; extra?: string;
+}) {
+  return (
+    <Link
+      href={`/transactions?district=${encodeURIComponent(district)}&q=${encodeURIComponent(apt)}`}
+      style={{
+        display: 'block', padding: '13px 15px', borderRadius: '12px',
+        backgroundColor: 'var(--bg-overlay, var(--bg-tertiary))',
+        border: '1px solid var(--border-light)', textDecoration: 'none',
+      }}
+    >
+      <p style={{
+        margin: 0, fontSize: '13.5px', fontWeight: 800, color: 'var(--text-primary)',
+        overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
+      }}>
+        {apt}
+      </p>
+      <p style={{ margin: '3px 0 8px', fontSize: '11.5px', color: 'var(--text-dim)' }}>
+        {district} · {meta}
+      </p>
+      <p style={{
+        margin: 0, fontSize: '16px', fontWeight: 800, fontFamily: 'Roboto Mono, monospace',
+        color: priceColor ?? 'var(--text-primary)',
+      }}>
+        {price}
+        {extra && (
+          <span style={{ marginLeft: '7px', fontSize: '11.5px', fontWeight: 600, color: 'var(--text-muted)', fontFamily: 'inherit' }}>
+            {extra}
+          </span>
+        )}
+      </p>
+    </Link>
   );
 }
 
@@ -99,6 +151,7 @@ export default function HighlightsClient() {
   const [failed, setFailed] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
   const [today, setToday] = useState(new Date(0));
+  const [view, setView] = useState<'table' | 'card'>('table');
 
   // hydration mismatch 방지 — mount 후 비동기 주입 (동기 setState 룰 회피)
   useEffect(() => {
@@ -150,9 +203,29 @@ export default function HighlightsClient() {
               <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#E23B3B', display: 'inline-block' }} />
               {today.getFullYear() > 2000 ? fullDateLabel(today) : '—'} · 오늘 공개된 거래
             </div>
-            <h1 style={{ margin: '0 0 6px', fontSize: 'clamp(22px, 3vw, 29px)', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.6px' }}>
-              오늘의 주요거래
-            </h1>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+              <h1 style={{ margin: '0 0 6px', fontSize: 'clamp(22px, 3vw, 29px)', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.6px' }}>
+                오늘의 주요거래
+              </h1>
+              {/* 표 ↔ 카드 보기 토글 (사이클 HH) */}
+              <div style={{ display: 'flex', gap: '4px', padding: '3px', borderRadius: '10px', backgroundColor: 'var(--border-light)' }}>
+                {([['table', '표'], ['card', '카드']] as const).map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => setView(key)}
+                    style={{
+                      padding: '6px 14px', borderRadius: '7px', fontSize: '12px', fontWeight: 700,
+                      border: 'none', cursor: 'pointer',
+                      backgroundColor: view === key ? 'var(--bg-card)' : 'transparent',
+                      color: view === key ? 'var(--text-primary)' : 'var(--text-dim)',
+                      boxShadow: view === key ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>
               신고가·급등·국평 고가 매매를 한눈에. 단지를 누르면 상세 실거래로 이동합니다.
             </p>
@@ -190,8 +263,18 @@ export default function HighlightsClient() {
                     value: fmtPrice(d.price),
                     valueSub: `종전 ${fmtPrice(d.prevHigh)}`, valueColor: '#C92F2F',
                   })))}
+                  cardView={view === 'card'}
                 >
-                  {data.newHighs.map((d, i) => (
+                  {view === 'card'
+                    ? data.newHighs.map((d, i) => (
+                        <DealMiniCard
+                          key={i} district={d.district} apt={d.apt}
+                          meta={`${d.area}㎡ · ${fmtContractDate(d.date)}`}
+                          price={fmtPrice(d.price)} priceColor="var(--up-color, #C92F2F)"
+                          extra={`종전 ${fmtPrice(d.prevHigh)}`}
+                        />
+                      ))
+                    : data.newHighs.map((d, i) => (
                     <tr key={i} style={{ borderTop: '1px solid var(--border-light)' }}>
                       <td style={tdStyle}>{d.district}</td>
                       <td style={tdStyle}><AptLink district={d.district} apt={d.apt} /></td>
@@ -217,8 +300,18 @@ export default function HighlightsClient() {
                     value: fmtPrice(d.price),
                     valueSub: `▲ ${d.ratePct}%`, valueColor: '#C92F2F',
                   })))}
+                  cardView={view === 'card'}
                 >
-                  {data.surges.map((d, i) => (
+                  {view === 'card'
+                    ? data.surges.map((d, i) => (
+                        <DealMiniCard
+                          key={i} district={d.district} apt={d.apt}
+                          meta={`${d.area}㎡ · 직전 ${fmtPrice(d.prevPrice)}`}
+                          price={fmtPrice(d.price)}
+                          extra={`▲ ${d.ratePct}%`}
+                        />
+                      ))
+                    : data.surges.map((d, i) => (
                     <tr key={i} style={{ borderTop: '1px solid var(--border-light)' }}>
                       <td style={tdStyle}>{d.district}</td>
                       <td style={tdStyle}><AptLink district={d.district} apt={d.apt} /></td>
@@ -246,8 +339,18 @@ export default function HighlightsClient() {
                     value: fmtPrice(d.price),
                     valueSub: `${fmtContractDate(d.date)} 계약`,
                   })))}
+                  cardView={view === 'card'}
                 >
-                  {data.pyeong84.map((d, i) => (
+                  {view === 'card'
+                    ? data.pyeong84.map((d, i) => (
+                        <DealMiniCard
+                          key={i} district={d.district} apt={d.apt}
+                          meta={`${d.area}㎡ · ${d.floor}층`}
+                          price={fmtPrice(d.price)}
+                          extra={fmtContractDate(d.date)}
+                        />
+                      ))
+                    : data.pyeong84.map((d, i) => (
                     <tr key={i} style={{ borderTop: '1px solid var(--border-light)' }}>
                       <td style={tdStyle}>{d.district}</td>
                       <td style={tdStyle}><AptLink district={d.district} apt={d.apt} /></td>
