@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import {
   type AptGroup,
-  fmtPrice, fmtContractDate, detectNewHigh, sparkSeries,
+  fmtPrice, fmtContractDate, detectNewHigh, sparkSeries, peakRecovery,
 } from '@/lib/tx-shared';
 import { smoothPath, type Pt } from '@/lib/svg-smooth';
 import { TxErrorState, TxEmptyState } from '@/components/shared/TxStates';
@@ -33,6 +33,8 @@ interface FeedDeal {
   high:     boolean;
   spark:    Pt[];            // 0~100 × 0~56 좌표계 (월평균 스무딩)
   sparkUp:  boolean;
+  /** 전고점 회복률 (사이클 BB) — 100% 미만일 때만 카드에 표시 */
+  recovery: { peak: number; peakDate: string; pct: number } | null;
 }
 
 interface DealFeedProps {
@@ -70,6 +72,7 @@ function toFeedDeals(groups: AptGroup[], limit: number): FeedDeal[] {
     ) ?? null;
 
     const spark = buildSpark(g);
+    const rec = peakRecovery(g);
 
     deals.push({
       apt:      g.name,
@@ -86,6 +89,7 @@ function toFeedDeals(groups: AptGroup[], limit: number): FeedDeal[] {
       high:     detectNewHigh(g),
       spark:    spark?.pts ?? [],
       sparkUp:  spark?.up ?? true,
+      recovery: rec ? { peak: rec.peak, peakDate: rec.peakDate, pct: rec.pct } : null,
     });
   }
 
@@ -411,6 +415,12 @@ export function DealFeed({ district }: DealFeedProps) {
                 {deal.prevPrice !== null && (
                   <div style={{ fontSize: '11.5px', color: 'var(--text-dim)', marginTop: '1px' }}>
                     직전 거래 {fmtPrice(deal.prevPrice)}{deal.prevDate ? ` · ${fmtContractDate(deal.prevDate)}` : ''}
+                  </div>
+                )}
+                {deal.recovery !== null && deal.recovery.pct < 100 && (
+                  <div style={{ fontSize: '11.5px', color: 'var(--text-dim)', marginTop: '1px' }}>
+                    전고점 {fmtPrice(deal.recovery.peak)}({fmtContractDate(deal.recovery.peakDate)}) 대비{' '}
+                    <span style={{ fontWeight: 700, color: 'var(--text-muted)' }}>{deal.recovery.pct}%</span>
                   </div>
                 )}
               </div>

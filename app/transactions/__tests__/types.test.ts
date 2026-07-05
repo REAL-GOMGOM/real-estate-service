@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   fmtPrice, fmtPriceFull, fmtContractDate,
-  detectNewHigh, representativeArea, sparkSeries,
+  detectNewHigh, representativeArea, sparkSeries, peakRecovery,
   type AptGroup, type Transaction,
 } from '../types';
 
@@ -124,5 +124,59 @@ describe('sparkSeries (사이클 Z — silgga 형 시간축 시리즈)', () => {
     ]);
     // 대표면적(84 또는 135 중 다수) 기준 1건뿐 → null
     expect(sparkSeries(g)).toBeNull();
+  });
+});
+
+describe('peakRecovery — 사이클 BB', () => {
+  it('고점 후 하락 — 회복률·전고점 일자 계산', () => {
+    const g = group([
+      tx({ price: 100000, date: '2024-03-10' }),
+      tx({ price: 150000, date: '2025-01-20' }),  // 전고점
+      tx({ price: 138000, date: '2026-06-05' }),  // 최근
+    ]);
+    const r = peakRecovery(g)!;
+    expect(r.peak).toBe(150000);
+    expect(r.peakDate).toBe('2025-01-20');
+    expect(r.latest).toBe(138000);
+    expect(r.pct).toBe(92);
+  });
+
+  it('최근 거래가 곧 전고점(신고가)이면 100%', () => {
+    const g = group([
+      tx({ price: 100000, date: '2025-05-01' }),
+      tx({ price: 160000, date: '2026-06-01' }),
+    ]);
+    const r = peakRecovery(g)!;
+    expect(r.pct).toBe(100);
+    expect(r.peakDate).toBe('2026-06-01');
+  });
+
+  it('대표면적(±6㎡) 밖 거래는 전고점 계산에서 제외', () => {
+    const g = group([
+      tx({ price: 300000, area: 135, date: '2025-01-01' }),  // 대형 — 제외
+      tx({ price: 100000, area: 84,  date: '2025-03-01' }),
+      tx({ price: 120000, area: 84,  date: '2025-08-01' }),
+      tx({ price: 110000, area: 84,  date: '2026-06-01' }),
+    ]);
+    const r = peakRecovery(g)!;
+    expect(r.peak).toBe(120000);
+    expect(r.pct).toBeCloseTo(91.7, 1);
+  });
+
+  it('동일 면적 거래 2건 미만이면 null', () => {
+    expect(peakRecovery(group([tx({})]))).toBeNull();
+    expect(peakRecovery(group([
+      tx({ price: 200000, area: 135, date: '2026-05-01' }),
+      tx({ price: 110000, area: 84,  date: '2026-06-01' }),
+    ]))).toBeNull();
+  });
+
+  it('전고점 동가 복수 — 먼저 기록된 거래를 전고점으로', () => {
+    const g = group([
+      tx({ price: 150000, date: '2025-02-01' }),
+      tx({ price: 150000, date: '2025-09-01' }),
+      tx({ price: 140000, date: '2026-06-01' }),
+    ]);
+    expect(peakRecovery(g)!.peakDate).toBe('2025-02-01');
   });
 });

@@ -112,6 +112,11 @@ export default function AptDetailModal({ apt, onClose, months }: AptDetailModalP
   const maxPrice = maxTx?.price ?? 0;
   const newHigh  = detectNewHigh(apt);
 
+  // 전고점 회복률 (사이클 BB) — 면적 필터에 연동, 거래 2건 이상일 때만
+  const recoveryPct = latest && maxPrice > 0 && filtered.length >= 2
+    ? Math.round((latest.price / maxPrice) * 1000) / 10
+    : null;
+
   // 차트 데이터 — 개별 거래 도트 + 월평균 라인 (시간축).
   // filtered 가 렌더마다 새로 계산되는 파생값이라 memo 없이 직접 계산.
   const asc = [...filtered].sort((a, b) => a.date.localeCompare(b.date));
@@ -219,11 +224,18 @@ export default function AptDetailModal({ apt, onClose, months }: AptDetailModalP
           ))}
         </div>
 
-        {/* 통계 카드 3개 */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', padding: '0 24px 20px' }}>
+        {/* 통계 카드 4개 — 전고점 회복률 포함 (사이클 BB) */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', padding: '0 24px 20px' }}>
           <StatCard label="최근 실거래가" value={latest ? fmtPrice(latest.price) : '—'} sub={latest ? fmtContractDate(latest.date) : undefined} />
           <StatCard label={`${months}개월 평균`}  value={filtered.length ? fmtPrice(avgPrice) : '—'} />
           <StatCard label="최고 실거래가"  value={maxTx ? fmtPrice(maxPrice) : '—'} sub={maxTx ? fmtContractDate(maxTx.date) : undefined} />
+          <StatCard
+            label="전고점 회복률"
+            value={recoveryPct !== null ? `${recoveryPct}%` : '—'}
+            sub={recoveryPct !== null
+              ? (recoveryPct >= 100 ? '전고점 경신' : '기간 내 최고가 기준')
+              : undefined}
+          />
         </div>
 
         {/* 가격 차트 — 월평균 라인 + 개별 거래 도트 (시간축) */}

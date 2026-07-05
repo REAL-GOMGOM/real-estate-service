@@ -103,6 +103,42 @@ export function sparkSeries(apt: AptGroup): { points: SparkPoint[]; rising: bool
   return { points, rising: points[points.length - 1].price >= points[0].price };
 }
 
+/**
+ * 전고점 회복률 — 사이클 BB.
+ *
+ * 대표 면적(±6㎡) 거래 중 조회 기간 내 최고가(전고점) 대비
+ * 최근 거래가의 비율. 조회 창 밖 고점은 알 수 없으므로
+ * 표기 시 "기간 내" 캡션을 함께 쓴다.
+ */
+export interface PeakRecovery {
+  peak:       number;  // 전고점 (만원)
+  peakDate:   string;
+  latest:     number;  // 최근 거래가 (만원)
+  latestDate: string;
+  pct:        number;  // 회복률 % (소수 1자리 반올림, 최근가=전고점이면 100)
+}
+
+export function peakRecovery(apt: AptGroup): PeakRecovery | null {
+  const repArea = representativeArea(apt);
+  const txs = apt.transactions
+    .filter((tr) => Math.abs(tr.area - repArea) <= 6)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (txs.length < 2) return null;
+
+  const latest = txs[txs.length - 1];
+  // 동가 시 먼저 기록된 거래를 전고점으로 (경신 시점 표기가 자연스럽도록)
+  const peakTx = txs.reduce((m, t) => (t.price > m.price ? t : m), txs[0]);
+  if (peakTx.price <= 0) return null;
+
+  return {
+    peak:       peakTx.price,
+    peakDate:   peakTx.date,
+    latest:     latest.price,
+    latestDate: latest.date,
+    pct:        Math.round((latest.price / peakTx.price) * 1000) / 10,
+  };
+}
+
 /** 거래 최다 대표 면적 (카드 라인차트·평균가 기준) */
 export function representativeArea(apt: AptGroup): number {
   const counts = new Map<number, number>();
