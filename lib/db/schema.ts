@@ -136,3 +136,28 @@ export const apartments = pgTable('apartments', {
 
 export type Apartment = typeof apartments.$inferSelect;
 export type NewApartment = typeof apartments.$inferInsert;
+
+/**
+ * 일별 공개분 집계 — 사이클 AA (봇 공개분 연동)
+ *
+ * 아침 봇이 MOLIT diff 로 산출한 "오늘 공개(신고 등록)된" 거래를
+ * 시도별로 push. 사이트 summary 는 이 값이 있으면 "오늘 공개 N건"
+ * 지표로 표시하고, 없으면 월 누계 실집계로 폴백한다.
+ */
+export const dailyStats = pgTable('daily_stats', {
+  // 공개일 (YYYY-MM-DD) — 하루 1행, 재전송 시 upsert
+  date: text('date').primaryKey(),
+  // 시도별 집계: [{ label, count, newHighs }]
+  regions: jsonb('regions')
+    .$type<{ label: string; count: number; newHighs: number }[]>()
+    .notNull(),
+  totalCount: integer('total_count').notNull(),
+  totalNewHighs: integer('total_new_highs').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+export type DailyStats = typeof dailyStats.$inferSelect;

@@ -50,7 +50,11 @@ interface SummaryRegion {
   avg59:          number | null;
   avg84:          number | null;
   firstDistrict:  string;
+  todayCount?:    number;   // 봇 공개분 (있으면 오늘 공개 기준 표시)
+  todayNewHighs?: number;
 }
+
+interface DailyMeta { date: string; totalCount: number; totalNewHighs: number }
 
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'volume', label: '거래많은순' },
@@ -84,6 +88,7 @@ export default function TransactionsClient() {
 
   const [viewMode, setViewMode] = useState<'summary' | 'detail'>(districtParam ? 'detail' : 'summary');
   const [summaryData, setSummaryData] = useState<SummaryRegion[]>([]);
+  const [dailyMeta, setDailyMeta] = useState<DailyMeta | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
 
   // 구 선택 모달 (아실형) — 열려 있으면 해당 시도 그룹
@@ -138,6 +143,7 @@ export default function TransactionsClient() {
       .then(r => r.json())
       .then(json => {
         setSummaryData(json.summary || []);
+        setDailyMeta(json.daily ?? null);
         setSummaryLoading(false);
       })
       .catch(() => setSummaryLoading(false));
@@ -210,7 +216,7 @@ export default function TransactionsClient() {
                 borderRadius: '99px', marginBottom: '12px',
               }}>
                 <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#E23B3B', display: 'inline-block' }} />
-                이번 달 신고 집계
+                {dailyMeta ? '오늘 아침 공개' : '이번 달 신고 집계'}
               </div>
               <h1 style={{ margin: '0 0 6px', fontSize: 'clamp(22px, 3vw, 29px)', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.6px' }}>
                 오늘 공개된 최신 실거래
@@ -224,12 +230,12 @@ export default function TransactionsClient() {
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', justifyContent: 'flex-end' }}>
                   <span style={{ fontSize: '13px', color: 'var(--text-dim)' }}>총</span>
                   <span style={{ fontSize: '26px', fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>
-                    {summaryData.reduce((s, r) => s + r.estimatedCount, 0).toLocaleString()}
+                    {(dailyMeta ? dailyMeta.totalCount : summaryData.reduce((s, r) => s + r.estimatedCount, 0)).toLocaleString()}
                   </span>
                   <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-muted)' }}>건</span>
                 </div>
                 <div style={{ fontSize: '13px', fontWeight: 700, color: '#E23B3B', marginTop: '2px' }}>
-                  신고가 {summaryData.reduce((s, r) => s + r.newHighs, 0)}건 🔥
+                  신고가 {dailyMeta ? dailyMeta.totalNewHighs : summaryData.reduce((s, r) => s + r.newHighs, 0)}건 🔥
                 </div>
               </div>
             )}
@@ -293,7 +299,9 @@ export default function TransactionsClient() {
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '12px' }}>
                 {[...summaryData]
-                  .sort((a, b) => b.estimatedCount - a.estimatedCount)
+                  .sort((a, b) => (dailyMeta
+                    ? (b.todayCount ?? 0) - (a.todayCount ?? 0)
+                    : b.estimatedCount - a.estimatedCount))
                   .map((region, i) => (
                   <button
                     key={region.label}
@@ -336,11 +344,11 @@ export default function TransactionsClient() {
 
                     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '10px' }}>
                       <span style={{ fontSize: '20px', fontWeight: 800, fontFamily: 'Roboto Mono, monospace', color: 'var(--text-primary)' }}>
-                        {region.estimatedCount.toLocaleString()}<span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-muted)' }}>건</span>
+                        {(dailyMeta ? (region.todayCount ?? 0) : region.estimatedCount).toLocaleString()}<span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-muted)' }}>건</span>
                       </span>
-                      {region.newHighs > 0 && (
+                      {(dailyMeta ? (region.todayNewHighs ?? 0) : region.newHighs) > 0 && (
                         <span style={{ fontSize: '12px', fontWeight: 700, color: '#E23B3B' }}>
-                          신고가 {region.newHighs}
+                          신고가 {dailyMeta ? region.todayNewHighs : region.newHighs}
                         </span>
                       )}
                     </div>
@@ -372,7 +380,7 @@ export default function TransactionsClient() {
             )}
 
             <p style={{ margin: '16px 0 20px', fontSize: '11px', color: 'var(--text-dim)' }}>
-              ※ 등록 시군구 전체 실집계 (당월 신고 누계 · 6시간 갱신). 지역을 클릭해 구를 선택하면 상세 거래를 확인할 수 있습니다.
+              {dailyMeta ? `※ ${dailyMeta.date} 공개분 (아침 봇 집계) · 평균가는 당월 기준` : '※ 등록 시군구 전체 실집계 (당월 신고 누계)'} · 지역을 클릭해 구를 선택하면 상세 거래를 확인할 수 있습니다.
             </p>
 
             {/* 조회를 넘어 분석까지 — 내집만의 기능 프로모 */}

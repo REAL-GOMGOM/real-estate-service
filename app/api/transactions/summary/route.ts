@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { fetchMolitXml } from '@/lib/molit-fetch';
 import { DISTRICT_CODE } from '@/lib/district-codes';
 import { DISTRICT_GROUPS } from '@/lib/district-groups';
+import { eq } from 'drizzle-orm';
+import { getBlogDb } from '@/lib/db/client';
+import { dailyStats } from '@/lib/db/schema';
 
 /**
  * 시도별 실거래 집계 API — 사이클 Z5 (추정치 → 전 시군구 실집계)
@@ -130,14 +133,39 @@ export async function GET() {
       };
     });
 
+    // 봇이 push 한 "오늘 공개분"이 있으면 병기 (사이클 AA — 실까식 지표)
+    let daily: { date: string; totalCount: number; totalNewHighs: number } | null = null;
+    try {
+      const kstNow = new Date(Date.now() + 9 * 3600_000);
+      const todayKst = kstNow.toISOString().slice(0, 10);
+      const db = getBlogDb();
+      const rows = await db.select().from(dailyStats).where(eq(dailyStats.date, todayKst)).limit(1);
+      const row = rows[0];
+      if (row) {
+        daily = { date: row.date, totalCount: row.totalCount, totalNewHighs: row.totalNewHighs };
+        const byLabel = new Map(row.regions.map((r) => [r.label, r]));
+        for (const g of summary as (typeof summary[number] & { todayCount?: number; todayNewHighs?: number })[]) {
+          const match = byLabel.get(g.label);
+          if (match) {
+            g.todayCount = match.count;
+            g.todayNewHighs = match.newHighs;
+          }
+        }
+      }
+    } catch {
+      // daily 는 부가 지표 — 조회 실패 시 월 누계만 제공
+    }
+
     return NextResponse.json(
       {
         summary,
+        daily,
         month: yyyymm,
         updatedAt: new Date().toISOString(),
         note: '등록 시군구 전체 실집계 (당월 신고 누계)',
       },
-      { headers: { 'Cache-Control': 'public, s-maxage=21600, stale-while-revalidate=86400' } }
+      // daily 반영 지연 최소화 — 캐시 1시간으로 단축
+      { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } }
     );
   } catch (error) {
     console.error('시도별 집계 실패:', error);
