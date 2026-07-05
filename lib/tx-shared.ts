@@ -24,6 +24,8 @@ export interface AptGroup {
   dong?:        string | null;
   buildYear?:   number | null;
   households?:  number | null;
+  /** 단지 마스터 PK (kaptCode) — 있으면 /apt/[id] 전용 페이지 존재 (사이클 DD) */
+  masterId?:    string | null;
   areas:        number[];
   transactions: Transaction[];
 }

@@ -1,16 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { X } from 'lucide-react';
-import {
-  ComposedChart, Line, Scatter, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, CartesianGrid, ReferenceLine,
-} from 'recharts';
 import {
   type AptGroup, type Transaction,
   fmtPrice, fmtContractDate, detectNewHigh, buildSparkPts,
 } from '../types';
 import { buildShareImage, shareOrDownloadImage } from '@/lib/share-image';
+import PriceComboChart from '@/components/apt/PriceComboChart';
 
 /**
  * 단지 상세 모달 — 사이클 W (아실형 차트)
@@ -36,50 +34,6 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
       <p style={{ fontSize: '11px', color: 'var(--text-dim)', marginBottom: '6px' }}>{label}</p>
       <p style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>{value}</p>
       {sub && <p style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '3px' }}>{sub}</p>}
-    </div>
-  );
-}
-
-function toTimestamp(date: string): number {
-  // YYYY-MM-DD 또는 YYYY-MM (구캐시) 모두 처리
-  const [y, m, d] = date.split('-').map((v) => parseInt(v));
-  return new Date(y, (m ?? 1) - 1, d ?? 15).getTime();
-}
-
-function fmtTick(ts: number): string {
-  const d = new Date(ts);
-  return `${String(d.getFullYear()).slice(2)}.${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
-interface TooltipPayloadItem {
-  payload?: {
-    kind: 'deal' | 'month';
-    ts: number;
-    price?: number; avg?: number;
-    date?: string; area?: number; floor?: number;
-  };
-}
-
-function ChartTooltip({ active, payload }: { active?: boolean; payload?: TooltipPayloadItem[] }) {
-  if (!active || !payload?.length) return null;
-  const d = (payload.find((p) => p.payload?.kind === 'deal')?.payload ?? payload[0].payload)!;
-  return (
-    <div style={{
-      padding: '8px 12px', borderRadius: '8px',
-      backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-hover)',
-      fontSize: '12px',
-    }}>
-      {d.kind === 'deal' ? (
-        <>
-          <p style={{ color: 'var(--text-muted)', marginBottom: '2px' }}>{fmtContractDate(d.date ?? '')} · {d.area}㎡ · {d.floor}층</p>
-          <p style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{fmtPrice(d.price ?? 0)}</p>
-        </>
-      ) : (
-        <>
-          <p style={{ color: 'var(--text-muted)', marginBottom: '2px' }}>{fmtTick(d.ts)} 월평균</p>
-          <p style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{fmtPrice(d.avg ?? 0)}</p>
-        </>
-      )}
     </div>
   );
 }
@@ -144,28 +98,6 @@ export default function AptDetailModal({ apt, onClose, months }: AptDetailModalP
     setImageSaving(false);
   };
 
-  // 차트 데이터 — 개별 거래 도트 + 월평균 라인 (시간축).
-  // filtered 가 렌더마다 새로 계산되는 파생값이라 memo 없이 직접 계산.
-  const asc = [...filtered].sort((a, b) => a.date.localeCompare(b.date));
-  const dealDots = asc.map((t) => ({
-    kind: 'deal' as const,
-    ts: toTimestamp(t.date),
-    price: t.price,
-    date: t.date, area: t.area, floor: t.floor,
-  }));
-
-  const byMonth = new Map<string, number[]>();
-  asc.forEach((t) => {
-    const ym = t.date.slice(0, 7);
-    if (!byMonth.has(ym)) byMonth.set(ym, []);
-    byMonth.get(ym)!.push(t.price);
-  });
-  const monthlyLine = [...byMonth.entries()].map(([ym, prices]) => ({
-    kind: 'month' as const,
-    ts: toTimestamp(ym + '-15'),
-    avg: Math.round(prices.reduce((s, v) => s + v, 0) / prices.length),
-  }));
-
   return (
     <div
       onClick={onClose}
@@ -196,7 +128,7 @@ export default function AptDetailModal({ apt, onClose, months }: AptDetailModalP
           display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
         }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px', flexWrap: 'wrap' }}>
               <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)' }}>{apt.name}</h2>
               {newHigh && (
                 <span style={{
@@ -205,6 +137,18 @@ export default function AptDetailModal({ apt, onClose, months }: AptDetailModalP
                 }}>
                   신고가
                 </span>
+              )}
+              {apt.masterId && (
+                <Link
+                  href={`/apt/${encodeURIComponent(apt.masterId)}`}
+                  style={{
+                    fontSize: '11.5px', fontWeight: 700, color: 'var(--accent)',
+                    border: '1px solid var(--border)', padding: '3px 9px',
+                    borderRadius: '6px', textDecoration: 'none', whiteSpace: 'nowrap',
+                  }}
+                >
+                  단지 페이지 ↗
+                </Link>
               )}
             </div>
             <p style={{ fontSize: '13px', color: 'var(--text-dim)' }}>
@@ -265,68 +209,10 @@ export default function AptDetailModal({ apt, onClose, months }: AptDetailModalP
           />
         </div>
 
-        {/* 가격 차트 — 월평균 라인 + 개별 거래 도트 (시간축) */}
-        {dealDots.length > 1 && (
+        {/* 가격 차트 — 월평균 라인 + 개별 거래 도트 (공용 PriceComboChart) */}
+        {filtered.length > 1 && (
           <div style={{ padding: '0 24px 20px' }}>
-            <div style={{
-              borderRadius: '12px', padding: '16px 8px 8px',
-              backgroundColor: 'var(--bg-overlay)',
-              border: '1px solid var(--border-light)',
-            }}>
-              <ResponsiveContainer width="100%" height={190}>
-                <ComposedChart margin={{ top: 4, right: 16, bottom: 4, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" />
-                  <XAxis
-                    dataKey="ts"
-                    type="number"
-                    domain={['dataMin', 'dataMax']}
-                    tickFormatter={fmtTick}
-                    tick={{ fontSize: 11, fill: 'var(--text-dim)' }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    dataKey="price"
-                    domain={['auto', 'auto']}
-                    tickFormatter={(v) => fmtPrice(v)}
-                    tick={{ fontSize: 11, fill: 'var(--text-dim)' }}
-                    width={56}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip content={<ChartTooltip />} />
-                  {maxPrice > 0 && (
-                    <ReferenceLine
-                      y={maxPrice}
-                      stroke="rgba(201,47,47,0.35)"
-                      strokeDasharray="4 4"
-                    />
-                  )}
-                  <Line
-                    data={monthlyLine}
-                    dataKey="avg"
-                    type="monotone"
-                    stroke="var(--accent)"
-                    strokeWidth={2}
-                    dot={false}
-                    activeDot={false}
-                    isAnimationActive={false}
-                  />
-                  <Scatter
-                    data={dealDots}
-                    dataKey="price"
-                    fill="var(--accent)"
-                    opacity={0.5}
-                    shape={(props: { cx?: number; cy?: number }) => (
-                      <circle cx={props.cx} cy={props.cy} r={3} fill="var(--accent)" opacity={0.55} />
-                    )}
-                  />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-            <p style={{ marginTop: '6px', fontSize: '11px', color: 'var(--text-dim)' }}>
-              선 = 월평균 · 점 = 개별 거래 · 점선 = 기간 내 최고가
-            </p>
+            <PriceComboChart transactions={filtered} maxPrice={maxPrice} />
           </div>
         )}
 

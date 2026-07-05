@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchMolitXml } from '@/lib/molit-fetch';
 import { eq, ilike, sql } from 'drizzle-orm';
 import { DISTRICT_CODE, findDistrictByLawdCd } from '@/lib/district-codes';
 import { matchesQuery } from '@/lib/search-utils';
 import { getBlogDb } from '@/lib/db/client';
 import { apartments } from '@/lib/db/schema';
 import { normalizeMLTMName } from '@/lib/normalize-mltm-name';
-
-const BASE_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade';
+import { getMonthList, fetchTradeMonthAllPages } from '@/lib/molit-months';
 
 const APT_NAME_MAX_LEN = 50;
 
@@ -31,52 +29,13 @@ interface AptGroupRow {
   dong:         string | null;
   buildYear:    number | null;
   households:   number | null;
+  masterId:     string | null;   // 단지 마스터 PK — /apt/[id] 전용 페이지 링크용
   areas:        number[];
   transactions: TxRow[];
 }
 
 function escapeLike(input: string): string {
   return input.replace(/[\\%_]/g, (ch) => `\\${ch}`);
-}
-
-function getMonthList(months: number): string[] {
-  const result: string[] = [];
-  const now = new Date();
-  for (let i = 0; i < months; i++) {
-    const d    = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const yyyy = d.getFullYear();
-    const mm   = String(d.getMonth() + 1).padStart(2, '0');
-    result.push(`${yyyy}${mm}`);
-  }
-  return result;
-}
-
-async function fetchAllPages(apiKey: string, lawdCd: string, yyyymm: string): Promise<string> {
-  const makeUrl = (pageNo: number) => {
-    const params = new URLSearchParams({
-      LAWD_CD: lawdCd,
-      DEAL_YMD: yyyymm,
-      numOfRows: '1000',
-      pageNo: String(pageNo),
-    });
-    return BASE_URL + '?serviceKey=' + apiKey + '&' + params.toString();
-  };
-
-  const firstPage = await fetchMolitXml(makeUrl(1), 86400);
-
-  const totalMatch = firstPage.match(/<totalCount>(\d+)<\/totalCount>/);
-  const totalCount = totalMatch ? parseInt(totalMatch[1]) : 0;
-
-  if (totalCount <= 1000) return firstPage;
-
-  const totalPages = Math.min(Math.ceil(totalCount / 1000), 3);
-  const additionalPages = await Promise.all(
-    Array.from({ length: totalPages - 1 }, (_, i) =>
-      fetchMolitXml(makeUrl(i + 2), 86400)
-    )
-  );
-
-  return [firstPage, ...additionalPages].join('\n');
 }
 
 export async function GET(req: NextRequest) {
@@ -166,7 +125,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const responses = await Promise.all(
-      monthList.map((yyyymm) => fetchAllPages(apiKey, lawdCd, yyyymm))
+      monthList.map((yyyymm) => fetchTradeMonthAllPages(apiKey, lawdCd, yyyymm))
     );
 
     const transactions: TxRow[] = [];
@@ -215,6 +174,7 @@ export async function GET(req: NextRequest) {
           dong:         tx.dong || null,
           buildYear:    tx.buildYear,
           households:   null,
+          masterId:     null,
           areas:        [],
           transactions: [],
         };
@@ -234,6 +194,7 @@ export async function GET(req: NextRequest) {
       const db = getBlogDb();
       const masterRows = await db
         .select({
+          id:              apartments.id,
           name:            apartments.name,
           aliases:         apartments.aliases,
           totalHouseholds: apartments.totalHouseholds,
@@ -241,11 +202,12 @@ export async function GET(req: NextRequest) {
         .from(apartments)
         .where(eq(apartments.lawdCd, lawdCd));
 
-      const masterByName = new Map<string, number | null>();
+      const masterByName = new Map<string, { id: string; households: number | null }>();
       for (const row of masterRows) {
-        if (!masterByName.has(row.name)) masterByName.set(row.name, row.totalHouseholds);
+        const entry = { id: row.id, households: row.totalHouseholds };
+        if (!masterByName.has(row.name)) masterByName.set(row.name, entry);
         for (const alias of row.aliases ?? []) {
-          if (!masterByName.has(alias)) masterByName.set(alias, row.totalHouseholds);
+          if (!masterByName.has(alias)) masterByName.set(alias, entry);
         }
       }
 
@@ -253,7 +215,10 @@ export async function GET(req: NextRequest) {
         const matched =
           masterByName.get(apt.name) ??
           masterByName.get(normalizeMLTMName(apt.name));
-        if (matched != null) apt.households = matched;
+        if (matched) {
+          apt.masterId = matched.id;
+          if (matched.households != null) apt.households = matched.households;
+        }
       });
     } catch (e) {
       console.error('[transactions API] 마스터 조인 실패 (fail-open):', e);

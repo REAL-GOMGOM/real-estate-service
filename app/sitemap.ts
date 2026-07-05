@@ -1,6 +1,8 @@
 import type { MetadataRoute } from 'next';
 import { getAllRegionIds } from '@/lib/region-data';
 import { getAllPublishedSlugs, getAllCategories } from '@/lib/blog/queries';
+import { getBlogDb } from '@/lib/db/client';
+import { apartments } from '@/lib/db/schema';
 import { SITE_URL } from '@/lib/site';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -52,5 +54,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
-  return [...staticPages, ...regionUrls, ...categoryUrls, ...postUrls];
+  // 단지 전용 페이지 전체 (사이클 DD — "단지명 실거래" 검색 유입).
+  // 실패는 fail-open: 단지 URL 만 생략하고 기존 sitemap 은 유지.
+  let aptUrls: MetadataRoute.Sitemap = [];
+  try {
+    const rows = await getBlogDb()
+      .select({ id: apartments.id, updatedAt: apartments.updatedAt })
+      .from(apartments);
+    aptUrls = rows.map((a) => ({
+      url: `${baseUrl}/apt/${encodeURIComponent(a.id)}`,
+      lastModified: a.updatedAt,
+      changeFrequency: 'weekly',
+      priority: 0.6,
+    }));
+  } catch (e) {
+    console.error('[sitemap] 단지 목록 조회 실패 (단지 URL 생략):', e);
+  }
+
+  return [...staticPages, ...regionUrls, ...categoryUrls, ...postUrls, ...aptUrls];
 }
