@@ -113,6 +113,7 @@ export default function AptDetailModal({ apt, onClose, months }: AptDetailModalP
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        className="rounded-scroll"
         style={{
           width: '100%', maxWidth: '700px', maxHeight: '90vh',
           backgroundColor: 'var(--bg-primary)',

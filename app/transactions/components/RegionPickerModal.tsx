@@ -49,6 +49,7 @@ export default function RegionPickerModal({ label, districts, onPick, onClose }:
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        className="rounded-scroll"
         style={{
           width: '100%', maxWidth: '560px', maxHeight: '80vh', overflowY: 'auto',
           backgroundColor: 'var(--bg-primary)', borderRadius: '20px',
