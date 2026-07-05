@@ -1,8 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import Link from 'next/link';
+import { useState, useEffect } from 'react';
 import { Trophy, BarChart3, TrendingUp, Flame } from 'lucide-react';
+import {
+  buildRankingShareImage, shareOrDownloadImage, type RankingShareRow,
+} from '@/lib/share-image';
+import { SaveImageButton } from '@/components/shared/SaveImageButton';
 
 // ── 타입 ────────────────────────────────────────────
 interface TopPriceItem {
@@ -136,16 +139,23 @@ function PriceChangeCard({ item }: { item: PriceChangeItem }) {
 }
 
 // ── 시도별 카드 ─────────────────────────────────────
-function RegionCard({ title, children }: { title: string; children: React.ReactNode }) {
+function RegionCard({ title, onSave, children }: {
+  title: string;
+  onSave?: () => Promise<void>;
+  children: React.ReactNode;
+}) {
   return (
     <div style={{
       padding: '20px', borderRadius: '16px',
       backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
       transition: 'box-shadow 0.15s',
     }}>
-      <h3 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '14px' }}>
-        {title}
-      </h3>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+        <h3 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)' }}>
+          {title}
+        </h3>
+        {onSave && <SaveImageButton onSave={onSave} />}
+      </div>
       {children}
     </div>
   );
@@ -155,26 +165,90 @@ function EmptyState() {
   return <p style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-dim)', fontSize: '13px' }}>데이터 없음</p>;
 }
 
+/** 탭별 랭킹 행 → 공유 카드 행 매핑 (사이클 CC) */
+function toShareRows(tab: TabKey, items: unknown[]): RankingShareRow[] {
+  return items.slice(0, 5).map((raw) => {
+    if (tab === 'topPrice') {
+      const it = raw as TopPriceItem;
+      return {
+        rank: it.rank, name: it.aptName,
+        sub: `${it.district} ${it.dong} · ${it.area}㎡ · ${it.floor}층`,
+        value: it.priceFormatted, valueSub: it.dealDate,
+      };
+    }
+    if (tab === 'volume') {
+      const it = raw as VolumeItem;
+      return {
+        rank: it.rank, name: it.aptName,
+        sub: `${it.district} · 평균 ${it.avgPriceFormatted}`,
+        value: `${it.count}건`, valueColor: '#D97E1F',
+      };
+    }
+    if (tab === 'newHigh') {
+      const it = raw as NewHighItem;
+      return {
+        rank: it.rank, name: it.aptName,
+        sub: `${it.district} · 이전 ${formatPrice(it.prevHigh)}`,
+        value: formatPrice(it.price),
+        valueSub: `${it.diffFormatted} (${it.diffPercent}%)`, valueColor: '#2E7A4C',
+      };
+    }
+    const it = raw as PriceChangeItem;
+    return {
+      rank: it.rank, name: it.name,
+      value: `${it.direction === 'up' ? '+' : ''}${it.changeRate.toFixed(2)}%`,
+      valueColor: it.direction === 'up' ? '#2E7A4C' : it.direction === 'down' ? '#E23B3B' : '#8A94A8',
+    };
+  });
+}
+
 // ── 메인 ────────────────────────────────────────────
 export default function RankingClientPage() {
   const [tab, setTab] = useState<TabKey>('topPrice');
   const [area, setArea] = useState('all');
   const [period, setPeriod] = useState('3');
-  const [data, setData] = useState<RankingData | null>(null);
-  const [loading, setLoading] = useState(true);
+  // 결과에 조회 키를 함께 저장 — loading 은 파생값 (effect 안 동기 setState 룰 회피, DealFeed 패턴)
+  const [result, setResult] = useState<{ key: string; data: RankingData | null } | null>(null);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/ranking?period=${period}&area=${area}`);
-      if (res.ok) setData(await res.json());
-    } catch { /* ignore */ }
-    setLoading(false);
+  const queryKey = `${period}-${area}`;
+  useEffect(() => {
+    let cancelled = false;
+    const key = `${period}-${area}`;
+    fetch(`/api/ranking?period=${period}&area=${area}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => { if (!cancelled) setResult({ key, data: json }); })
+      .catch(() => { if (!cancelled) setResult({ key, data: null }); });
+    return () => { cancelled = true; };
   }, [period, area]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  const loading = result === null || result.key !== queryKey;
+  const data = loading ? null : result.data;
 
   const regionNames = data ? Object.keys(data.topPrice).filter((k) => k !== '전국') : [];
+
+  // 카드 → 브랜드 공유 이미지 (사이클 CC — silgga식 캡처 공유의 전용 렌더 버전)
+  const saveCard = async (cardTitle: string, items: unknown[]) => {
+    const tabLabel = TABS.find((t) => t.key === tab)?.label ?? '';
+    const d = new Date();
+    const dateStr = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+    const periodLabel = PERIOD_OPTIONS.find((o) => o.key === period)?.label ?? '';
+    const areaLabel = tab !== 'priceChange'
+      ? ` · ${AREA_OPTIONS.find((o) => o.key === area)?.label} 면적` : '';
+
+    const blob = await buildRankingShareImage({
+      title: tab === 'priceChange' ? `${cardTitle} TOP` : `${tabLabel} TOP — ${cardTitle}`,
+      subtitle: `${periodLabel}${areaLabel} · ${dateStr} 기준`,
+      rows: toShareRows(tab, items),
+      source: tab === 'priceChange' ? '한국부동산원 매매가격지수' : undefined,
+    });
+    if (blob) {
+      await shareOrDownloadImage(
+        blob,
+        `내집-주간랭킹-${tabLabel}-${cardTitle}.png`,
+        `주간 랭킹 ${tabLabel} — ${cardTitle}`,
+      );
+    }
+  };
 
   function renderTab() {
     if (!data) return null;
@@ -187,12 +261,12 @@ export default function RankingClientPage() {
           gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 340px), 1fr))',
           gap: '16px',
         }}>
-          <RegionCard title="시도별 상승률">
+          <RegionCard title="시도별 상승률" onSave={regions.length > 0 ? () => saveCard('시도별 상승률', regions) : undefined}>
             {regions.length > 0
               ? <div style={listStyle}>{regions.map((it) => <PriceChangeCard key={it.rank} item={it} />)}</div>
               : <EmptyState />}
           </RegionCard>
-          <RegionCard title="서울 구별 상승률">
+          <RegionCard title="서울 구별 상승률" onSave={seoulDistricts.length > 0 ? () => saveCard('서울 구별 상승률', seoulDistricts) : undefined}>
             {seoulDistricts.length > 0
               ? <div style={listStyle}>{seoulDistricts.map((it) => <PriceChangeCard key={it.rank} item={it} />)}</div>
               : <EmptyState />}
@@ -213,13 +287,17 @@ export default function RankingClientPage() {
             : tab === 'volume' ? data.volume[region]
             : data.newHigh[region];
           return (
-            <RegionCard key={region} title={region}>
+            <RegionCard
+              key={region}
+              title={region}
+              onSave={items && items.length > 0 ? () => saveCard(region, items) : undefined}
+            >
               {items && items.length > 0 ? (
                 <div style={listStyle}>
-                  {items.map((it: any) =>
-                    tab === 'topPrice' ? <TopPriceCard key={it.rank} item={it} />
-                    : tab === 'volume' ? <VolumeCard key={it.rank} item={it} />
-                    : <NewHighCard key={it.rank} item={it} />
+                  {items.map((it) =>
+                    tab === 'topPrice' ? <TopPriceCard key={it.rank} item={it as TopPriceItem} />
+                    : tab === 'volume' ? <VolumeCard key={it.rank} item={it as VolumeItem} />
+                    : <NewHighCard key={it.rank} item={it as NewHighItem} />
                   )}
                 </div>
               ) : <EmptyState />}

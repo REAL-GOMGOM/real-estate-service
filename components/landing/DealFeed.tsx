@@ -8,7 +8,7 @@ import {
 } from '@/lib/tx-shared';
 import { smoothPath, type Pt } from '@/lib/svg-smooth';
 import { TxErrorState, TxEmptyState } from '@/components/shared/TxStates';
-import { buildShareImage } from '@/lib/share-image';
+import { buildShareImage, shareOrDownloadImage } from '@/lib/share-image';
 
 /**
  * 메인 실거래 카드 피드 — 사이클 W (실데이터).
@@ -178,16 +178,7 @@ function SharePopover({ deal }: { deal: FeedDeal }) {
         high: deal.high,
       });
       if (!blob) return;
-      const file = new File([blob], `${deal.apt}-실거래.png`, { type: 'image/png' });
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: deal.apt });
-      } else {
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `${deal.apt}-실거래.png`;
-        a.click();
-        URL.revokeObjectURL(a.href);
-      }
+      await shareOrDownloadImage(blob, `${deal.apt}-실거래.png`, deal.apt);
       setOpen(false);
     } catch { /* 공유 취소 무시 */ }
   };

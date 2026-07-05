@@ -6,7 +6,11 @@ import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { TxErrorState, TxEmptyState } from '@/components/shared/TxStates';
 import { AnalysisPromoBar } from '@/components/shared/AnalysisPromoBar';
+import { SaveImageButton } from '@/components/shared/SaveImageButton';
 import { fmtPrice, fmtContractDate } from '@/lib/tx-shared';
+import {
+  buildRankingShareImage, shareOrDownloadImage, type RankingShareRow,
+} from '@/lib/share-image';
 
 /**
  * 오늘의 주요거래 — 사이클 X (최종 디자인 TURN 4 리포트 뷰)
@@ -47,21 +51,22 @@ const tdStyle: React.CSSProperties = {
 };
 
 function SectionCard({
-  emoji, title, sub, headers, children,
+  emoji, title, sub, headers, onSave, children,
 }: {
   emoji: string; title: string; sub: string;
-  headers: string[]; children: React.ReactNode;
+  headers: string[]; onSave?: () => Promise<void>; children: React.ReactNode;
 }) {
   return (
     <section style={{
       backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
       borderRadius: '16px', overflow: 'hidden',
     }}>
-      <div style={{ padding: '16px 18px 12px', display: 'flex', alignItems: 'baseline', gap: '10px' }}>
-        <span style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>
+      <div style={{ padding: '16px 18px 12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <span style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
           {emoji} {title}
         </span>
-        <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>{sub}</span>
+        <span style={{ fontSize: '12px', color: 'var(--text-dim)', flex: 1 }}>{sub}</span>
+        {onSave && <SaveImageButton onSave={onSave} />}
       </div>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -114,6 +119,20 @@ export default function HighlightsClient() {
   const empty = data !== null && !failed &&
     data.newHighs.length === 0 && data.surges.length === 0 && data.pyeong84.length === 0;
 
+  // 섹션 → 브랜드 공유 카드 (사이클 CC)
+  const saveSection = async (sectionTitle: string, rows: RankingShareRow[]) => {
+    const d = new Date();
+    const dateStr = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+    const blob = await buildRankingShareImage({
+      title: `오늘의 주요거래 — ${sectionTitle}`,
+      subtitle: `${dateStr} 공개 · 최근 1개월 신고분 기준`,
+      rows: rows.slice(0, 5),
+    });
+    if (blob) {
+      await shareOrDownloadImage(blob, `내집-주요거래-${sectionTitle}.png`, `오늘의 주요거래 — ${sectionTitle}`);
+    }
+  };
+
   return (
     <>
       <Header />
@@ -165,6 +184,12 @@ export default function HighlightsClient() {
                 <SectionCard
                   emoji="🔥" title="신고가 주요거래" sub="동일 면적 종전 최고가 경신"
                   headers={['시군구', '아파트명', '면적', '가격', '종전 최고가', '계약일']}
+                  onSave={() => saveSection('신고가', data.newHighs.map((d, i) => ({
+                    rank: i + 1, name: d.apt,
+                    sub: `${d.district} · ${d.area}㎡ · ${fmtContractDate(d.date)} 계약`,
+                    value: fmtPrice(d.price),
+                    valueSub: `종전 ${fmtPrice(d.prevHigh)}`, valueColor: '#C92F2F',
+                  })))}
                 >
                   {data.newHighs.map((d, i) => (
                     <tr key={i} style={{ borderTop: '1px solid var(--border-light)' }}>
@@ -186,6 +211,12 @@ export default function HighlightsClient() {
                 <SectionCard
                   emoji="⚡" title="급등 거래" sub="직전 거래 대비 상승률"
                   headers={['시군구', '아파트명', '면적', '가격', '직전 거래', '상승률']}
+                  onSave={() => saveSection('급등', data.surges.map((d, i) => ({
+                    rank: i + 1, name: d.apt,
+                    sub: `${d.district} · ${d.area}㎡ · 직전 ${fmtPrice(d.prevPrice)}`,
+                    value: fmtPrice(d.price),
+                    valueSub: `▲ ${d.ratePct}%`, valueColor: '#C92F2F',
+                  })))}
                 >
                   {data.surges.map((d, i) => (
                     <tr key={i} style={{ borderTop: '1px solid var(--border-light)' }}>
@@ -209,6 +240,12 @@ export default function HighlightsClient() {
                 <SectionCard
                   emoji="🏆" title="국평(84㎡) 고가 거래" sub="전용 80~88㎡ 최고가"
                   headers={['시군구', '아파트명', '면적', '가격', '층', '계약일']}
+                  onSave={() => saveSection('국평 고가', data.pyeong84.map((d, i) => ({
+                    rank: i + 1, name: d.apt,
+                    sub: `${d.district} · ${d.area}㎡ · ${d.floor}층`,
+                    value: fmtPrice(d.price),
+                    valueSub: `${fmtContractDate(d.date)} 계약`,
+                  })))}
                 >
                   {data.pyeong84.map((d, i) => (
                     <tr key={i} style={{ borderTop: '1px solid var(--border-light)' }}>
