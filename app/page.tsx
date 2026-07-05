@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { CompactHero } from '@/components/landing/CompactHero';
@@ -29,7 +30,18 @@ export default async function HomePage() {
 
       {/* 2. 3컬럼 본문 — 필터 레일 / 실거래 피드(실데이터) / 우측 레일(실집계) */}
       <FeedSection
-        rightRail={<RightRail topLocations={getTopLocations(5)} />}
+        rightRail={
+          <Suspense
+            fallback={
+              <aside className="flex flex-col gap-4 min-w-0" aria-hidden>
+                <div style={{ height: '240px', borderRadius: '14px', backgroundColor: '#0E2A66', opacity: 0.55 }} />
+                <div style={{ height: '280px', borderRadius: '14px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-light)' }} />
+              </aside>
+            }
+          >
+            <RightRail topLocations={getTopLocations(5)} />
+          </Suspense>
+        }
       />
 
       {/* 3. 청약 일정 */}

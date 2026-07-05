@@ -1,4 +1,5 @@
 import 'server-only';
+import { connection } from 'next/server';
 import { fetchMolitXml } from '@/lib/molit-fetch';
 import { DISTRICT_CODE } from '@/lib/district-codes';
 
@@ -54,6 +55,9 @@ function avg(rows: DealRow[]): number | null {
 }
 
 export async function getTodayReport(): Promise<TodayReportRow[] | null> {
+  // PPR 프리렌더에서 제외 — 요청 시 실행 선언 (new Date 사용 전 필수)
+  await connection();
+
   const rawKey = process.env.PUBLIC_DATA_API_KEY;
   if (!rawKey) return null;
   const apiKey = decodeURIComponent(rawKey);
