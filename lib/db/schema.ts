@@ -161,3 +161,28 @@ export const dailyStats = pgTable('daily_stats', {
 });
 
 export type DailyStats = typeof dailyStats.$inferSelect;
+
+/**
+ * 단지·면적별 역대 전고점 — 사이클 FF.
+ *
+ * 시드(2019.01~ 장기 MOLIT 집계, scripts/seed-apt-highs.ts) + 봇 일일
+ * 신고가 push(/api/machine/apt-highs)로 유지. 더 높은 가격일 때만 갱신.
+ * 단지 페이지 회복률이 이 값을 우선 사용하고, 없으면 36개월 폴백.
+ */
+export const aptHighs = pgTable('apt_highs', {
+  id: text('id').primaryKey(),              // `${district}|${aptName}|${area}` (조회는 인덱스로)
+  district: text('district').notNull(),     // 사이트 표기 시군구 (예: '강남구')
+  aptName: text('apt_name').notNull(),      // MOLIT aptNm 원문
+  area: integer('area').notNull(),          // 전용면적 반올림 ㎡
+  price: integer('price').notNull(),        // 최고가 (만원)
+  dealDate: text('deal_date').notNull(),    // 최고가 계약일 (YYYY-MM-DD)
+  source: text('source').notNull(),         // 'seed' | 'bot'
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+}, (table) => ({
+  districtNameIdx: index('apt_highs_district_name_idx').on(table.district, table.aptName),
+}));
+
+export type AptHigh = typeof aptHighs.$inferSelect;

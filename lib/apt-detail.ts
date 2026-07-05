@@ -1,11 +1,11 @@
 import 'server-only';
-import { eq } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, lte } from 'drizzle-orm';
 import { getBlogDb } from '@/lib/db/client';
-import { apartments, type Apartment } from '@/lib/db/schema';
+import { apartments, aptHighs, type Apartment } from '@/lib/db/schema';
 import { findDistrictByLawdCd } from '@/lib/district-codes';
 import { getMonthList, fetchTradeMonthAllPages } from '@/lib/molit-months';
 import { buildNameCandidates, aptNameMatches } from '@/lib/apt-name-match';
-import type { AptGroup, Transaction } from '@/lib/tx-shared';
+import { representativeArea, type AptGroup, type Transaction } from '@/lib/tx-shared';
 
 /**
  * 단지 전용 페이지 데이터 로더 — 사이클 DD.
@@ -21,6 +21,8 @@ export interface AptPageData {
   master:   Apartment;
   district: string;      // 사이트 표기 시군구 (예: '송파구')
   group:    AptGroup;    // 거래 0건이어도 반환 (페이지는 항상 렌더)
+  /** 역대 전고점 (apt_highs, 사이클 FF) — 시드·봇 데이터 없으면 null → 36개월 폴백 */
+  allTimeHigh: { price: number; dealDate: string } | null;
 }
 
 export async function getApartmentById(id: string): Promise<Apartment | null> {
@@ -49,7 +51,7 @@ export async function getAptPageData(id: string): Promise<AptPageData | null> {
     areas:        [],
     transactions: [],
   };
-  if (!rawKey) return { master, district, group };
+  if (!rawKey) return { master, district, group, allTimeHigh: null };
 
   const apiKey     = decodeURIComponent(rawKey);
   const candidates = buildNameCandidates({ name: master.name, aliases: master.aliases ?? [] });
@@ -101,5 +103,27 @@ export async function getAptPageData(id: string): Promise<AptPageData | null> {
   group.transactions.sort((a, b) => b.date.localeCompare(a.date));
   group.areas.sort((a, b) => a - b);
 
-  return { master, district, group };
+  // 역대 전고점 (fail-open) — 대표 면적대(±6㎡) 기준, 거래 없으면 생략
+  let allTimeHigh: AptPageData['allTimeHigh'] = null;
+  if (group.transactions.length > 0) {
+    try {
+      const repArea = representativeArea(group);
+      const rows = await getBlogDb()
+        .select({ price: aptHighs.price, dealDate: aptHighs.dealDate })
+        .from(aptHighs)
+        .where(and(
+          eq(aptHighs.district, district),
+          inArray(aptHighs.aptName, [...candidates]),
+          gte(aptHighs.area, repArea - 6),
+          lte(aptHighs.area, repArea + 6),
+        ))
+        .orderBy(desc(aptHighs.price))
+        .limit(1);
+      allTimeHigh = rows[0] ?? null;
+    } catch (e) {
+      console.error('[apt-detail] apt_highs 조회 실패 (fail-open):', e);
+    }
+  }
+
+  return { master, district, group, allTimeHigh };
 }

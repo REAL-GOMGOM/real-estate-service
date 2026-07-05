@@ -78,7 +78,7 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
   const data = await getAptPageData(decodeURIComponent(id));
   if (!data) notFound();
 
-  const { master, district, group } = data;
+  const { master, district, group, allTimeHigh } = data;
   const sorted   = group.transactions; // 로더가 최신순 정렬
   const latest   = sorted[0];
   const avg      = sorted.length
@@ -87,6 +87,19 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
   const maxPrice = maxTx?.price ?? 0;
   const newHigh  = detectNewHigh(group);
   const recovery = peakRecovery(group);
+
+  // 회복률 — 역대 전고점(apt_highs) 우선, 없으면 36개월 폴백 (사이클 FF)
+  const recoveryPct = allTimeHigh && latest
+    ? Math.round((latest.price / allTimeHigh.price) * 1000) / 10
+    : recovery?.pct ?? null;
+  const recoveryLabel = allTimeHigh ? '역대 전고점 회복률' : '전고점 회복률';
+  const recoverySub = allTimeHigh
+    ? (recoveryPct !== null && recoveryPct >= 100
+        ? `전고점 경신 · 종전 ${fmtPrice(allTimeHigh.price)}`
+        : `전고점 ${fmtPrice(allTimeHigh.price)} (${fmtContractDate(allTimeHigh.dealDate)})`)
+    : (recovery
+        ? (recovery.pct >= 100 ? '전고점 경신' : `최근 ${APT_PAGE_MONTHS}개월 최고가 기준`)
+        : undefined);
 
   const deepLink = `/transactions?district=${encodeURIComponent(district)}&q=${encodeURIComponent(group.name)}`;
 
@@ -141,9 +154,9 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
             <StatCard label={`${APT_PAGE_MONTHS}개월 평균`} value={fmtPrice(avg)} sub={`${sorted.length}건 기준`} />
             <StatCard label="최고 실거래가" value={maxTx ? fmtPrice(maxPrice) : '—'} sub={maxTx ? fmtContractDate(maxTx.date) : undefined} />
             <StatCard
-              label="전고점 회복률"
-              value={recovery ? `${recovery.pct}%` : '—'}
-              sub={recovery ? (recovery.pct >= 100 ? '전고점 경신' : '기간 내 최고가 기준') : undefined}
+              label={recoveryLabel}
+              value={recoveryPct !== null ? `${recoveryPct}%` : '—'}
+              sub={recoverySub}
             />
           </div>
 
