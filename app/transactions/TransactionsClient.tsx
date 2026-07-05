@@ -10,7 +10,9 @@ import { matchesQuery } from '@/lib/search-utils';
 import Header from '@/components/layout/Header';
 import { AptAutocomplete, type ApartmentSearchResult } from '@/components/search/AptAutocomplete';
 import { type AptGroup, type DistrictStat, detectNewHigh } from './types';
+import { type RentAptGroup } from '@/lib/rent-shared';
 import AptCard from './components/AptCard';
+import RentAptCard from './components/RentAptCard';
 import AptDetailModal from './components/AptDetailModal';
 import RegionPickerModal from './components/RegionPickerModal';
 import DistrictChips from './components/DistrictChips';
@@ -39,9 +41,15 @@ function fullDateLabel(d: Date) {
   return `${d.getFullYear()}.${mm}.${dd}(${day})`;
 }
 
-const TX_TYPE_TABS = ['매매', '분양권', '전세', '월세'];
-
 type SortKey = 'volume' | 'date' | 'price';
+
+/** 거래 유형 탭 — 사이클 II (전세·월세 오픈) */
+type DealType = 'buy' | 'jeonse' | 'monthly';
+const DEAL_TYPE_TABS: { key: DealType; label: string }[] = [
+  { key: 'buy',     label: '매매' },
+  { key: 'jeonse',  label: '전세' },
+  { key: 'monthly', label: '월세' },
+];
 
 interface SummaryRegion {
   label:          string;
@@ -87,6 +95,13 @@ export default function TransactionsClient() {
   const [activeApt, setActiveApt] = useState<AptGroup | null>(null);
 
   const [viewMode, setViewMode] = useState<'summary' | 'detail'>(districtParam ? 'detail' : 'summary');
+
+  // 거래 유형 (사이클 II) — 전월세는 별도 데이터·카드 경로
+  const [dealType, setDealType] = useState<DealType>('buy');
+  const [rentGroups,  setRentGroups]  = useState<RentAptGroup[]>([]);
+  const [rentLoading, setRentLoading] = useState(false);
+  const [rentError,   setRentError]   = useState(false);
+  const [rentFetched, setRentFetched] = useState('');
   const [summaryData, setSummaryData] = useState<SummaryRegion[]>([]);
   const [dailyMeta, setDailyMeta] = useState<DailyMeta | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
@@ -132,8 +147,34 @@ export default function TransactionsClient() {
   }, [fetched]);
 
   useEffect(() => {
-    if (viewMode === 'detail') load(district, months);
-  }, [district, months, viewMode, load]);
+    if (viewMode === 'detail' && dealType === 'buy') load(district, months);
+  }, [district, months, viewMode, dealType, load]);
+
+  // 전월세 조회 (사이클 II) — 매매 캐시(fetched)와 별개 키
+  useEffect(() => {
+    if (viewMode !== 'detail' || dealType === 'buy') return;
+    const key = `${district}-${months}-${dealType}`;
+    if (rentFetched === key) return;
+    let cancelled = false;
+    setRentLoading(true);
+    setRentError(false);
+    fetch(`/api/transactions/rent?district=${encodeURIComponent(district)}&months=${months}&rentType=${dealType}`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (cancelled) return;
+        setRentGroups(json.data ?? []);
+        setRentFetched(key);
+        setRentLoading(false);
+        if (json.error) setRentError(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setRentGroups([]);
+        setRentError(true);
+        setRentLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [viewMode, dealType, district, months, rentFetched]);
 
   // 시도별 요약
   useEffect(() => {
@@ -260,23 +301,22 @@ export default function TransactionsClient() {
         {/* 시도별 요약 카드 뷰 */}
         {viewMode === 'summary' && (
           <>
-            {/* 거래 유형 탭 — 매매만 오픈, 나머지 준비 중 */}
+            {/* 거래 유형 탭 — 매매·전세·월세 오픈 (사이클 II), 선택 후 구 진입 시 해당 유형으로 시작 */}
             <div style={{ display: 'flex', gap: '6px', marginTop: '18px', borderBottom: '1px solid var(--border)' }}>
-              {TX_TYPE_TABS.map((t, i) => (
-                <span
-                  key={t}
-                  aria-disabled={i !== 0}
-                  title={i !== 0 ? '준비 중' : undefined}
+              {DEAL_TYPE_TABS.map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setDealType(key)}
                   style={{
-                    backgroundColor: i === 0 ? 'var(--accent)' : 'var(--bg-tertiary)',
-                    color: i === 0 ? '#FFFFFF' : 'var(--text-dim)',
-                    fontSize: '13px', fontWeight: i === 0 ? 700 : 600,
+                    backgroundColor: dealType === key ? 'var(--accent)' : 'var(--bg-tertiary)',
+                    color: dealType === key ? '#FFFFFF' : 'var(--text-dim)',
+                    fontSize: '13px', fontWeight: dealType === key ? 700 : 600,
                     padding: '9px 18px', borderRadius: '10px 10px 0 0',
-                    cursor: i === 0 ? 'default' : 'not-allowed',
+                    border: 'none', cursor: 'pointer',
                   }}
                 >
-                  {t}
-                </span>
+                  {label}
+                </button>
               ))}
             </div>
 
@@ -402,15 +442,23 @@ export default function TransactionsClient() {
           ← 전체 보기
         </button>
 
-        {/* 매매 탭 */}
+        {/* 거래 유형 탭 — 매매·전세·월세 (사이클 II) */}
         <div style={{ borderBottom: '1px solid var(--border)', marginBottom: '20px', display: 'flex' }}>
-          <button style={{
-            padding: '12px 4px', marginRight: '24px', fontSize: '15px', fontWeight: 700,
-            color: 'var(--text-primary)', background: 'none', border: 'none', cursor: 'default',
-            borderBottom: '2px solid var(--accent)', marginBottom: '-1px',
-          }}>
-            매매
-          </button>
+          {DEAL_TYPE_TABS.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setDealType(key)}
+              style={{
+                padding: '12px 4px', marginRight: '24px', fontSize: '15px', fontWeight: 700,
+                color: dealType === key ? 'var(--text-primary)' : 'var(--text-dim)',
+                background: 'none', border: 'none', cursor: 'pointer',
+                borderBottom: dealType === key ? '2px solid var(--accent)' : '2px solid transparent',
+                marginBottom: '-1px',
+              }}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         {/* 구별 칩 (아실형 — 건수·신고가) */}
@@ -421,7 +469,8 @@ export default function TransactionsClient() {
           onPick={(d) => { setDistrict(d); setFetched(''); }}
         />
 
-        {/* 통계 바 + 정렬·필터 */}
+        {/* 통계 바 + 정렬·필터 (매매 전용 — 전월세는 v1 에서 최근 계약순 고정) */}
+        {dealType === 'buy' && (
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           gap: '12px', flexWrap: 'wrap', marginBottom: '20px',
@@ -481,6 +530,7 @@ export default function TransactionsClient() {
             </button>
           </div>
         </div>
+        )}
 
         {/* 기간 필터 + 검색 */}
         <div style={{ display: 'flex', gap: '10px', marginBottom: '28px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -521,41 +571,84 @@ export default function TransactionsClient() {
           </div>
         </div>
 
-        {/* 에러 상태 — 최종 디자인 10c */}
-        {error && !loading && (
-          <TxErrorState
-            onRetry={() => { setError(null); setFetched(''); load(district, months); }}
-          />
+        {/* 매매 — 에러·스켈레톤·카드 그리드 */}
+        {dealType === 'buy' && (
+          <>
+            {error && !loading && (
+              <TxErrorState
+                onRetry={() => { setError(null); setFetched(''); load(district, months); }}
+              />
+            )}
+
+            {loading ? (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
+                  {[...Array(8)].map((_, i) => (
+                    <div key={i} style={{
+                      height: '220px', borderRadius: '16px',
+                      backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-light)',
+                      animation: 'pulse 1.5s ease-in-out infinite',
+                    }} />
+                  ))}
+                </div>
+                <style>{`@keyframes pulse{0%,100%{opacity:.3}50%{opacity:.6}}`}</style>
+              </>
+            ) : filtered.length === 0 && !error ? (
+              <TxEmptyState
+                onReset={() => { setQuery(''); setNewHighOnly(false); setAreaFilter('all'); setMonths(6); setFetched(''); }}
+              />
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
+                {filtered.map((apt) => (
+                  <AptCard key={apt.id} apt={apt} onClick={() => setActiveApt(apt)} />
+                ))}
+              </div>
+            )}
+          </>
         )}
 
-        {/* 카드 그리드 */}
-        {loading ? (
+        {/* 전세·월세 — 전용 카드 (사이클 II v1) */}
+        {dealType !== 'buy' && (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
-              {[...Array(8)].map((_, i) => (
-                <div key={i} style={{
-                  height: '220px', borderRadius: '16px',
-                  backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-light)',
-                  animation: 'pulse 1.5s ease-in-out infinite',
-                }} />
-              ))}
-            </div>
-            <style>{`@keyframes pulse{0%,100%{opacity:.3}50%{opacity:.6}}`}</style>
+            {rentError && !rentLoading && (
+              <TxErrorState onRetry={() => setRentFetched('')} />
+            )}
+
+            {rentLoading ? (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
+                  {[...Array(8)].map((_, i) => (
+                    <div key={i} style={{
+                      height: '220px', borderRadius: '16px',
+                      backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-light)',
+                      animation: 'pulse 1.5s ease-in-out infinite',
+                    }} />
+                  ))}
+                </div>
+                <style>{`@keyframes pulse{0%,100%{opacity:.3}50%{opacity:.6}}`}</style>
+              </>
+            ) : (() => {
+              const rentFiltered = query.trim()
+                ? rentGroups.filter((g) => matchesQuery(g.name, query.trim()))
+                : rentGroups;
+              if (rentFiltered.length === 0 && !rentError) {
+                return <TxEmptyState onReset={() => { setQuery(''); setMonths(6); setRentFetched(''); }} />;
+              }
+              return (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
+                  {rentFiltered.map((apt) => (
+                    <RentAptCard key={apt.id} apt={apt} />
+                  ))}
+                </div>
+              );
+            })()}
           </>
-        ) : filtered.length === 0 && !error ? (
-          <TxEmptyState
-            onReset={() => { setQuery(''); setNewHighOnly(false); setAreaFilter('all'); setMonths(6); setFetched(''); }}
-          />
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
-            {filtered.map((apt) => (
-              <AptCard key={apt.id} apt={apt} onClick={() => setActiveApt(apt)} />
-            ))}
-          </div>
         )}
 
         <p style={{ marginTop: '24px', fontSize: '11px', color: 'var(--text-dim)', lineHeight: 1.8 }}>
-          ※ 매매 계약일 기준 · 신고가는 조회 기간 내 동일 면적 최고가 기준 · 전고점은 조회 기간 내 대표 면적 최고가
+          {dealType === 'buy'
+            ? '※ 매매 계약일 기준 · 신고가는 조회 기간 내 동일 면적 최고가 기준 · 전고점은 조회 기간 내 대표 면적 최고가'
+            : '※ 전월세 계약일 기준 · 보증금/월세는 국토교통부 신고 금액 · 신규/갱신은 계약 구분 신고값 (미신고 시 빈칸)'}
         </p>
           </>
         )}
