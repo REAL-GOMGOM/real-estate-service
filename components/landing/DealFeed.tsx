@@ -232,8 +232,9 @@ export function DealFeed({ district }: DealFeedProps) {
 
   useEffect(() => {
     let cancelled = false;
-    // 36개월 — silgga 형 시세 차트 밀도 확보 (피드 카드 자체는 최신 계약 순)
-    fetch(`/api/transactions?district=${encodeURIComponent(district)}&months=36`)
+    // 36개월 — silgga 형 시세 차트 밀도 확보. limit=20 으로 페이로드 축소
+    // (피드 카드는 8개, 최신 계약 순 선별 여유분 포함)
+    fetch(`/api/transactions?district=${encodeURIComponent(district)}&months=36&limit=20`)
       .then((r) => r.json())
       .then((json) => {
         if (cancelled) return;

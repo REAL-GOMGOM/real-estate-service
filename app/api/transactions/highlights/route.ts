@@ -131,12 +131,15 @@ export async function GET() {
     })
     .slice(0, PER_CATEGORY);
 
-  return NextResponse.json({
-    month: yyyymm,
-    coverage: '시도별 대표 구 기준',
-    newHighs: newHighs.slice(0, PER_CATEGORY),
-    surges:   surges.slice(0, PER_CATEGORY),
-    pyeong84,
-    updatedAt: new Date().toISOString(),
-  });
+  return NextResponse.json(
+    {
+      month: yyyymm,
+      coverage: '시도별 대표 구 기준',
+      newHighs: newHighs.slice(0, PER_CATEGORY),
+      surges:   surges.slice(0, PER_CATEGORY),
+      pyeong84,
+      updatedAt: new Date().toISOString(),
+    },
+    { headers: { 'Cache-Control': 'public, s-maxage=21600, stale-while-revalidate=86400' } }
+  );
 }

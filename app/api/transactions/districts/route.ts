@@ -86,5 +86,8 @@ export async function GET(req: NextRequest) {
   // 아실형: 건수 많은 순 정렬
   districts.sort((a, b) => b.count - a.count);
 
-  return NextResponse.json({ group: group.label, month: yyyymm, districts });
+  return NextResponse.json(
+    { group: group.label, month: yyyymm, districts },
+    { headers: { 'Cache-Control': 'public, s-maxage=21600, stale-while-revalidate=86400' } }
+  );
 }

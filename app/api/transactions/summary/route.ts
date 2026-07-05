@@ -143,11 +143,14 @@ export async function GET() {
       })
     );
 
-    return NextResponse.json({
-      summary: results,
-      updatedAt: new Date().toISOString(),
-      note: '대표 구 기반 추정치입니다. 상세는 지역을 클릭해주세요.',
-    });
+    return NextResponse.json(
+      {
+        summary: results,
+        updatedAt: new Date().toISOString(),
+        note: '대표 구 기반 추정치입니다. 상세는 지역을 클릭해주세요.',
+      },
+      { headers: { 'Cache-Control': 'public, s-maxage=21600, stale-while-revalidate=86400' } }
+    );
   } catch (error) {
     console.error('시도별 집계 실패:', error);
     return NextResponse.json({ error: '집계 실패' }, { status: 500 });

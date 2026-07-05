@@ -84,6 +84,8 @@ export async function GET(req: NextRequest) {
   const aptNameParam = searchParams.get('aptName')?.trim() ?? '';
   const districtParam = searchParams.get('district')?.trim() ?? '';
   const months       = Math.min(parseInt(searchParams.get('months') ?? '3'), 36);
+  // 응답 단지 수 제한 — 메인 피드 등 경량 소비자용 (페이로드 축소)
+  const limit        = Math.min(Math.max(parseInt(searchParams.get('limit') ?? '60') || 60, 1), 100);
 
   // 우선순위: aptId → aptName(단독) → district
   // district + aptName 동시는 기존 동작(지역 내 단지명 필터) 유지
@@ -262,9 +264,13 @@ export async function GET(req: NextRequest) {
       .filter((apt) => apt.transactions.length >= 1)
       .filter((apt) => !aptName || matchesQuery(apt.name, aptName))
       .sort((a, b) => b.transactions.length - a.transactions.length)
-      .slice(0, aptName ? 100 : 60);
+      .slice(0, aptName ? 100 : limit);
 
-    return NextResponse.json({ data: result, district, months, total: transactions.length });
+    return NextResponse.json(
+      { data: result, district, months, total: transactions.length },
+      // CDN 캐시 — 같은 지역·기간 요청은 엣지에서 즉시 응답 (첫 조회만 MOLIT 페치)
+      { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } }
+    );
 
   } catch (error) {
     console.error('공공API 호출 실패:', error);
