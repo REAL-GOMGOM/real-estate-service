@@ -29,8 +29,8 @@ function getClientIp(request: NextRequest): string {
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // /api/* 경로에만 적용, /api/visitors는 제외
-  if (!pathname.startsWith('/api/') || pathname.startsWith('/api/visitors')) {
+  // /api/* 경로에만 적용
+  if (!pathname.startsWith('/api/')) {
     return NextResponse.next();
   }
 

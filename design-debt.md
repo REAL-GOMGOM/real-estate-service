@@ -89,7 +89,8 @@
   1. Hero.tsx를 HeroContent + VisitorStats + LiveTicker 형제 구조로 분해
   2. page.tsx가 섹션 레이아웃 책임
   3. VisitorStats를 Server Component로 전환, `'use cache'` + `cacheLife('seconds')` 적용
-- **상태**: 📌 OPEN (관찰)
+- **상태**: ✅ RESOLVED (2026-07-05) — 방문자 카운팅 기능 자체를 제거 (Eric 지시).
+  VisitorStatsSlim·VisitorCounter·VisitorTracker·visitor-tracking·api/track·api/visitors 삭제로 부채 소멸.
 
 ### DD-003 · KakaoBanner 'use client' 불필요
 - **발견일**: 2026-04-19
