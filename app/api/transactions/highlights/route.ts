@@ -12,7 +12,7 @@ import { DISTRICT_GROUPS } from '@/lib/district-groups';
  *   surges    — 급등 (직전 거래 대비 상승률 TOP)
  *   pyeong84  — 국평(84㎡) 고가 TOP
  *
- * 커버리지: 시도별 대표 2개 구 (summary 와 동일 URL 조회 → Next data cache 공유).
+ * 커버리지: 등록 시군구 전체 (summary 와 동일 URL 조회 → Next data cache 공유).
  */
 
 const BASE_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade';
@@ -63,25 +63,29 @@ export async function GET() {
   const apiKey = decodeURIComponent(rawKey);
   const yyyymm = latestMonth();
 
-  // 시도별 대표 2개 구 — summary 와 동일 커버리지·동일 URL (캐시 공유)
-  const targets: string[] = DISTRICT_GROUPS.flatMap((g) => g.districts.slice(0, 2));
+  // 등록 전 시군구 — summary 와 동일 URL 조회 (Next Data Cache 공유로 저비용)
+  const targets: string[] = DISTRICT_GROUPS.flatMap((g) =>
+    g.districts.filter((d) => DISTRICT_CODE[d])
+  );
 
   const all: Deal[] = [];
-  await Promise.all(
-    targets.map(async (district) => {
-      const lawdCd = DISTRICT_CODE[district];
-      if (!lawdCd) return;
-      const params = new URLSearchParams({
-        LAWD_CD: lawdCd, DEAL_YMD: yyyymm, numOfRows: '1000', pageNo: '1',
-      });
-      try {
-        const xml = await fetchMolitXml(BASE_URL + '?serviceKey=' + apiKey + '&' + params.toString(), 21600);
-        all.push(...parseDeals(xml, district));
-      } catch {
-        // 개별 구 실패 fail-open
-      }
-    })
-  );
+  const BATCH = 15; // MOLIT 부하 보호 (summary 와 동일 정책)
+  for (let i = 0; i < targets.length; i += BATCH) {
+    await Promise.all(
+      targets.slice(i, i + BATCH).map(async (district) => {
+        const lawdCd = DISTRICT_CODE[district];
+        const params = new URLSearchParams({
+          LAWD_CD: lawdCd, DEAL_YMD: yyyymm, numOfRows: '1000', pageNo: '1',
+        });
+        try {
+          const xml = await fetchMolitXml(BASE_URL + '?serviceKey=' + apiKey + '&' + params.toString(), 21600);
+          all.push(...parseDeals(xml, district));
+        } catch {
+          // 개별 구 실패 fail-open
+        }
+      })
+    );
+  }
 
   // 단지·면적 키로 이력 그룹
   const byApt = new Map<string, Deal[]>();
@@ -133,7 +137,7 @@ export async function GET() {
   return NextResponse.json(
     {
       month: yyyymm,
-      coverage: '시도별 대표 구 기준',
+      coverage: '등록 시군구 전체 기준',
       newHighs: newHighs.slice(0, PER_CATEGORY),
       surges:   surges.slice(0, PER_CATEGORY),
       pyeong84,
