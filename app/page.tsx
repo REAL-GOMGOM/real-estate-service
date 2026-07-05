@@ -7,7 +7,6 @@ import { RightRail } from '@/components/landing/RightRail';
 import { SubscriptionList } from '@/components/landing/SubscriptionList';
 import { TelegramBanner } from '@/components/landing/TelegramBanner';
 import { VisitorStatsSlim } from '@/components/landing/VisitorStatsSlim';
-import { MOCK_DISTRICTS } from '@/lib/mock-data';
 import { getTopLocations } from '@/lib/region-data';
 import { toSubscription } from '@/lib/adapters';
 import { fetchSubscriptions } from '@/lib/subscription-api';
@@ -38,9 +37,9 @@ export default async function HomePage() {
       {/* 1. 컴팩트 히어로 (시안 1a) */}
       <CompactHero />
 
-      {/* 2. 3컬럼 본문 — 필터 레일 / 실거래 피드(실데이터) / 우측 레일 */}
+      {/* 2. 3컬럼 본문 — 필터 레일 / 실거래 피드(실데이터) / 우측 레일(실집계) */}
       <FeedSection
-        rightRail={<RightRail districts={MOCK_DISTRICTS} topLocations={getTopLocations(5)} />}
+        rightRail={<RightRail topLocations={getTopLocations(5)} />}
       />
 
       {/* 3. 청약 일정 */}

@@ -1,14 +1,11 @@
 import Link from 'next/link';
+import { getTodayReport } from '@/lib/today-report';
 
 /**
- * 사이클 U 메인 우측 레일 — 시안 1a.
- * 다크 네이비 TODAY'S REPORT 패널 + LOCATION SCORE TOP5 카드.
+ * 메인 우측 레일 — 사이클 Z2 (TODAY'S REPORT 실데이터화).
+ * 다크 네이비 패널: 수도권 4구 국평 최근 30일 평균·직전 30일 대비 (MOLIT 실집계).
+ * 집계 불가 시 패널에 준비 중 표기 — 목업 수치는 완전 제거.
  */
-export interface District {
-  name: string;
-  price: number;
-  change: number;
-}
 
 interface TopLocationItem {
   rank: number;
@@ -18,41 +15,51 @@ interface TopLocationItem {
 }
 
 interface RightRailProps {
-  districts: District[];
   topLocations: TopLocationItem[];
 }
 
-export function RightRail({ districts, topLocations }: RightRailProps) {
+export async function RightRail({ topLocations }: RightRailProps) {
+  const report = await getTodayReport().catch(() => null);
+
   return (
     <aside className="flex flex-col gap-4 min-w-0">
-      {/* TODAY'S REPORT — 다크 네이비 패널 */}
+      {/* TODAY'S REPORT — 다크 네이비 패널 (실집계) */}
       <div style={{ backgroundColor: '#0E2A66', borderRadius: '14px', padding: '18px', color: '#FFFFFF' }}>
         <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '1px', color: '#8FB0F0', marginBottom: '12px' }}>
           TODAY&apos;S REPORT
         </div>
-        <div style={{ fontSize: '14px', fontWeight: 800, marginBottom: '14px' }}>오늘의 수도권 실거래</div>
-        <div className="flex flex-col gap-3">
-          {districts.map((d) => {
-            const isUp = d.change >= 0;
-            return (
-              <div key={d.name} className="flex items-center justify-between">
-                <span style={{ fontSize: '13px', color: '#C9D6F0' }}>{d.name}</span>
-                <div className="text-right">
-                  <span style={{ fontSize: '15px', fontWeight: 800 }}>{d.price.toFixed(1)}억</span>
-                  <span
-                    style={{
-                      fontSize: '12px', fontWeight: 700, marginLeft: '6px',
-                      // 다크 배경용 밝은 상승 레드 / 하락 블루 (한국 컨벤션)
-                      color: isUp ? '#FF8A8A' : '#8FB4FF',
-                    }}
-                  >
-                    {isUp ? '+' : ''}{d.change.toFixed(1)}%
-                  </span>
-                </div>
-              </div>
-            );
-          })}
+        <div style={{ fontSize: '14px', fontWeight: 800, marginBottom: '4px' }}>수도권 국평 실거래</div>
+        <div style={{ fontSize: '10.5px', color: 'rgba(255,255,255,0.45)', marginBottom: '14px' }}>
+          최근 30일 84㎡ 평균 · 직전 30일 대비
         </div>
+        {report ? (
+          <div className="flex flex-col gap-3">
+            {report.map((d) => {
+              const isUp = d.change >= 0;
+              return (
+                <div key={d.name} className="flex items-center justify-between">
+                  <span style={{ fontSize: '13px', color: '#C9D6F0' }}>{d.name}</span>
+                  <div className="text-right">
+                    <span style={{ fontSize: '15px', fontWeight: 800 }}>{d.price.toFixed(1)}억</span>
+                    <span
+                      style={{
+                        fontSize: '12px', fontWeight: 700, marginLeft: '6px',
+                        // 다크 배경용 밝은 상승 레드 / 하락 블루 (한국 컨벤션)
+                        color: isUp ? '#FF8A8A' : '#8FB4FF',
+                      }}
+                    >
+                      {isUp ? '+' : ''}{d.change.toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p style={{ fontSize: '12.5px', color: 'rgba(255,255,255,0.6)', lineHeight: 1.6, margin: 0 }}>
+            오늘 집계를 준비하고 있어요.<br />잠시 후 다시 확인해주세요.
+          </p>
+        )}
       </div>
 
       {/* LOCATION SCORE TOP 5 */}

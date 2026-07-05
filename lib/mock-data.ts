@@ -1,12 +1,7 @@
-import type { District } from '@/components/landing/RightRail';
-
 /**
- * 우측 레일 TODAY'S REPORT 표시용 목업 — 실데이터 연동 백로그.
- * (메인 실거래 피드 목업 MOCK_DEALS 는 사이클 W 실데이터화로 제거)
+ * (비어 있음) 메인 목업 데이터는 사이클 W~Z2 에서 전부 실데이터로 대체됨.
+ * - MOCK_DEALS     → DealFeed 실거래 API (사이클 W)
+ * - MOCK_DISTRICTS → TODAY'S REPORT 실집계 lib/today-report.ts (사이클 Z2)
+ * 이 파일은 참조가 없어지는 대로 삭제 예정.
  */
-export const MOCK_DISTRICTS: District[] = [
-  { name: '강남구', price: 28.4, change: 2.1 },
-  { name: '서초구', price: 24.7, change: 1.8 },
-  { name: '마포구', price: 12.3, change: -0.8 },
-  { name: '용산구', price: 22.1, change: 2.7 },
-];
+export {};
