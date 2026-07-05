@@ -139,6 +139,25 @@ export function peakRecovery(apt: AptGroup): PeakRecovery | null {
   };
 }
 
+/**
+ * 스파크 좌표 빌더 — 공유 카드·피드 썸네일 공용 (0~100 × 0~56 좌표계).
+ * sparkSeries(시간축 비례)를 카드 렌더 좌표로 변환한다.
+ */
+export function buildSparkPts(apt: AptGroup): { pts: { x: number; y: number }[]; up: boolean } | null {
+  const series = sparkSeries(apt);
+  if (!series) return null;
+
+  const prices = series.points.map((p) => p.price);
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  const span = max - min || 1;
+  const pts = series.points.map((p) => ({
+    x: 3 + p.t * 94,
+    y: 7 + (1 - (p.price - min) / span) * 42,
+  }));
+  return { pts, up: series.rising };
+}
+
 /** 거래 최다 대표 면적 (카드 라인차트·평균가 기준) */
 export function representativeArea(apt: AptGroup): number {
   const counts = new Map<number, number>();

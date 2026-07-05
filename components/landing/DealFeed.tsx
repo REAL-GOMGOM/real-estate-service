@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import {
   type AptGroup,
-  fmtPrice, fmtContractDate, detectNewHigh, sparkSeries, peakRecovery,
+  fmtPrice, fmtContractDate, detectNewHigh, buildSparkPts, peakRecovery,
 } from '@/lib/tx-shared';
 import { smoothPath, type Pt } from '@/lib/svg-smooth';
 import { TxErrorState, TxEmptyState } from '@/components/shared/TxStates';
@@ -41,22 +41,6 @@ interface DealFeedProps {
   district: string;
 }
 
-/** 대표 면적 실거래 이력 → 시간축 비례 좌표 (0~100 × 0~56, silgga 스타일) */
-function buildSpark(group: AptGroup): { pts: Pt[]; up: boolean } | null {
-  const series = sparkSeries(group);
-  if (!series) return null;
-
-  const prices = series.points.map((p) => p.price);
-  const min = Math.min(...prices);
-  const max = Math.max(...prices);
-  const span = max - min || 1;
-  const pts: Pt[] = series.points.map((p) => ({
-    x: 3 + p.t * 94,
-    y: 7 + (1 - (p.price - min) / span) * 42,
-  }));
-  return { pts, up: series.rising };
-}
-
 /** AptGroup[] → 최근 계약 순 피드 아이템 */
 function toFeedDeals(groups: AptGroup[], limit: number): FeedDeal[] {
   const deals: FeedDeal[] = [];
@@ -71,7 +55,7 @@ function toFeedDeals(groups: AptGroup[], limit: number): FeedDeal[] {
       (t) => t !== latest && Math.abs(t.area - latest.area) <= 6
     ) ?? null;
 
-    const spark = buildSpark(g);
+    const spark = buildSparkPts(g);
     const rec = peakRecovery(g);
 
     deals.push({

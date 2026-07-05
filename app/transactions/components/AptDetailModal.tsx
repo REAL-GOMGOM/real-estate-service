@@ -8,8 +8,9 @@ import {
 } from 'recharts';
 import {
   type AptGroup, type Transaction,
-  fmtPrice, fmtContractDate, detectNewHigh,
+  fmtPrice, fmtContractDate, detectNewHigh, buildSparkPts,
 } from '../types';
+import { buildShareImage, shareOrDownloadImage } from '@/lib/share-image';
 
 /**
  * 단지 상세 모달 — 사이클 W (아실형 차트)
@@ -86,6 +87,7 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: Tooltip
 export default function AptDetailModal({ apt, onClose, months }: AptDetailModalProps) {
   const [selArea, setSelArea] = useState<number | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
+  const [imageSaving, setImageSaving] = useState(false);
 
   // 모달 열림 중 배경 페이지 스크롤 잠금 (스크롤바 이중 노출 방지)
   useEffect(() => {
@@ -116,6 +118,31 @@ export default function AptDetailModal({ apt, onClose, months }: AptDetailModalP
   const recoveryPct = latest && maxPrice > 0 && filtered.length >= 2
     ? Math.round((latest.price / maxPrice) * 1000) / 10
     : null;
+
+  // 이미지 공유 (사이클 CC-2) — 현재 면적 필터 상태의 브랜드 카드 생성
+  const saveAsImage = async () => {
+    if (!latest || imageSaving) return;
+    setImageSaving(true);
+    try {
+      // 직전 동일 면적(±6㎡) 거래 대비 등락
+      const prev = filtered.find((t) => t !== latest && Math.abs(t.area - latest.area) <= 6) ?? null;
+      const delta = prev ? latest.price - prev.price : null;
+      const spark = buildSparkPts({ ...apt, transactions: filtered });
+
+      const blob = await buildShareImage({
+        apt: apt.name,
+        location: `${apt.district}${apt.dong ? ' ' + apt.dong : ''}`,
+        price: fmtPrice(latest.price),
+        delta: delta !== null && delta !== 0 ? `${delta > 0 ? '▲' : '▼'} ${fmtPrice(Math.abs(delta))}` : '',
+        up: delta !== null ? delta >= 0 : true,
+        meta: `${latest.area}㎡ · ${Math.round(latest.area / 3.3058)}평 · ${latest.floor}층 · ${fmtContractDate(latest.date)} 계약`,
+        spark: spark?.pts ?? [],
+        high: newHigh,
+      });
+      if (blob) await shareOrDownloadImage(blob, `${apt.name}-실거래.png`, apt.name);
+    } catch { /* 공유 취소 무시 */ }
+    setImageSaving(false);
+  };
 
   // 차트 데이터 — 개별 거래 도트 + 월평균 라인 (시간축).
   // filtered 가 렌더마다 새로 계산되는 파생값이라 memo 없이 직접 계산.
@@ -403,28 +430,43 @@ export default function AptDetailModal({ apt, onClose, months }: AptDetailModalP
             </span>
             네이버 지도에서 위치·로드뷰 보기 ↗
           </a>
-          <button
-            onClick={async () => {
-              const url = `${window.location.origin}/transactions?district=${encodeURIComponent(apt.district)}&q=${encodeURIComponent(apt.name)}`;
-              const text = `${apt.name} 최근 실거래 ${latest ? fmtPrice(latest.price) : ''} · 내집 My.ZIP`;
-              try {
-                if (navigator.share) {
-                  await navigator.share({ title: apt.name, text, url });
-                } else {
-                  await navigator.clipboard.writeText(`${text}\n${url}`);
-                  setShareCopied(true);
-                  setTimeout(() => setShareCopied(false), 1500);
-                }
-              } catch { /* 공유 취소 무시 */ }
-            }}
-            style={{
-              border: 0, backgroundColor: 'var(--accent)', color: '#FFFFFF',
-              fontWeight: 800, fontSize: '14px', padding: '14px', borderRadius: '12px',
-              cursor: 'pointer', fontFamily: 'inherit',
-            }}
-          >
-            {shareCopied ? '✓ 링크 복사됨' : '↗ 공유하기'}
-          </button>
+          <div style={{ display: 'flex', gap: '9px' }}>
+            <button
+              onClick={saveAsImage}
+              disabled={imageSaving || !latest}
+              style={{
+                flex: 1, backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)',
+                border: '1px solid var(--border)', fontWeight: 800, fontSize: '14px',
+                padding: '14px', borderRadius: '12px',
+                cursor: imageSaving ? 'wait' : 'pointer', fontFamily: 'inherit',
+                opacity: imageSaving ? 0.6 : 1,
+              }}
+            >
+              {imageSaving ? '생성 중…' : '🖼 이미지로 공유'}
+            </button>
+            <button
+              onClick={async () => {
+                const url = `${window.location.origin}/transactions?district=${encodeURIComponent(apt.district)}&q=${encodeURIComponent(apt.name)}`;
+                const text = `${apt.name} 최근 실거래 ${latest ? fmtPrice(latest.price) : ''} · 내집 My.ZIP`;
+                try {
+                  if (navigator.share) {
+                    await navigator.share({ title: apt.name, text, url });
+                  } else {
+                    await navigator.clipboard.writeText(`${text}\n${url}`);
+                    setShareCopied(true);
+                    setTimeout(() => setShareCopied(false), 1500);
+                  }
+                } catch { /* 공유 취소 무시 */ }
+              }}
+              style={{
+                flex: 1, border: 0, backgroundColor: 'var(--accent)', color: '#FFFFFF',
+                fontWeight: 800, fontSize: '14px', padding: '14px', borderRadius: '12px',
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              {shareCopied ? '✓ 링크 복사됨' : '↗ 공유하기'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
