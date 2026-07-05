@@ -10,13 +10,33 @@ import PriceChart from '@/components/chart/PriceChart';
 import ErrorState from '@/components/common/ErrorState';
 import { AptAutocomplete, type ApartmentSearchResult } from '@/components/search/AptAutocomplete';
 import { findDistrictByLawdCd } from '@/lib/district-codes';
+import mockTransactions from '@/data/apartment-transactions.json';
 
 const TransactionTable = dynamic(
   () => import('@/components/chart/TransactionTable'),
   { ssr: false }
 );
 
-const MOCK_DATA = require('@/data/apartment-transactions.json');
+// 실거래 데이터 형태 (목업 JSON · /api/transactions 응답 공통)
+interface TxRecord {
+  id?: string;
+  area: number;
+  floor: number;
+  price: number;
+  pricePerArea: number;
+  date: string;
+  dealType?: string;
+}
+interface ApartmentRecord {
+  id: string;
+  name: string;
+  district: string;
+  address?: string;
+  areas?: number[];
+  transactions: TxRecord[];
+}
+
+const MOCK_DATA: ApartmentRecord[] = mockTransactions;
 
 const PERIOD_OPTIONS = [
   { label: '3개월', months: 3  },
@@ -32,7 +52,7 @@ function ChartContent() {
   const [selectedPeriod, setSelectedPeriod] = useState(12);
   const [selectedId,     setSelectedId]     = useState<string>(MOCK_DATA[0].id);
   const [selectedArea,   setSelectedArea]   = useState<number | 'all'>('all');
-  const [apiData,        setApiData]        = useState<any[] | null>(null);
+  const [apiData,        setApiData]        = useState<ApartmentRecord[] | null>(null);
   const [isLoading,      setIsLoading]      = useState(false);
   const [apiError,       setApiError]       = useState<string | null>(null);
   const [activeDistrict, setActiveDistrict] = useState<string>(districtParam ?? '강남구');
@@ -63,8 +83,8 @@ function ChartContent() {
 
       setApiData(json.data);
       if (json.data.length > 0) setSelectedId(json.data[0].id);
-    } catch (e: any) {
-      setApiError(e.message);
+    } catch (e) {
+      setApiError(e instanceof Error ? e.message : String(e));
       setApiData(null);
     } finally {
       setIsLoading(false);
@@ -97,8 +117,8 @@ function ChartContent() {
         setActiveDistrict(merged[0].district);
         setSelectedId(merged[0].id);
       }
-    } catch (e: any) {
-      setApiError(e.message);
+    } catch (e) {
+      setApiError(e instanceof Error ? e.message : String(e));
     } finally {
       setIsLoading(false);
     }
@@ -119,8 +139,8 @@ function ChartContent() {
   const sourceData = apiData ?? MOCK_DATA;
 
   const apartments = useMemo(() => {
-    return sourceData.map((apt: any) => {
-      const txSorted = [...apt.transactions].sort((a: any, b: any) =>
+    return sourceData.map((apt) => {
+      const txSorted = [...apt.transactions].sort((a, b) =>
         b.date.localeCompare(a.date)
       );
       const latest = txSorted[0]?.price ?? 0;
@@ -139,7 +159,7 @@ function ChartContent() {
   }, [sourceData]);
 
   const selectedApt = useMemo(
-    () => sourceData.find((a: any) => a.id === selectedId),
+    () => sourceData.find((a) => a.id === selectedId),
     [sourceData, selectedId]
   );
 
@@ -147,12 +167,12 @@ function ChartContent() {
     if (!selectedApt) return [];
     return selectedArea === 'all'
       ? selectedApt.transactions
-      : selectedApt.transactions.filter((t: any) => t.area === selectedArea);
+      : selectedApt.transactions.filter((t) => t.area === selectedArea);
   }, [selectedApt, selectedArea]);
 
   const monthlyData = useMemo(() => {
     const grouped: Record<string, { prices: number[]; count: number }> = {};
-    filteredTx.forEach((t: any) => {
+    filteredTx.forEach((t) => {
       if (!grouped[t.date]) grouped[t.date] = { prices: [], count: 0 };
       grouped[t.date].prices.push(t.price);
       grouped[t.date].count++;
@@ -169,12 +189,12 @@ function ChartContent() {
 
   const stats = useMemo(() => {
     if (filteredTx.length === 0) return null;
-    const sorted   = [...filteredTx].sort((a: any, b: any) => b.date.localeCompare(a.date));
+    const sorted   = [...filteredTx].sort((a, b) => b.date.localeCompare(a.date));
     const latest   = sorted[0].price;
     const prev     = sorted[1]?.price ?? latest;
     const change   = ((latest - prev) / prev) * 100;
-    const maxPrice = Math.max(...filteredTx.map((t: any) => t.price));
-    const minPrice = Math.min(...filteredTx.map((t: any) => t.price));
+    const maxPrice = Math.max(...filteredTx.map((t) => t.price));
+    const minPrice = Math.min(...filteredTx.map((t) => t.price));
     return { latest, change, maxPrice, minPrice, count: filteredTx.length };
   }, [filteredTx]);
 

@@ -167,9 +167,30 @@ export function AreaChart({
   // stacked 모드 누적값 사전 계산 (필요 시)
   const stackedTotals = stacked ? computeStackedValues(series, xValues) : null;
 
-  // 누적 모드에서 직전 시리즈의 상단 좌표(다음 시리즈의 하단으로 사용)
-  // 첫 시리즈는 baseline(yDomain.min)에서 시작
-  let prevUpperCoords: { cx: number; cy: number }[] | null = null;
+  // 누적 모드: 시리즈별 경로를 렌더 전에 사전 계산
+  // 하단 좌표는 직전 시리즈의 상단 좌표, 첫 시리즈는 baseline(yDomain.min)에서 시작
+  // (series 와 같은 인덱스로 정렬, 빈 시리즈 자리는 null)
+  const stackedPaths: ({ fillPath: string; linePath: string; pointCount: number } | null)[] = [];
+  if (stacked && stackedTotals) {
+    let prevUpperCoords: { cx: number; cy: number }[] | null = null;
+    for (const s of series) {
+      if (s.data.length === 0) { stackedPaths.push(null); continue; }
+      const upperYs = stackedTotals.get(s.name) ?? [];
+      const upperCoords = xValues.map((xv, i) =>
+        mapPointToCoord(xv, upperYs[i], yDomain, plotArea, xAxisType, xValues, numericMin, numericMax),
+      );
+      const lowerCoords = prevUpperCoords
+        ?? xValues.map((xv) =>
+          mapPointToCoord(xv, yDomain.min, yDomain, plotArea, xAxisType, xValues, numericMin, numericMax),
+        );
+      stackedPaths.push({
+        fillPath:   buildStackedAreaPath(upperCoords, lowerCoords),
+        linePath:   buildLinePath(upperCoords),
+        pointCount: upperCoords.length,
+      });
+      prevUpperCoords = upperCoords;
+    }
+  }
 
   return (
     <svg
@@ -299,26 +320,15 @@ export function AreaChart({
         const stroke = resolveAreaColor(s, sIdx, series.length);
 
         if (stacked && stackedTotals) {
-          // stacked: 시리즈 상단 좌표 = (xValues, runningTotal[i])
-          // 하단 좌표 = 직전 시리즈 상단 (없으면 baseline)
-          const upperYs = stackedTotals.get(s.name) ?? [];
-          const upperCoords = xValues.map((xv, i) =>
-            mapPointToCoord(xv, upperYs[i], yDomain, plotArea, xAxisType, xValues, numericMin, numericMax),
-          );
-          const lowerCoords = prevUpperCoords
-            ?? xValues.map((xv) =>
-              mapPointToCoord(xv, yDomain.min, yDomain, plotArea, xAxisType, xValues, numericMin, numericMax),
-            );
-
-          const fillPath  = buildStackedAreaPath(upperCoords, lowerCoords);
-          const linePath  = buildLinePath(upperCoords);
-          prevUpperCoords = upperCoords;
+          // stacked: 사전 계산된 경로 사용 (상단 = 누적값, 하단 = 직전 시리즈 상단)
+          const geom = stackedPaths[sIdx];
+          if (!geom) return null;
 
           return (
             <g key={s.name}>
-              <path d={fillPath} fill={stroke} fillOpacity={STACKED_OPACITY} stroke="none" />
-              {upperCoords.length > 1 && (
-                <path d={linePath} fill="none" stroke={stroke} strokeWidth={LINE_STROKE_WIDTH} />
+              <path d={geom.fillPath} fill={stroke} fillOpacity={STACKED_OPACITY} stroke="none" />
+              {geom.pointCount > 1 && (
+                <path d={geom.linePath} fill="none" stroke={stroke} strokeWidth={LINE_STROKE_WIDTH} />
               )}
             </g>
           );

@@ -44,7 +44,7 @@ describe('Phase 8-1 — 차트 12종 비정상 입력 방어', () => {
 
   it('LineChart: series가 객체일 때 → placeholder', () => {
     const html = renderToStaticMarkup(
-      // @ts-expect-error
+      // @ts-expect-error series에 배열 대신 객체 전달
       createElement(LineChart, { title: 't', series: { name: 'A' } }),
     );
     expect(html).toContain(ERROR_MARKER);
@@ -64,7 +64,7 @@ describe('Phase 8-1 — 차트 12종 비정상 입력 방어', () => {
 
   it('AreaChart: series 누락 → placeholder', () => {
     const html = renderToStaticMarkup(
-      // @ts-expect-error
+      // @ts-expect-error series 누락
       createElement(AreaChart, { title: 't' }),
     );
     expect(html).toContain(ERROR_MARKER);
@@ -72,7 +72,7 @@ describe('Phase 8-1 — 차트 12종 비정상 입력 방어', () => {
 
   it('HorizontalBarChart: data 누락 → placeholder', () => {
     const html = renderToStaticMarkup(
-      // @ts-expect-error
+      // @ts-expect-error data 누락
       createElement(HorizontalBarChart, { title: 't' }),
     );
     expect(html).toContain(ERROR_MARKER);
@@ -80,7 +80,7 @@ describe('Phase 8-1 — 차트 12종 비정상 입력 방어', () => {
 
   it('DonutChart: data가 문자열 → placeholder', () => {
     const html = renderToStaticMarkup(
-      // @ts-expect-error
+      // @ts-expect-error data에 문자열 전달
       createElement(DonutChart, { title: 't', data: 'invalid' }),
     );
     expect(html).toContain(ERROR_MARKER);
@@ -88,7 +88,7 @@ describe('Phase 8-1 — 차트 12종 비정상 입력 방어', () => {
 
   it('StackedBarChart: bars 누락 → placeholder', () => {
     const html = renderToStaticMarkup(
-      // @ts-expect-error
+      // @ts-expect-error bars 누락
       createElement(StackedBarChart, { title: 't' }),
     );
     expect(html).toContain(ERROR_MARKER);
@@ -108,7 +108,7 @@ describe('Phase 8-1 — 차트 12종 비정상 입력 방어', () => {
 
   it('ScatterPlot: groups 누락 → placeholder', () => {
     const html = renderToStaticMarkup(
-      // @ts-expect-error
+      // @ts-expect-error groups 누락
       createElement(ScatterPlot, { title: 't' }),
     );
     expect(html).toContain(ERROR_MARKER);
@@ -116,7 +116,7 @@ describe('Phase 8-1 — 차트 12종 비정상 입력 방어', () => {
 
   it('RangeBarChart: items 누락 → placeholder', () => {
     const html = renderToStaticMarkup(
-      // @ts-expect-error
+      // @ts-expect-error items 누락
       createElement(RangeBarChart, { title: 't' }),
     );
     expect(html).toContain(ERROR_MARKER);
@@ -124,7 +124,7 @@ describe('Phase 8-1 — 차트 12종 비정상 입력 방어', () => {
 
   it('HeatMap: values 누락 → placeholder', () => {
     const html = renderToStaticMarkup(
-      // @ts-expect-error
+      // @ts-expect-error values 누락
       createElement(HeatMap, { title: 't', rows: ['r'], cols: ['c'] }),
     );
     expect(html).toContain(ERROR_MARKER);
@@ -132,7 +132,7 @@ describe('Phase 8-1 — 차트 12종 비정상 입력 방어', () => {
 
   it('HeatMap: rows가 문자열 → placeholder', () => {
     const html = renderToStaticMarkup(
-      // @ts-expect-error
+      // @ts-expect-error rows에 문자열 전달
       createElement(HeatMap, { title: 't', rows: 'invalid', cols: ['c'], values: [[1]] }),
     );
     expect(html).toContain(ERROR_MARKER);
@@ -140,7 +140,7 @@ describe('Phase 8-1 — 차트 12종 비정상 입력 방어', () => {
 
   it('GaugeChart: value 누락 → placeholder', () => {
     const html = renderToStaticMarkup(
-      // @ts-expect-error
+      // @ts-expect-error value 누락
       createElement(GaugeChart, { title: 't' }),
     );
     expect(html).toContain(ERROR_MARKER);
@@ -155,7 +155,7 @@ describe('Phase 8-1 — 차트 12종 비정상 입력 방어', () => {
 
   it('GaugeChart: value 문자열 → placeholder', () => {
     const html = renderToStaticMarkup(
-      // @ts-expect-error
+      // @ts-expect-error value에 문자열 전달
       createElement(GaugeChart, { title: 't', value: '50' }),
     );
     expect(html).toContain(ERROR_MARKER);
@@ -163,7 +163,7 @@ describe('Phase 8-1 — 차트 12종 비정상 입력 방어', () => {
 
   it('SparkLine: data 누락 → placeholder', () => {
     const html = renderToStaticMarkup(
-      // @ts-expect-error
+      // @ts-expect-error data 누락
       createElement(SparkLine, { ariaLabel: 'test' }),
     );
     expect(html).toContain(ERROR_MARKER);
@@ -183,7 +183,7 @@ describe('Phase 8-1 — 차트 12종 비정상 입력 방어', () => {
 
   it('AgeGroupBars: groups 누락 → placeholder', () => {
     const html = renderToStaticMarkup(
-      // @ts-expect-error
+      // @ts-expect-error groups 누락
       createElement(AgeGroupBars, { title: 't', beforeLabel: 'B', afterLabel: 'A' }),
     );
     expect(html).toContain(ERROR_MARKER);

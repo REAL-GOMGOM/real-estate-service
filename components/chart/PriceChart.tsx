@@ -22,13 +22,23 @@ function toEok(manwon: number): string {
   return `${(manwon / 10000).toFixed(1)}억`;
 }
 
+/** recharts Tooltip payload 항목 (이 차트에서 쓰는 필드만 최소 폭으로) */
+interface TooltipItem {
+  dataKey: string;
+  value: number;
+}
+
 /** 커스텀 툴팁 */
-function CustomTooltip({ active, payload, label }: any) {
+function CustomTooltip({ active, payload, label }: {
+  active?: boolean;
+  payload?: TooltipItem[];
+  label?: string;
+}) {
   if (!active || !payload?.length) return null;
 
-  const count    = payload.find((p: any) => p.dataKey === 'count');
-  const avgPrice = payload.find((p: any) => p.dataKey === 'avgPrice');
-  const minPrice = payload.find((p: any) => p.dataKey === 'minPrice');
+  const count    = payload.find((p) => p.dataKey === 'count');
+  const avgPrice = payload.find((p) => p.dataKey === 'avgPrice');
+  const minPrice = payload.find((p) => p.dataKey === 'minPrice');
 
   return (
     <div style={{

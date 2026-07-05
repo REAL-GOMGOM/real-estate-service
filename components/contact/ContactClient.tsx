@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { Mail, Handshake, Megaphone, MessageSquare } from 'lucide-react';
+import { useMounted } from '@/hooks/useMounted';
 
 const MONO = "'Roboto Mono', var(--font-mono, monospace)";
 
@@ -45,14 +45,12 @@ function CategoryButton({ icon, title, desc, onClick }: CategoryButtonProps) {
 }
 
 export default function ContactClient() {
-  const [email, setEmail] = useState('');
+  const mounted = useMounted();
 
-  useEffect(() => {
-    // 마운트 후 이메일 조립 (스팸봇 방지)
-    const user = 'm2zipco';
-    const domain = 'gmail.com';
-    setEmail(`${user}@${domain}`);
-  }, []);
+  // 마운트 후 이메일 조립 (스팸봇 방지 — 서버 HTML 에는 미포함)
+  const user = 'm2zipco';
+  const domain = 'gmail.com';
+  const email = mounted ? `${user}@${domain}` : '';
 
   function handleMailto(subject: string) {
     if (!email) return;

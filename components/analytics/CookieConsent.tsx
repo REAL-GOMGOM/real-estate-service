@@ -3,16 +3,14 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getConsent, setConsent } from '@/lib/cookie-consent';
+import { useMounted } from '@/hooks/useMounted';
 
 export function CookieConsent() {
-  const [visible, setVisible] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  // 초기 노출 여부는 저장된 동의 유무에서 파생 (SSR 에서는 mounted 게이트로 렌더 안 함)
+  const [visible, setVisible] = useState(() => getConsent() === null);
+  const mounted = useMounted();
 
   useEffect(() => {
-    setMounted(true);
-    const consent = getConsent();
-    setVisible(consent === null);
-
     const handleReopen = () => setVisible(true);
     window.addEventListener('naezip:cookie-settings-open', handleReopen);
 

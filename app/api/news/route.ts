@@ -9,6 +9,14 @@ export interface NewsItem {
   thumbnail: string | null;
 }
 
+// 네이버 뉴스 검색 API 응답 항목 (사용 필드만)
+interface NaverNewsItem {
+  title: string;
+  originallink?: string;
+  link: string;
+  pubDate: string;
+}
+
 function stripHtml(str: string): string {
   return str.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 }
@@ -42,12 +50,12 @@ async function extractThumbnail(url: string): Promise<string | null> {
   }
 }
 
-async function searchNews(query: string, display: number, category: NewsItem['category'], headers: Record<string, string>): Promise<(NewsItem & { pubDateTs: number; pubDateFormatted: string })[]> {
+async function searchNews(query: string, display: number, category: NewsItem['category'], headers: Record<string, string>): Promise<(NewsItem & { naverLink: string; pubDateTs: number; pubDateFormatted: string })[]> {
   const url = `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(query)}&display=${display}&sort=date`;
   const res  = await fetch(url, { headers, next: { revalidate: 1800 } });
   const json = await res.json();
 
-  return (json.items ?? []).map((item: any) => ({
+  return (json.items ?? []).map((item: NaverNewsItem) => ({
     title:            stripHtml(item.title),
     link:             item.originallink || item.link,
     naverLink:        item.link,
@@ -92,8 +100,8 @@ export async function GET() {
     async function getThumbnail(item: typeof top12[0]): Promise<string | null> {
       const result = await extractThumbnail(item.link);
       if (result) return result;
-      if ((item as any).naverLink && (item as any).naverLink !== item.link) {
-        return extractThumbnail((item as any).naverLink);
+      if (item.naverLink && item.naverLink !== item.link) {
+        return extractThumbnail(item.naverLink);
       }
       return null;
     }

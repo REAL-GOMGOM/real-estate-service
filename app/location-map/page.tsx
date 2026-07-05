@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useMemo, useEffect, useCallback } from 'react';
+import { Suspense, useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import KakaoMap from '@/components/location-map/KakaoMap';
@@ -11,8 +11,9 @@ import SchoolDetailPanel, { type SchoolData } from '@/components/location-map/Sc
 import BottomSheet from '@/components/common/BottomSheet';
 import FloatingNavPanel from '@/components/location-map/FloatingNavPanel';
 import type { LocationScore } from '@/lib/types';
+import locationScoresJson from '@/data/location-scores.json';
 
-const ALL_LOCATIONS: LocationScore[] = require('@/data/location-scores.json');
+const ALL_LOCATIONS = locationScoresJson as LocationScore[];
 
 const VALID_REGIONS = [
   '전체', '서울', '경기', '인천', '1기신도시', '2기신도시', '3기신도시',
@@ -41,7 +42,10 @@ function LocationMapContent() {
     },
   );
   const [showToheoOnly, setShowToheoOnly] = useState(false);
-  const [mapReady, setMapReady] = useState(false);
+  // SDK 가 이미 로드된 채로 재마운트되는 경우는 초기값에서 바로 반영
+  const [mapReady, setMapReady] = useState(
+    () => typeof window !== 'undefined' && !!window.kakao?.maps,
+  );
   const [isMobile, setIsMobile] = useState(false);
 
   const [activeLayers, setActiveLayers] = useState<Set<string>>(() => new Set());
@@ -57,7 +61,7 @@ function LocationMapContent() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (window.kakao?.maps) { setMapReady(true); return; }
+    if (window.kakao?.maps) return; // 이미 로드됨 — 초기 state 에서 반영
 
     const script = document.createElement('script');
     script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_MAP_KEY}&autoload=false`;
@@ -95,32 +99,23 @@ function LocationMapContent() {
     }
   }, [selectedRegion]);
 
-  const fetchSchools = useCallback(async () => {
-    if (activeLayers.size === 0) {
-      setSchools([]);
-      return;
-    }
-    try {
-      const district = selectedRegion === '전체' ? '' : selectedRegion;
-      const res = await fetch(`/api/map/schools${district ? `?district=${encodeURIComponent(district)}` : ''}`);
-      const json = await res.json();
-      setSchools(json.schools || []);
-    } catch {
-      // 기존 데이터 유지
-    }
+  useEffect(() => {
+    // 켜진 레이어가 없으면 호출 불필요 (목록 비우기는 toggleLayer 에서 처리)
+    if (activeLayers.size === 0) return;
+    const district = selectedRegion === '전체' ? '' : selectedRegion;
+    fetch(`/api/map/schools${district ? `?district=${encodeURIComponent(district)}` : ''}`)
+      .then((res) => res.json())
+      .then((json) => setSchools(json.schools || []))
+      .catch(() => { /* 실패 시 기존 데이터 유지 */ });
   }, [activeLayers.size, selectedRegion]);
 
-  useEffect(() => {
-    fetchSchools();
-  }, [fetchSchools]);
-
   const toggleLayer = (key: string) => {
-    setActiveLayers((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+    const next = new Set(activeLayers);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    setActiveLayers(next);
+    // 레이어가 모두 꺼지면 학교 목록도 비움 (기존 동작 유지)
+    if (next.size === 0) setSchools([]);
   };
 
   const handleSchoolClick = (school: SchoolData) => {

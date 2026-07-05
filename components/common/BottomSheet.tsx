@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useState, useCallback } from 'react';
 
 interface BottomSheetProps {
   isOpen: boolean;
@@ -42,9 +42,12 @@ export default function BottomSheet({ isOpen, onClose, children }: BottomSheetPr
     }
   }, [height, onClose]);
 
-  useEffect(() => {
+  // 열릴 때마다 미니 높이(35vh)로 초기화 (렌더 중 이전 값 비교 패턴)
+  const [prevOpen, setPrevOpen] = useState(isOpen);
+  if (prevOpen !== isOpen) {
+    setPrevOpen(isOpen);
     if (isOpen) setHeight(35);
-  }, [isOpen]);
+  }
 
   if (!isOpen) return null;
 

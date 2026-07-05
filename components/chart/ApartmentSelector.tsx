@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { TrendingUp, TrendingDown, Building2, AlertTriangle, Search } from 'lucide-react';
 import { DISTRICT_GROUPS, ALL_DISTRICTS, findRegionIndex } from '@/lib/district-groups';
 import { matchesQuery } from '@/lib/search-utils';
+import { useMounted } from '@/hooks/useMounted';
 
 interface ApartmentSummary {
   id: string;
@@ -57,14 +58,16 @@ export default function ApartmentSelector({
   });
   const [districtSearch, setDistrictSearch] = useState('');
   const [search, setSearch] = useState('');
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
+  const mounted = useMounted();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  useEffect(() => {
+  // activeDistrict 변경 시 지역 탭 동기화 (렌더 중 이전 값 비교 패턴)
+  const [prevDistrict, setPrevDistrict] = useState(activeDistrict);
+  if (prevDistrict !== activeDistrict) {
+    setPrevDistrict(activeDistrict);
     const idx = findRegionIndex(activeDistrict);
     if (idx >= 0) setRegionIdx(idx);
-  }, [activeDistrict]);
+  }
 
   const visibleDistricts = districtSearch.trim()
     ? ALL_DISTRICTS.filter((d) => d.includes(districtSearch.trim()))

@@ -21,7 +21,7 @@ function ComplexSearchInput({
   label: string;
   district: string;
   onDistrictChange: (d: string) => void;
-  onSelect: (c: ComplexSearchResult) => void;
+  onSelect: (c: ComplexSearchResult | null) => void;
   selected: ComplexSearchResult | null;
 }) {
   const [query, setQuery] = useState('');
@@ -49,7 +49,7 @@ function ComplexSearchInput({
             <p style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-strong)' }}>{selected.name}</p>
             <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>{selected.district} {selected.dong}</p>
           </div>
-          <button onClick={() => { onSelect(null as any); setQuery(''); setResults([]); }}
+          <button onClick={() => { onSelect(null); setQuery(''); setResults([]); }}
             style={{ fontSize: '12px', color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer' }}>
             변경
           </button>
@@ -121,7 +121,7 @@ function GapContent() {
       const json = await res.json();
       if (json.error) setError(json.error);
       else setResult(json);
-    } catch (e: any) { setError(e.message); }
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setLoading(false); }
   };
 

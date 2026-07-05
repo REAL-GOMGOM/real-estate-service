@@ -17,6 +17,8 @@
  * - error / reset 시그니처는 framework 지정
  */
 
+import Link from 'next/link';
+
 export default function BlogPostError({
   error,
   reset,
@@ -47,12 +49,12 @@ export default function BlogPostError({
         >
           다시 시도
         </button>
-        <a
+        <Link
           href="/blog"
           className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
         >
           글 목록으로
-        </a>
+        </Link>
       </div>
       {process.env.NODE_ENV !== 'production' && error?.digest && (
         <p className="mt-6 text-xs text-slate-400">

@@ -48,8 +48,8 @@ async function fetchAllPages(
       firstPage.includes('<!DOCTYPE');
     const err = new Error(
       `Invalid API response for ${lawdCd} ${yyyymm}: len=${firstPage.length}, resultCode=${resultCode || 'none'}`,
-    );
-    (err as any).noRetry = isBlocked;
+    ) as Error & { noRetry?: boolean };
+    err.noRetry = isBlocked;
     throw err;
   }
 
@@ -127,7 +127,7 @@ async function fetchWithRetry<T>(
       return await task();
     } catch (e) {
       lastError = e;
-      if ((e as any)?.noRetry) throw e;
+      if ((e as { noRetry?: boolean } | undefined)?.noRetry) throw e;
       if (attempt < maxRetries) {
         console.warn('[retry]', attempt + 1, '/', maxRetries, (e as Error)?.message?.slice(0, 80));
         const delay = baseDelayMs * Math.pow(2, attempt) + Math.random() * 200;

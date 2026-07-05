@@ -1,9 +1,10 @@
 'use client';
 
 import { Calendar, Home, Users } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useMemo } from 'react';
 import type { SubscriptionItem } from '@/lib/types';
 import dayjs from 'dayjs';
+import { useMounted } from '@/hooks/useMounted';
 
 interface Props {
   items: SubscriptionItem[];
@@ -30,8 +31,9 @@ function getDday(endDate: string, status: string, now: ReturnType<typeof dayjs>)
 }
 
 export default function SubscriptionTable({ items, onSelect }: Props) {
-  const [now, setNow] = useState(() => dayjs('2000-01-01'));
-  useEffect(() => { setNow(dayjs()); }, []);
+  // SSR/하이드레이션에서는 고정 기준일, 마운트 후 실제 현재 시각으로 파생
+  const mounted = useMounted();
+  const now = useMemo(() => (mounted ? dayjs() : dayjs('2000-01-01')), [mounted]);
 
   if (items.length === 0) {
     return (

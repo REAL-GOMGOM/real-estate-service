@@ -166,7 +166,7 @@ describe('DemographicShiftBars Phase 8-1 가드 (회귀 0)', () => {
         title: 't',
         leftHeader: LEFT_HEADER,
         rightHeader: RIGHT_HEADER,
-        // @ts-expect-error
+        // @ts-expect-error categories 강제 undefined 전달
         categories: undefined,
       }),
     );

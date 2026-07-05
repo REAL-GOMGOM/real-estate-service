@@ -111,20 +111,26 @@ async function fetchDistrict(
 }
 
 // ── R-ONE 상승률 ────────────────────────────────────
+// R-ONE 통계 응답 행 (사용 필드만)
+interface RoneRow {
+  CLS_NM: string;
+  CLS_FULLNM: string;
+  DTA_VAL: string;
+}
 type ChangeEntry = { name: string; changeRate: number; direction: 'up' | 'down' | 'flat' };
 type RankedEntry = ChangeEntry & { rank: number };
 
 async function fetchPriceChange(apiKey: string): Promise<{ regions: RankedEntry[]; seoulDistricts: RankedEntry[] }> {
   const STATBL_ID = 'A_2024_00045';
 
-  async function fetchRawRows(month: string) {
+  async function fetchRawRows(month: string): Promise<RoneRow[]> {
     const url = `${RONE_URL}?KEY=${apiKey}&STATBL_ID=${STATBL_ID}&DTACYCLE_CD=MM&WRTTIME_IDTFR_ID=${month}&Type=json&pSize=500`;
     const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, next: { revalidate: 3600 } });
     const json = await res.json();
     return json?.SttsApiTblData?.[1]?.row || [];
   }
 
-  function parseRegions(rows: any[]): Record<string, number> {
+  function parseRegions(rows: RoneRow[]): Record<string, number> {
     const result: Record<string, number> = {};
     for (const r of rows) {
       if ((r.CLS_FULLNM || '').split('>').length === 1) {
@@ -134,7 +140,7 @@ async function fetchPriceChange(apiKey: string): Promise<{ regions: RankedEntry[
     return result;
   }
 
-  function parseSeoulDistricts(rows: any[]): Record<string, number> {
+  function parseSeoulDistricts(rows: RoneRow[]): Record<string, number> {
     const pathMap: Record<string, number> = {};
     for (const r of rows) {
       const full = r.CLS_FULLNM || '';
@@ -174,8 +180,8 @@ async function fetchPriceChange(apiKey: string): Promise<{ regions: RankedEntry[
   const rawRows = await Promise.all(months.map(fetchRawRows));
 
   // 연속 데이터 있는 최신 쌍 찾기
-  let thisRows: any[] = [];
-  let lastRows: any[] = [];
+  let thisRows: RoneRow[] = [];
+  let lastRows: RoneRow[] = [];
   for (let i = 0; i < rawRows.length - 1; i++) {
     if (rawRows[i].length > 0 && rawRows[i + 1].length > 0) {
       thisRows = rawRows[i]; lastRows = rawRows[i + 1]; break;

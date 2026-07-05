@@ -11,6 +11,12 @@ const PROVINCE_NAMES: Record<string, string> = {
   '48': '경남', '50': '제주',
 };
 
+// R-ONE 통계 응답 행 (사용 필드만)
+interface RoneRow {
+  CLS_FULLNM: string;
+  DTA_VAL: string;
+}
+
 interface DistrictChange {
   name: string;
   fullPath: string;
@@ -25,7 +31,7 @@ function getMonthStr(offset: number): string {
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-async function fetchRoneAll(apiKey: string, statblId: string, month: string) {
+async function fetchRoneAll(apiKey: string, statblId: string, month: string): Promise<RoneRow[]> {
   const url = `${RONE_URL}?KEY=${apiKey}&STATBL_ID=${statblId}&DTACYCLE_CD=MM&WRTTIME_IDTFR_ID=${month}&Type=json&pSize=500`;
   const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, next: { revalidate: 3600 } });
   const data = await res.json();
@@ -52,8 +58,8 @@ export async function GET(request: NextRequest) {
     const statblId = STAT_TABLES[type] || STAT_TABLES.sale;
 
     // 최신 데이터 찾기 (당월 → 전월 → 전전월 → 3개월전 fallback)
-    let thisRows: any[] = [];
-    let lastRows: any[] = [];
+    let thisRows: RoneRow[] = [];
+    let lastRows: RoneRow[] = [];
     for (let offset = 0; offset >= -4; offset--) {
       const rows = await fetchRoneAll(apiKey, statblId, getMonthStr(offset));
       if (rows.length > 0) {

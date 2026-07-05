@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import path from 'path';
 
 const NEIS_URL = 'https://open.neis.go.kr/hub/schoolInfo';
 const LEVEL_MAP: Record<string, string> = {
@@ -11,10 +12,10 @@ const ATPT_CODES: Record<string, string> = {
 };
 
 // ── SQLite 시도 ─────────────────────────────────────
-function tryDbSchools(district?: string, level?: string) {
+async function tryDbSchools(district?: string, level?: string) {
   try {
-    const Database = require('better-sqlite3');
-    const path = require('path');
+    // 동적 import — better-sqlite3 를 못 쓰는 환경에서는 catch 로 fallback
+    const { default: Database } = await import('better-sqlite3');
     const db = new Database(path.join(process.cwd(), 'data', 'realestate.db'), { readonly: true });
     let sql = `
       SELECT s.*, r.grade, r.special_high_rate, r.science_high_rate,
@@ -58,6 +59,28 @@ async function geocodeSchool(
 }
 
 // ── NEIS API + Kakao geocoding ──────────────────────
+// NEIS 조회 결과 학교 레코드 (DB 응답과 동일한 필드 구성)
+interface NeisSchool {
+  id: string;
+  name: string;
+  school_level: 'elementary' | 'middle' | 'high';
+  address: string;
+  latitude: number | null;
+  longitude: number | null;
+  establish_type: string | null;
+  coedu_type: string | null;
+  student_count: number | null;
+  teacher_count: number | null;
+  district: string | null;
+  grade: number | null;
+  nationwide_pct: number | null;
+  region_pct: number | null;
+  special_high_rate: number | null;
+  science_high_rate: number | null;
+  foreign_high_rate: number | null;
+  autonomous_high_rate: number | null;
+}
+
 async function fetchNeisSchools(
   apiKey: string,
   kakaoKey: string,
@@ -87,7 +110,7 @@ async function fetchNeisSchools(
   const data = await res.json();
   const rows = data?.schoolInfo?.[1]?.row || [];
 
-  const raw: any[] = [];
+  const raw: NeisSchool[] = [];
   for (const r of rows) {
     const addr = `${r.ORG_RDNMA || ''} ${r.ORG_RDNDA || ''}`.trim();
     if (district && !addr.includes(district)) continue;
@@ -151,7 +174,7 @@ export async function GET(request: NextRequest) {
     const level = searchParams.get('level') || undefined;
 
     // 1) SQLite 시도
-    const dbSchools = tryDbSchools(district, level);
+    const dbSchools = await tryDbSchools(district, level);
     if (dbSchools && dbSchools.length > 0) {
       return NextResponse.json({ schools: dbSchools }, {
         headers: { 'Cache-Control': 's-maxage=86400' },

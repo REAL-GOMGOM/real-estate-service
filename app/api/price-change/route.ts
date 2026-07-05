@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import path from 'path';
 import type { PriceChangeData, RegionChange } from '@/types/price-map';
 
 const RONE_URL = 'https://www.reb.or.kr/r-one/openapi/SttsApiTblData.do';
@@ -42,10 +43,10 @@ function getMonthStr(offset: number): string {
 }
 
 // SQLite fallback 시도
-function tryDbData(tradeType: string): PriceChangeData | null {
+async function tryDbData(tradeType: string): Promise<PriceChangeData | null> {
   try {
-    const Database = require('better-sqlite3');
-    const path = require('path');
+    // 동적 import — better-sqlite3 를 못 쓰는 환경에서는 catch 로 fallback
+    const { default: Database } = await import('better-sqlite3');
     const dbPath = path.join(process.cwd(), 'data', 'realestate.db');
     const db = new Database(dbPath, { readonly: true });
     const rows = db.prepare(
@@ -84,7 +85,7 @@ export async function GET(request: NextRequest) {
     const type = (searchParams.get('type') || 'sale') as 'sale' | 'rent';
 
     // 1) SQLite 시도
-    const dbData = tryDbData(type);
+    const dbData = await tryDbData(type);
     if (dbData) return NextResponse.json(dbData);
 
     // 2) R-ONE API 직접 호출

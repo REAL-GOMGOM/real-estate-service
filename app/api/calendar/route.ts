@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import path from 'path';
 import { getCalendarEvents, type CalendarEvent } from '@/lib/calendar-events';
 
-function tryDbEvents(year: number, month: number) {
+async function tryDbEvents(year: number, month: number) {
   try {
-    const Database = require('better-sqlite3');
-    const path = require('path');
+    // 동적 import — better-sqlite3 를 못 쓰는 환경에서는 catch 로 fallback
+    const { default: Database } = await import('better-sqlite3');
     const db = new Database(path.join(process.cwd(), 'data', 'calendar.db'), { readonly: true });
     const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
     const endDate = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, '0')}-01`;
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
     const month = Number(searchParams.get('month')) || now.getMonth() + 1;
 
     // 1) SQLite 시도
-    const dbEvents = tryDbEvents(year, month);
+    const dbEvents = await tryDbEvents(year, month);
 
     // 2) 확정 정기 이벤트
     const fixedEvents = getCalendarEvents(year, month);

@@ -13,16 +13,23 @@ export default function PageLoader({
   message = '데이터를 불러오는 중...',
   delay = 800,
 }: Props) {
-  const [show, setShow] = useState(false);
+  // delay 경과 여부만 state 로 두고, 표시 여부는 loading 과의 파생값으로 계산
+  const [delayPassed, setDelayPassed] = useState(false);
+
+  // loading 이 바뀌면 경과 플래그 초기화 (렌더 중 이전 값 비교 패턴)
+  const [prevLoading, setPrevLoading] = useState(loading);
+  if (prevLoading !== loading) {
+    setPrevLoading(loading);
+    setDelayPassed(false);
+  }
 
   useEffect(() => {
-    if (!loading) {
-      setShow(false);
-      return;
-    }
-    const timer = setTimeout(() => setShow(true), delay);
+    if (!loading) return;
+    const timer = setTimeout(() => setDelayPassed(true), delay);
     return () => clearTimeout(timer);
   }, [loading, delay]);
+
+  const show = loading && delayPassed;
 
   if (!show) return null;
 

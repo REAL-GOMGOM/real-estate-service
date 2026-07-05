@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useSyncExternalStore } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { SubscriptionItem, SupplyDate } from '@/lib/types';
 
@@ -38,16 +38,21 @@ const SUPPLY_LEGEND_ORDER: SupplyDate['type'][] = [
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
+const MOBILE_QUERY = '(max-width: 768px)';
+
+function subscribeMobile(onChange: () => void) {
+  const mq = window.matchMedia(MOBILE_QUERY);
+  mq.addEventListener('change', onChange);
+  return () => mq.removeEventListener('change', onChange);
+}
+
 function useIsMobile() {
-  const [mobile, setMobile] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 768px)');
-    setMobile(mq.matches);
-    const handler = (e: MediaQueryListEvent) => setMobile(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
-  return mobile;
+  // 미디어쿼리 구독 — SSR 스냅샷은 false (기존 초기값과 동일)
+  return useSyncExternalStore(
+    subscribeMobile,
+    () => window.matchMedia(MOBILE_QUERY).matches,
+    () => false,
+  );
 }
 
 export default function SubscriptionCalendar({ items, onSelect }: Props) {
