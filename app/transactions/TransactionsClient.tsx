@@ -210,7 +210,7 @@ export default function TransactionsClient() {
                 borderRadius: '99px', marginBottom: '12px',
               }}>
                 <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#E23B3B', display: 'inline-block' }} />
-                오늘 아침 공개
+                이번 달 신고 집계
               </div>
               <h1 style={{ margin: '0 0 6px', fontSize: 'clamp(22px, 3vw, 29px)', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.6px' }}>
                 오늘 공개된 최신 실거래
@@ -372,7 +372,7 @@ export default function TransactionsClient() {
             )}
 
             <p style={{ margin: '16px 0 20px', fontSize: '11px', color: 'var(--text-dim)' }}>
-              ※ 대표 구 기준 추정치입니다. 지역을 클릭해 구를 선택하면 상세 거래를 확인할 수 있습니다.
+              ※ 등록 시군구 전체 실집계 (당월 신고 누계 · 6시간 갱신). 지역을 클릭해 구를 선택하면 상세 거래를 확인할 수 있습니다.
             </p>
 
             {/* 조회를 넘어 분석까지 — 내집만의 기능 프로모 */}

@@ -3,78 +3,76 @@ import { fetchMolitXml } from '@/lib/molit-fetch';
 import { DISTRICT_CODE } from '@/lib/district-codes';
 import { DISTRICT_GROUPS } from '@/lib/district-groups';
 
-const BASE_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade';
+/**
+ * 시도별 실거래 집계 API — 사이클 Z5 (추정치 → 전 시군구 실집계)
+ *
+ * 기존: 시도별 대표 2개 구 × 비율 추정 → 실측과 큰 오차 (치명적).
+ * 개편: 등록된 전 시군구(~190개)를 당월 실제 집계. MOLIT 부하 보호를
+ * 위해 15개 동시 배치, 응답은 6시간 CDN 캐시 (콜드 1회만 수 초).
+ */
 
-// 이번 달과 지난 달 YYYYMM
-function getRecentMonths(): string[] {
+const BASE_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade';
+const BATCH_SIZE = 15;
+
+function latestMonth(): string {
   const now = new Date();
-  const result: string[] = [];
-  for (let i = 0; i < 3; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    result.push(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`);
-  }
-  return result;
+  return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
-// XML에서 거래 건수와 가격 추출
-function parseXml(xml: string): { count: number; prices59: number[]; prices84: number[]; allPrices: number[] } {
+interface DistrictAgg {
+  count:    number;
+  newHighs: number;
+  prices59: number[];
+  prices84: number[];
+}
+
+/** 한 구의 당월 XML → 집계 (건수·간이 신고가·59/84 가격 표본) */
+function aggregate(xml: string): DistrictAgg {
+  const agg: DistrictAgg = { count: 0, newHighs: 0, prices59: [], prices84: [] };
+
+  const total = xml.match(/<totalCount>(\d+)<\/totalCount>/)?.[1];
+  if (total !== undefined) agg.count = parseInt(total);
+
   const items = xml.match(/<item>([\s\S]*?)<\/item>/g) ?? [];
-  let count = 0;
-  const prices59: number[] = [];
-  const prices84: number[] = [];
-  const allPrices: number[] = [];
+  const byApt: Record<string, { max: number; latest: number }> = {};
 
   items.forEach((item) => {
     const get = (tag: string) =>
       item.match(new RegExp('<' + tag + '>([^<]*)<\\/' + tag + '>'))?.[1]?.trim() ?? '';
-
     const price = parseInt(get('dealAmount').replace(/,/g, ''));
-    const area = parseFloat(get('excluUseAr'));
+    const area  = parseFloat(get('excluUseAr'));
+    const aptNm = get('aptNm');
     if (!price || !area) return;
 
-    count++;
-    allPrices.push(price);
+    if (area >= 55 && area <= 63) agg.prices59.push(price);
+    if (area >= 80 && area <= 88) agg.prices84.push(price);
 
-    // 59㎡ (55~63㎡ 범위)
-    if (area >= 55 && area <= 63) prices59.push(price);
-    // 84㎡ (80~88㎡ 범위)
-    if (area >= 80 && area <= 88) prices84.push(price);
-  });
-
-  return { count, prices59, prices84, allPrices };
-}
-
-// 신고가 판정 (간이 — 전체 기간 최고가와 비교)
-function countNewHighs(xml: string): number {
-  const items = xml.match(/<item>([\s\S]*?)<\/item>/g) ?? [];
-  const aptMaxPrices: Record<string, { maxPrice: number; latestPrice: number }> = {};
-
-  items.forEach((item) => {
-    const get = (tag: string) =>
-      item.match(new RegExp('<' + tag + '>([^<]*)<\\/' + tag + '>'))?.[1]?.trim() ?? '';
-
-    const price = parseInt(get('dealAmount').replace(/,/g, ''));
-    const aptNm = get('aptNm');
-    const area = Math.round(parseFloat(get('excluUseAr')));
-    if (!price || !aptNm) return;
-
-    const key = `${aptNm}-${area}`;
-    if (!aptMaxPrices[key]) {
-      aptMaxPrices[key] = { maxPrice: price, latestPrice: price };
-    } else {
-      if (price > aptMaxPrices[key].maxPrice) {
-        aptMaxPrices[key].maxPrice = price;
+    if (aptNm) {
+      const key = `${aptNm}-${Math.round(area)}`;
+      if (!byApt[key]) byApt[key] = { max: price, latest: price };
+      else {
+        if (price > byApt[key].max) byApt[key].max = price;
+        byApt[key].latest = price;
       }
-      aptMaxPrices[key].latestPrice = price;
     }
   });
 
-  return Object.values(aptMaxPrices).filter(v => v.latestPrice >= v.maxPrice && v.maxPrice > 0).length;
+  agg.newHighs = Object.values(byApt).filter((v) => v.latest >= v.max && v.max > 0).length;
+  return agg;
 }
 
 function avg(arr: number[]): number | null {
   if (arr.length === 0) return null;
   return Math.round(arr.reduce((s, v) => s + v, 0) / arr.length);
+}
+
+/** 동시성 제한 배치 실행 — MOLIT rate limit 보호 */
+async function mapBatched<T, R>(items: T[], size: number, fn: (t: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = [];
+  for (let i = 0; i < items.length; i += size) {
+    out.push(...(await Promise.all(items.slice(i, i + size).map(fn))));
+  }
+  return out;
 }
 
 export async function GET() {
@@ -84,71 +82,60 @@ export async function GET() {
     return NextResponse.json({ error: '거래 집계 데이터를 불러올 수 없습니다' }, { status: 500 });
   }
   const apiKey = decodeURIComponent(rawKey);
-  const months = getRecentMonths();
+  const yyyymm = latestMonth();
 
   try {
-    // 시도별로 대표 구 1개씩만 조회해서 추정
-    // + 가장 최근 1개월 데이터를 시도별 대표 구 전체에서 가져옴
-    const results = await Promise.all(
-      DISTRICT_GROUPS.map(async (group) => {
-        // 시도 내 대표 구 2개로 추정 (속도와 정확도 밸런스)
-        const sampleDistricts = group.districts.slice(0, 2);
-
-        let totalCount = 0;
-        let totalNewHighs = 0;
-        const all59: number[] = [];
-        const all84: number[] = [];
-
-        await Promise.all(
-          sampleDistricts.map(async (district) => {
-            const lawdCd = DISTRICT_CODE[district];
-            if (!lawdCd) return;
-
-            // 최근 1개월만 (속도 확보)
-            const latestMonth = months[0];
-            const params = new URLSearchParams({
-              LAWD_CD: lawdCd,
-              DEAL_YMD: latestMonth,
-              numOfRows: '1000',
-              pageNo: '1',
-            });
-            const url = BASE_URL + '?serviceKey=' + apiKey + '&' + params.toString();
-
-            try {
-              const xml = await fetchMolitXml(url, 21600);
-              const parsed = parseXml(xml);
-              totalCount += parsed.count;
-              totalNewHighs += countNewHighs(xml);
-              all59.push(...parsed.prices59);
-              all84.push(...parsed.prices84);
-            } catch {
-              // 개별 실패 무시
-            }
-          })
-        );
-
-        // 대표 구 기준이므로 전체 시도 거래량을 추정
-        // (대표 구 2개 / 전체 구 수) 비율로 보정
-        const ratio = group.districts.length / sampleDistricts.length;
-
-        return {
-          label: group.label,
-          districtCount: group.districts.length,
-          estimatedCount: Math.round(totalCount * ratio),
-          sampleCount: totalCount,
-          newHighs: totalNewHighs,
-          avg59: avg(all59),
-          avg84: avg(all84),
-          firstDistrict: group.districts[0],
-        };
-      })
+    // 전 시군구 flat 목록 (그룹 라벨 유지)
+    const targets = DISTRICT_GROUPS.flatMap((g) =>
+      g.districts
+        .filter((d) => DISTRICT_CODE[d])
+        .map((d) => ({ group: g.label, district: d, lawdCd: DISTRICT_CODE[d] }))
     );
+
+    const results = await mapBatched(targets, BATCH_SIZE, async (t) => {
+      const params = new URLSearchParams({
+        LAWD_CD: t.lawdCd, DEAL_YMD: yyyymm, numOfRows: '1000', pageNo: '1',
+      });
+      try {
+        const xml = await fetchMolitXml(BASE_URL + '?serviceKey=' + apiKey + '&' + params.toString(), 21600);
+        return { group: t.group, agg: aggregate(xml) };
+      } catch {
+        return { group: t.group, agg: { count: 0, newHighs: 0, prices59: [], prices84: [] } as DistrictAgg };
+      }
+    });
+
+    // 그룹별 합산
+    const byGroup = new Map<string, DistrictAgg>();
+    for (const r of results) {
+      const acc = byGroup.get(r.group) ?? { count: 0, newHighs: 0, prices59: [], prices84: [] };
+      acc.count += r.agg.count;
+      acc.newHighs += r.agg.newHighs;
+      acc.prices59.push(...r.agg.prices59);
+      acc.prices84.push(...r.agg.prices84);
+      byGroup.set(r.group, acc);
+    }
+
+    const summary = DISTRICT_GROUPS.map((g) => {
+      const agg = byGroup.get(g.label) ?? { count: 0, newHighs: 0, prices59: [], prices84: [] };
+      return {
+        label:          g.label,
+        districtCount:  g.districts.length,
+        // 필드명은 프론트 호환 유지 — 의미는 이제 "실측 누계"
+        estimatedCount: agg.count,
+        sampleCount:    agg.count,
+        newHighs:       agg.newHighs,
+        avg59:          avg(agg.prices59),
+        avg84:          avg(agg.prices84),
+        firstDistrict:  g.districts[0],
+      };
+    });
 
     return NextResponse.json(
       {
-        summary: results,
+        summary,
+        month: yyyymm,
         updatedAt: new Date().toISOString(),
-        note: '대표 구 기반 추정치입니다. 상세는 지역을 클릭해주세요.',
+        note: '등록 시군구 전체 실집계 (당월 신고 누계)',
       },
       { headers: { 'Cache-Control': 'public, s-maxage=21600, stale-while-revalidate=86400' } }
     );
