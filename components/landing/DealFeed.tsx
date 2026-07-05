@@ -22,6 +22,8 @@ interface FeedDeal {
   apt:      string;
   district: string;
   dong:     string;
+  /** 단지 마스터 PK — 있으면 카드·공유가 /apt/[id] 전용 페이지로 (사이클 FF) */
+  masterId: string | null;
   price:    number;
   delta:    number | null;   // 직전 동일면적 거래 대비 (만원)
   up:       boolean;
@@ -62,6 +64,7 @@ function toFeedDeals(groups: AptGroup[], limit: number): FeedDeal[] {
       apt:      g.name,
       district: g.district,
       dong:     g.dong ?? '',
+      masterId: g.masterId ?? null,
       price:    latest.price,
       delta:    prev ? latest.price - prev.price : null,
       up:       prev ? latest.price - prev.price >= 0 : (spark?.up ?? true),
@@ -131,7 +134,9 @@ function SharePopover({ deal }: { deal: FeedDeal }) {
     return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
 
-  const url = `https://www.naezipkorea.com/transactions?district=${encodeURIComponent(deal.district)}&q=${encodeURIComponent(deal.apt)}`;
+  const url = deal.masterId
+    ? `https://www.naezipkorea.com/apt/${encodeURIComponent(deal.masterId)}`
+    : `https://www.naezipkorea.com/transactions?district=${encodeURIComponent(deal.district)}&q=${encodeURIComponent(deal.apt)}`;
   const text = `${deal.district} ${deal.apt} ${fmtPrice(deal.price)} (${deal.area}㎡·${deal.floor}층·${fmtContractDate(deal.date)} 계약) · 내집 My.ZIP\n${url}`;
 
   const copy = async (kind: 'link' | 'text', e: React.MouseEvent) => {
@@ -320,7 +325,9 @@ export function DealFeed({ district }: DealFeedProps) {
       {!loading && deals.map((deal) => (
         <Link
           key={`${deal.apt}-${deal.date}-${deal.floor}`}
-          href={`/transactions?district=${encodeURIComponent(deal.district)}&q=${encodeURIComponent(deal.apt)}`}
+          href={deal.masterId
+            ? `/apt/${encodeURIComponent(deal.masterId)}`
+            : `/transactions?district=${encodeURIComponent(deal.district)}&q=${encodeURIComponent(deal.apt)}`}
           style={{
             display: 'block',
             backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
