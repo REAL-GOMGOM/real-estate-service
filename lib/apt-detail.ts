@@ -3,8 +3,11 @@ import { and, desc, eq, gte, inArray, lte } from 'drizzle-orm';
 import { getBlogDb } from '@/lib/db/client';
 import { apartments, aptHighs, type Apartment } from '@/lib/db/schema';
 import { findDistrictByLawdCd } from '@/lib/district-codes';
-import { getMonthList, fetchTradeMonthAllPages, revalidateForMonth } from '@/lib/molit-months';
+import {
+  getMonthList, fetchTradeMonthAllPages, fetchRentMonthAllPages, revalidateForMonth,
+} from '@/lib/molit-months';
 import { buildNameCandidates, aptNameMatches } from '@/lib/apt-name-match';
+import { parseRentXml, isJeonse, type RentTransaction } from '@/lib/rent-shared';
 import { representativeArea, type AptGroup, type Transaction } from '@/lib/tx-shared';
 
 /**
@@ -16,6 +19,8 @@ import { representativeArea, type AptGroup, type Transaction } from '@/lib/tx-sh
  */
 
 export const APT_PAGE_MONTHS = 36;
+/** 전세 시세 조회 기간 — 전세가율은 최근 계약이면 충분 (MOLIT 부하 최소화) */
+export const APT_RENT_MONTHS = 6;
 
 export interface AptPageData {
   master:   Apartment;
@@ -23,6 +28,8 @@ export interface AptPageData {
   group:    AptGroup;    // 거래 0건이어도 반환 (페이지는 항상 렌더)
   /** 역대 전고점 (apt_highs, 사이클 FF) — 시드·봇 데이터 없으면 null → 36개월 폴백 */
   allTimeHigh: { price: number; dealDate: string } | null;
+  /** 대표 면적 최근 전세 계약 (사이클 LL — 전세가율용, 최신순 최대 5건) */
+  recentJeonse: RentTransaction[];
 }
 
 export async function getApartmentById(id: string): Promise<Apartment | null> {
@@ -51,7 +58,7 @@ export async function getAptPageData(id: string): Promise<AptPageData | null> {
     areas:        [],
     transactions: [],
   };
-  if (!rawKey) return { master, district, group, allTimeHigh: null };
+  if (!rawKey) return { master, district, group, allTimeHigh: null, recentJeonse: [] };
 
   const apiKey     = decodeURIComponent(rawKey);
   const candidates = buildNameCandidates({ name: master.name, aliases: master.aliases ?? [] });
@@ -103,6 +110,30 @@ export async function getAptPageData(id: string): Promise<AptPageData | null> {
   group.transactions.sort((a, b) => b.date.localeCompare(a.date));
   group.areas.sort((a, b) => a - b);
 
+  // 최근 전세 계약 (사이클 LL — 전세가율) — 대표 면적대(±6㎡), fail-open
+  let recentJeonse: RentTransaction[] = [];
+  if (group.transactions.length > 0) {
+    try {
+      const repArea = representativeArea(group);
+      const rentXmls = await Promise.all(
+        getMonthList(APT_RENT_MONTHS).map((yyyymm) =>
+          fetchRentMonthAllPages(apiKey, master.lawdCd, yyyymm, revalidateForMonth(yyyymm)).catch(() => '')
+        )
+      );
+      recentJeonse = rentXmls
+        .flatMap((xml) => parseRentXml(xml, district))
+        .filter((tx) =>
+          isJeonse(tx) &&
+          Math.abs(tx.area - repArea) <= 6 &&
+          aptNameMatches(tx.aptName, candidates)
+        )
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, 5);
+    } catch (e) {
+      console.error('[apt-detail] 전세 조회 실패 (fail-open):', e);
+    }
+  }
+
   // 역대 전고점 (fail-open) — 대표 면적대(±6㎡) 기준, 거래 없으면 생략
   let allTimeHigh: AptPageData['allTimeHigh'] = null;
   if (group.transactions.length > 0) {
@@ -125,5 +156,5 @@ export async function getAptPageData(id: string): Promise<AptPageData | null> {
     }
   }
 
-  return { master, district, group, allTimeHigh };
+  return { master, district, group, allTimeHigh, recentJeonse };
 }
