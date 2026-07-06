@@ -3,7 +3,7 @@ import { and, desc, eq, gte, inArray, lte } from 'drizzle-orm';
 import { getBlogDb } from '@/lib/db/client';
 import { apartments, aptHighs, type Apartment } from '@/lib/db/schema';
 import { findDistrictByLawdCd } from '@/lib/district-codes';
-import { getMonthList, fetchTradeMonthAllPages } from '@/lib/molit-months';
+import { getMonthList, fetchTradeMonthAllPages, revalidateForMonth } from '@/lib/molit-months';
 import { buildNameCandidates, aptNameMatches } from '@/lib/apt-name-match';
 import { representativeArea, type AptGroup, type Transaction } from '@/lib/tx-shared';
 
@@ -59,7 +59,7 @@ export async function getAptPageData(id: string): Promise<AptPageData | null> {
   try {
     const xmls = await Promise.all(
       getMonthList(APT_PAGE_MONTHS).map((yyyymm) =>
-        fetchTradeMonthAllPages(apiKey, master.lawdCd, yyyymm).catch(() => '')
+        fetchTradeMonthAllPages(apiKey, master.lawdCd, yyyymm, revalidateForMonth(yyyymm)).catch(() => '')
       )
     );
 

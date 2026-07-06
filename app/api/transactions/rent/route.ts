@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { DISTRICT_CODE } from '@/lib/district-codes';
 import { matchesQuery } from '@/lib/search-utils';
-import { getMonthList, fetchRentMonthAllPages } from '@/lib/molit-months';
+import { getMonthList, fetchRentMonthAllPages, revalidateForMonth } from '@/lib/molit-months';
 import { parseRentXml, groupRentTransactions, isJeonse } from '@/lib/rent-shared';
 
 /**
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
   try {
     const xmls = await Promise.all(
       getMonthList(months).map((yyyymm) =>
-        fetchRentMonthAllPages(apiKey, lawdCd, yyyymm).catch(() => '')
+        fetchRentMonthAllPages(apiKey, lawdCd, yyyymm, revalidateForMonth(yyyymm)).catch(() => '')
       )
     );
 

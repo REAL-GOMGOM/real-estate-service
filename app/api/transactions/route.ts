@@ -5,7 +5,7 @@ import { matchesQuery } from '@/lib/search-utils';
 import { getBlogDb } from '@/lib/db/client';
 import { apartments } from '@/lib/db/schema';
 import { normalizeMLTMName } from '@/lib/normalize-mltm-name';
-import { getMonthList, fetchTradeMonthAllPages } from '@/lib/molit-months';
+import { getMonthList, fetchTradeMonthAllPages, revalidateForMonth } from '@/lib/molit-months';
 
 const APT_NAME_MAX_LEN = 50;
 
@@ -125,7 +125,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const responses = await Promise.all(
-      monthList.map((yyyymm) => fetchTradeMonthAllPages(apiKey, lawdCd, yyyymm))
+      monthList.map((yyyymm) => fetchTradeMonthAllPages(apiKey, lawdCd, yyyymm, revalidateForMonth(yyyymm)))
     );
 
     const transactions: TxRow[] = [];

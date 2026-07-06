@@ -12,6 +12,18 @@ const TRADE_BASE_URL =
 const RENT_BASE_URL =
   'https://apis.data.go.kr/1613000/RTMSDataSvcAptRent/getRTMSDataSvcAptRent';
 
+/**
+ * 월별 캐시 수명 — MOLIT 일 한도 보호 (사이클 KK).
+ * 2개월 이상 지난 달의 거래는 사실상 불변(소급 신고 미미)이므로 7일,
+ * 최근 2개월만 24h. 단지 페이지 크롤·API 재조회 비용을 크게 줄인다.
+ */
+export function revalidateForMonth(yyyymm: string): number {
+  const now = new Date();
+  const cur = now.getFullYear() * 12 + now.getMonth();
+  const ym  = parseInt(yyyymm.slice(0, 4)) * 12 + (parseInt(yyyymm.slice(4, 6)) - 1);
+  return cur - ym >= 2 ? 604800 : 86400;
+}
+
 /** 최근 n개월 'YYYYMM' 목록 (이번 달부터 과거로) */
 export function getMonthList(months: number): string[] {
   const result: string[] = [];
