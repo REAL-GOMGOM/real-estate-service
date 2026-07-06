@@ -22,6 +22,7 @@ import {
 interface BaseDeal {
   district: string; apt: string; area: number; floor: number;
   price: number; date: string;
+  masterId?: string | null;   // 있으면 단지 전용 페이지 링크 (사이클 JJ)
 }
 interface NewHighDeal extends BaseDeal { prevHigh: number }
 interface SurgeDeal   extends BaseDeal { prevPrice: number; ratePct: number }
@@ -96,14 +97,14 @@ function SectionCard({
 
 /** 카드뷰 개별 딜 카드 — 표의 한 행을 카드로 (모바일 가독) */
 function DealMiniCard({
-  district, apt, meta, price, priceColor, extra,
+  district, apt, masterId, meta, price, priceColor, extra,
 }: {
-  district: string; apt: string; meta: string;
+  district: string; apt: string; masterId?: string | null; meta: string;
   price: string; priceColor?: string; extra?: string;
 }) {
   return (
     <Link
-      href={`/transactions?district=${encodeURIComponent(district)}&q=${encodeURIComponent(apt)}`}
+      href={aptHref({ district, apt, masterId })}
       style={{
         display: 'block', padding: '13px 15px', borderRadius: '12px',
         backgroundColor: 'var(--bg-overlay, var(--bg-tertiary))',
@@ -134,10 +135,17 @@ function DealMiniCard({
   );
 }
 
-function AptLink({ district, apt }: { district: string; apt: string }) {
+/** 단지 링크 — 마스터 등록 단지는 전용 페이지, 아니면 실거래 검색 딥링크 */
+function aptHref(d: { district: string; apt: string; masterId?: string | null }): string {
+  return d.masterId
+    ? `/apt/${encodeURIComponent(d.masterId)}`
+    : `/transactions?district=${encodeURIComponent(d.district)}&q=${encodeURIComponent(d.apt)}`;
+}
+
+function AptLink({ district, apt, masterId }: { district: string; apt: string; masterId?: string | null }) {
   return (
     <Link
-      href={`/transactions?district=${encodeURIComponent(district)}&q=${encodeURIComponent(apt)}`}
+      href={aptHref({ district, apt, masterId })}
       style={{ color: 'var(--text-primary)', fontWeight: 700, textDecoration: 'none' }}
       className="hover:underline"
     >
@@ -268,7 +276,7 @@ export default function HighlightsClient() {
                   {view === 'card'
                     ? data.newHighs.map((d, i) => (
                         <DealMiniCard
-                          key={i} district={d.district} apt={d.apt}
+                          key={i} district={d.district} apt={d.apt} masterId={d.masterId}
                           meta={`${d.area}㎡ · ${fmtContractDate(d.date)}`}
                           price={fmtPrice(d.price)} priceColor="var(--up-color, #C92F2F)"
                           extra={`종전 ${fmtPrice(d.prevHigh)}`}
@@ -277,7 +285,7 @@ export default function HighlightsClient() {
                     : data.newHighs.map((d, i) => (
                     <tr key={i} style={{ borderTop: '1px solid var(--border-light)' }}>
                       <td style={tdStyle}>{d.district}</td>
-                      <td style={tdStyle}><AptLink district={d.district} apt={d.apt} /></td>
+                      <td style={tdStyle}><AptLink district={d.district} apt={d.apt} masterId={d.masterId} /></td>
                       <td style={tdStyle}>{d.area}㎡</td>
                       <td style={{ ...tdStyle, fontWeight: 800, color: 'var(--up-color, #C92F2F)', fontFamily: 'Roboto Mono, monospace' }}>
                         {fmtPrice(d.price)}
@@ -305,7 +313,7 @@ export default function HighlightsClient() {
                   {view === 'card'
                     ? data.surges.map((d, i) => (
                         <DealMiniCard
-                          key={i} district={d.district} apt={d.apt}
+                          key={i} district={d.district} apt={d.apt} masterId={d.masterId}
                           meta={`${d.area}㎡ · 직전 ${fmtPrice(d.prevPrice)}`}
                           price={fmtPrice(d.price)}
                           extra={`▲ ${d.ratePct}%`}
@@ -314,7 +322,7 @@ export default function HighlightsClient() {
                     : data.surges.map((d, i) => (
                     <tr key={i} style={{ borderTop: '1px solid var(--border-light)' }}>
                       <td style={tdStyle}>{d.district}</td>
-                      <td style={tdStyle}><AptLink district={d.district} apt={d.apt} /></td>
+                      <td style={tdStyle}><AptLink district={d.district} apt={d.apt} masterId={d.masterId} /></td>
                       <td style={tdStyle}>{d.area}㎡</td>
                       <td style={{ ...tdStyle, fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>
                         {fmtPrice(d.price)}
@@ -344,7 +352,7 @@ export default function HighlightsClient() {
                   {view === 'card'
                     ? data.pyeong84.map((d, i) => (
                         <DealMiniCard
-                          key={i} district={d.district} apt={d.apt}
+                          key={i} district={d.district} apt={d.apt} masterId={d.masterId}
                           meta={`${d.area}㎡ · ${d.floor}층`}
                           price={fmtPrice(d.price)}
                           extra={fmtContractDate(d.date)}
@@ -353,7 +361,7 @@ export default function HighlightsClient() {
                     : data.pyeong84.map((d, i) => (
                     <tr key={i} style={{ borderTop: '1px solid var(--border-light)' }}>
                       <td style={tdStyle}>{d.district}</td>
-                      <td style={tdStyle}><AptLink district={d.district} apt={d.apt} /></td>
+                      <td style={tdStyle}><AptLink district={d.district} apt={d.apt} masterId={d.masterId} /></td>
                       <td style={tdStyle}>{d.area}㎡</td>
                       <td style={{ ...tdStyle, fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>
                         {fmtPrice(d.price)}

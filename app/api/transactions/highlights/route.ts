@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
+import { inArray } from 'drizzle-orm';
 import { fetchMolitXml } from '@/lib/molit-fetch';
 import { DISTRICT_CODE } from '@/lib/district-codes';
 import { DISTRICT_GROUPS } from '@/lib/district-groups';
+import { getBlogDb } from '@/lib/db/client';
+import { apartments } from '@/lib/db/schema';
+import { normalizeMLTMName } from '@/lib/normalize-mltm-name';
 
 /**
  * 오늘의 주요거래 API — 사이클 X (최종 디자인 TURN 4)
@@ -25,6 +29,47 @@ interface Deal {
   floor:    number;
   price:    number;
   date:     string;
+  /** 단지 마스터 PK — 있으면 프론트가 /apt/[id] 전용 페이지로 링크 (사이클 JJ) */
+  masterId?: string | null;
+}
+
+/**
+ * 최종 하이라이트(최대 24건)에 단지 마스터 id 부여 — fail-open.
+ * 대상 구의 lawd_cd 로 일괄 조회 후 등록명·별칭·정제명 매칭 (transactions API 와 동일 규칙).
+ */
+async function attachMasterIds(deals: Deal[]): Promise<void> {
+  if (deals.length === 0) return;
+  try {
+    const lawdCds = [...new Set(deals.map((d) => DISTRICT_CODE[d.district]).filter(Boolean))];
+    const rows = await getBlogDb()
+      .select({
+        id:      apartments.id,
+        name:    apartments.name,
+        aliases: apartments.aliases,
+        lawdCd:  apartments.lawdCd,
+      })
+      .from(apartments)
+      .where(inArray(apartments.lawdCd, lawdCds));
+
+    // lawdCd 별 이름 → id 매핑
+    const byLawd = new Map<string, Map<string, string>>();
+    for (const r of rows) {
+      if (!byLawd.has(r.lawdCd)) byLawd.set(r.lawdCd, new Map());
+      const m = byLawd.get(r.lawdCd)!;
+      if (!m.has(r.name)) m.set(r.name, r.id);
+      for (const alias of r.aliases ?? []) {
+        if (!m.has(alias)) m.set(alias, r.id);
+      }
+    }
+
+    for (const d of deals) {
+      const m = byLawd.get(DISTRICT_CODE[d.district]);
+      if (!m) continue;
+      d.masterId = m.get(d.apt) ?? m.get(normalizeMLTMName(d.apt)) ?? null;
+    }
+  } catch (e) {
+    console.error('[highlights API] 마스터 조인 실패 (fail-open):', e);
+  }
 }
 
 function latestMonth(): string {
@@ -134,12 +179,18 @@ export async function GET() {
     })
     .slice(0, PER_CATEGORY);
 
+  const topNewHighs = newHighs.slice(0, PER_CATEGORY);
+  const topSurges   = surges.slice(0, PER_CATEGORY);
+
+  // 최종 결과에만 단지 마스터 id 부여 (사이클 JJ — 단지 페이지 내부 링크)
+  await attachMasterIds([...topNewHighs, ...topSurges, ...pyeong84]);
+
   return NextResponse.json(
     {
       month: yyyymm,
       coverage: '등록 시군구 전체 기준',
-      newHighs: newHighs.slice(0, PER_CATEGORY),
-      surges:   surges.slice(0, PER_CATEGORY),
+      newHighs: topNewHighs,
+      surges:   topSurges,
       pyeong84,
       updatedAt: new Date().toISOString(),
     },
