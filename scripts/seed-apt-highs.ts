@@ -63,16 +63,36 @@ function monthRange(): string[] {
   return out;
 }
 
-/** 한 페이지 fetch — totalCount 누락(에러 XML) 시 1회 재시도 */
+/** 연속 실패 감지 — 한도 소진 시 헛 fetch 로 내일 한도까지 잠식하는 것을 방지 */
+let consecutiveFails = 0;
+const ABORT_AFTER_FAILS = 12;
+
+/** 한 페이지 fetch — totalCount 누락(에러 XML) 시 1회 재시도 + 에러 본문 진단 */
 async function fetchPage(apiKey: string, lawdCd: string, ym: string, pageNo: number): Promise<string> {
   const url = `${BASE_URL}?serviceKey=${apiKey}&LAWD_CD=${lawdCd}&DEAL_YMD=${ym}&numOfRows=1000&pageNo=${pageNo}`;
+  let lastBody = '';
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const res = await fetch(url);
-      const xml = await res.text();
-      if (xml.includes('<totalCount>')) return xml;
-    } catch { /* 재시도 */ }
+      lastBody = await res.text();
+      if (lastBody.includes('<totalCount>')) {
+        consecutiveFails = 0;
+        return lastBody;
+      }
+    } catch (e) {
+      lastBody = `(네트워크 예외) ${e}`;
+    }
     await sleep(600);
+  }
+
+  consecutiveFails++;
+  if (consecutiveFails <= 3 || consecutiveFails === ABORT_AFTER_FAILS) {
+    console.error(`⚠️  ${lawdCd}/${ym} 응답 이상 (연속 ${consecutiveFails}회): ${lastBody.slice(0, 180).replace(/\n/g, ' ')}`);
+  }
+  if (consecutiveFails >= ABORT_AFTER_FAILS) {
+    console.error(`\n🛑 연속 ${ABORT_AFTER_FAILS}회 실패 — MOLIT 일 한도 소진으로 판단, 전체 중단.`);
+    console.error('   자정(한도 리셋) 이후 같은 명령으로 재실행하세요. 이미 적재된 구는 재실행해도 무해합니다 (GREATEST upsert).');
+    process.exit(2);
   }
   return '';
 }
@@ -137,9 +157,23 @@ async function main() {
   if (EXECUTE && !dbUrl) { console.error('DATABASE_URL 미설정'); process.exit(1); }
   const sql = EXECUTE ? neon(dbUrl!) : null;
 
-  const targets = DISTRICT_GROUPS
+  let targets = DISTRICT_GROUPS
     .filter((g) => REGION_LABELS.includes(g.label))
     .flatMap((g) => g.districts.filter((d) => DISTRICT_CODE[d]));
+
+  // 재실행 시 이미 시드된 구 스킵 (중단 후 재개용) — 50행 초과 적재 구만 완료로 간주
+  if (EXECUTE && sql) {
+    const done = (await sql`
+      SELECT district, count(*)::int AS c FROM apt_highs
+      WHERE source = 'seed' GROUP BY district HAVING count(*) > 50
+    `) as { district: string; c: number }[];
+    const doneSet = new Set(done.map((r) => r.district));
+    const before = targets.length;
+    targets = targets.filter((d) => !doneSet.has(d));
+    if (before !== targets.length) {
+      console.log(`⏭️  이미 시드된 ${before - targets.length}개 구 스킵 (재개 모드)`);
+    }
+  }
 
   const months = monthRange();
   console.log(`${EXECUTE ? '🔴 EXECUTE' : '🟡 DRY-RUN'} — ${REGION_LABELS.join('·')} ${targets.length}개 구 × ${months.length}개월 (${FROM_YM}~)`);
