@@ -103,8 +103,39 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
 
   const deepLink = `/transactions?district=${encodeURIComponent(district)}&q=${encodeURIComponent(group.name)}`;
 
+  // JSON-LD — 단지(ApartmentComplex) + 브레드크럼 (사이클 JJ, XSS 방지 위해 < 이스케이프)
+  const pageUrl = `${SITE_URL}/apt/${encodeURIComponent(master.id)}`;
+  const jsonLd = JSON.stringify([
+    {
+      '@context': 'https://schema.org',
+      '@type': 'ApartmentComplex',
+      name: group.name,
+      url: pageUrl,
+      address: {
+        '@type': 'PostalAddress',
+        addressRegion: master.sido,
+        addressLocality: district,
+        ...(group.dong && { streetAddress: group.dong }),
+      },
+      ...(group.households && { numberOfAccommodationUnits: group.households }),
+      ...(master.lat && master.lng && {
+        geo: { '@type': 'GeoCoordinates', latitude: master.lat, longitude: master.lng },
+      }),
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: '홈', item: SITE_URL },
+        { '@type': 'ListItem', position: 2, name: '실거래 조회', item: `${SITE_URL}/transactions` },
+        { '@type': 'ListItem', position: 3, name: group.name, item: pageUrl },
+      ],
+    },
+  ]).replace(/</g, '\\u003c');
+
   return (
     <div style={{ maxWidth: '820px', margin: '0 auto', padding: '40px 24px 56px' }}>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd }} />
       {/* 브레드크럼 + 헤더 */}
       <nav style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '14px' }} aria-label="breadcrumb">
         <Link href="/transactions" style={{ color: 'var(--text-dim)', textDecoration: 'none' }}>실거래 조회</Link>
