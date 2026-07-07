@@ -1,7 +1,7 @@
 import 'server-only';
 import { and, desc, eq, gte, inArray, lte } from 'drizzle-orm';
 import { getBlogDb } from '@/lib/db/client';
-import { apartments, aptHighs, type Apartment } from '@/lib/db/schema';
+import { apartments, aptHighs, aptScores, type Apartment, type AptScore } from '@/lib/db/schema';
 import { findDistrictByLawdCd } from '@/lib/district-codes';
 import {
   getMonthList, fetchTradeMonthAllPages, fetchRentMonthAllPages, revalidateForMonth,
@@ -30,6 +30,8 @@ export interface AptPageData {
   allTimeHigh: { price: number; dealDate: string } | null;
   /** 대표 면적 최근 전세 계약 (사이클 LL — 전세가율용, 최신순 최대 5건) */
   recentJeonse: RentTransaction[];
+  /** 입지 점수 (사이클 MM — analysis 산출물, 106개 주요 단지만) */
+  aptScore: AptScore | null;
 }
 
 export async function getApartmentById(id: string): Promise<Apartment | null> {
@@ -58,7 +60,7 @@ export async function getAptPageData(id: string): Promise<AptPageData | null> {
     areas:        [],
     transactions: [],
   };
-  if (!rawKey) return { master, district, group, allTimeHigh: null, recentJeonse: [] };
+  if (!rawKey) return { master, district, group, allTimeHigh: null, recentJeonse: [], aptScore: null };
 
   const apiKey     = decodeURIComponent(rawKey);
   const candidates = buildNameCandidates({ name: master.name, aliases: master.aliases ?? [] });
@@ -156,5 +158,18 @@ export async function getAptPageData(id: string): Promise<AptPageData | null> {
     }
   }
 
-  return { master, district, group, allTimeHigh, recentJeonse };
+  // 입지 점수 (사이클 MM, fail-open) — import 스크립트가 masterId 를 매칭해둠
+  let aptScore: AptScore | null = null;
+  try {
+    const rows = await getBlogDb()
+      .select()
+      .from(aptScores)
+      .where(eq(aptScores.masterId, master.id))
+      .limit(1);
+    aptScore = rows[0] ?? null;
+  } catch (e) {
+    console.error('[apt-detail] apt_scores 조회 실패 (fail-open):', e);
+  }
+
+  return { master, district, group, allTimeHigh, recentJeonse, aptScore };
 }

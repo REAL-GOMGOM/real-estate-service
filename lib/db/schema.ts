@@ -4,6 +4,8 @@ import {
   text,
   timestamp,
   integer,
+  real,
+  boolean,
   pgEnum,
   index,
   uniqueIndex,
@@ -186,3 +188,34 @@ export const aptHighs = pgTable('apt_highs', {
 }));
 
 export type AptHigh = typeof aptHighs.$inferSelect;
+
+/**
+ * 단지 입지 점수 — 사이클 MM (analysis 스코어링 모델 산출물).
+ *
+ * scripts/import-apt-scores.ts 가 analysis/ CSV 3종을 반영.
+ * 점수: 1.0(극상급) ~ 5.0(하급). K-apt 실측(용적률·주차)은 nullable.
+ */
+export const aptScores = pgTable('apt_scores', {
+  id: text('id').primaryKey(),                    // SEED 단지명 (통칭)
+  masterId: text('master_id'),                    // apartments 매칭 성공 시 PK
+  district: text('district').notNull(),           // 자치구 표기 (analysis 기준)
+  score: real('score').notNull(),                 // 단지입지점수
+  regionScore: real('region_score').notNull(),    // 지역점수
+  isRegionTop: boolean('is_region_top').notNull().default(false), // 지역 대장
+  confidence: text('confidence').notNull(),       // H | M | L
+  stationM: integer('station_m'),                 // 역세권 거리(m)
+  elemSchool: boolean('elem_school'),             // 초품아
+  brandScore: integer('brand_score'),             // 브랜드 (1~10)
+  far: real('far'),                               // 용적률(%) — K-apt 실측
+  farLimit: real('far_limit'),                    // 허용용적률(%)
+  parkingPerHh: real('parking_per_hh'),           // 세대당 주차
+  buildYear: integer('build_year'),               // 준공연도 (API 실측)
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+}, (table) => ({
+  masterIdIdx: index('apt_scores_master_id_idx').on(table.masterId),
+}));
+
+export type AptScore = typeof aptScores.$inferSelect;
