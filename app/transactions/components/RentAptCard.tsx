@@ -29,7 +29,7 @@ export default function RentAptCard({ apt }: { apt: RentAptGroup }) {
       <p style={{ margin: '3px 0 12px', fontSize: '12px', color: 'var(--text-dim)' }}>
         {apt.district}{apt.dong ? ` ${apt.dong}` : ''}
         {apt.buildYear ? ` · ${apt.buildYear}년` : ''}
-        {' · '}{apt.transactions.length}건
+        {' · '}{(apt.txCount ?? apt.transactions.length).toLocaleString()}건
       </p>
 
       {/* 최근 계약 헤드라인 */}

@@ -54,7 +54,9 @@ export async function GET(req: NextRequest) {
         return g;
       })
       .sort((a, b) => b.transactions.length - a.transactions.length)
-      .slice(0, aptName ? 100 : limit);
+      .slice(0, aptName ? 100 : limit)
+      // 페이로드 절감 — 카드는 최근 계약만 사용 (전월세는 거래량이 매매의 2~3배)
+      .map((g) => ({ ...g, txCount: g.transactions.length, transactions: g.transactions.slice(0, 10) }));
 
     return NextResponse.json(
       { data: result, district, months, rentType, total: transactions.length },

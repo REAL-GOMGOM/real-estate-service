@@ -28,6 +28,8 @@ export interface RentAptGroup {
   buildYear:    number | null;
   areas:        number[];
   transactions: RentTransaction[];
+  /** 전체 계약 수 — API 가 페이로드 절감을 위해 transactions 를 자른 경우의 원본 건수 */
+  txCount?:     number;
 }
 
 export function isJeonse(tx: Pick<RentTransaction, 'monthlyRent'>): boolean {
