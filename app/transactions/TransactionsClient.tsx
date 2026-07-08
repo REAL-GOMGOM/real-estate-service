@@ -10,9 +10,10 @@ import { matchesQuery } from '@/lib/search-utils';
 import Header from '@/components/layout/Header';
 import { AptAutocomplete, type ApartmentSearchResult } from '@/components/search/AptAutocomplete';
 import { type AptGroup, type DistrictStat, detectNewHigh } from './types';
-import { type RentAptGroup } from '@/lib/rent-shared';
+import { sortRentGroups, type RentAptGroup, type RentSortKey } from '@/lib/rent-shared';
 import AptCard from './components/AptCard';
 import RentAptCard from './components/RentAptCard';
+import RentAptDetailModal from './components/RentAptDetailModal';
 import AptDetailModal from './components/AptDetailModal';
 import RegionPickerModal from './components/RegionPickerModal';
 import DistrictChips from './components/DistrictChips';
@@ -76,6 +77,14 @@ const AREA_OPTIONS: { key: string; label: string }[] = [
   { key: '84',  label: '84㎡' },
 ];
 
+// 전월세 정렬 (전월세 v2) — monthlyOnly 는 월세 탭에서만 노출
+const RENT_SORT_OPTIONS: { key: RentSortKey; label: string; monthlyOnly?: boolean }[] = [
+  { key: 'volume',  label: '거래많은순' },
+  { key: 'date',    label: '최신순' },
+  { key: 'deposit', label: '보증금높은순' },
+  { key: 'monthly', label: '월세높은순', monthlyOnly: true },
+];
+
 export default function TransactionsClient() {
   const searchParams  = useSearchParams();
   const districtParam = searchParams.get('district');
@@ -102,6 +111,8 @@ export default function TransactionsClient() {
   const [rentLoading, setRentLoading] = useState(false);
   const [rentError,   setRentError]   = useState(false);
   const [rentFetched, setRentFetched] = useState('');
+  const [rentSortKey, setRentSortKey] = useState<RentSortKey>('volume');
+  const [activeRent,  setActiveRent]  = useState<RentAptGroup | null>(null);
   const [summaryData, setSummaryData] = useState<SummaryRegion[]>([]);
   const [dailyMeta, setDailyMeta] = useState<DailyMeta | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
@@ -231,6 +242,11 @@ export default function TransactionsClient() {
 
   const totalTx    = filtered.reduce((s, g) => s + g.transactions.length, 0);
   const newHighCnt = filtered.filter(detectNewHigh).length;
+
+  // 전월세 파생값 (전월세 v2 — 월세 정렬): 검색 필터 → 정렬. 총 건수는 서버 원본 건수(txCount) 합
+  const rentFiltered = query.trim() ? rentGroups.filter((g) => matchesQuery(g.name, query.trim())) : rentGroups;
+  const rentSorted   = sortRentGroups(rentFiltered, rentSortKey);
+  const rentTotalTx  = rentFiltered.reduce((s, g) => s + (g.txCount ?? g.transactions.length), 0);
 
   const enterDistrict = (d: string) => {
     setGroupIdx(Math.max(0, findGroupIndexOfDistrict(d)));
@@ -447,7 +463,11 @@ export default function TransactionsClient() {
           {DEAL_TYPE_TABS.map(({ key, label }) => (
             <button
               key={key}
-              onClick={() => setDealType(key)}
+              onClick={() => {
+                setDealType(key);
+                // 전세 탭엔 월세 축이 없음 — 월세 정렬 상태면 기본으로 리셋
+                if (key !== 'monthly' && rentSortKey === 'monthly') setRentSortKey('volume');
+              }}
               style={{
                 padding: '12px 4px', marginRight: '24px', fontSize: '15px', fontWeight: 700,
                 color: dealType === key ? 'var(--text-primary)' : 'var(--text-dim)',
@@ -469,7 +489,7 @@ export default function TransactionsClient() {
           onPick={(d) => { setDistrict(d); setFetched(''); }}
         />
 
-        {/* 통계 바 + 정렬·필터 (매매 전용 — 전월세는 v1 에서 최근 계약순 고정) */}
+        {/* 통계 바 + 정렬·필터 (매매) */}
         {dealType === 'buy' && (
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -529,6 +549,32 @@ export default function TransactionsClient() {
               신고가
             </button>
           </div>
+        </div>
+        )}
+
+        {/* 통계 바 + 정렬 (전월세 — 전월세 v2: 월세 정렬) */}
+        {dealType !== 'buy' && !rentLoading && rentGroups.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: '12px', flexWrap: 'wrap', marginBottom: '20px',
+        }}>
+          <span style={{ fontSize: '15px', color: 'var(--text-muted)' }}>
+            총&nbsp;<strong style={{ color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>{rentTotalTx.toLocaleString()}</strong>건
+          </span>
+          <select
+            value={rentSortKey}
+            onChange={(e) => setRentSortKey(e.target.value as RentSortKey)}
+            aria-label="전월세 정렬"
+            style={{
+              padding: '8px 12px', borderRadius: '10px', fontSize: '13px', fontWeight: 600,
+              backgroundColor: 'var(--ink, #14213D)', color: '#FFFFFF',
+              border: '1px solid var(--ink, #14213D)', cursor: 'pointer', outline: 'none',
+            }}
+          >
+            {RENT_SORT_OPTIONS
+              .filter((o) => !o.monthlyOnly || dealType === 'monthly')
+              .map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+          </select>
         </div>
         )}
 
@@ -628,16 +674,13 @@ export default function TransactionsClient() {
                 <style>{`@keyframes pulse{0%,100%{opacity:.3}50%{opacity:.6}}`}</style>
               </>
             ) : (() => {
-              const rentFiltered = query.trim()
-                ? rentGroups.filter((g) => matchesQuery(g.name, query.trim()))
-                : rentGroups;
-              if (rentFiltered.length === 0 && !rentError) {
+              if (rentSorted.length === 0 && !rentError) {
                 return <TxEmptyState onReset={() => { setQuery(''); setMonths(6); setRentFetched(''); }} />;
               }
               return (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
-                  {rentFiltered.map((apt) => (
-                    <RentAptCard key={apt.id} apt={apt} />
+                  {rentSorted.map((apt) => (
+                    <RentAptCard key={apt.id} apt={apt} onClick={() => setActiveRent(apt)} />
                   ))}
                 </div>
               );
@@ -648,7 +691,7 @@ export default function TransactionsClient() {
         <p style={{ marginTop: '24px', fontSize: '11px', color: 'var(--text-dim)', lineHeight: 1.8 }}>
           {dealType === 'buy'
             ? '※ 매매 계약일 기준 · 신고가는 조회 기간 내 동일 면적 최고가 기준 · 전고점은 조회 기간 내 대표 면적 최고가'
-            : '※ 전월세 계약일 기준 · 보증금/월세는 국토교통부 신고 금액 · 신규/갱신은 계약 구분 신고값 (미신고 시 빈칸)'}
+            : '※ 전월세 계약일 기준 · 보증금/월세는 국토교통부 신고 금액 · 신규/갱신은 계약 구분 신고값 (미신고 시 빈칸) · 정렬의 보증금/월세는 조회 기간 내 단지 최고액 기준'}
         </p>
           </>
         )}
@@ -669,6 +712,15 @@ export default function TransactionsClient() {
         <AptDetailModal
           apt={activeApt}
           onClose={() => setActiveApt(null)}
+          months={months}
+        />
+      )}
+
+      {/* 전월세 상세 모달 (전월세 v2) */}
+      {activeRent && (
+        <RentAptDetailModal
+          apt={activeRent}
+          onClose={() => setActiveRent(null)}
           months={months}
         />
       )}

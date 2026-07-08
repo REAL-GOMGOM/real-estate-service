@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  parseRentXml, groupRentTransactions, isJeonse, fmtRentPrice,
-  type RentTransaction,
+  parseRentXml, groupRentTransactions, isJeonse, fmtRentPrice, sortRentGroups,
+  type RentTransaction, type RentAptGroup,
 } from '../rent-shared';
 import { fmtPrice } from '../tx-shared';
 
@@ -82,5 +82,44 @@ describe('fmtRentPrice', () => {
   it('전세는 보증금만, 월세는 보증금/월세', () => {
     expect(fmtRentPrice(tx(150000, 0), fmtPrice)).toBe('15억');
     expect(fmtRentPrice(tx(10000, 120), fmtPrice)).toBe('1억/120만');
+  });
+});
+
+describe('sortRentGroups (전월세 v2 — 월세 정렬)', () => {
+  const group = (name: string, over: Partial<RentAptGroup> = {}): RentAptGroup => ({
+    id: name, name, district: '강남구', dong: null, buildYear: null,
+    areas: [84], transactions: [], ...over,
+  });
+  const tx = (deposit: number, monthlyRent: number, date: string): RentTransaction => ({
+    aptName: 'X', district: '강남구', dong: '', area: 84, floor: 1,
+    deposit, monthlyRent, date, buildYear: null, contractType: '',
+    prevDeposit: null, prevMonthlyRent: null,
+  });
+
+  it('volume — txCount 우선, 없으면 거래 수 폴백', () => {
+    const a = group('A', { txCount: 30, transactions: [tx(1, 0, '2026-06-01')] });
+    const b = group('B', { transactions: [tx(1, 0, '2026-06-01'), tx(1, 0, '2026-06-02')] });
+    expect(sortRentGroups([b, a], 'volume').map((g) => g.name)).toEqual(['A', 'B']);
+  });
+
+  it('date — 최근 계약일 내림차순 (거래 순서 무관)', () => {
+    const a = group('A', { transactions: [tx(1, 0, '2026-05-01'), tx(1, 0, '2026-07-01')] });
+    const b = group('B', { transactions: [tx(1, 0, '2026-06-15')] });
+    expect(sortRentGroups([b, a], 'date').map((g) => g.name)).toEqual(['A', 'B']);
+  });
+
+  it('deposit — 서버 집계값 우선, 없으면 보이는 거래 최고 보증금 폴백', () => {
+    const a = group('A', { maxDeposit: 200000, transactions: [tx(50000, 0, '2026-06-01')] });
+    const b = group('B', { transactions: [tx(150000, 0, '2026-06-01')] });
+    const c = group('C', { transactions: [tx(90000, 0, '2026-06-01')] });
+    expect(sortRentGroups([c, b, a], 'deposit').map((g) => g.name)).toEqual(['A', 'B', 'C']);
+  });
+
+  it('monthly — 최고 월세 내림차순, 원본 배열 불변', () => {
+    const a = group('A', { maxMonthlyRent: 300 });
+    const b = group('B', { transactions: [tx(10000, 450, '2026-06-01')] });
+    const input = [a, b];
+    expect(sortRentGroups(input, 'monthly').map((g) => g.name)).toEqual(['B', 'A']);
+    expect(input.map((g) => g.name)).toEqual(['A', 'B']);
   });
 });

@@ -56,7 +56,14 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b.transactions.length - a.transactions.length)
       .slice(0, aptName ? 100 : limit)
       // 페이로드 절감 — 카드는 최근 계약만 사용 (전월세는 거래량이 매매의 2~3배)
-      .map((g) => ({ ...g, txCount: g.transactions.length, transactions: g.transactions.slice(0, 10) }));
+      // maxDeposit/maxMonthlyRent 는 슬라이스 전 전체 거래 기준 — 정렬 정확도 보장 (v2)
+      .map((g) => ({
+        ...g,
+        txCount: g.transactions.length,
+        maxDeposit:     g.transactions.reduce((m, t) => Math.max(m, t.deposit), 0),
+        maxMonthlyRent: g.transactions.reduce((m, t) => Math.max(m, t.monthlyRent), 0),
+        transactions: g.transactions.slice(0, 10),
+      }));
 
     return NextResponse.json(
       { data: result, district, months, rentType, total: transactions.length },

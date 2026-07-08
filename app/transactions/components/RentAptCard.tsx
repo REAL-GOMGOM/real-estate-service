@@ -10,15 +10,25 @@ import { type RentAptGroup, fmtRentPrice } from '@/lib/rent-shared';
  * 전월세 상세 모달·차트는 v2 백로그 — v1 은 카드 안에서 완결.
  */
 
-export default function RentAptCard({ apt }: { apt: RentAptGroup }) {
+export default function RentAptCard({ apt, onClick }: { apt: RentAptGroup; onClick?: () => void }) {
   const latest = apt.transactions[0]; // 호출부(API)가 최신순 정렬
   if (!latest) return null;
 
   return (
-    <article style={{
-      backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
-      borderRadius: '16px', padding: '18px',
-    }}>
+    <article
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
+      onMouseEnter={onClick ? (e) => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(20,33,61,0.08)'; } : undefined}
+      onMouseLeave={onClick ? (e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none'; } : undefined}
+      style={{
+        backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
+        borderRadius: '16px', padding: '18px',
+        cursor: onClick ? 'pointer' : 'default',
+        transition: 'border-color 0.15s, box-shadow 0.15s',
+      }}
+    >
       {/* 단지명 · 위치 */}
       <p style={{
         margin: 0, fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)',
