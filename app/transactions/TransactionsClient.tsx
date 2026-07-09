@@ -44,12 +44,13 @@ function fullDateLabel(d: Date) {
 
 type SortKey = 'volume' | 'date' | 'price';
 
-/** 거래 유형 탭 — 사이클 II (전세·월세 오픈) */
-type DealType = 'buy' | 'jeonse' | 'monthly';
+/** 거래 유형 탭 — 사이클 II (전세·월세), 분양권 추가 */
+type DealType = 'buy' | 'jeonse' | 'monthly' | 'bunyang';
 const DEAL_TYPE_TABS: { key: DealType; label: string }[] = [
   { key: 'buy',     label: '매매' },
   { key: 'jeonse',  label: '전세' },
   { key: 'monthly', label: '월세' },
+  { key: 'bunyang', label: '분양권' },
 ];
 
 interface SummaryRegion {
@@ -113,6 +114,11 @@ export default function TransactionsClient() {
   const [rentFetched, setRentFetched] = useState('');
   const [rentSortKey, setRentSortKey] = useState<RentSortKey>('volume');
   const [activeRent,  setActiveRent]  = useState<RentAptGroup | null>(null);
+  // 분양권 (silv) — 매매와 동일 AptGroup 이라 카드·모달 재사용
+  const [silvGroups,  setSilvGroups]  = useState<AptGroup[]>([]);
+  const [silvLoading, setSilvLoading] = useState(false);
+  const [silvError,   setSilvError]   = useState(false);
+  const [silvFetched, setSilvFetched] = useState('');
   const [summaryData, setSummaryData] = useState<SummaryRegion[]>([]);
   const [dailyMeta, setDailyMeta] = useState<DailyMeta | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
@@ -186,6 +192,32 @@ export default function TransactionsClient() {
       });
     return () => { cancelled = true; };
   }, [viewMode, dealType, district, months, rentFetched]);
+
+  // 분양권 조회 — 매매/전월세와 별개 키 (silv 라우트)
+  useEffect(() => {
+    if (viewMode !== 'detail' || dealType !== 'bunyang') return;
+    const key = `${district}-${months}`;
+    if (silvFetched === key) return;
+    let cancelled = false;
+    setSilvLoading(true);
+    setSilvError(false);
+    fetch(`/api/transactions/silv?district=${encodeURIComponent(district)}&months=${months}`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (cancelled) return;
+        setSilvGroups(json.data ?? []);
+        setSilvFetched(key);
+        setSilvLoading(false);
+        if (json.error) setSilvError(true);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSilvGroups([]);
+        setSilvError(true);
+        setSilvLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [viewMode, dealType, district, months, silvFetched]);
 
   // 시도별 요약
   useEffect(() => {
@@ -343,7 +375,7 @@ export default function TransactionsClient() {
                 backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border)',
                 fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6,
               }}>
-                {dealType === 'jeonse' ? '전세' : '월세'} 시세는{' '}
+                {dealType === 'jeonse' ? '전세' : dealType === 'monthly' ? '월세' : '분양권'} 시세는{' '}
                 <strong style={{ color: 'var(--text-primary)' }}>지역(구) 단위</strong>로 제공됩니다.
                 아래 시/도를 눌러 구를 선택하면 확인할 수 있어요.
                 <span style={{ color: 'var(--text-dim)' }}> (아래 카드 숫자는 매매 기준)</span>
@@ -668,7 +700,7 @@ export default function TransactionsClient() {
         )}
 
         {/* 전세·월세 — 전용 카드 (사이클 II v1) */}
-        {dealType !== 'buy' && (
+        {(dealType === 'jeonse' || dealType === 'monthly') && (
           <>
             {rentError && !rentLoading && (
               <TxErrorState onRetry={() => setRentFetched('')} />
@@ -702,9 +734,47 @@ export default function TransactionsClient() {
           </>
         )}
 
+        {/* 분양권 — 매매 카드·모달 재사용 (AptGroup 동일 구조) */}
+        {dealType === 'bunyang' && (
+          <>
+            {silvError && !silvLoading && (
+              <TxErrorState onRetry={() => setSilvFetched('')} />
+            )}
+
+            {silvLoading ? (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
+                  {[...Array(8)].map((_, i) => (
+                    <div key={i} style={{
+                      height: '220px', borderRadius: '16px',
+                      backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-light)',
+                      animation: 'pulse 1.5s ease-in-out infinite',
+                    }} />
+                  ))}
+                </div>
+                <style>{`@keyframes pulse{0%,100%{opacity:.3}50%{opacity:.6}}`}</style>
+              </>
+            ) : (() => {
+              const list = query.trim() ? silvGroups.filter((g) => matchesQuery(g.name, query.trim())) : silvGroups;
+              if (list.length === 0 && !silvError) {
+                return <TxEmptyState onReset={() => { setQuery(''); setMonths(6); setSilvFetched(''); }} />;
+              }
+              return (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
+                  {list.map((apt) => (
+                    <AptCard key={apt.id} apt={apt} onClick={() => setActiveApt(apt)} />
+                  ))}
+                </div>
+              );
+            })()}
+          </>
+        )}
+
         <p style={{ marginTop: '24px', fontSize: '11px', color: 'var(--text-dim)', lineHeight: 1.8 }}>
           {dealType === 'buy'
             ? '※ 매매 계약일 기준 · 신고가는 조회 기간 내 동일 면적 최고가 기준 · 전고점은 조회 기간 내 대표 면적 최고가'
+            : dealType === 'bunyang'
+            ? '※ 분양권 계약일 기준 · 국토교통부 분양권 전매 신고분 · 가격은 신고 거래금액'
             : '※ 전월세 계약일 기준 · 보증금/월세는 국토교통부 신고 금액 · 신규/갱신은 계약 구분 신고값 (미신고 시 빈칸) · 정렬의 보증금/월세는 조회 기간 내 단지 최고액 기준'}
         </p>
           </>
