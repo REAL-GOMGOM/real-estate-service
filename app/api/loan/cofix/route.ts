@@ -3,9 +3,11 @@ import { NextResponse } from 'next/server';
 const BOK_API_KEY = process.env.BOK_API_KEY ?? '';
 const BOK_BASE = 'https://ecos.bok.or.kr/api/StatisticSearch';
 
-// COFIX 신규취급액 기준 통계코드: 121Y006, 항목코드: 010190000
+// 예금은행 대출금리(신규취급액 기준) 통계코드 121Y006, 대출평균 항목 BECBLA01.
+// (기존 010190000 은 존재하지 않는 항목코드라 항상 빈 결과였음. COFIX 는 ECOS 미제공이라
+//  변동금리 기준지표로 예금은행 대출평균금리를 사용한다.)
 const STAT_CODE = '121Y006';
-const ITEM_CODE = '010190000';
+const ITEM_CODE = 'BECBLA01';
 
 function formatMonth(date: Date): string {
   const y = date.getFullYear();
@@ -37,7 +39,7 @@ export async function GET() {
           {
             rate: parseFloat(row.DATA_VALUE),
             period: row.TIME,
-            name: 'COFIX 신규취급액 기준',
+            name: '예금은행 대출평균금리(신규취급액)',
           },
           {
             headers: { 'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=3600' },

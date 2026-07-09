@@ -15,7 +15,7 @@ const BOK_BASE = 'https://ecos.bok.or.kr/api/StatisticSearch';
 
 // COFIX 신규취급액: 121Y006/010190000 (월), 한은 기준금리: 722Y001/0101000 (월)
 const SERIES = {
-  cofix: { stat: '121Y006', item: '010190000', name: 'COFIX 신규취급액' },
+  cofix: { stat: '121Y006', item: 'BECBLA01', name: '예금은행 대출평균금리(신규취급액)' },
   base:  { stat: '722Y001', item: '0101000',   name: '한국은행 기준금리' },
 } as const;
 
