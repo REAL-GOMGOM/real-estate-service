@@ -21,6 +21,8 @@ import { representativeArea, type AptGroup, type Transaction } from '@/lib/tx-sh
 export const APT_PAGE_MONTHS = 36;
 /** 전세 시세 조회 기간 — 전세가율은 최근 계약이면 충분 (MOLIT 부하 최소화) */
 export const APT_RENT_MONTHS = 6;
+/** 전월세 탭 테이블 최대 행수 */
+const APT_RENT_TABLE_LIMIT = 40;
 
 export interface AptPageData {
   master:   Apartment;
@@ -30,6 +32,8 @@ export interface AptPageData {
   allTimeHigh: { price: number; dealDate: string } | null;
   /** 대표 면적 최근 전세 계약 (사이클 LL — 전세가율용, 최신순 최대 5건) */
   recentJeonse: RentTransaction[];
+  /** 단지 전월세 전체 (전세+월세·전 면적, 최근 APT_RENT_MONTHS개월·최신순) — 전월세 탭용 */
+  rentTransactions: RentTransaction[];
   /** 입지 점수 (사이클 MM — analysis 산출물, 106개 주요 단지만) */
   aptScore: AptScore | null;
 }
@@ -60,7 +64,7 @@ export async function getAptPageData(id: string): Promise<AptPageData | null> {
     areas:        [],
     transactions: [],
   };
-  if (!rawKey) return { master, district, group, allTimeHigh: null, recentJeonse: [], aptScore: null };
+  if (!rawKey) return { master, district, group, allTimeHigh: null, recentJeonse: [], rentTransactions: [], aptScore: null };
 
   const apiKey     = decodeURIComponent(rawKey);
   const candidates = buildNameCandidates({ name: master.name, aliases: master.aliases ?? [] });
@@ -114,6 +118,7 @@ export async function getAptPageData(id: string): Promise<AptPageData | null> {
 
   // 최근 전세 계약 (사이클 LL — 전세가율) — 대표 면적대(±6㎡), fail-open
   let recentJeonse: RentTransaction[] = [];
+  let rentTransactions: RentTransaction[] = [];
   if (group.transactions.length > 0) {
     try {
       const repArea = representativeArea(group);
@@ -122,17 +127,18 @@ export async function getAptPageData(id: string): Promise<AptPageData | null> {
           fetchRentMonthAllPages(apiKey, master.lawdCd, yyyymm, revalidateForMonth(yyyymm)).catch(() => '')
         )
       );
-      recentJeonse = rentXmls
+      // 해당 단지 전월세 전체 (전세+월세·전 면적) — 같은 XML 재사용이라 MOLIT 부하 추가 없음
+      const allRent = rentXmls
         .flatMap((xml) => parseRentXml(xml, district))
-        .filter((tx) =>
-          isJeonse(tx) &&
-          Math.abs(tx.area - repArea) <= 6 &&
-          aptNameMatches(tx.aptName, candidates)
-        )
-        .sort((a, b) => b.date.localeCompare(a.date))
+        .filter((tx) => aptNameMatches(tx.aptName, candidates))
+        .sort((a, b) => b.date.localeCompare(a.date));
+      rentTransactions = allRent.slice(0, APT_RENT_TABLE_LIMIT);
+      // 전세가율용 — 대표 면적대(±6㎡) 전세만 최신 5건
+      recentJeonse = allRent
+        .filter((tx) => isJeonse(tx) && Math.abs(tx.area - repArea) <= 6)
         .slice(0, 5);
     } catch (e) {
-      console.error('[apt-detail] 전세 조회 실패 (fail-open):', e);
+      console.error('[apt-detail] 전월세 조회 실패 (fail-open):', e);
     }
   }
 
@@ -171,5 +177,5 @@ export async function getAptPageData(id: string): Promise<AptPageData | null> {
     console.error('[apt-detail] apt_scores 조회 실패 (fail-open):', e);
   }
 
-  return { master, district, group, allTimeHigh, recentJeonse, aptScore };
+  return { master, district, group, allTimeHigh, recentJeonse, rentTransactions, aptScore };
 }

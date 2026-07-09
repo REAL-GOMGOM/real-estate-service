@@ -14,6 +14,7 @@ import {
 import { fmtRentPrice } from '@/lib/rent-shared';
 import { SITE_URL } from '@/lib/site';
 import AptShareActions from './AptShareActions';
+import AptDealTabs from './AptDealTabs';
 
 /**
  * 단지 전용 페이지 — 사이클 DD (SEO 유입 엔진).
@@ -79,7 +80,7 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
   const data = await getAptPageData(decodeURIComponent(id));
   if (!data) notFound();
 
-  const { master, district, group, allTimeHigh, recentJeonse, aptScore } = data;
+  const { master, district, group, allTimeHigh, recentJeonse, rentTransactions, aptScore } = data;
 
   // 입지 점수 등급 라벨 (1.0 극상 ~ 5.0)
   const scoreGrade = aptScore
@@ -202,6 +203,8 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
         </div>
       ) : (
         <>
+          <AptDealTabs hasRent={rentTransactions.length > 0}>
+          <div>
           {/* 통계 카드 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', marginBottom: '20px' }}>
             <StatCard label="최근 실거래가" value={fmtPrice(latest.price)} sub={`${fmtContractDate(latest.date)} · ${latest.area}㎡`} />
@@ -280,6 +283,68 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
               </div>
             )}
           </section>
+          </div>
+          {/* 전월세 탭 패널 (전월세 v2) */}
+          <div>
+            {rentTransactions.length > 0 ? (
+              <section style={{
+                backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
+                borderRadius: '16px', overflow: 'hidden', marginBottom: '10px',
+              }}>
+                <div style={{ padding: '16px 18px 12px', display: 'flex', alignItems: 'baseline', gap: '10px' }}>
+                  <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                    전월세 거래
+                  </h2>
+                  <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
+                    최근 {APT_RENT_MONTHS}개월 · 계약일순
+                  </span>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+                        {['계약일', '면적', '층', '보증금/월세', '구분'].map((h) => (
+                          <th key={h} style={thStyle}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rentTransactions.map((tx, i) => (
+                        <tr key={i} style={{ borderTop: '1px solid var(--border-light)' }}>
+                          <td style={tdStyle}>{fmtContractDate(tx.date)}</td>
+                          <td style={tdStyle}>{tx.area}㎡ · {Math.round(tx.area / 3.3058)}평</td>
+                          <td style={tdStyle}>{tx.floor}층</td>
+                          <td style={{ ...tdStyle, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>
+                            {fmtRentPrice(tx, fmtPrice)}
+                          </td>
+                          <td style={tdStyle}>
+                            <span style={{
+                              fontSize: '11px', fontWeight: 700, padding: '1px 7px', borderRadius: '5px',
+                              backgroundColor: tx.monthlyRent === 0 ? '#EAF3FF' : 'var(--border-light)',
+                              color: tx.monthlyRent === 0 ? '#1B4DDB' : 'var(--text-dim)',
+                            }}>
+                              {tx.monthlyRent === 0 ? '전세' : '월세'}
+                            </span>
+                            {tx.contractType ? ` ${tx.contractType}` : ''}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            ) : (
+              <div style={{
+                padding: '40px 24px', borderRadius: '16px', textAlign: 'center',
+                backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
+              }}>
+                <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>
+                  최근 {APT_RENT_MONTHS}개월 내 전월세 거래가 없습니다.
+                </p>
+              </div>
+            )}
+          </div>
+          </AptDealTabs>
 
           {/* 입지 분석 (사이클 MM) — analysis 스코어링 산출물, 주요 단지만 */}
           {aptScore && (
@@ -347,47 +412,6 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
                 입지점수는 내집 자체 산정(지역 기반 50% + 단지 프리미엄 50%, 1.0 최상)이며
                 용적률·주차는 공동주택관리정보시스템(K-apt) 실측 기준입니다.
               </p>
-            </section>
-          )}
-
-          {/* 최근 전세 계약 (사이클 LL) — 대표 면적, 전세가율 근거 */}
-          {recentJeonse.length > 0 && (
-            <section style={{
-              backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
-              borderRadius: '16px', overflow: 'hidden', marginBottom: '10px',
-            }}>
-              <div style={{ padding: '16px 18px 12px', display: 'flex', alignItems: 'baseline', gap: '10px' }}>
-                <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>
-                  최근 전세 계약
-                </h2>
-                <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
-                  대표 면적 · 최근 {APT_RENT_MONTHS}개월
-                </span>
-              </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ backgroundColor: 'var(--bg-tertiary)' }}>
-                      {['계약일', '면적', '층', '보증금', '구분'].map((h) => (
-                        <th key={h} style={thStyle}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentJeonse.map((tx, i) => (
-                      <tr key={i} style={{ borderTop: '1px solid var(--border-light)' }}>
-                        <td style={tdStyle}>{fmtContractDate(tx.date)}</td>
-                        <td style={tdStyle}>{tx.area}㎡</td>
-                        <td style={tdStyle}>{tx.floor}층</td>
-                        <td style={{ ...tdStyle, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>
-                          {fmtRentPrice(tx, fmtPrice)}
-                        </td>
-                        <td style={tdStyle}>{tx.contractType || '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
             </section>
           )}
 
