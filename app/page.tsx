@@ -4,6 +4,7 @@ import {
   BarChart3, TrendingUp, CalendarDays, Target, MapPin, FileText,
 } from 'lucide-react';
 import HeroLive from '@/components/landing/HeroLive';
+import MarketLive from '@/components/landing/MarketLive';
 import { toSubscription } from '@/lib/adapters';
 import { fetchSubscriptions } from '@/lib/subscription-api';
 import { getTopLocations } from '@/lib/region-data';
@@ -43,14 +44,7 @@ const SHORTCUTS = [
   { title: '내집마련 도구', sub: '청약가점·대출 계산', href: '/loan', Icon: FileText },
 ];
 
-const MARKET = [
-  { region: '강남구', price: '25.7억', change: -15.5 },
-  { region: '서초구', price: '25.1억', change: -25.6 },
-  { region: '송파구', price: '18.9억', change: -8.2 },
-  { region: '마포구', price: '14.5억', change: -12.6 },
-  { region: '용산구', price: '21.5억', change: -1.1 },
-  { region: '성동구', price: '17.2억', change: 2.4 },
-];
+// 국평 시세(수도권 6구 84㎡)는 MarketLive 클라이언트 컴포넌트에서 라이브 집계.
 
 // 입지 TOP5 — 실데이터(location-scores.json). 원점수 1.0(최상)~5.0 → 0~100 표시 스케일 변환.
 const TOP_LOCATIONS = getTopLocations(5).map((t) => ({
@@ -169,31 +163,8 @@ export default async function HomePage() {
       {/* ── 국평 시세 + 입지 TOP5 ── */}
       <section style={{ background: '#F7F8FB', borderTop: '1px solid #EEF0F5' }}>
         <div style={{ ...sectionPad, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 28 }}>
-          {/* 국평 실거래가 */}
-          <div style={{ background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 20, padding: 24 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 4 }}>
-              <span style={eyebrow}>MARKET · 84㎡</span>
-              <span style={{ fontSize: 12, color: MUTED }}>최근 30일 평균 · 직전 대비</span>
-            </div>
-            <h3 style={{ margin: '4px 0 16px', fontSize: 20, fontWeight: 800, letterSpacing: '-0.02em', color: INK }}>수도권 국평 실거래가</h3>
-            {MARKET.map((m, i) => {
-              const up = m.change > 0;
-              return (
-                <div key={m.region} style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '12px 0', borderTop: i === 0 ? 'none' : '1px solid #F1F3F7',
-                }}>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: INK2 }}>{m.region}</span>
-                  <span style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-                    <span style={{ fontSize: 15, fontWeight: 800, color: INK, fontFamily: 'Roboto Mono, monospace' }}>{m.price}</span>
-                    <span style={{ fontSize: 12.5, fontWeight: 700, color: up ? '#E5484D' : BLUE, fontFamily: 'Roboto Mono, monospace', minWidth: 62, textAlign: 'right' }}>
-                      {up ? '▲' : '▼'} {up ? '+' : ''}{m.change}%
-                    </span>
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+          {/* 국평 실거래가 — 라이브 집계 */}
+          <MarketLive />
 
           {/* 입지 TOP5 (다크) */}
           <div style={{ background: 'linear-gradient(160deg, #12224E, #1B3B8A)', borderRadius: 20, padding: 24, color: '#FFFFFF' }}>
