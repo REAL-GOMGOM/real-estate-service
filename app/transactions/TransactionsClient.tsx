@@ -336,6 +336,20 @@ export default function TransactionsClient() {
               ))}
             </div>
 
+            {/* 전월세 탭 안내 — summary(시도별)는 매매 전용 집계라, 전세/월세는 구 선택 후 제공 */}
+            {dealType !== 'buy' && (
+              <div style={{
+                marginTop: '12px', padding: '12px 14px', borderRadius: '10px',
+                backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border)',
+                fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6,
+              }}>
+                {dealType === 'jeonse' ? '전세' : '월세'} 시세는{' '}
+                <strong style={{ color: 'var(--text-primary)' }}>지역(구) 단위</strong>로 제공됩니다.
+                아래 시/도를 눌러 구를 선택하면 확인할 수 있어요.
+                <span style={{ color: 'var(--text-dim)' }}> (아래 카드 숫자는 매매 기준)</span>
+              </div>
+            )}
+
             {/* 섹션 헤더 */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '20px 0 14px' }}>
               <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)' }}>시/도별 거래 현황</span>
