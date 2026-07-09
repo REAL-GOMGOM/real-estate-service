@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import HeroLive from '@/components/landing/HeroLive';
 import MarketLive from '@/components/landing/MarketLive';
+import MobileNav from '@/components/landing/MobileNav';
 import { toSubscription } from '@/lib/adapters';
 import { fetchSubscriptions } from '@/lib/subscription-api';
 import { getTopLocations } from '@/lib/region-data';
@@ -89,7 +90,7 @@ export default async function HomePage() {
 
   return (
     <main className={sg.variable} style={{ fontFamily: 'Pretendard, system-ui, sans-serif', background: '#FFFFFF', color: INK, overflowX: 'hidden' }}>
-      <style>{`@media (max-width:720px){.naezip-navlinks{display:none}}`}</style>
+      <style>{`.naezip-mobilenav{display:none}@media (max-width:720px){.naezip-navlinks,.naezip-login{display:none}.naezip-mobilenav{display:block}}`}</style>
       {/* ── 내비 ── */}
       <nav style={{
         position: 'sticky', top: 0, zIndex: 50,
@@ -127,6 +128,7 @@ export default async function HomePage() {
             }}>
               지역 둘러보기
             </Link>
+            <MobileNav />
           </div>
         </div>
       </nav>
