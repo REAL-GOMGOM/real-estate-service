@@ -8,7 +8,6 @@ import {
   generateAriaDesc,
   formatSegmentLabel,
   type StackedBar,
-  type StackedSegment,
 } from '../StackedBarChart.utils';
 
 describe('sanitizeSegmentValue', () => {

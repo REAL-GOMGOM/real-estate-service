@@ -39,8 +39,8 @@ export default function DollarPageClient() {
   const [baseYear,    setBaseYear]    = useState(2020);
   const [compareYear, setCompareYear] = useState(2025);
   // 현재 시세 — 티커 표시용 (table BTC/금 열은 entry.data의 역사적 시세 사용)
-  const [btcKrw,         setBtcKrw]         = useState<number | null>(null);
-  const [goldKrwPerGram, setGoldKrwPerGram] = useState<number | null>(null);
+  const [, setBtcKrw]         = useState<number | null>(null);
+  const [, setGoldKrwPerGram] = useState<number | null>(null);
   const [entries,     setEntries]     = useState<ApartmentEntry[]>(() =>
     POPULAR_APARTMENTS.map(({ district, aptName }) => ({
       id: makeId(district, aptName), aptName, district,

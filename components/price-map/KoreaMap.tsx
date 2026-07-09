@@ -200,10 +200,6 @@ export default function KoreaMap({ regions, onRegionClick, tradeType = 'sale' }:
     return map;
   }, [districtData]);
 
-  const provinceName = selectedProvince
-    ? Object.entries(CODE_MAP).find(([, v]) => v === selectedProvince)?.[0]
-    : null;
-
   if (!provinceGeo) {
     return (
       <div style={{ width: '100%', maxWidth: '700px', height: '600px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)' }}>

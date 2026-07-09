@@ -29,7 +29,6 @@ import {
   mapPointToCoord,
   resolveSeriesColor,
   type LineSeries,
-  type XValue,
 } from './LineChart.utils';
 
 interface LineChartProps {

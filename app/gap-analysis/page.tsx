@@ -4,12 +4,12 @@ import { useState, useCallback, Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import Header from '@/components/layout/Header';
 import Link from 'next/link';
-import { Search, TrendingUp, TrendingDown, Minus, AlertTriangle, BarChart2, ArrowRight } from 'lucide-react';
+import { Search, TrendingUp, TrendingDown, Minus, AlertTriangle, ArrowRight } from 'lucide-react';
 import type { GapResult, ComplexSearchResult } from '@/types/gap-analysis';
 
 const GapChart = dynamic(() => import('@/components/gap-analysis/GapChart'), { ssr: false });
 
-import { DISTRICT_GROUPS, ALL_DISTRICTS } from '@/lib/district-groups';
+import { DISTRICT_GROUPS } from '@/lib/district-groups';
 
 function ComplexSearchInput({
   label,

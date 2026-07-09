@@ -6,7 +6,6 @@ import { drizzle } from 'drizzle-orm/neon-http';
 import { sql } from 'drizzle-orm';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { apartments } from '../lib/db/schema';
-import { DISTRICT_CODE } from '../lib/district-codes';
 
 /**
  * 사이클 I 진단 — skipped 216건 원인 분류 + 분포 분석.

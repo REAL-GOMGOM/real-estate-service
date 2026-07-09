@@ -50,7 +50,6 @@ export default function ApartmentSelector({
   const selectedApt = apartments.find((a) => a.id === selectedId);
   const isToheo     = TOHEO_DISTRICTS.has(activeDistrict);
 
-  const activeRegionIndex = findRegionIndex(activeDistrict);
   // -1 = 전체
   const [regionIdx, setRegionIdx] = useState<number>(() => {
     const idx = findRegionIndex(activeDistrict);

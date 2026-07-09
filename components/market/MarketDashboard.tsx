@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { TrendingUp, TrendingDown, Minus, Search, Trophy, Flame, BarChart3 } from 'lucide-react';
+import { Search, Trophy, Flame, BarChart3 } from 'lucide-react';
 
 const MONO = "'Roboto Mono', var(--font-mono, monospace)";
 
