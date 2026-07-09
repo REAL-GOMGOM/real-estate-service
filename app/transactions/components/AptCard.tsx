@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Share2 } from 'lucide-react';
 import {
   type AptGroup,
@@ -45,7 +45,19 @@ function buildSparkline(apt: AptGroup, width: number, height: number) {
 }
 
 export default function AptCard({ apt, onClick }: AptCardProps) {
-  const [shared, setShared] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const shareRef = useRef<HTMLDivElement>(null);
+
+  // 공유 팝오버 — 바깥 클릭 시 닫기
+  useEffect(() => {
+    if (!shareOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (shareRef.current && !shareRef.current.contains(e.target as Node)) setShareOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [shareOpen]);
 
   const sorted  = [...apt.transactions].sort((a, b) => b.date.localeCompare(a.date));
   const latest  = sorted[0];
@@ -75,7 +87,9 @@ export default function AptCard({ apt, onClick }: AptCardProps) {
   const CHART_H = 66;
   const spark = buildSparkline(apt, CHART_W, CHART_H);
 
-  const handleShare = async (e: React.MouseEvent) => {
+  // 이미지 공유 — 브랜드 실거래 카드 PNG (모바일 네이티브 공유 / 데스크톱 다운로드)
+  const shareImage = async (e: React.MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
     try {
       // 대표 면적 거래열 → 공유 카드 스파크라인(0~100 × 0~56) + 최근 등락
@@ -106,8 +120,27 @@ export default function AptCard({ apt, onClick }: AptCardProps) {
       });
       if (!blob) return;
       await shareOrDownloadImage(blob, `${apt.name}-실거래.png`, apt.name);
-      setShared(true);
-      setTimeout(() => setShared(false), 1600);
+      setShareOpen(false);
+    } catch {
+      // 공유 취소 등은 무시
+    }
+  };
+
+  // 링크 공유 — 텍스트+URL (모바일 네이티브 공유 시트 → 카톡 링크카드 / 데스크톱 클립보드)
+  const shareLink = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const url = `${window.location.origin}/transactions?district=${encodeURIComponent(apt.district)}&q=${encodeURIComponent(apt.name)}`;
+    const text = `${apt.name} 최근 실거래 ${fmtPrice(latest.price)} (${latest.area}㎡·${latest.floor}층) · 전고점 ${fmtPrice(peak)}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: apt.name, text, url });
+        setShareOpen(false);
+      } else {
+        await navigator.clipboard.writeText(`${text}\n${url}`);
+        setCopied(true);
+        setTimeout(() => { setCopied(false); setShareOpen(false); }, 1400);
+      }
     } catch {
       // 공유 취소 등은 무시
     }
@@ -226,19 +259,55 @@ export default function AptCard({ apt, onClick }: AptCardProps) {
             </p>
           )}
         </div>
-        <button
-          onClick={handleShare}
-          aria-label={`${apt.name} 공유`}
-          style={{
-            flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: '5px',
-            padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 600,
-            backgroundColor: 'var(--bg-card)', color: 'var(--text-muted)',
-            border: '1px solid var(--border)', cursor: 'pointer',
-          }}
+        <div
+          ref={shareRef}
+          style={{ position: 'relative', flexShrink: 0 }}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
         >
-          <Share2 size={13} />
-          {shared ? '완료' : '공유'}
-        </button>
+          <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShareOpen((v) => !v); }}
+            aria-label={`${apt.name} 공유`}
+            aria-expanded={shareOpen}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: '5px',
+              padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 600,
+              backgroundColor: 'var(--bg-card)', color: 'var(--text-muted)',
+              border: '1px solid var(--border)', cursor: 'pointer',
+            }}
+          >
+            <Share2 size={13} />
+            공유
+          </button>
+
+          {shareOpen && (
+            <div style={{
+              position: 'absolute', right: 0, bottom: 'calc(100% + 8px)', zIndex: 20,
+              minWidth: '152px', display: 'flex', flexDirection: 'column',
+              backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
+              borderRadius: '10px', boxShadow: '0 10px 28px rgba(20,33,61,0.14)', padding: '6px',
+            }}>
+              <button
+                onClick={shareImage}
+                style={{
+                  textAlign: 'left', fontSize: '12.5px', fontWeight: 600, color: 'var(--text-primary)',
+                  padding: '8px 10px', borderRadius: '7px', background: 'none', border: 'none', cursor: 'pointer',
+                }}
+              >
+                🖼 이미지로 공유
+              </button>
+              <button
+                onClick={shareLink}
+                style={{
+                  textAlign: 'left', fontSize: '12.5px', fontWeight: 600,
+                  color: copied ? 'var(--success-text, #2E7A4C)' : 'var(--text-primary)',
+                  padding: '8px 10px', borderRadius: '7px', background: 'none', border: 'none', cursor: 'pointer',
+                }}
+              >
+                {copied ? '✓ 링크 복사됨' : '🔗 링크 공유'}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
