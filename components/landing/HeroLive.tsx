@@ -106,7 +106,7 @@ export default function HeroLive() {
     <section style={{ background: 'linear-gradient(180deg, #FBFCFE, #F3F6FD)' }}>
       <div style={{
         maxWidth: 1200, margin: '0 auto', padding: '74px 24px 66px',
-        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(320px, 100%), 1fr))',
         gap: 44, alignItems: 'center',
       }}>
         {/* 좌측 — 카피 + 지역 선택 + CTA */}

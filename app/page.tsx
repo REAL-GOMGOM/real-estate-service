@@ -88,7 +88,8 @@ export default async function HomePage() {
   const subs: Sub[] = real.length ? real : SAMPLE_SUBS;
 
   return (
-    <main className={sg.variable} style={{ fontFamily: 'Pretendard, system-ui, sans-serif', background: '#FFFFFF', color: INK }}>
+    <main className={sg.variable} style={{ fontFamily: 'Pretendard, system-ui, sans-serif', background: '#FFFFFF', color: INK, overflowX: 'hidden' }}>
+      <style>{`@media (max-width:720px){.naezip-navlinks{display:none}}`}</style>
       {/* ── 내비 ── */}
       <nav style={{
         position: 'sticky', top: 0, zIndex: 50,
@@ -162,7 +163,7 @@ export default async function HomePage() {
 
       {/* ── 국평 시세 + 입지 TOP5 ── */}
       <section style={{ background: '#F7F8FB', borderTop: '1px solid #EEF0F5' }}>
-        <div style={{ ...sectionPad, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 28 }}>
+        <div style={{ ...sectionPad, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(320px, 100%), 1fr))', gap: 28 }}>
           {/* 국평 실거래가 — 라이브 집계 */}
           <MarketLive />
 
