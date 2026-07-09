@@ -11,6 +11,8 @@ const TRADE_BASE_URL =
   'https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade';
 const RENT_BASE_URL =
   'https://apis.data.go.kr/1613000/RTMSDataSvcAptRent/getRTMSDataSvcAptRent';
+const SILV_BASE_URL =
+  'https://apis.data.go.kr/1613000/RTMSDataSvcSilvTrade/getRTMSDataSvcSilvTrade';
 
 /**
  * 월별 캐시 수명 — MOLIT 일 한도 보호 (사이클 KK).
@@ -55,6 +57,43 @@ export async function fetchTradeMonthAllPages(
       pageNo: String(pageNo),
     });
     return TRADE_BASE_URL + '?serviceKey=' + apiKey + '&' + params.toString();
+  };
+
+  const firstPage = await fetchMolitXml(makeUrl(1), revalidate);
+
+  const totalMatch = firstPage.match(/<totalCount>(\d+)<\/totalCount>/);
+  const totalCount = totalMatch ? parseInt(totalMatch[1]) : 0;
+
+  if (totalCount <= 1000) return firstPage;
+
+  const totalPages = Math.min(Math.ceil(totalCount / 1000), 3);
+  const additionalPages = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, i) =>
+      fetchMolitXml(makeUrl(i + 2), revalidate)
+    )
+  );
+
+  return [firstPage, ...additionalPages].join('\n');
+}
+
+/**
+ * 한 구·한 달 분양권전매 XML 전체 페이지 조회 — 분양권 탭.
+ * 매매(fetchTradeMonthAllPages)와 동일 규칙: 최대 3페이지, fetch 캐시 공유.
+ */
+export async function fetchSilvMonthAllPages(
+  apiKey: string,
+  lawdCd: string,
+  yyyymm: string,
+  revalidate = 86400,
+): Promise<string> {
+  const makeUrl = (pageNo: number) => {
+    const params = new URLSearchParams({
+      LAWD_CD: lawdCd,
+      DEAL_YMD: yyyymm,
+      numOfRows: '1000',
+      pageNo: String(pageNo),
+    });
+    return SILV_BASE_URL + '?serviceKey=' + apiKey + '&' + params.toString();
   };
 
   const firstPage = await fetchMolitXml(makeUrl(1), revalidate);
