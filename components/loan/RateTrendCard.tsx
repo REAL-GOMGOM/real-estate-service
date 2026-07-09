@@ -52,8 +52,11 @@ export default function RateTrendCard({ variant }: RateTrendCardProps) {
   }, []);
 
   if (failed) return null;               // 금리 추이는 부가 정보 — 실패 시 조용히 생략
-  const series = history?.[variant];
-  if (!history || !series || series.points.length < 2) {
+
+  // 아직 로딩 중(fetch 미완료)일 때만 스켈레톤을 보인다.
+  // 로드 완료 후 해당 시리즈가 비어 있으면(예: COFIX 미제공) 영구 스켈레톤 대신
+  // 조용히 생략한다 — 부가 정보라 빈 박스로 남기지 않는다.
+  if (!history) {
     return (
       <div style={{
         height: '128px', borderRadius: '14px',
@@ -64,17 +67,20 @@ export default function RateTrendCard({ variant }: RateTrendCardProps) {
       </div>
     );
   }
+  const series = history[variant];
+  if (!series || series.points.length < 2) return null;
 
   const pts = series.points;
   const rates = pts.map((p) => p.rate);
   const min = Math.min(...rates);
   const max = Math.max(...rates);
+  const flat = max === min;              // 값 변동 없음(예: 기준금리 동결) — 선을 세로 중앙에 수평 배치
   const span = max - min || 0.1;
 
   const W = 560, H = 84, PAD = 8;
   const coords = pts.map((p, i) => ({
     x: PAD + (i / (pts.length - 1)) * (W - PAD * 2),
-    y: PAD + (1 - (p.rate - min) / span) * (H - PAD * 2),
+    y: flat ? H / 2 : PAD + (1 - (p.rate - min) / span) * (H - PAD * 2),
   }));
 
   const latest = pts[pts.length - 1];
