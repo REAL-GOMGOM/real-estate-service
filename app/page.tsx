@@ -90,7 +90,7 @@ export default async function HomePage() {
 
   return (
     <main className={sg.variable} style={{ fontFamily: 'Pretendard, system-ui, sans-serif', background: '#FFFFFF', color: INK, overflowX: 'hidden' }}>
-      <style>{`.naezip-mobilenav{display:none}@media (max-width:720px){.naezip-navlinks,.naezip-login{display:none}.naezip-mobilenav{display:block}}`}</style>
+      <style>{`.naezip-mobilenav{display:none}@media (max-width:720px){.naezip-navlinks,.naezip-login{display:none!important}.naezip-mobilenav{display:block!important}}`}</style>
       {/* ── 내비 ── */}
       <nav style={{
         position: 'sticky', top: 0, zIndex: 50,

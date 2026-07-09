@@ -8,6 +8,7 @@ import {
   detectNewHigh, representativeArea, sparkSeries,
 } from '../types';
 import { smoothPath, type Pt } from '@/lib/svg-smooth';
+import { buildShareImage, shareOrDownloadImage } from '@/lib/share-image';
 
 /**
  * 아실형 단지 카드 — 사이클 W
@@ -76,16 +77,37 @@ export default function AptCard({ apt, onClick }: AptCardProps) {
 
   const handleShare = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const url = `${window.location.origin}/transactions?district=${encodeURIComponent(apt.district)}&q=${encodeURIComponent(apt.name)}`;
-    const text = `${apt.name} 최근 실거래 ${fmtPrice(latest.price)} (${latest.area}㎡·${latest.floor}층) · 전고점 ${fmtPrice(peak)}`;
     try {
-      if (navigator.share) {
-        await navigator.share({ title: apt.name, text, url });
-      } else {
-        await navigator.clipboard.writeText(`${text}\n${url}`);
-        setShared(true);
-        setTimeout(() => setShared(false), 1600);
+      // 대표 면적 거래열 → 공유 카드 스파크라인(0~100 × 0~56) + 최근 등락
+      const series = sparkSeries(apt);
+      let sparkPts: Pt[] = [];
+      let delta = '';
+      let up = false;
+      if (series && series.points.length > 1) {
+        const prices = series.points.map((p) => p.price);
+        const min = Math.min(...prices);
+        const max = Math.max(...prices);
+        const span = max - min || 1;
+        sparkPts = series.points.map((p) => ({ x: p.t * 100, y: (1 - (p.price - min) / span) * 56 }));
+        const diff = prices[prices.length - 1] - prices[prices.length - 2];
+        up = diff >= 0;
+        if (diff !== 0) delta = `${up ? '▲' : '▼'} ${fmtPrice(Math.abs(diff))}`;
       }
+
+      const blob = await buildShareImage({
+        apt:      apt.name,
+        location: apt.dong ? `${apt.district} ${apt.dong}` : apt.district,
+        price:    fmtPrice(latest.price),
+        delta,
+        up,
+        meta:     `${latest.area}㎡ · ${Math.round(latest.area / 3.3058)}평 · ${latest.floor}층 · ${fmtContractDate(latest.date)} 계약`,
+        spark:    sparkPts,
+        high:     newHigh,
+      });
+      if (!blob) return;
+      await shareOrDownloadImage(blob, `${apt.name}-실거래.png`, apt.name);
+      setShared(true);
+      setTimeout(() => setShared(false), 1600);
     } catch {
       // 공유 취소 등은 무시
     }
@@ -215,7 +237,7 @@ export default function AptCard({ apt, onClick }: AptCardProps) {
           }}
         >
           <Share2 size={13} />
-          {shared ? '복사됨' : '공유'}
+          {shared ? '완료' : '공유'}
         </button>
       </div>
     </div>
