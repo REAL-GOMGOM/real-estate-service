@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
 /**
@@ -62,9 +62,45 @@ const EYEBROW: React.CSSProperties = {
   textTransform: 'uppercase', color: '#98A1B0',
 };
 
+function fmtEok(manwon: number): string {
+  if (manwon >= 10000) {
+    const e = manwon / 10000;
+    return (Number.isInteger(e) ? String(e) : e.toFixed(1)) + '억';
+  }
+  return manwon.toLocaleString() + '만';
+}
+function fmtDay(date: string): string {
+  const p = date.split('-');
+  return p.length >= 3 ? `${p[1]}.${p[2]}` : (p[1] ?? '');
+}
+
 export default function HeroLive() {
   const [region, setRegion] = useState<Region>('강남구');
-  const list = TX[region];
+  const [live, setLive] = useState<{ region: Region; rows: Tx[] } | null>(null);
+  const list = live && live.region === region ? live.rows : TX[region];
+
+  // 지역 변경 시 실거래 API 로 최근 매매 4건 라이브 로드 (매칭 전엔 표본, 도착하면 교체).
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/transactions?district=${encodeURIComponent(region)}&months=2`)
+      .then((r) => r.json())
+      .then((json: { data?: Array<{ name: string; dong?: string | null; transactions: Array<{ dong?: string | null; area: number; floor: number; price: number; date: string }> }> }) => {
+        if (cancelled) return;
+        const rows = (json.data ?? []).flatMap((g) => g.transactions.map((t) => ({ g, t })));
+        rows.sort((a, b) => b.t.date.localeCompare(a.t.date));
+        const top4 = rows.slice(0, 4).map(({ g, t }) => ({
+          name: g.name,
+          dong: t.dong ?? g.dong ?? '',
+          area: `${t.area}㎡`,
+          floor: `${t.floor}층`,
+          price: fmtEok(t.price),
+          date: fmtDay(t.date),
+        }));
+        if (top4.length) setLive({ region, rows: top4 });
+      })
+      .catch(() => { /* 실패 시 표본 유지 */ });
+    return () => { cancelled = true; };
+  }, [region]);
 
   return (
     <section style={{ background: 'linear-gradient(180deg, #FBFCFE, #F3F6FD)' }}>

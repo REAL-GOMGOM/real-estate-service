@@ -6,6 +6,7 @@ import {
 import HeroLive from '@/components/landing/HeroLive';
 import { toSubscription } from '@/lib/adapters';
 import { fetchSubscriptions } from '@/lib/subscription-api';
+import { getTopLocations } from '@/lib/region-data';
 
 /**
  * 메인 랜딩 — 디자인 개편 (Claude Design 캔버스 시안 기준).
@@ -51,13 +52,12 @@ const MARKET = [
   { region: '성동구', price: '17.2억', change: 2.4 },
 ];
 
-const TOP_LOCATIONS = [
-  { rank: 1, region: '강남구', score: 98 },
-  { rank: 2, region: '서초구', score: 96 },
-  { rank: 3, region: '송파구', score: 93 },
-  { rank: 4, region: '용산구', score: 90 },
-  { rank: 5, region: '판교', score: 88 },
-];
+// 입지 TOP5 — 실데이터(location-scores.json). 원점수 1.0(최상)~5.0 → 0~100 표시 스케일 변환.
+const TOP_LOCATIONS = getTopLocations(5).map((t) => ({
+  rank: t.rank,
+  region: t.name,
+  score: Math.max(0, Math.min(100, Math.round(((5 - t.score) / 4) * 100))),
+}));
 
 const STEPS = [
   { n: '01', title: '지역을 고르세요', body: '관심 지역과 단지를 선택하면 최근 실거래가가 바로 흐릅니다.' },
