@@ -5,6 +5,7 @@ import { DISTRICT_GROUPS } from '@/lib/district-groups';
 import { eq } from 'drizzle-orm';
 import { getBlogDb } from '@/lib/db/client';
 import { dailyStats } from '@/lib/db/schema';
+import { countNewHighs, type SummaryDeal } from '@/lib/summary-highs';
 
 /**
  * 시도별 실거래 집계 API — 사이클 Z5 (추정치 → 전 시군구 실집계)
@@ -29,7 +30,7 @@ interface DistrictAgg {
   prices84: number[];
 }
 
-/** 한 구의 당월 XML → 집계 (건수·간이 신고가·59/84 가격 표본) */
+/** 한 구의 당월 XML → 집계 (건수·신고가·59/84 가격 표본) */
 function aggregate(xml: string): DistrictAgg {
   const agg: DistrictAgg = { count: 0, newHighs: 0, prices59: [], prices84: [] };
 
@@ -37,7 +38,7 @@ function aggregate(xml: string): DistrictAgg {
   if (total !== undefined) agg.count = parseInt(total);
 
   const items = xml.match(/<item>([\s\S]*?)<\/item>/g) ?? [];
-  const byApt: Record<string, { max: number; latest: number }> = {};
+  const deals: SummaryDeal[] = [];
 
   items.forEach((item) => {
     const get = (tag: string) =>
@@ -51,16 +52,15 @@ function aggregate(xml: string): DistrictAgg {
     if (area >= 80 && area <= 88) agg.prices84.push(price);
 
     if (aptNm) {
-      const key = `${aptNm}-${Math.round(area)}`;
-      if (!byApt[key]) byApt[key] = { max: price, latest: price };
-      else {
-        if (price > byApt[key].max) byApt[key].max = price;
-        byApt[key].latest = price;
-      }
+      const y = get('dealYear');
+      const m = get('dealMonth').padStart(2, '0');
+      const d = get('dealDay').padStart(2, '0');
+      deals.push({ aptName: aptNm, area, price, date: `${y}${m}${d}` });
     }
   });
 
-  agg.newHighs = Object.values(byApt).filter((v) => v.latest >= v.max && v.max > 0).length;
+  // 신고가: 최초 거래 제외 + 직전 최고가 경신 기준 (lib/summary-highs)
+  agg.newHighs = countNewHighs(deals);
   return agg;
 }
 
