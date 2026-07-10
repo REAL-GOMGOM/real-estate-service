@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseRentXml, groupRentTransactions, isJeonse, fmtRentPrice, sortRentGroups,
+  buildRentShareCard, rentSparkPts,
   type RentTransaction, type RentAptGroup,
 } from '../rent-shared';
 import { fmtPrice } from '../tx-shared';
@@ -121,5 +122,102 @@ describe('sortRentGroups (전월세 v2 — 월세 정렬)', () => {
     const input = [a, b];
     expect(sortRentGroups(input, 'monthly').map((g) => g.name)).toEqual(['B', 'A']);
     expect(input.map((g) => g.name)).toEqual(['A', 'B']);
+  });
+});
+
+// === 전월세 공유 이미지 카드 매핑 (상세 모달 → buildShareImage) ===
+
+function rtx(over: Partial<RentTransaction>): RentTransaction {
+  return {
+    aptName: '래미안', district: '강남구', dong: '대치동',
+    area: 84, floor: 12, deposit: 100000, monthlyRent: 0,
+    date: '2026-07-01', buildYear: 2015, contractType: '',
+    prevDeposit: null, prevMonthlyRent: null,
+    ...over,
+  };
+}
+
+describe('buildRentShareCard', () => {
+  const fmt = (n: number) => `${n}만`;
+  const fmtDate = (d: string) => d;
+  const base = { aptName: '래미안', district: '강남구', dong: '대치동' as string | null, fmt, fmtDate };
+
+  it('전세 — 직전 유사면적 전세 대비 보증금 등락 표기', () => {
+    const filtered = [
+      rtx({ deposit: 120000, date: '2026-07-01' }),
+      rtx({ deposit: 100000, date: '2026-06-01' }),
+    ];
+    const card = buildRentShareCard({ ...base, filtered });
+    expect(card).not.toBeNull();
+    expect(card!.price).toBe('120000만');
+    expect(card!.delta).toBe('▲ 20000만');
+    expect(card!.up).toBe(true);
+    expect(card!.high).toBe(false);
+    expect(card!.meta).toContain('전세');
+    expect(card!.location).toBe('강남구 대치동');
+  });
+
+  it('월세 — 등락 생략 + 보증금/월세 병기 표기', () => {
+    const filtered = [
+      rtx({ deposit: 10000, monthlyRent: 120, date: '2026-07-01' }),
+      rtx({ deposit: 9000, monthlyRent: 110, date: '2026-06-01' }),
+    ];
+    const card = buildRentShareCard({ ...base, filtered })!;
+    expect(card.delta).toBe('');
+    expect(card.price).toBe('10000만/120만');
+    expect(card.meta).toContain('월세');
+  });
+
+  it('갱신 계약 — meta 에 갱신 표기', () => {
+    const filtered = [rtx({ contractType: '갱신' })];
+    expect(buildRentShareCard({ ...base, filtered })!.meta).toContain('· 갱신');
+  });
+
+  it('면적 차이 ±6㎡ 초과 직전 거래는 등락 비교에서 제외', () => {
+    const filtered = [
+      rtx({ deposit: 120000, area: 84 }),
+      rtx({ deposit: 200000, area: 114, date: '2026-06-01' }),
+    ];
+    expect(buildRentShareCard({ ...base, filtered })!.delta).toBe('');
+  });
+
+  it('빈 목록 → null', () => {
+    expect(buildRentShareCard({ ...base, filtered: [] })).toBeNull();
+  });
+});
+
+describe('rentSparkPts', () => {
+  it('보증금 추이 — 좌표 범위 x 3~97 / y 7~49, 날짜 오름차순 정렬', () => {
+    const pts = rentSparkPts([
+      rtx({ deposit: 100000, date: '2026-05-01' }),
+      rtx({ deposit: 150000, date: '2026-07-01' }),
+      rtx({ deposit: 120000, date: '2026-06-01' }),
+    ]);
+    expect(pts).toHaveLength(3);
+    expect(pts[0].x).toBeCloseTo(3);
+    expect(pts[pts.length - 1].x).toBeCloseTo(97);
+    // 최저 보증금(100000)이 y 최대(49), 최고 보증금(150000)이 y 최소(7)
+    expect(pts[0].y).toBeCloseTo(49);
+    expect(pts[2].y).toBeCloseTo(7);
+    pts.forEach((p) => {
+      expect(p.x).toBeGreaterThanOrEqual(3);
+      expect(p.x).toBeLessThanOrEqual(97);
+      expect(p.y).toBeGreaterThanOrEqual(7);
+      expect(p.y).toBeLessThanOrEqual(49);
+    });
+  });
+
+  it('계약일이 전부 같으면 인덱스 균등 배치', () => {
+    const pts = rentSparkPts([
+      rtx({ deposit: 1000, date: '2026-07-01' }),
+      rtx({ deposit: 2000, date: '2026-07-01' }),
+    ]);
+    expect(pts[0].x).toBeCloseTo(3);
+    expect(pts[1].x).toBeCloseTo(97);
+  });
+
+  it('2건 미만 → 빈 배열', () => {
+    expect(rentSparkPts([rtx({})])).toEqual([]);
+    expect(rentSparkPts([])).toEqual([]);
   });
 });

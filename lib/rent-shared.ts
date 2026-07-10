@@ -4,6 +4,8 @@
  * MOLIT RTMSDataSvcAptRent XML → RentTransaction. 순수 함수 (단위 테스트 대상).
  * 전세 = monthlyRent 0, 월세 = monthlyRent > 0.
  */
+import type { ShareCardData } from '@/lib/share-image';
+import type { Pt } from '@/lib/svg-smooth';
 
 export interface RentTransaction {
   aptName:      string;
@@ -138,4 +140,82 @@ export function sortRentGroups(groups: RentAptGroup[], key: RentSortKey): RentAp
     case 'volume':
     default:        return sorted.sort((a, b) => txCount(b) - txCount(a));
   }
+}
+
+// === 전월세 공유 이미지 카드 매핑 (상세 모달 → buildShareImage) ===
+
+export interface RentShareCardInput {
+  aptName:  string;
+  district: string;
+  dong:     string | null;
+  /** 최신순 정렬 + 모달의 면적 필터가 적용된 거래 목록 */
+  filtered: RentTransaction[];
+  /** 만원 → "26.9억" 표기 (호출부에서 fmtPrice 주입 — fmtRentPrice 와 동일 패턴) */
+  fmt:      (n: number) => string;
+  /** YYYY-MM-DD → "26.06.27" 표기 */
+  fmtDate:  (d: string) => string;
+}
+
+/**
+ * 보증금 스파크 좌표 — 매매 buildSparkPts 와 동일 좌표계 (x 3~97, y 7~49).
+ * 모달에서 보고 있는 필터 상태 그대로를 그린다 (대표면적 재선택 없음).
+ * 시간축 정규화, 계약일이 전부 같으면 인덱스 균등 배치. 2건 미만이면 빈 배열.
+ */
+export function rentSparkPts(filtered: RentTransaction[]): Pt[] {
+  if (filtered.length < 2) return [];
+  const asc = [...filtered].sort((a, b) => a.date.localeCompare(b.date));
+  const times = asc.map((t) => new Date(t.date).getTime());
+  const t0 = times[0];
+  const tSpan = times[times.length - 1] - t0;
+  const deposits = asc.map((t) => t.deposit);
+  const min = Math.min(...deposits);
+  const span = Math.max(...deposits) - min || 1;
+  return asc.map((tx, i) => ({
+    x: 3 + (tSpan > 0 ? (times[i] - t0) / tSpan : i / (asc.length - 1)) * 94,
+    y: 7 + (1 - (tx.deposit - min) / span) * 42,
+  }));
+}
+
+/**
+ * 전월세 상세 모달 → 공유 이미지 카드 데이터.
+ *
+ * - 가격: 전세 "5.2억" / 월세 "1억 2,000/120만" (fmtRentPrice)
+ * - 등락: 전세만 — 동일 유형·유사 면적(±6㎡) 직전 계약 보증금 대비.
+ *   월세는 보증금·월세 2차원 가격이라 스칼라 등락 표기를 생략한다.
+ * - 신고가 뱃지(high)는 매매 전용 개념이라 항상 false.
+ * - 거래가 없으면 null.
+ */
+export function buildRentShareCard(input: RentShareCardInput): ShareCardData | null {
+  const { aptName, district, dong, filtered, fmt, fmtDate } = input;
+  const latest = filtered[0];
+  if (!latest) return null;
+
+  const jeonse = isJeonse(latest);
+  let delta = '';
+  let up = true;
+  if (jeonse) {
+    const prev = filtered.find(
+      (t) => t !== latest && isJeonse(t) && Math.abs(t.area - latest.area) <= 6,
+    );
+    if (prev) {
+      const diff = latest.deposit - prev.deposit;
+      if (diff !== 0) {
+        delta = `${diff > 0 ? '▲' : '▼'} ${fmt(Math.abs(diff))}`;
+        up = diff > 0;
+      }
+    }
+  }
+
+  const kind = jeonse ? '전세' : '월세';
+  const renewal = latest.contractType === '갱신' ? ' · 갱신' : '';
+  return {
+    apt:      aptName,
+    location: `${district}${dong ? ' ' + dong : ''}`,
+    price:    fmtRentPrice(latest, fmt),
+    delta,
+    up,
+    meta:     `${kind} · ${latest.area}㎡ · ${Math.round(latest.area / 3.3058)}평 · ${latest.floor}층 · ${fmtDate(latest.date)} 계약${renewal}`,
+    spark:    rentSparkPts(filtered),
+    high:     false,
+  };
 }

@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { fmtPrice, fmtContractDate, type Transaction } from '../types';
-import { type RentAptGroup, type RentTransaction, fmtRentPrice } from '@/lib/rent-shared';
+import { type RentAptGroup, type RentTransaction, fmtRentPrice, buildRentShareCard } from '@/lib/rent-shared';
+import { buildShareImage, shareOrDownloadImage } from '@/lib/share-image';
 import PriceComboChart from '@/components/apt/PriceComboChart';
 
 /**
@@ -43,6 +44,7 @@ function renewalDepositPct(tx: RentTransaction): number | null {
 export default function RentAptDetailModal({ apt, onClose, months }: RentAptDetailModalProps) {
   const [selArea, setSelArea] = useState<number | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
+  const [imageSaving, setImageSaving] = useState(false);
 
   // 모달 열림 중 배경 페이지 스크롤 잠금 + Esc 닫기
   useEffect(() => {
@@ -85,6 +87,27 @@ export default function RentAptDetailModal({ apt, onClose, months }: RentAptDeta
     area: t.area, floor: t.floor,
     price: t.deposit, pricePerArea: 0, date: t.date,
   }));
+
+  // 이미지 공유 — 현재 면적 필터 상태의 브랜드 카드 생성 (매매 AptDetailModal 과 대칭)
+  const saveAsImage = async () => {
+    if (!latest || imageSaving) return;
+    setImageSaving(true);
+    try {
+      const data = buildRentShareCard({
+        aptName: apt.name,
+        district: apt.district,
+        dong: apt.dong,
+        filtered,
+        fmt: fmtPrice,
+        fmtDate: fmtContractDate,
+      });
+      if (data) {
+        const blob = await buildShareImage(data);
+        if (blob) await shareOrDownloadImage(blob, `${apt.name}-전월세.png`, apt.name);
+      }
+    } catch { /* 공유 취소 무시 */ }
+    setImageSaving(false);
+  };
 
   return (
     <div
@@ -294,28 +317,43 @@ export default function RentAptDetailModal({ apt, onClose, months }: RentAptDeta
             </span>
             네이버 지도에서 위치·로드뷰 보기 ↗
           </a>
-          <button
-            onClick={async () => {
-              const url = `${window.location.origin}/transactions?district=${encodeURIComponent(apt.district)}&q=${encodeURIComponent(apt.name)}`;
-              const text = `${apt.name} 최근 전월세 ${latest ? fmtRentPrice(latest, fmtPrice) : ''} · 내집 My.ZIP`;
-              try {
-                if (navigator.share) {
-                  await navigator.share({ title: apt.name, text, url });
-                } else {
-                  await navigator.clipboard.writeText(`${text}\n${url}`);
-                  setShareCopied(true);
-                  setTimeout(() => setShareCopied(false), 1500);
-                }
-              } catch { /* 공유 취소 무시 */ }
-            }}
-            style={{
-              border: 0, backgroundColor: 'var(--accent)', color: '#FFFFFF',
-              fontWeight: 800, fontSize: '14px', padding: '14px', borderRadius: '12px',
-              cursor: 'pointer', fontFamily: 'inherit',
-            }}
-          >
-            {shareCopied ? '✓ 링크 복사됨' : '↗ 공유하기'}
-          </button>
+          <div style={{ display: 'flex', gap: '9px' }}>
+            <button
+              onClick={saveAsImage}
+              disabled={imageSaving || !latest}
+              style={{
+                flex: 1, backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)',
+                border: '1px solid var(--border)', fontWeight: 800, fontSize: '14px',
+                padding: '14px', borderRadius: '12px',
+                cursor: imageSaving ? 'wait' : 'pointer', fontFamily: 'inherit',
+                opacity: imageSaving ? 0.6 : 1,
+              }}
+            >
+              {imageSaving ? '생성 중…' : '🖼 이미지로 공유'}
+            </button>
+            <button
+              onClick={async () => {
+                const url = `${window.location.origin}/transactions?district=${encodeURIComponent(apt.district)}&q=${encodeURIComponent(apt.name)}`;
+                const text = `${apt.name} 최근 전월세 ${latest ? fmtRentPrice(latest, fmtPrice) : ''} · 내집 My.ZIP`;
+                try {
+                  if (navigator.share) {
+                    await navigator.share({ title: apt.name, text, url });
+                  } else {
+                    await navigator.clipboard.writeText(`${text}\n${url}`);
+                    setShareCopied(true);
+                    setTimeout(() => setShareCopied(false), 1500);
+                  }
+                } catch { /* 공유 취소 무시 */ }
+              }}
+              style={{
+                flex: 1, border: 0, backgroundColor: 'var(--accent)', color: '#FFFFFF',
+                fontWeight: 800, fontSize: '14px', padding: '14px', borderRadius: '12px',
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              {shareCopied ? '✓ 링크 복사됨' : '↗ 공유하기'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
