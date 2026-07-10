@@ -26,12 +26,6 @@ const SAMPLE: Row[] = [
   { region: '성동구', price: '17.2억', change: 2.4 },
 ];
 
-const eyebrow: React.CSSProperties = {
-  fontFamily: 'var(--font-sg, ui-monospace, monospace)',
-  fontSize: 12, fontWeight: 600, letterSpacing: '0.14em',
-  textTransform: 'uppercase', color: '#98A1B0',
-};
-
 function fmtEok(manwon: number): string {
   if (manwon >= 10000) {
     const e = Math.round((manwon / 10000) * 10) / 10;
@@ -81,24 +75,26 @@ export default function MarketLive() {
   }, []);
 
   return (
-    <div style={{ background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 20, padding: 24 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 4 }}>
-        <span style={eyebrow}>MARKET · 84㎡</span>
-        <span style={{ fontSize: 12, color: MUTED }}>최근 30일 평균 · 직전 대비</span>
+    <div style={{
+      background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 18,
+      padding: 20, minWidth: 0, display: 'flex', flexDirection: 'column',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
+        <span style={{ fontWeight: 800, fontSize: 15, color: INK, letterSpacing: '-0.01em' }}>수도권 국평 시세</span>
+        <span style={{ fontSize: 11, color: MUTED }}>84㎡ · 최근 30일 · 직전 대비</span>
       </div>
-      <h3 style={{ margin: '4px 0 16px', fontSize: 20, fontWeight: 800, letterSpacing: '-0.02em', color: INK }}>수도권 국평 실거래가</h3>
-      {rows.map((m, i) => {
+      {rows.map((m) => {
         const up = m.change !== null && m.change > 0;
         return (
           <div key={m.region} style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '12px 0', borderTop: i === 0 ? 'none' : '1px solid #F1F3F7',
+            padding: '10px 0', borderBottom: '1px solid #F1F3F7',
           }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: INK2 }}>{m.region}</span>
+            <span style={{ fontSize: 13.5, fontWeight: 600, color: INK2 }}>{m.region}</span>
             <span style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-              <span style={{ fontSize: 15, fontWeight: 800, color: INK, fontFamily: 'Roboto Mono, monospace' }}>{m.price}</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: INK, fontFamily: 'Roboto Mono, monospace' }}>{m.price}</span>
               {m.change !== null && (
-                <span style={{ fontSize: 12.5, fontWeight: 700, color: up ? '#E5484D' : BLUE, fontFamily: 'Roboto Mono, monospace', minWidth: 62, textAlign: 'right' }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: up ? '#E5484D' : BLUE, fontFamily: 'Roboto Mono, monospace', minWidth: 56, textAlign: 'right' }}>
                   {up ? '▲' : '▼'} {up ? '+' : ''}{m.change}%
                 </span>
               )}
