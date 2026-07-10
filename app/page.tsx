@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { cacheLife } from 'next/cache';
 import { Space_Grotesk } from 'next/font/google';
 import {
@@ -200,12 +201,8 @@ export default async function HomePage() {
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
         }}>
           <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 9, textDecoration: 'none' }}>
-            <span style={{
-              width: 30, height: 30, borderRadius: 9, background: BLUE,
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            }}>
-              <span style={{ width: 11, height: 11, background: '#FFFFFF', transform: 'rotate(45deg)', borderRadius: 2 }} />
-            </span>
+            {/* 기존 이미지 로고 사용 — 시안의 CSS 도형은 프로토타입 대체물 (README Assets 명시) */}
+            <Image src="/logo.png" alt="내집(My.ZIP)" width={32} height={32} style={{ objectFit: 'contain', flexShrink: 0 }} priority />
             <span style={{ fontSize: 18, fontWeight: 800, color: INK }}>내집</span>
             <span style={{ fontFamily: 'var(--font-sg)', fontSize: 13, fontWeight: 600, color: MUTED2, letterSpacing: '0.04em' }}>My.ZIP</span>
           </Link>
