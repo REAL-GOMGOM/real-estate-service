@@ -19,6 +19,11 @@ import { normalizeMLTMName } from '@/lib/normalize-mltm-name';
  * 커버리지: 등록 시군구 전체 (summary 와 동일 URL 조회 → Next data cache 공유).
  */
 
+// 프리렌더 제외 — 빌드 시점 DB 조회가 프리렌더 종료 후 reject 되며 내던
+// "[highlights API] 마스터 조인 실패 (fail-open)" 경고 제거 (HANDOVER §7).
+// 클라이언트 fetch 전용 라우트라 정적 프리렌더의 이득이 없다.
+export const dynamic = 'force-dynamic';
+
 const BASE_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade';
 const PER_CATEGORY = 8;
 

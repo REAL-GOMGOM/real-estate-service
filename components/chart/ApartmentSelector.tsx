@@ -44,7 +44,7 @@ export default function ApartmentSelector({
   onSelect,
   onAreaChange,
   onDistrictChange,
-  onAptSearch,
+  onAptSearch: _onAptSearch,
   isMobile = false,
 }: Props) {
   const selectedApt = apartments.find((a) => a.id === selectedId);

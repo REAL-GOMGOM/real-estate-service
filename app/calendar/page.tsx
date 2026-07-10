@@ -21,7 +21,8 @@ function CalendarContent() {
     () => new Set(ALL_CATEGORIES),
   );
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
-  const [isMobile, setIsMobile] = useState(false);
+  // 모바일 리스트 뷰 도입 전까지 미사용 (렌더 분기 예정) — lint 무시 패턴 `_`
+  const [_isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -151,8 +152,8 @@ export default function CalendarPage() {
   );
 }
 
-/* 모바일 리스트 뷰 */
-function MobileListView({
+/* 모바일 리스트 뷰 — 렌더 분기 도입 전까지 미사용 (lint 무시 패턴 `_`) */
+function _MobileListView({
   events,
   onEventClick,
 }: {

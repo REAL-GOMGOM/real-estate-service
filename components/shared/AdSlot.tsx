@@ -13,7 +13,7 @@ interface AdSlotProps {
   label?: string;
 }
 
-export function AdSlot({ type, slotId, label = '광고' }: AdSlotProps) {
+export function AdSlot({ type: _type, slotId, label = '광고' }: AdSlotProps) {
   const publisherId = process.env.NEXT_PUBLIC_ADSENSE_CLIENT;
   const isProduction = process.env.NODE_ENV === 'production';
   const hasAdSense = Boolean(publisherId && slotId);

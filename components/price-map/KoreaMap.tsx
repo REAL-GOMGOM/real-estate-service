@@ -119,7 +119,7 @@ interface DistrictData {
   direction: 'up' | 'down' | 'flat';
 }
 
-export default function KoreaMap({ regions, onRegionClick, tradeType = 'sale' }: KoreaMapProps) {
+export default function KoreaMap({ regions, onRegionClick: _onRegionClick, tradeType = 'sale' }: KoreaMapProps) {
   const [provinceGeo, setProvinceGeo] = useState<GeoFeature[] | null>(null);
   const [municipalGeo, setMunicipalGeo] = useState<GeoFeature[] | null>(null);
   const [hoveredCode, setHoveredCode] = useState<string | null>(null);
