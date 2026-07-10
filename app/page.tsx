@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { cacheLife } from 'next/cache';
 import { Space_Grotesk } from 'next/font/google';
 import {
   BarChart3, TrendingUp, CalendarDays, Target, MapPin, FileText, Search,
@@ -94,6 +95,22 @@ function fmtPostDate(d: Date): string {
   return `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/**
+ * 칼럼 피드 — 캐시 경계.
+ * Cache Components 에서 비캐시 DB 접근은 프리렌더 오류가 되므로
+ * subscription-api 와 동일하게 'use cache' + cacheLife 로 감싼다.
+ * 실패 시 빈 배열 → 호출부에서 표본 폴백.
+ */
+async function getLandingFeed(): Promise<FeedItem[]> {
+  'use cache';
+  cacheLife('hours');
+  try {
+    return await getRecentPublishedPostsForFeed(5);
+  } catch {
+    return [];
+  }
+}
+
 /** 카드 공통 헤더 (제목 + 우측 링크) */
 function CardHeader({ title, moreHref, moreLabel }: { title: string; moreHref?: string; moreLabel?: string }) {
   return (
@@ -117,11 +134,8 @@ export default async function HomePage() {
     .map(toSubscription) as unknown as Sub[];
   const subs: Sub[] = real.length ? real : SAMPLE_SUBS;
 
-  // 칼럼 — 최근 발행 5건 (fail-open: DB 오류 시 표본)
-  let feed: FeedItem[] = [];
-  try {
-    feed = await getRecentPublishedPostsForFeed(5);
-  } catch { /* 프리렌더/DB 오류 시 표본 사용 */ }
+  // 칼럼 — 최근 발행 5건 (캐시 경계 통과, 실패 시 표본)
+  const feed = await getLandingFeed();
   const featured = feed[0]
     ? {
         category: feed[0].categoryName ?? '칼럼',
