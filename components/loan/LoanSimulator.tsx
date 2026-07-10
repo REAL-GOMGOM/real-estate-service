@@ -196,8 +196,11 @@ export default function LoanSimulator() {
               대출 시뮬레이터
             </h1>
           </div>
+          {/* 탭별 금리 기준 안내 — 정부대출은 공사 공시(분기), 은행대출은 금감원 공시 실시간 조회 */}
           <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
-            한국주택금융공사 공시 금리 기준 ({LAST_UPDATED})
+            {activeTab === 'policy'
+              ? `한국주택금융공사 공시 금리 기준 (${LAST_UPDATED})`
+              : '금융감독원 은행별 상품 공시 금리 · 조회 시점 최신 반영'}
           </p>
         </div>
 
