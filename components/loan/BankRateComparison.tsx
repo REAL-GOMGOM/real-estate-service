@@ -143,7 +143,8 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
 
   useEffect(() => { fetchRates(); }, []);
 
-  const banks = data?.banks ?? [];
+  // useMemo 랩 — 매 렌더마다 새 배열 생성으로 하위 useMemo deps 가 흔들리는 것 방지
+  const banks = useMemo(() => data?.banks ?? [], [data]);
 
   // 선택된 은행/상품의 금리 범위 조회
   const selectedRateRange = useMemo(() => {

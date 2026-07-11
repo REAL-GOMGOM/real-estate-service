@@ -45,6 +45,13 @@ const PERIOD_OPTIONS = [
   { label: '1년',   months: 12 },
 ];
 
+// 단지명 전국 검색 대상 — 주요 서울/경기 구 (불변 상수라 모듈 스코프)
+const SEARCH_DISTRICTS = [
+  '강남구', '서초구', '송파구', '용산구', '마포구', '성동구',
+  '영등포구', '양천구', '강동구', '광진구', '동작구',
+  '성남시 분당구', '과천시', '하남시', '용인시 수지구',
+];
+
 function ChartContent() {
   const searchParams  = useSearchParams();
   const districtParam = searchParams.get('district');
@@ -91,13 +98,7 @@ function ChartContent() {
     }
   }, []);
 
-  // 단지명 전국 검색 — 주요 서울/경기 구에 병렬 호출
-  const SEARCH_DISTRICTS = [
-    '강남구', '서초구', '송파구', '용산구', '마포구', '성동구',
-    '영등포구', '양천구', '강동구', '광진구', '동작구',
-    '성남시 분당구', '과천시', '하남시', '용인시 수지구',
-  ];
-
+  // 단지명 전국 검색 — SEARCH_DISTRICTS(모듈 상수)에 병렬 호출
   const searchByAptName = useCallback(async (aptName: string) => {
     if (aptName.length < 2) return;
     setIsLoading(true);
@@ -129,11 +130,17 @@ function ChartContent() {
     const district = districtParam ?? '강남구';
     setActiveDistrict(district);
     fetchApiData(district, selectedPeriod);
+    // 의도: districtParam 변경에만 반응. selectedPeriod 를 deps에 넣으면
+    // 기간 변경 시 아래 전용 효과와 이중 fetch 발생. fetchApiData 는 useCallback([]) 안정.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [districtParam]);
 
   // 기간 변경 시 재호출
   useEffect(() => {
     fetchApiData(activeDistrict, selectedPeriod);
+    // 의도: selectedPeriod 변경에만 반응. activeDistrict 를 deps에 넣으면
+    // 단지 검색(setActiveDistrict) 직후 재fetch가 검색 결과를 덮어쓰는 회귀 발생.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPeriod]);
 
   const sourceData = apiData ?? MOCK_DATA;

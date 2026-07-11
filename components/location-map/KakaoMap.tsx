@@ -247,6 +247,9 @@ export default function KakaoMap({
     };
     zoomHandlerRef.current = handler;
     window.kakao.maps.event.addListener(mapRef.current, 'zoom_changed', handler);
+    // 의도: 지도 인스턴스 최초 1회 생성. deps(mapConfig·render*·applyZoomLevel) 추가 시
+    // 데이터 변경마다 지도가 재생성됨 — 마커·학교 갱신은 아래 전용 효과(renderMarkers 등)가 담당.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // locations 변경 시 마커 재생성

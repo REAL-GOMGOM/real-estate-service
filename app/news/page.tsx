@@ -130,6 +130,9 @@ export default function NewsPage() {
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                       {/* 썸네일 또는 카테고리 아이콘 */}
                       {item.thumbnail ? (
+                        // RSS 썸네일 = 외부 임의 도메인이라 next/image remotePatterns 등록 불가
+                        // + onError 숨김 폴백이 next/image 와 비호환 → <img> 유지 (문서화된 예외)
+                        // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={item.thumbnail}
                           alt=""

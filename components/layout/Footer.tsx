@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { CookieSettingsButton } from './CookieSettingsButton';
 
 const FOOTER_LINKS = {
@@ -24,7 +25,7 @@ export default function Footer() {
           {/* 브랜드 */}
           <div style={{ gridColumn: 'span 2' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-              <img src="/logo.png" alt="내집" width={40} height={40} style={{ objectFit: 'contain' }} />
+              <Image src="/logo.png" alt="내집" width={40} height={40} style={{ objectFit: 'contain' }} />
               <span style={{ fontWeight: 800, fontSize: '18px', color: 'var(--text-strong)' }}>내집 <span style={{ fontWeight: 400, fontSize: '12px', color: 'var(--text-dim)' }}>My.ZIP</span></span>
             </div>
             <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: '1.8' }}>
