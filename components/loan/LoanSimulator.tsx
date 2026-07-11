@@ -10,6 +10,7 @@ import {
 } from '@/lib/loan-products';
 import { Calculator, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Info, Landmark, Building2, Search, X, Loader2 } from 'lucide-react';
 import { findDistrictByLawdCd } from '@/lib/district-codes';
+import { summarizeAptTxns, type AptPriceSummary } from '@/lib/apt-price-summary';
 import { AptAutocomplete, type ApartmentSearchResult } from '@/components/search/AptAutocomplete';
 import RateTrendCard from './RateTrendCard';
 import {
@@ -86,29 +87,52 @@ export default function LoanSimulator() {
   // 단지 검색
   const [showSearch, setShowSearch] = useState(false);
   const [priceLoading, setPriceLoading] = useState(false);
-  const [selectedApt, setSelectedApt] = useState<{ name: string; district: string; count: number; avg: number } | null>(null);
+  const [selectedApt, setSelectedApt] = useState<{
+    name: string; district: string; count: number; avg: number;
+    summary: AptPriceSummary | null;
+    selArea: number | null; // 선택 평형 (null = 전체 평균)
+  } | null>(null);
   const [priceEdited, setPriceEdited] = useState(false);
 
   async function handleSelectApt(apt: ApartmentSearchResult) {
     const district = findDistrictByLawdCd(apt.lawdCd) ?? apt.sigungu;
     setPriceLoading(true);
     setPriceEdited(false);
-    setSelectedApt({ name: apt.name, district, count: 0, avg: 0 });
+    setSelectedApt({ name: apt.name, district, count: 0, avg: 0, summary: null, selArea: null });
     try {
       const res = await fetch(`/api/transactions?aptId=${encodeURIComponent(apt.id)}&months=3`);
       const data = await res.json();
       const txns = data?.data?.[0]?.transactions;
-      if (txns && txns.length > 0) {
-        const prices = txns.map((t: { price: number }) => t.price);
-        const avg = Math.round(prices.reduce((a: number, b: number) => a + b, 0) / prices.length);
-        setHousePrice(avg);
-        setSelectedApt({ name: apt.name, district, count: txns.length, avg });
+      const summary = txns ? summarizeAptTxns(txns) : null;
+      if (summary) {
+        // 기본 적용 = 최다 거래 평형 (평형 혼합 통합 평균은 대표성이 없음)
+        setHousePrice(summary.best.avg);
+        setSelectedApt({
+          name: apt.name, district,
+          count: summary.best.count, avg: summary.best.avg,
+          summary, selArea: summary.best.area,
+        });
       }
     } catch { /* 조회 실패 시 매매가 유지 */ }
     finally {
       setPriceLoading(false);
       setShowSearch(false);
     }
+  }
+
+  /** 평형 칩 선택 — area=null 이면 전체 평균 적용 */
+  function applyAreaGroup(area: number | null) {
+    if (!selectedApt?.summary) return;
+    const s = selectedApt.summary;
+    const g = area === null ? null : s.groups.find((x) => x.area === area);
+    setHousePrice(g ? g.avg : s.totalAvg);
+    setPriceEdited(false);
+    setSelectedApt({
+      ...selectedApt,
+      avg: g ? g.avg : s.totalAvg,
+      count: g ? g.count : s.totalCount,
+      selArea: g ? g.area : null,
+    });
   }
 
   // Debounced numeric inputs
@@ -292,14 +316,46 @@ export default function LoanSimulator() {
                   <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{selectedApt.district}</span>
                 </div>
                 <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', margin: '0 0 8px' }}>
-                  최근 3개월 실거래 평균가 적용 중
+                  {selectedApt.summary ? `${selectedApt.summary.periodLabel} 실거래 평균가 적용 중` : '실거래 평균가 적용 중'}
                 </p>
                 {priceLoading ? (
                   <Loader2 size={14} style={{ color: 'var(--accent)', animation: 'spin 1s linear infinite' }} />
                 ) : selectedApt.count > 0 && (
                   <div style={{ borderTop: '1px solid var(--accent-border, rgba(196,101,74,0.2))', paddingTop: 8 }}>
+                    {/* 평형 선택 칩 — 평형 혼합 단지의 통합 평균 문제 해소 */}
+                    {selectedApt.summary && selectedApt.summary.groups.length > 1 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                        {selectedApt.summary.groups.map((g) => (
+                          <button
+                            key={g.area}
+                            onClick={() => applyAreaGroup(g.area)}
+                            style={{
+                              padding: '4px 10px', borderRadius: 8, fontSize: 12, cursor: 'pointer',
+                              fontWeight: selectedApt.selArea === g.area ? 700 : 500,
+                              color: selectedApt.selArea === g.area ? '#fff' : 'var(--text-secondary)',
+                              backgroundColor: selectedApt.selArea === g.area ? 'var(--accent)' : 'var(--bg-card)',
+                              border: '1px solid ' + (selectedApt.selArea === g.area ? 'var(--accent)' : 'var(--border)'),
+                            }}
+                          >
+                            {g.area}㎡ · {g.count}건
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => applyAreaGroup(null)}
+                          style={{
+                            padding: '4px 10px', borderRadius: 8, fontSize: 12, cursor: 'pointer',
+                            fontWeight: selectedApt.selArea === null ? 700 : 500,
+                            color: selectedApt.selArea === null ? '#fff' : 'var(--text-dim)',
+                            backgroundColor: selectedApt.selArea === null ? 'var(--accent)' : 'var(--bg-card)',
+                            border: '1px solid ' + (selectedApt.selArea === null ? 'var(--accent)' : 'var(--border)'),
+                          }}
+                        >
+                          전체 {selectedApt.summary.totalCount}건
+                        </button>
+                      </div>
+                    )}
                     <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontFamily: MONO }}>
-                      거래 {selectedApt.count}건 평균 &middot;{' '}
+                      {selectedApt.selArea !== null ? `${selectedApt.selArea}㎡ ` : ''}거래 {selectedApt.count}건 평균 &middot;{' '}
                     </span>
                     <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--accent)', fontFamily: MONO }}>
                       {fmtWon(selectedApt.avg)}
@@ -342,7 +398,7 @@ export default function LoanSimulator() {
               <p style={{ fontSize: 12, marginBottom: 6, margin: '0 0 6px' , color: priceEdited ? 'var(--text-muted)' : '#2E7A4C' }}>
                 {priceEdited
                   ? '\u270F\uFE0F 매매가가 직접 입력 값으로 변경되었습니다'
-                  : `\u2705 ${selectedApt.name}의 최근 3개월 실거래 평균가(${fmtWon(selectedApt.avg)})가 자동 입력되었습니다. 직접 수정도 가능합니다.`}
+                  : `\u2705 ${selectedApt.name}${selectedApt.selArea !== null ? ` ${selectedApt.selArea}㎡` : ''}의 ${selectedApt.summary ? `${selectedApt.summary.periodLabel} ` : ''}실거래 평균가(${fmtWon(selectedApt.avg)})가 자동 입력되었습니다. 직접 수정도 가능합니다.`}
               </p>
             )}
             <input

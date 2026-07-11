@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { AptAutocomplete, type ApartmentSearchResult } from '@/components/search/AptAutocomplete';
 import { findDistrictByLawdCd } from '@/lib/district-codes';
+import { summarizeAptTxns, type AptPriceSummary } from '@/lib/apt-price-summary';
 import RateTrendCard from './RateTrendCard';
 import {
   simulateBankLoan,
@@ -106,26 +107,49 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
   // 단지 검색 — 최근 3개월 실거래 평균가를 매매가에 적용 (정부대출 탭과 동일 UX)
   const [showSearch, setShowSearch] = useState(false);
   const [priceLoading, setPriceLoading] = useState(false);
-  const [selectedApt, setSelectedApt] = useState<{ name: string; district: string; count: number; avg: number } | null>(null);
+  const [selectedApt, setSelectedApt] = useState<{
+    name: string; district: string; count: number; avg: number;
+    summary: AptPriceSummary | null;
+    selArea: number | null; // 선택 평형 (null = 전체 평균)
+  } | null>(null);
 
   async function handleSelectApt(apt: ApartmentSearchResult) {
     const district = findDistrictByLawdCd(apt.lawdCd) ?? apt.sigungu;
     setPriceLoading(true);
-    setSelectedApt({ name: apt.name, district, count: 0, avg: 0 });
+    setSelectedApt({ name: apt.name, district, count: 0, avg: 0, summary: null, selArea: null });
     try {
       const res = await fetch(`/api/transactions?aptId=${encodeURIComponent(apt.id)}&months=3`);
       const json = await res.json();
-      const txns: { price: number }[] | undefined = json?.data?.[0]?.transactions;
-      if (txns && txns.length > 0) {
-        const avg = Math.round(txns.reduce((a, t) => a + t.price, 0) / txns.length);
-        setHousePrice(avg);
-        setSelectedApt({ name: apt.name, district, count: txns.length, avg });
+      const txns: { area: number; price: number; date: string }[] | undefined = json?.data?.[0]?.transactions;
+      const summary = txns ? summarizeAptTxns(txns) : null;
+      if (summary) {
+        // 기본 적용 = 최다 거래 평형 (정부대출 탭과 동일 정책)
+        setHousePrice(summary.best.avg);
+        setSelectedApt({
+          name: apt.name, district,
+          count: summary.best.count, avg: summary.best.avg,
+          summary, selArea: summary.best.area,
+        });
       }
     } catch { /* 조회 실패 시 매매가 유지 */ }
     finally {
       setPriceLoading(false);
       setShowSearch(false);
     }
+  }
+
+  /** 평형 칩 선택 — area=null 이면 전체 평균 적용 */
+  function applyAreaGroup(area: number | null) {
+    if (!selectedApt?.summary) return;
+    const s = selectedApt.summary;
+    const g = area === null ? null : s.groups.find((x) => x.area === area);
+    setHousePrice(g ? g.avg : s.totalAvg);
+    setSelectedApt({
+      ...selectedApt,
+      avg: g ? g.avg : s.totalAvg,
+      count: g ? g.count : s.totalCount,
+      selArea: g ? g.area : null,
+    });
   }
 
   async function fetchRates() {
@@ -337,9 +361,44 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
               {priceLoading ? (
                 <Loader2 size={14} style={{ color: 'var(--accent)', animation: 'spin 1s linear infinite' }} />
               ) : selectedApt.count > 0 ? (
-                <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', margin: 0 }}>
-                  최근 3개월 {selectedApt.count}건 평균 {fmtWon(selectedApt.avg)} 적용 중
-                </p>
+                <>
+                  <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', margin: 0 }}>
+                    {selectedApt.summary?.periodLabel ?? '최근 3개월'}
+                    {selectedApt.selArea !== null ? ` · ${selectedApt.selArea}㎡` : ''} {selectedApt.count}건 평균 {fmtWon(selectedApt.avg)} 적용 중
+                  </p>
+                  {/* 평형 선택 칩 — 평형 혼합 단지의 통합 평균 문제 해소 */}
+                  {selectedApt.summary && selectedApt.summary.groups.length > 1 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                      {selectedApt.summary.groups.map((g) => (
+                        <button
+                          key={g.area}
+                          onClick={() => applyAreaGroup(g.area)}
+                          style={{
+                            padding: '4px 10px', borderRadius: 8, fontSize: 12, cursor: 'pointer',
+                            fontWeight: selectedApt.selArea === g.area ? 700 : 500,
+                            color: selectedApt.selArea === g.area ? '#fff' : 'var(--text-secondary)',
+                            backgroundColor: selectedApt.selArea === g.area ? 'var(--accent)' : 'var(--bg-card)',
+                            border: '1px solid ' + (selectedApt.selArea === g.area ? 'var(--accent)' : 'var(--border)'),
+                          }}
+                        >
+                          {g.area}㎡ · {g.count}건
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => applyAreaGroup(null)}
+                        style={{
+                          padding: '4px 10px', borderRadius: 8, fontSize: 12, cursor: 'pointer',
+                          fontWeight: selectedApt.selArea === null ? 700 : 500,
+                          color: selectedApt.selArea === null ? '#fff' : 'var(--text-dim)',
+                          backgroundColor: selectedApt.selArea === null ? 'var(--accent)' : 'var(--bg-card)',
+                          border: '1px solid ' + (selectedApt.selArea === null ? 'var(--accent)' : 'var(--border)'),
+                        }}
+                      >
+                        전체 {selectedApt.summary.totalCount}건
+                      </button>
+                    </div>
+                  )}
+                </>
               ) : (
                 <p style={{ fontSize: 12, color: 'var(--text-dim)', margin: 0 }}>
                   최근 3개월 실거래가 없어 매매가를 직접 입력해주세요
