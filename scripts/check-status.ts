@@ -6,6 +6,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { neon } from '@neondatabase/serverless';
+import { DISTRICT_CODE } from '../lib/district-codes';
+import { DISTRICT_GROUPS } from '../lib/district-groups';
 
 const envPath = path.join(process.cwd(), '.env.local');
 if (fs.existsSync(envPath)) {
@@ -30,9 +32,22 @@ async function main() {
   for (const r of highs) {
     console.log(`   ${r.source === 'seed' ? '시드' : '봇  '}: ${Number(r.c).toLocaleString()}행 · ${r.d}개 구`);
   }
+  // 2026-07-11 전국 확장 — 완료 기준을 DISTRICT_GROUPS 전체로 갱신,
+  // 누락 구는 이름까지 출력해 시드 재개 대상을 바로 알 수 있게 한다.
   const seedDistricts = highs.find((r) => r.source === 'seed');
   if (seedDistricts) {
-    console.log(`   → 시드 ${Number(seedDistricts.d) >= 75 ? '✅ 완료 (75개 구 전체)' : `⚠️ 부분 완료 (${seedDistricts.d}/75개 구 — seed-apt-highs.ts --execute 로 재개)`}`);
+    const expected = DISTRICT_GROUPS.flatMap((g) => g.districts.filter((d) => DISTRICT_CODE[d]));
+    const seeded = (await sql`
+      SELECT DISTINCT district FROM apt_highs WHERE source = 'seed'
+    `) as { district: string }[];
+    const seededSet = new Set(seeded.map((r) => r.district));
+    const missing = expected.filter((d) => !seededSet.has(d));
+    if (missing.length === 0) {
+      console.log(`   → 시드 ✅ 완료 (전국 ${expected.length}개 구 전체)`);
+    } else {
+      console.log(`   → 시드 ⚠️ 부분 완료 (${expected.length - missing.length}/${expected.length}개 구) — 누락: ${missing.join(', ')}`);
+      console.log('     재개: npx tsx scripts/seed-apt-highs.ts --execute --regions <권역>');
+    }
   }
 
   // ② 봇 일일 push (daily_stats 최신)
