@@ -1,9 +1,14 @@
 import 'server-only';
-import { and, count, desc, eq } from 'drizzle-orm';
+import { and, count, desc, eq, ilike, or } from 'drizzle-orm';
 import { getBlogDb } from '@/lib/db/client';
 import { posts, categories } from '@/lib/db/schema';
 
 const SLUG_PATTERN = /^[a-z0-9-]{1,200}$/;
+
+/** ILIKE 패턴 이스케이프 — % _ \ 무력화 (검색어를 리터럴로 취급) */
+function escapeLike(input: string): string {
+  return input.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -47,9 +52,12 @@ const PER_PAGE = 12;
 export async function getPublishedPosts({
   page = 1,
   categorySlug,
+  q,
 }: {
   page?: number;
   categorySlug?: string;
+  /** 제목·요약 검색어 (2026-07-12) — 공백 트림, 100자 컷 */
+  q?: string;
 } = {}): Promise<PostsPage> {
   const safePage = Math.max(1, Math.floor(page));
   const offset = (safePage - 1) * PER_PAGE;
@@ -75,6 +83,14 @@ export async function getPublishedPosts({
 
   const conditions = [eq(posts.status, 'published')];
   if (categoryId) conditions.push(eq(posts.categoryId, categoryId));
+
+  // 검색 — 제목·요약 ILIKE (escapeLike 로 %_\ 이스케이프)
+  const query = (q ?? '').trim().slice(0, 100);
+  if (query) {
+    const pattern = `%${escapeLike(query)}%`;
+    const searchCond = or(ilike(posts.title, pattern), ilike(posts.excerpt, pattern));
+    if (searchCond) conditions.push(searchCond);
+  }
 
   const [rows, totalRows] = await Promise.all([
     db

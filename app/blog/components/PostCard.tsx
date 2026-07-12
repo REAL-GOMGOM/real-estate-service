@@ -36,7 +36,17 @@ export function PostCard({ post }: { post: PublicPostListItem }) {
           />
         </div>
       ) : (
-        <div className="aspect-[16/9] bg-gradient-to-br from-slate-100 to-slate-50" />
+        /* 커버 미지정 → 글별 자동 생성 OG 이미지 재사용 (발행 파이프라인 무변경) */
+        <div className="relative aspect-[16/9] overflow-hidden bg-slate-100">
+          <Image
+            src={`/blog/${post.slug}/opengraph-image`}
+            alt=""
+            fill
+            unoptimized
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            className="object-cover transition group-hover:scale-105"
+          />
+        </div>
       )}
 
       <div className="flex flex-1 flex-col p-4">
