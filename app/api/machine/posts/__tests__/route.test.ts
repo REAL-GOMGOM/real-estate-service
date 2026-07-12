@@ -220,6 +220,41 @@ describe('POST /api/machine/posts', () => {
     expect(insertedSlug()).toBe('real-title');
   });
 
+  it('categorySlug 매핑 성공 → categoryId insert + 응답 category 이름', async () => {
+    selectLimitMock.mockResolvedValueOnce([{ id: UUID, name: '시장 동향' }]);
+    insertReturningMock.mockResolvedValue([{ id: UUID, slug: 'cat-post' }]);
+
+    const res = await POST(
+      postReq({ title: 'Cat Post', mdxContent: '# 본문', categorySlug: 'market-trends' }) as never,
+    );
+    expect(res.status).toBe(201);
+    const json = await res.json();
+    expect(json.category).toBe('시장 동향');
+    const values = (insertValuesMock.mock.calls[0] as unknown[])[0] as { categoryId: string | null };
+    expect(values.categoryId).toBe(UUID);
+  });
+
+  it('미존재 categorySlug → fail-open (카테고리 없이 발행, category null)', async () => {
+    selectLimitMock.mockResolvedValueOnce([]);
+    insertReturningMock.mockResolvedValue([{ id: UUID, slug: 'no-cat' }]);
+
+    const res = await POST(
+      postReq({ title: 'No Cat', mdxContent: '# 본문', categorySlug: 'unknown-slug' }) as never,
+    );
+    expect(res.status).toBe(201);
+    const json = await res.json();
+    expect(json.category).toBeNull();
+    const values = (insertValuesMock.mock.calls[0] as unknown[])[0] as { categoryId: string | null };
+    expect(values.categoryId).toBeNull();
+  });
+
+  it('categorySlug 형식 위반 → 400', async () => {
+    const res = await POST(
+      postReq({ title: 'Bad', mdxContent: '# 본문', categorySlug: 'BAD SLUG!!' }) as never,
+    );
+    expect(res.status).toBe(400);
+  });
+
   it('제공된 slug 가 기존과 충돌 시 → suffix 부여', async () => {
     selectWhereThenMock.mockReturnValue([{ slug: 'my-slug' }]); // base 충돌
     insertReturningMock.mockResolvedValue([{ id: UUID, slug: 'x' }]);

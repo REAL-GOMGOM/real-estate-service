@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { getBlogDb } from '@/lib/db/client';
-import { posts } from '@/lib/db/schema';
+import { posts, categories } from '@/lib/db/schema';
+import { eq } from 'drizzle-orm';
 import { verifyMachineToken } from '@/lib/api/machine-auth';
 import { validateMdxStrict } from '@/lib/blog/validate-mdx';
 import { normalizeSlug, slugifyBase, ensureUniqueSlug } from '@/lib/blog/slug';
@@ -13,7 +14,8 @@ import { SITE_URL } from '@/lib/site';
  *
  * POST /api/machine/posts
  *   인증: Authorization: Bearer <MACHINE_PUBLISH_SECRET>
- *   body: { title, mdxContent, excerpt?, categoryId?, coverImageUrl? }
+ *   body: { title, mdxContent, excerpt?, categoryId?, categorySlug?, coverImageUrl? }
+ *   - categorySlug: 'market-trends'|'subscription'|'loan'|'tax'|'policy' — 서버에서 id 변환 (봇용)
  *   → MDX 검증 통과 시 status:'draft' 로 insert. 발행은 PATCH 로 별도.
  *
  * 응답: { id, slug, previewUrl }
@@ -30,10 +32,14 @@ type CreateBody = {
   mdxContent: string;
   excerpt: string | null;
   categoryId: string | null;
+  /** 카테고리 slug — categoryId 대신 사용 가능 (봇은 UUID 를 모름). 2026-07-12 */
+  categorySlug: string | null;
   coverImageUrl: string | null;
   // 클라이언트(봇)가 제안하는 slug. 정규화 후 base 로 사용, 비면 title 폴백.
   slug: string | null;
 };
+
+const CATEGORY_SLUG_PATTERN = /^[a-z0-9-]{1,50}$/;
 
 function parseBody(raw: unknown): CreateBody | { error: string } {
   if (typeof raw !== 'object' || raw === null) {
@@ -45,6 +51,7 @@ function parseBody(raw: unknown): CreateBody | { error: string } {
   const mdxContent = typeof b.mdxContent === 'string' ? b.mdxContent : '';
   const excerpt = typeof b.excerpt === 'string' ? b.excerpt.trim() : '';
   const categoryId = typeof b.categoryId === 'string' ? b.categoryId.trim() : '';
+  const categorySlug = typeof b.categorySlug === 'string' ? b.categorySlug.trim() : '';
   const coverImageUrl =
     typeof b.coverImageUrl === 'string' ? b.coverImageUrl.trim() : '';
   const slug = typeof b.slug === 'string' ? b.slug.trim() : '';
@@ -61,12 +68,16 @@ function parseBody(raw: unknown): CreateBody | { error: string } {
   if (categoryId && !UUID_PATTERN.test(categoryId)) {
     return { error: 'categoryId 형식이 올바르지 않습니다' };
   }
+  if (categorySlug && !CATEGORY_SLUG_PATTERN.test(categorySlug)) {
+    return { error: 'categorySlug 형식이 올바르지 않습니다' };
+  }
 
   return {
     title,
     mdxContent,
     excerpt: excerpt.length > 0 ? excerpt : null,
     categoryId: categoryId.length > 0 ? categoryId : null,
+    categorySlug: categorySlug.length > 0 ? categorySlug : null,
     coverImageUrl: coverImageUrl.length > 0 ? coverImageUrl : null,
     slug: slug.length > 0 ? slug : null,
   };
@@ -106,6 +117,22 @@ export async function POST(req: NextRequest) {
     // 클라이언트 slug 도 신뢰 불가 입력 → normalizeSlug 로 안전화 후 사용.
     const base = normalizeSlug(parsed.slug ?? '') || slugifyBase(parsed.title);
     const slug = await ensureUniqueSlug(base);
+
+    // categorySlug → id 변환 (미존재 slug 는 fail-open: 카테고리 없이 발행 진행)
+    let categoryId = parsed.categoryId;
+    let categoryName: string | null = null;
+    if (!categoryId && parsed.categorySlug) {
+      const cat = await getBlogDb()
+        .select({ id: categories.id, name: categories.name })
+        .from(categories)
+        .where(eq(categories.slug, parsed.categorySlug))
+        .limit(1);
+      if (cat.length > 0) {
+        categoryId = cat[0].id;
+        categoryName = cat[0].name;
+      }
+    }
+
     const result = await getBlogDb()
       .insert(posts)
       .values({
@@ -114,7 +141,7 @@ export async function POST(req: NextRequest) {
         excerpt: parsed.excerpt,
         mdxContent: parsed.mdxContent,
         coverImageUrl: parsed.coverImageUrl,
-        categoryId: parsed.categoryId,
+        categoryId,
         status: 'draft',
         publishedAt: null,
       })
@@ -133,7 +160,8 @@ export async function POST(req: NextRequest) {
     const previewUrl = `${SITE_URL}/preview/${row.id}?token=${token}`;
 
     return NextResponse.json(
-      { id: row.id, slug: row.slug, previewUrl },
+      // category: 봇이 초안 카드에 "📂 카테고리" 표시용 (미매핑이면 null)
+      { id: row.id, slug: row.slug, previewUrl, category: categoryName },
       { status: 201 },
     );
   } catch (e) {

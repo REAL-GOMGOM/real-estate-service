@@ -13,6 +13,7 @@ import NotableDealsCard from '@/components/landing/NotableDealsCard';
 import HomeCalculator from '@/components/landing/HomeCalculator';
 import NewsCard from '@/components/landing/NewsCard';
 import RealValueCard from '@/components/landing/RealValueCard';
+import AddToHomeCta from '@/components/landing/AddToHomeCta';
 import { toSubscription } from '@/lib/adapters';
 import { fetchSubscriptions } from '@/lib/subscription-api';
 import { getTopLocations } from '@/lib/region-data';
@@ -425,6 +426,9 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* ── 홈 화면 바로가기 CTA (2026-07-12) — 미지원·이미 설치 시 자동 숨김 ── */}
+      <AddToHomeCta />
 
       {/* ── 텔레그램 CTA ── */}
       <section style={{ background: BLUE }}>
