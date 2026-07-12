@@ -25,13 +25,13 @@ const ROTATION = [
 ] as const;
 
 const BASE_YEAR = 2020;
-const COMPARE_YEAR = 2025;
 
 interface RowView { icon: string; label: string; accent: string; pct: number | null; }
 
 interface CardState {
   aptName: string;
   district: string;
+  compareYear: number;
   krwPct: number | null;
   usdPct: number | null;
   btcPct: number | null;
@@ -40,7 +40,7 @@ interface CardState {
 
 /** 표본 — API 도착 전 즉시 표시용 (은마 2020→2025 실측 근사) */
 const SAMPLE: CardState = {
-  aptName: '은마아파트', district: '강남구',
+  aptName: '은마아파트', district: '강남구', compareYear: 2025,
   krwPct: 73.7, usdPct: 39.5, btcPct: -82.6, goldPct: -38.5,
 };
 
@@ -56,9 +56,10 @@ export default function RealValueCard() {
     let cancelled = false;
     // 날짜 계산은 클라이언트에서만 (hydration 안전)
     const pick = ROTATION[new Date().getDate() % ROTATION.length];
+    const compareYear = new Date().getFullYear(); // 연중 시세 (2026-07-12 최신화)
     const params = new URLSearchParams({
       district: pick.district, aptName: pick.aptName,
-      baseYear: String(BASE_YEAR), compareYear: String(COMPARE_YEAR),
+      baseYear: String(BASE_YEAR), compareYear: String(compareYear),
     });
     fetch(`/api/dollar?${params}`)
       .then((r) => (r.ok ? r.json() : null))
@@ -73,7 +74,7 @@ export default function RealValueCard() {
         const baseAu     = d.basePriceKrw    !== null && d.baseGoldKrwPerGram    ? (d.basePriceKrw    * 10000) / d.baseGoldKrwPerGram    : null;
         const compareAu  = d.comparePriceKrw !== null && d.compareGoldKrwPerGram ? (d.comparePriceKrw * 10000) / d.compareGoldKrwPerGram : null;
         setCard({
-          aptName: pick.aptName, district: pick.district,
+          aptName: pick.aptName, district: pick.district, compareYear,
           krwPct,
           usdPct:  pctOf(baseUsd, compareUsd),
           btcPct:  pctOf(baseBtc, compareBtc),
@@ -86,7 +87,7 @@ export default function RealValueCard() {
 
   const insight = buildRealValueInsight({
     aptName: card.aptName, district: card.district,
-    baseYear: BASE_YEAR, compareYear: COMPARE_YEAR,
+    baseYear: BASE_YEAR, compareYear: card.compareYear,
     krwPct: card.krwPct, usdPct: card.usdPct, btcPct: card.btcPct, goldPct: card.goldPct,
   });
 
@@ -115,7 +116,7 @@ export default function RealValueCard() {
       <div style={{ marginBottom: 10 }}>
         <span style={{ fontSize: 15, fontWeight: 800, color: INK }}>{card.aptName}</span>
         <span style={{ fontSize: 11.5, color: '#8A94A8', marginLeft: 7 }}>
-          {card.district} · {BASE_YEAR}→{COMPARE_YEAR}
+          {card.district} · {BASE_YEAR}→{card.compareYear}
         </span>
       </div>
 

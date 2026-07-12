@@ -15,6 +15,7 @@ interface Props {
   baseYear:   number;
   compareYear: number;
   onRemove:   (id: string) => void;
+  onAreaChange: (id: string, area: number | null) => void;
 }
 
 // ── 포맷 헬퍼 ──────────────────────────────────────
@@ -78,10 +79,11 @@ interface RowProps {
   pct:         number | null;
   baseYear:    number;
   compareYear: number;
+  compareYtd?: boolean;
   unavailable?: boolean;
 }
 
-function AssetRow({ icon, label, accent, baseVal, compareVal, pct, baseYear, compareYear, unavailable }: RowProps) {
+function AssetRow({ icon, label, accent, baseVal, compareVal, pct, baseYear, compareYear, compareYtd, unavailable }: RowProps) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: '12px',
@@ -121,7 +123,7 @@ function AssetRow({ icon, label, accent, baseVal, compareVal, pct, baseYear, com
 
       {/* 비교년 값 */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: '10px', color: 'var(--text-dim)', marginBottom: '2px' }}>{compareYear}년</p>
+        <p style={{ fontSize: '10px', color: 'var(--text-dim)', marginBottom: '2px' }}>{compareYear}년{compareYtd ? ' 연중' : ''}</p>
         <p style={{
           fontSize: '15px', fontWeight: 800,
           fontFamily: 'Roboto Mono, monospace', color: 'var(--text-primary)',
@@ -143,8 +145,9 @@ function AssetRow({ icon, label, accent, baseVal, compareVal, pct, baseYear, com
 }
 
 // ── 단지 카드 ──────────────────────────────────────
-function DollarCard({ entry, baseYear, compareYear, onRemove }: {
-  entry: ApartmentEntry; baseYear: number; compareYear: number; onRemove: (id: string) => void;
+function DollarCard({ entry, baseYear, compareYear, onRemove, onAreaChange }: {
+  entry: ApartmentEntry; baseYear: number; compareYear: number;
+  onRemove: (id: string) => void; onAreaChange: (id: string, area: number | null) => void;
 }) {
   const [copied,  setCopied]  = useState(false);
   const [sharing, setSharing] = useState(false);
@@ -239,7 +242,9 @@ function DollarCard({ entry, baseYear, compareYear, onRemove }: {
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '4px' }}>
         <div>
           <span style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>{entry.aptName}</span>
-          <span style={{ fontSize: '12px', color: 'var(--text-dim)', marginLeft: '8px' }}>{entry.district}</span>
+          <span style={{ fontSize: '12px', color: 'var(--text-dim)', marginLeft: '8px' }}>
+            {entry.district}{entry.area != null ? ` · 전용 ${entry.area}㎡` : ''}
+          </span>
         </div>
         <button onClick={() => onRemove(entry.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-dim)', padding: '4px', flexShrink: 0 }}>
           <X size={15} />
@@ -272,27 +277,60 @@ function DollarCard({ entry, baseYear, compareYear, onRemove }: {
         </div>
       )}
 
+      {/* 평형 선택 칩 — 전 평형 통합 평균의 왜곡 해소 (2026-07-12) */}
+      {(entry.data!.availableAreas?.length ?? 0) > 1 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '8px 0 4px' }}>
+          <button
+            onClick={() => onAreaChange(entry.id, null)}
+            style={{
+              padding: '4px 10px', borderRadius: 8, fontSize: 12, cursor: 'pointer',
+              fontWeight: entry.area == null ? 700 : 500,
+              color: entry.area == null ? '#fff' : 'var(--text-dim)',
+              backgroundColor: entry.area == null ? 'var(--accent)' : 'var(--bg-overlay)',
+              border: '1px solid ' + (entry.area == null ? 'var(--accent)' : 'var(--border)'),
+            }}
+          >
+            전체
+          </button>
+          {entry.data!.availableAreas!.map((a) => (
+            <button
+              key={a.area}
+              onClick={() => onAreaChange(entry.id, a.area)}
+              style={{
+                padding: '4px 10px', borderRadius: 8, fontSize: 12, cursor: 'pointer',
+                fontWeight: entry.area === a.area ? 700 : 500,
+                color: entry.area === a.area ? '#fff' : 'var(--text-secondary)',
+                backgroundColor: entry.area === a.area ? 'var(--accent)' : 'var(--bg-overlay)',
+                border: '1px solid ' + (entry.area === a.area ? 'var(--accent)' : 'var(--border)'),
+              }}
+            >
+              {a.area}㎡{a.count > 0 ? ` · ${a.count}건` : ''}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* 자산별 비교 행 */}
       <AssetRow
         icon="₩" label="원화" accent="#94A3B8"
         baseVal={hasBase    ? fmtKrw(basePriceKrw!)    : '—'}
         compareVal={hasCompare ? fmtKrw(comparePriceKrw!) : '—'}
         pct={krwPct}
-        baseYear={baseYear} compareYear={compareYear}
+        baseYear={baseYear} compareYear={compareYear} compareYtd={entry.data!.compareIsYtd}
       />
       <AssetRow
         icon="$" label="달러" accent="#FCD34D"
         baseVal={baseUsd    ? fmtUsd(basePriceKrw!,    baseExchangeRate)    : '—'}
         compareVal={compareUsd ? fmtUsd(comparePriceKrw!, compareExchangeRate) : '—'}
         pct={usdPct}
-        baseYear={baseYear} compareYear={compareYear}
+        baseYear={baseYear} compareYear={compareYear} compareYtd={entry.data!.compareIsYtd}
       />
       <AssetRow
         icon="₿" label="비트" accent="#F0A24B"
         baseVal={baseBtc    !== null ? fmtBtc(basePriceKrw!,    baseBtcKrw!)    : (baseBtcKrw    === null ? 'BTC 미존재' : '—')}
         compareVal={compareBtc !== null ? fmtBtc(comparePriceKrw!, compareBtcKrw!) : (compareBtcKrw === null ? 'BTC 미존재' : '—')}
         pct={btcPct}
-        baseYear={baseYear} compareYear={compareYear}
+        baseYear={baseYear} compareYear={compareYear} compareYtd={entry.data!.compareIsYtd}
         unavailable={btcUnavail}
       />
       <AssetRow
@@ -300,7 +338,7 @@ function DollarCard({ entry, baseYear, compareYear, onRemove }: {
         baseVal={baseGrams    !== null ? fmtGold(basePriceKrw!,    baseGoldKrwPerGram!)    : '—'}
         compareVal={compareGrams !== null ? fmtGold(comparePriceKrw!, compareGoldKrwPerGram!) : '—'}
         pct={goldPct}
-        baseYear={baseYear} compareYear={compareYear}
+        baseYear={baseYear} compareYear={compareYear} compareYtd={entry.data!.compareIsYtd}
       />
 
       {/* 공유 버튼 */}
@@ -326,7 +364,7 @@ function DollarCard({ entry, baseYear, compareYear, onRemove }: {
 }
 
 // ── 메인 컴포넌트 ──────────────────────────────────
-export default function ApartmentDollarTable({ entries, baseYear, compareYear, onRemove }: Props) {
+export default function ApartmentDollarTable({ entries, baseYear, compareYear, onRemove, onAreaChange }: Props) {
   if (entries.length === 0) {
     return (
       <div style={{ padding: '60px 24px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '14px' }}>
@@ -395,6 +433,7 @@ export default function ApartmentDollarTable({ entries, baseYear, compareYear, o
             baseYear={baseYear}
             compareYear={compareYear}
             onRemove={onRemove}
+            onAreaChange={onAreaChange}
           />
         );
       })}

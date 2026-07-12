@@ -37,7 +37,8 @@ function makeId(district: string, aptName: string) {
 // ────────────────────────────────────────────────
 export default function DollarPageClient() {
   const [baseYear,    setBaseYear]    = useState(2020);
-  const [compareYear, setCompareYear] = useState(2025);
+  // 기본 비교 연도 = 현재 연도 (연중 시세) — 2026-07-12 최신화
+  const [compareYear, setCompareYear] = useState(() => new Date().getFullYear());
   // 현재 시세 — 티커 표시용 (table BTC/금 열은 entry.data의 역사적 시세 사용)
   const [, setBtcKrw]         = useState<number | null>(null);
   const [, setGoldKrwPerGram] = useState<number | null>(null);
@@ -54,12 +55,14 @@ export default function DollarPageClient() {
     aptName:  string,
     base:     number,
     compare:  number,
+    area:     number | null = null,
   ): Promise<{ data: DollarApiResult | null; error: string | null }> => {
     const params = new URLSearchParams({
       district, aptName,
       baseYear:    String(base),
       compareYear: String(compare),
     });
+    if (area !== null) params.set('area', String(area));
     try {
       const res  = await fetch(`/api/dollar?${params}`);
       const json = await res.json();
@@ -81,7 +84,7 @@ export default function DollarPageClient() {
 
     // 병렬 fetch
     const results = await Promise.allSettled(
-      list.map((e) => fetchEntry(e.district, e.aptName, base, compare)),
+      list.map((e) => fetchEntry(e.district, e.aptName, base, compare, e.area ?? null)),
     );
 
     setEntries(list.map((e, i) => {
@@ -122,6 +125,15 @@ export default function DollarPageClient() {
   // 단지 삭제
   function handleRemove(id: string) {
     setEntries((prev) => prev.filter((e) => e.id !== id));
+  }
+
+  // 평형 변경 — 해당 단지만 재조회 (null = 전체 평균)
+  async function handleAreaChange(id: string, area: number | null) {
+    const target = entries.find((e) => e.id === id);
+    if (!target) return;
+    setEntries((prev) => prev.map((e) => e.id === id ? { ...e, area, loading: true } : e));
+    const { data, error } = await fetchEntry(target.district, target.aptName, baseYear, compareYear, area);
+    setEntries((prev) => prev.map((e) => e.id === id ? { ...e, loading: false, data, error } : e));
   }
 
   // 환율 — 데이터 로드 전에는 정적 테이블 값 사용 (하드코딩 방지)
@@ -195,13 +207,14 @@ export default function DollarPageClient() {
           baseYear={baseYear}
           compareYear={compareYear}
           onRemove={handleRemove}
+          onAreaChange={handleAreaChange}
         />
 
         {/* 데이터 출처 */}
         <p style={{
           marginTop: '32px', fontSize: '11px', color: 'var(--text-dim)', lineHeight: 1.8,
         }}>
-          ※ 아파트 가격: 국토교통부 실거래가 공개시스템 Q4(10~12월) 평균가 기준 &nbsp;|&nbsp;
+          ※ 아파트 가격: 국토교통부 실거래가 — 과거 연도는 Q4(10~12월) 평균, 올해는 최근 3개월 신고분 평균(연중) &nbsp;|&nbsp;
           환율: {rateEntry ? '한국은행 ECOS' : '정적 연간 평균 (한국은행 키 미설정)'} &nbsp;|&nbsp;
           BTC·금: CoinGecko 실시간 (PAX Gold 추적) &nbsp;|&nbsp;
           ₿·Au 환산은 현재 시세 기준으로 과거 연도에 적용되어 참고용입니다.

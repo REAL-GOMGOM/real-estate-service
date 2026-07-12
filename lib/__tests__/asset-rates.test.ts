@@ -29,8 +29,13 @@ describe('getBtcKrw', () => {
     expect(getBtcKrw(2025)).toBe(130_000_000);
   });
 
+  it('현재 연도(2026)는 연중 잠정치 존재 — API가 라이브 시세로 덮어씀', () => {
+    expect(getBtcKrw(2026)).toBe(100_000_000);
+  });
+
   it('테이블 범위 밖 미래 연도 → null (실시간 시세로 보완하는 설계)', () => {
-    expect(getBtcKrw(2026)).toBeNull();
+    expect(getBtcKrw(2027)).toBeNull();
+    expect(getBtcKrw(2030)).toBeNull();
   });
 });
 
@@ -45,7 +50,11 @@ describe('getGoldKrwPerGram', () => {
     expect(getGoldKrwPerGram(2025)).toBe(195_000);
   });
 
+  it('현재 연도(2026)는 연중 잠정치 존재 — API가 라이브 시세로 덮어씀', () => {
+    expect(getGoldKrwPerGram(2026)).toBe(197_000);
+  });
+
   it('테이블 범위 밖 → null', () => {
-    expect(getGoldKrwPerGram(2026)).toBeNull();
+    expect(getGoldKrwPerGram(2027)).toBeNull();
   });
 });

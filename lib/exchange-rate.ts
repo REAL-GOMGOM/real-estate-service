@@ -16,6 +16,7 @@ const STATIC_ANNUAL_RATES: Record<number, number> = {
   2015: 1131, 2016: 1161, 2017: 1131, 2018: 1100, 2019: 1166,
   2020: 1180, 2021: 1144, 2022: 1292, 2023: 1306, 2024: 1363,
   2025: 1470,
+  2026: 1470,   // 연중 잠정 (전년 값 유지) — ECOS 키 설정 시 라이브 연중 평균이 우선, 연말 확정치로 교체
 };
 
 const BOK_ECOS_BASE = 'https://ecos.bok.or.kr/api/StatisticSearch';

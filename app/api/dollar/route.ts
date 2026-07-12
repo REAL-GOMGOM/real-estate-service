@@ -1,22 +1,26 @@
 import { NextRequest } from 'next/server';
 import { DISTRICT_CODE } from '@/lib/district-codes';
 import { getExchangeRates } from '@/lib/exchange-rate';
-import { getBtcKrw, getGoldKrwPerGram } from '@/lib/asset-rates';
+import { getBtcKrw, getGoldKrwPerGram, TROY_OZ_TO_GRAM } from '@/lib/asset-rates';
+import {
+  type DealRow,
+  monthsForYear,
+  fallbackMonths,
+  filterByArea,
+  availableAreas,
+  averagePrice,
+} from '@/lib/dollar-shared';
 
 const TRADE_API_BASE = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade';
-
-// Q4: 연도별 대표 거래 시점 (10·11·12월)
-const Q4_MONTHS    = ['10', '11', '12'];
-// Q4 데이터 없을 때 fallback: 상반기 포함 (01~09월)
-const FULL_MONTHS  = ['01', '02', '03', '04', '05', '06', '07', '08', '09'];
 
 /** 공백 제거 후 비교 — "래미안 대치팰리스" vs "래미안대치팰리스" 허용 */
 function normalize(s: string) {
   return s.replace(/\s/g, '');
 }
 
-function parseXmlPrices(xml: string, aptNameQuery: string): number[] {
-  const prices: number[] = [];
+/** XML → 단지 매칭 거래 {price, area} 목록 (2026-07-12: 평형 지원 위해 area 파싱 추가) */
+function parseXmlDeals(xml: string, aptNameQuery: string): DealRow[] {
+  const deals: DealRow[] = [];
   const items = xml.match(/<item>([\s\S]*?)<\/item>/g) ?? [];
   const normQuery = normalize(aptNameQuery);
 
@@ -26,21 +30,23 @@ function parseXmlPrices(xml: string, aptNameQuery: string): number[] {
 
     const aptNm     = get('aptNm');
     const normAptNm = normalize(aptNm);
-    // 정방향(API명이 쿼리를 포함) 또는 역방향(쿼리가 API명을 포함) 모두 허용
     if (!normAptNm.includes(normQuery) && !normQuery.includes(normAptNm)) continue;
 
     const price = parseInt(get('dealAmount').replace(/,/g, ''), 10);
-    if (!isNaN(price) && price > 0) prices.push(price);
+    const area  = parseFloat(get('excluUseAr'));
+    if (!isNaN(price) && price > 0) {
+      deals.push({ price, area: isNaN(area) ? 0 : area });
+    }
   }
-  return prices;
+  return deals;
 }
 
-async function fetchMonthAvg(
+async function fetchMonthDeals(
   lawdCd:   string,
   yyyymm:   string,
   aptName:  string,
   apiKey:   string,
-): Promise<number[]> {
+): Promise<DealRow[]> {
   const params = new URLSearchParams({
     LAWD_CD:   lawdCd,
     DEAL_YMD:  yyyymm,
@@ -57,15 +63,52 @@ async function fetchMonthAvg(
       next:   { revalidate: 86400 },
     });
     const xml = await res.text();
-    return parseXmlPrices(xml, aptName);
+    return parseXmlDeals(xml, aptName);
   } finally {
     clearTimeout(timeoutId);
   }
 }
 
-function average(prices: number[]): number | null {
-  if (prices.length === 0) return null;
-  return Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
+async function fetchYearDeals(
+  lawdCd: string, year: number, aptName: string, apiKey: string, now: Date,
+): Promise<DealRow[]> {
+  const primary = await Promise.allSettled(
+    monthsForYear(year, now).map((mm) => fetchMonthDeals(lawdCd, `${year}${mm}`, aptName, apiKey)),
+  );
+  let deals = primary.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
+  if (deals.length === 0) {
+    const fb = await Promise.allSettled(
+      fallbackMonths(year, now).map((mm) => fetchMonthDeals(lawdCd, `${year}${mm}`, aptName, apiKey)),
+    );
+    deals = fb.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
+  }
+  return deals;
+}
+
+/**
+ * 현재 연도 라이브 시세 — CoinGecko (BTC·PAXG, /api/crypto 와 동일 소스).
+ * BTC의 krw/usd 비율로 실시간 환율까지 도출. 실패 시 null (정적 잠정치 유지).
+ */
+async function fetchLiveRates(): Promise<{ btcKrw: number; goldKrwPerGram: number; usdKrw: number } | null> {
+  try {
+    const res = await fetch(
+      'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,pax-gold&vs_currencies=usd,krw',
+      { next: { revalidate: 300 } },
+    );
+    if (!res.ok) return null;
+    const json = await res.json();
+    const btcKrw  = json?.bitcoin?.krw;
+    const btcUsd  = json?.bitcoin?.usd;
+    const paxgKrw = json?.['pax-gold']?.krw;
+    if (!btcKrw || !btcUsd || !paxgKrw) return null;
+    return {
+      btcKrw,
+      goldKrwPerGram: paxgKrw / TROY_OZ_TO_GRAM,
+      usdKrw: btcKrw / btcUsd,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function GET(req: NextRequest) {
@@ -74,7 +117,9 @@ export async function GET(req: NextRequest) {
   const district    = searchParams.get('district') ?? '';
   const aptName     = searchParams.get('aptName')  ?? '';
   const baseYear    = parseInt(searchParams.get('baseYear')    ?? '2020', 10);
-  const compareYear = parseInt(searchParams.get('compareYear') ?? '2025', 10);
+  const compareYear = parseInt(searchParams.get('compareYear') ?? String(new Date().getFullYear()), 10);
+  const areaParam   = searchParams.get('area');
+  const area        = areaParam ? parseInt(areaParam, 10) : null;
 
   if (!district || !aptName) {
     return Response.json({ error: 'district, aptName 파라미터가 필요합니다' }, { status: 400 });
@@ -92,45 +137,53 @@ export async function GET(req: NextRequest) {
   }
   const apiKey = decodeURIComponent(rawKey);
 
-  // Q4 6개월 병렬 fetch (baseYear 3개월 + compareYear 3개월)
-  const q4Tasks = [
-    ...Q4_MONTHS.map((mm) => fetchMonthAvg(lawdCd, `${baseYear}${mm}`,    aptName, apiKey)),
-    ...Q4_MONTHS.map((mm) => fetchMonthAvg(lawdCd, `${compareYear}${mm}`, aptName, apiKey)),
-  ];
+  const now = new Date();
+  const curYear = now.getFullYear();
 
-  const q4Results = await Promise.allSettled(q4Tasks);
-  const q4Prices  = q4Results.map((r) => r.status === 'fulfilled' ? r.value : []);
-
-  let basePrices    = q4Prices.slice(0, 3).flat();
-  let comparePrices = q4Prices.slice(3, 6).flat();
-
-  // Q4에 해당 단지 거래 없으면 1~9월 전체로 fallback (연도별 독립 처리)
-  async function fullYearFallback(year: number): Promise<number[]> {
-    const results = await Promise.allSettled(
-      FULL_MONTHS.map((mm) => fetchMonthAvg(lawdCd, `${year}${mm}`, aptName, apiKey)),
-    );
-    return results.flatMap((r) => r.status === 'fulfilled' ? r.value : []);
-  }
-
-  if (basePrices.length === 0)    basePrices    = await fullYearFallback(baseYear);
-  if (comparePrices.length === 0) comparePrices = await fullYearFallback(compareYear);
-
-  const [rates] = await Promise.all([
-    getExchangeRates([baseYear, compareYear]),
+  const [baseDeals, compareDeals] = await Promise.all([
+    fetchYearDeals(lawdCd, baseYear, aptName, apiKey, now),
+    fetchYearDeals(lawdCd, compareYear, aptName, apiKey, now),
   ]);
+
+  // 평형 목록: 양 연도 등장 평형 합집합 (건수는 비교 연도 우선 표기용)
+  const areaMap = new Map<number, number>();
+  for (const { area: a, count } of availableAreas(compareDeals)) areaMap.set(a, count);
+  for (const { area: a } of availableAreas(baseDeals)) if (!areaMap.has(a)) areaMap.set(a, 0);
+  const areas = [...areaMap.entries()]
+    .map(([a, count]) => ({ area: a, count }))
+    .sort((x, y) => x.area - y.area);
+
+  const basePriceKrw    = averagePrice(filterByArea(baseDeals, area));
+  const comparePriceKrw = averagePrice(filterByArea(compareDeals, area));
+
+  const [rates, live] = await Promise.all([
+    getExchangeRates([baseYear, compareYear]),
+    (baseYear === curYear || compareYear === curYear) ? fetchLiveRates() : Promise.resolve(null),
+  ]);
+
+  // 현재 연도는 라이브 시세 우선 (연중 잠정 static 은 폴백)
+  const btcFor  = (y: number) => (y === curYear && live ? Math.round(live.btcKrw) : getBtcKrw(y));
+  const goldFor = (y: number) => (y === curYear && live ? Math.round(live.goldKrwPerGram) : getGoldKrwPerGram(y));
+  const rateFor = (y: number, fallback: number) =>
+    y === curYear && live ? Math.round(live.usdKrw) : (rates[y] ?? fallback);
 
   return Response.json({
     aptName,
     district,
     baseYear,
     compareYear,
-    basePriceKrw:          average(basePrices),
-    comparePriceKrw:       average(comparePrices),
-    baseExchangeRate:      rates[baseYear]    ?? 1180,
-    compareExchangeRate:   rates[compareYear] ?? 1470,
-    baseBtcKrw:            getBtcKrw(baseYear),
-    compareBtcKrw:         getBtcKrw(compareYear),
-    baseGoldKrwPerGram:    getGoldKrwPerGram(baseYear),
-    compareGoldKrwPerGram: getGoldKrwPerGram(compareYear),
+    basePriceKrw,
+    comparePriceKrw,
+    baseExchangeRate:      rateFor(baseYear, 1180),
+    compareExchangeRate:   rateFor(compareYear, 1470),
+    baseBtcKrw:            btcFor(baseYear),
+    compareBtcKrw:         btcFor(compareYear),
+    baseGoldKrwPerGram:    goldFor(baseYear),
+    compareGoldKrwPerGram: goldFor(compareYear),
+    // 2026-07-12 추가 — 평형 선택·연중 라벨용
+    area,
+    availableAreas: areas,
+    baseIsYtd:    baseYear === curYear,
+    compareIsYtd: compareYear === curYear,
   });
 }

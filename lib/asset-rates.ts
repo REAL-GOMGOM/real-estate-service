@@ -24,6 +24,7 @@ export const STATIC_BTC_KRW: Record<number, number> = {
   2023:   37_000_000,
   2024:   89_000_000,
   2025:  130_000_000,   // 연간 평균 추정 (실시간 시세로 보완)
+  2026:  100_000_000,   // 연중 잠정 (26.07 실시간 근사) — 현재 연도는 API가 라이브 시세로 덮어씀
 };
 
 export const STATIC_GOLD_KRW_PER_GRAM: Record<number, number> = {
@@ -48,6 +49,7 @@ export const STATIC_GOLD_KRW_PER_GRAM: Record<number, number> = {
   2023:  86_000,
   2024: 112_000,
   2025: 195_000,   // 연간 평균 추정 (실시간 시세로 보완)
+  2026: 197_000,   // 연중 잠정 (26.07 실시간 근사) — 현재 연도는 API가 라이브 시세로 덮어씀
 };
 
 /** 1 troy oz = 31.1035g */

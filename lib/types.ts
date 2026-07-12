@@ -14,6 +14,11 @@ export interface DollarApiResult {
   compareBtcKrw:         number | null;
   baseGoldKrwPerGram:    number | null;
   compareGoldKrwPerGram: number | null;
+  // 2026-07-12 — 평형 선택·연중(현재 연도) 라벨
+  area?:           number | null;
+  availableAreas?: { area: number; count: number }[];
+  baseIsYtd?:      boolean;
+  compareIsYtd?:   boolean;
 }
 
 export interface ApartmentEntry {
@@ -23,6 +28,8 @@ export interface ApartmentEntry {
   data:     DollarApiResult | null;
   loading:  boolean;
   error:    string | null;
+  /** 선택 평형 (반올림 ㎡) — null/undefined = 전체 평균 */
+  area?:    number | null;
 }
 
 export interface LocationScore {
