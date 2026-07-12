@@ -62,6 +62,7 @@ const SHORTCUTS = [
 const TOP_LOCATIONS = getTopLocations(5).map((t) => ({
   rank: t.rank,
   region: t.name,
+  id: t.id, // 클릭 → /region/{id} 상세 이동 (2026-07-12)
   score: Math.max(0, Math.min(100, Math.round(((5 - t.score) / 4) * 100))),
 }));
 
@@ -315,7 +316,8 @@ export default async function HomePage() {
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1, justifyContent: 'center' }}>
                 {TOP_LOCATIONS.map((t) => (
-                  <div key={t.region}>
+                  /* 행 전체 클릭 → 지역 상세 이동 (2026-07-12) */
+                  <Link key={t.region} href={`/region/${t.id}`} style={{ display: 'block', color: 'inherit', textDecoration: 'none' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                         <span style={{
@@ -325,12 +327,12 @@ export default async function HomePage() {
                         }}>{t.rank}</span>
                         <span style={{ fontWeight: 600, fontSize: 13.5 }}>{t.region}</span>
                       </div>
-                      <span style={{ fontFamily: 'var(--font-sg)', fontWeight: 700, fontSize: 13, color: '#BFD0FF' }}>{t.score}</span>
+                      <span style={{ fontFamily: 'var(--font-sg)', fontWeight: 700, fontSize: 13, color: '#BFD0FF' }}>{t.score} →</span>
                     </div>
                     <div style={{ height: 5, borderRadius: 99, background: 'rgba(255,255,255,0.12)', overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${t.score}%`, borderRadius: 99, background: 'linear-gradient(90deg, #6E9BFF, #A9C2FF)' }} />
                     </div>
-                  </div>
+                  </Link>
                 ))}
               </div>
             </div>
