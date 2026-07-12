@@ -189,5 +189,10 @@ export async function GET(req: NextRequest) {
     availableAreas: areas,
     baseIsYtd:    baseYear === curYear,
     compareIsYtd: compareYear === curYear,
+  }, {
+    // CDN 캐시 (Fluid CPU 절감, 2026-07-12): 동일 쿼리 반복 조회를 엣지에서 처리.
+    // s-maxage 는 라이브 시세 주기(300s)와 동기 — "실시간" 표방과 어긋나지 않는 상한.
+    // 성공 응답에만 부여 (400/500 은 캐시하면 장애가 고착됨).
+    headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=3600' },
   });
 }
