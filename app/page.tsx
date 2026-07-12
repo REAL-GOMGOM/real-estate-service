@@ -12,6 +12,7 @@ import RecentDealsCard from '@/components/landing/RecentDealsCard';
 import NotableDealsCard from '@/components/landing/NotableDealsCard';
 import HomeCalculator from '@/components/landing/HomeCalculator';
 import NewsCard from '@/components/landing/NewsCard';
+import RealValueCard from '@/components/landing/RealValueCard';
 import { toSubscription } from '@/lib/adapters';
 import { fetchSubscriptions } from '@/lib/subscription-api';
 import { getTopLocations } from '@/lib/region-data';
@@ -162,7 +163,7 @@ export default async function HomePage() {
         .nz-band{display:grid;gap:16px;align-items:stretch}
         .nz-band>*{min-width:0}
         .nz-band1{grid-template-columns:repeat(3,minmax(0,1fr))}
-        .nz-band2{grid-template-columns:minmax(0,1fr) minmax(0,1.35fr)}
+        .nz-band2{grid-template-columns:minmax(0,1fr) minmax(0,1.25fr) minmax(0,0.95fr)}
         .nz-band3{grid-template-columns:minmax(0,1fr) minmax(0,1.25fr) minmax(0,1fr)}
         @media (max-width:1080px){
           .nz-band1,.nz-band2,.nz-band3{grid-template-columns:minmax(0,1fr)}
@@ -334,10 +335,11 @@ export default async function HomePage() {
             </div>
           </div>
 
-          {/* 밴드 2 — 국평 시세 · 내집마련 계산기 */}
+          {/* 밴드 2 — 국평 시세 · 내집마련 계산기 · 실질 가치 (2026-07-12 추가) */}
           <div className="nz-band nz-band2">
             <MarketLive />
             <HomeCalculator />
+            <RealValueCard />
           </div>
 
           {/* 밴드 3 — 청약 · 칼럼 · 뉴스 */}
