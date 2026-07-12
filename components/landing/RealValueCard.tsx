@@ -15,13 +15,20 @@ import { buildRealValueInsight } from '@/lib/real-value-shared';
 const INK = '#0B1524';
 
 /** 일별 로테이션 풀 — /dollar 인기 단지 서브셋 */
+// /dollar 기본 목록(Eric 선정)과 동기 — 한강맨션은 2026 거래 부재(재건축 이주)로
+// 홈 로테이션에서만 제외 (비교 불가 시 표본 폴백돼 어제와 같은 카드가 떠버림)
+// 한강맨션(재건축 이주)·올림픽파크포레온(2024 입주 — 2020 기준값 없음)은
+// 비교 불가 시 표본 폴백돼 홈 로테이션에서만 제외
 const ROTATION = [
-  { district: '강남구', aptName: '은마아파트' },
-  { district: '서초구', aptName: '반포자이' },
-  { district: '송파구', aptName: '헬리오시티' },
-  { district: '강남구', aptName: '도곡렉슬' },
-  { district: '마포구', aptName: '마포래미안푸르지오' },
-  { district: '서초구', aptName: '아크로리버파크' },
+  { district: '강남구', aptName: '은마아파트',        label: '은마아파트' },
+  { district: '강남구', aptName: '신현대',            label: '압구정 신현대' },
+  { district: '강남구', aptName: '도곡렉슬',          label: '도곡렉슬' },
+  { district: '송파구', aptName: '잠실엘스',          label: '잠실엘스' },
+  { district: '송파구', aptName: '리센츠',            label: '리센츠' },
+  { district: '송파구', aptName: '트리지움',          label: '트리지움' },
+  { district: '송파구', aptName: '헬리오시티',        label: '헬리오시티' },
+  { district: '마포구', aptName: '마포래미안푸르지오', label: '마포래미안푸르지오' },
+  { district: '용산구', aptName: '신동아',            label: '서빙고 신동아' },
 ] as const;
 
 const BASE_YEAR = 2020;
@@ -74,7 +81,7 @@ export default function RealValueCard() {
         const baseAu     = d.basePriceKrw    !== null && d.baseGoldKrwPerGram    ? (d.basePriceKrw    * 10000) / d.baseGoldKrwPerGram    : null;
         const compareAu  = d.comparePriceKrw !== null && d.compareGoldKrwPerGram ? (d.comparePriceKrw * 10000) / d.compareGoldKrwPerGram : null;
         setCard({
-          aptName: pick.aptName, district: pick.district, compareYear,
+          aptName: pick.label, district: pick.district, compareYear,
           krwPct,
           usdPct:  pctOf(baseUsd, compareUsd),
           btcPct:  pctOf(baseBtc, compareBtc),

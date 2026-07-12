@@ -16,14 +16,17 @@ export interface DollarApiResult {
   compareGoldKrwPerGram: number | null;
   // 2026-07-12 — 평형 선택·연중(현재 연도) 라벨
   area?:           number | null;
-  availableAreas?: { area: number; count: number }[];
+  availableAreas?: { area: number; count: number; baseCount: number }[];
   baseIsYtd?:      boolean;
   compareIsYtd?:   boolean;
 }
 
 export interface ApartmentEntry {
   id:       string;
+  /** MOLIT 검색어 (aptNm 매칭용) */
   aptName:  string;
+  /** 표시명 — 없으면 aptName (예: 쿼리 "신현대" / 표시 "압구정 신현대") */
+  label?:   string;
   district: string;
   data:     DollarApiResult | null;
   loading:  boolean;

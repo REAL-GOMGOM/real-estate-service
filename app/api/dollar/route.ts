@@ -145,12 +145,16 @@ export async function GET(req: NextRequest) {
     fetchYearDeals(lawdCd, compareYear, aptName, apiKey, now),
   ]);
 
-  // 평형 목록: 양 연도 등장 평형 합집합 (건수는 비교 연도 우선 표기용)
-  const areaMap = new Map<number, number>();
-  for (const { area: a, count } of availableAreas(compareDeals)) areaMap.set(a, count);
-  for (const { area: a } of availableAreas(baseDeals)) if (!areaMap.has(a)) areaMap.set(a, 0);
+  // 평형 목록: 양 연도 합집합 + 연도별 건수 — 칩에서 "비교 가능 여부"를 보여주기 위함
+  const areaMap = new Map<number, { count: number; baseCount: number }>();
+  for (const { area: a, count } of availableAreas(compareDeals)) areaMap.set(a, { count, baseCount: 0 });
+  for (const { area: a, count } of availableAreas(baseDeals)) {
+    const e = areaMap.get(a);
+    if (e) e.baseCount = count;
+    else areaMap.set(a, { count: 0, baseCount: count });
+  }
   const areas = [...areaMap.entries()]
-    .map(([a, count]) => ({ area: a, count }))
+    .map(([a, { count, baseCount }]) => ({ area: a, count, baseCount }))
     .sort((x, y) => x.area - y.area);
 
   const basePriceKrw    = averagePrice(filterByArea(baseDeals, area));

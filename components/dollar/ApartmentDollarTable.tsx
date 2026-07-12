@@ -180,7 +180,7 @@ function DollarCard({ entry, baseYear, compareYear, onRemove, onAreaChange }: {
 
   // 공유·해석용 스탯 (표시 포맷 그대로)
   const stats: RealValueCardStats = {
-    aptName: entry.aptName, district: entry.district,
+    aptName: entry.label ?? entry.aptName, district: entry.district,
     baseYear, compareYear,
     krwPct, usdPct, btcPct, goldPct,
     krwBase:  hasBase    ? fmtKrw(basePriceKrw!)    : undefined,
@@ -214,11 +214,11 @@ function DollarCard({ entry, baseYear, compareYear, onRemove, onAreaChange }: {
         { icon: 'Au', label: '금',   accent: '#C9A227', baseVal: stats.goldBase ?? '—', compareVal: stats.goldCompare ?? '—', pct: goldPct },
       ].filter((r) => r.baseVal !== '—' || r.compareVal !== '—');
       const blob = await buildRealValueShareImage({
-        apt: entry.aptName, district: entry.district,
+        apt: entry.label ?? entry.aptName, district: entry.district,
         baseYear, compareYear, rows, insight,
       });
       if (blob) {
-        await shareOrDownloadImage(blob, `내집_실질가치_${entry.aptName}.png`, `${entry.aptName} 실질 가치 비교`);
+        await shareOrDownloadImage(blob, `내집_실질가치_${entry.label ?? entry.aptName}.png`, `${entry.label ?? entry.aptName} 실질 가치 비교`);
       }
     } catch { /* 사용자 공유 취소 등 무시 */ }
     finally { setSharing(false); }
@@ -241,7 +241,7 @@ function DollarCard({ entry, baseYear, compareYear, onRemove, onAreaChange }: {
       {/* 카드 헤더 */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '4px' }}>
         <div>
-          <span style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>{entry.aptName}</span>
+          <span style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>{entry.label ?? entry.aptName}</span>
           <span style={{ fontSize: '12px', color: 'var(--text-dim)', marginLeft: '8px' }}>
             {entry.district}{entry.area != null ? ` · 전용 ${entry.area}㎡` : ''}
           </span>
@@ -272,8 +272,10 @@ function DollarCard({ entry, baseYear, compareYear, onRemove, onAreaChange }: {
           backgroundColor: 'var(--bg-overlay)', border: '1px dashed var(--border)',
           fontSize: '12.5px', color: 'var(--text-muted)', lineHeight: 1.55,
         }}>
-          ℹ️ {baseYear}년 또는 {compareYear}년에 이 단지의 실거래(Q4 평균)가 없어 비교할 수 없어요.
-          위에서 <b>기준·비교 연도를 바꿔보세요</b>.
+          ℹ️ {entry.area != null ? `전용 ${entry.area}㎡는 ` : '이 단지는 '}
+          {!hasBase && !hasCompare ? `${baseYear}년·${compareYear}년 모두` : !hasBase ? `${baseYear}년(기준)에` : `${compareYear}년(비교)에`}
+          {' '}실거래가 없어 비교할 수 없어요.
+          {entry.area != null ? <> 다른 <b>평형</b>을 고르거나 </> : ' '}위에서 <b>기준·비교 연도를 바꿔보세요</b>.
         </div>
       )}
 
@@ -292,21 +294,29 @@ function DollarCard({ entry, baseYear, compareYear, onRemove, onAreaChange }: {
           >
             전체
           </button>
-          {entry.data!.availableAreas!.map((a) => (
-            <button
-              key={a.area}
-              onClick={() => onAreaChange(entry.id, a.area)}
-              style={{
-                padding: '4px 10px', borderRadius: 8, fontSize: 12, cursor: 'pointer',
-                fontWeight: entry.area === a.area ? 700 : 500,
-                color: entry.area === a.area ? '#fff' : 'var(--text-secondary)',
-                backgroundColor: entry.area === a.area ? 'var(--accent)' : 'var(--bg-overlay)',
-                border: '1px solid ' + (entry.area === a.area ? 'var(--accent)' : 'var(--border)'),
-              }}
-            >
-              {a.area}㎡{a.count > 0 ? ` · ${a.count}건` : ''}
-            </button>
-          ))}
+          {entry.data!.availableAreas!.map((a) => {
+            const comparable = a.count > 0 && a.baseCount > 0; // 양쪽 연도 모두 거래 존재
+            const active = entry.area === a.area;
+            return (
+              <button
+                key={a.area}
+                onClick={() => onAreaChange(entry.id, a.area)}
+                title={comparable ? undefined : '한쪽 연도에만 거래가 있어 비교가 어려운 평형이에요'}
+                style={{
+                  padding: '4px 10px', borderRadius: 8, fontSize: 12, cursor: 'pointer',
+                  fontWeight: active ? 700 : 500,
+                  color: active ? '#fff' : comparable ? 'var(--text-secondary)' : 'var(--text-dim)',
+                  backgroundColor: active ? 'var(--accent)' : 'var(--bg-overlay)',
+                  border: active
+                    ? '1px solid var(--accent)'
+                    : comparable ? '1px solid var(--border)' : '1px dashed var(--border)',
+                  opacity: active || comparable ? 1 : 0.55,
+                }}
+              >
+                {a.area}㎡{a.count > 0 ? ` · ${a.count}건` : ' · 기준년만'}
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -389,7 +399,7 @@ export default function ApartmentDollarTable({ entries, baseYear, compareYear, o
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
                 <Loader2 size={16} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent)' }} />
-                <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>{entry.aptName}</span>
+                <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>{entry.label ?? entry.aptName}</span>
                 <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>{entry.district}</span>
               </div>
               {[...Array(4)].map((_, i) => (
@@ -413,7 +423,7 @@ export default function ApartmentDollarTable({ entries, baseYear, compareYear, o
               display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px',
             }}>
               <div>
-                <p style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>{entry.aptName}</p>
+                <p style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>{entry.label ?? entry.aptName}</p>
                 <p style={{ fontSize: '13px', color: 'var(--text-dim)', lineHeight: 1.5 }}>
                   {entry.error ?? '데이터 없음'} — 선택한 연도에 거래가 없거나 단지명이 다를 수 있어요.
                 </p>

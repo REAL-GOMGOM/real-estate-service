@@ -11,17 +11,20 @@ import type { ApartmentEntry, DollarApiResult } from '@/lib/types';
 // ────────────────────────────────────────────────
 // 인기 단지 초기 목록
 // ────────────────────────────────────────────────
+// 2026-07-12 Eric 선정 — 상징성 있는 구축·재건축 대장 위주.
+// aptName 은 MOLIT aptNm 매칭 검색어 (봇 DB 실표기 검증), label 은 표시명.
 const POPULAR_APARTMENTS = [
   { district: '강남구', aptName: '은마아파트' },
-  { district: '강남구', aptName: '래미안대치팰리스' },
+  { district: '강남구', aptName: '신현대',   label: '압구정 신현대' },
   { district: '강남구', aptName: '도곡렉슬' },
-  { district: '서초구', aptName: '반포자이' },
-  { district: '서초구', aptName: '아크로리버파크' },
-  { district: '송파구', aptName: '헬리오시티' },
+  { district: '송파구', aptName: '잠실엘스' },
   { district: '송파구', aptName: '리센츠' },
+  { district: '송파구', aptName: '트리지움' },
+  { district: '송파구', aptName: '헬리오시티' },
+  { district: '강동구', aptName: '올림픽파크포레온' },
   { district: '마포구', aptName: '마포래미안푸르지오' },
-  { district: '용산구', aptName: '파크타워' },
-  { district: '성동구', aptName: '서울숲트리마제' },
+  { district: '용산구', aptName: '한강맨션', label: '이촌 한강맨션' },
+  { district: '용산구', aptName: '신동아',   label: '서빙고 신동아' },
 ] as const;
 
 // re-export for sub-components
@@ -43,8 +46,9 @@ export default function DollarPageClient() {
   const [, setBtcKrw]         = useState<number | null>(null);
   const [, setGoldKrwPerGram] = useState<number | null>(null);
   const [entries,     setEntries]     = useState<ApartmentEntry[]>(() =>
-    POPULAR_APARTMENTS.map(({ district, aptName }) => ({
-      id: makeId(district, aptName), aptName, district,
+    POPULAR_APARTMENTS.map((a) => ({
+      id: makeId(a.district, a.aptName), aptName: a.aptName,
+      label: 'label' in a ? a.label : undefined, district: a.district,
       data: null, loading: true, error: null,
     })),
   );
