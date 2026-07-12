@@ -229,8 +229,10 @@ export default function Header() {
             */}
           </div>
 
-          {/* 모바일: 메뉴 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} className="lg:hidden">
+          {/* 모바일: 메뉴 — display 는 클래스로만 제어.
+              (인라인 display:flex 가 lg:hidden 미디어쿼리보다 우선해
+               데스크톱에 "눌러도 무반응인 유령 햄버거"가 뜨던 버그 — 2026-07-12) */}
+          <div className="flex items-center gap-2 lg:hidden">
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               style={{ padding: '8px', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
