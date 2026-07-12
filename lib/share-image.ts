@@ -273,6 +273,188 @@ export async function buildRankingShareImage(data: RankingShareData): Promise<Bl
   return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
 }
 
+// ── 실질 가치 비교 공유 카드 — 2026-07-12 ─────────────────────
+//
+// /dollar 단지 카드를 브랜드 이미지로. 4개 자산(원화·달러·BTC·금)의
+// 기준→비교 값 + 변동률 뱃지 + 해석 문장(최대 2줄 랩핑).
+
+export interface RealValueShareRow {
+  icon:    string;   // "₩" "$" "₿" "Au"
+  label:   string;   // "원화"
+  accent:  string;   // 아이콘 색
+  baseVal: string;
+  compareVal: string;
+  pct:     number | null;
+}
+
+export interface RealValueShareData {
+  apt:      string;
+  district: string;
+  baseYear: number;
+  compareYear: number;
+  rows:     RealValueShareRow[];
+  insight:  string | null;
+}
+
+export async function buildRealValueShareImage(data: RealValueShareData): Promise<Blob | null> {
+  const width = 900;
+  const rowH = 58;
+  const insightH = data.insight ? 96 : 0;
+  const height = 190 + data.rows.length * rowH + insightH + 100;
+
+  const canvas = document.createElement('canvas');
+  const scale = 2;
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.scale(scale, scale);
+
+  const font = (weight: number, size: number) =>
+    `${weight} ${size}px Pretendard, -apple-system, "Apple SD Gothic Neo", sans-serif`;
+
+  // 배경
+  const grad = ctx.createLinearGradient(0, 0, 0, height);
+  grad.addColorStop(0, '#FFFFFF');
+  grad.addColorStop(1, '#F3F6FC');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, width, height);
+
+  // 브랜드
+  ctx.fillStyle = '#1B4DDB';
+  ctx.font = font(800, 26);
+  ctx.fillText('내집', 48, 66);
+  ctx.fillStyle = '#8A94A8';
+  ctx.font = font(600, 16);
+  ctx.fillText('My.ZIP · 실질 가치 비교', 106, 66);
+
+  // 기간 뱃지 (우측 상단)
+  const period = `${data.baseYear} → ${data.compareYear}`;
+  ctx.font = font(700, 16);
+  const pw = ctx.measureText(period).width + 40;
+  ctx.fillStyle = '#EEF2FB';
+  roundRect(ctx, width - 48 - pw, 42, pw, 34, 17);
+  ctx.fill();
+  ctx.fillStyle = '#1B4DDB';
+  ctx.fillText(period, width - 48 - pw + 20, 65);
+
+  // 단지명 · 위치
+  ctx.fillStyle = '#14213D';
+  ctx.font = font(800, 36);
+  ctx.fillText(truncate(ctx, data.apt, width - 96), 48, 140);
+  ctx.fillStyle = '#64708A';
+  ctx.font = font(500, 18);
+  ctx.fillText(data.district, 48, 170);
+
+  // 자산 행
+  let y = 214;
+  for (const row of data.rows) {
+    // 아이콘 칩
+    ctx.fillStyle = `${row.accent}22`;
+    roundRect(ctx, 48, y - 24, 34, 34, 9);
+    ctx.fill();
+    ctx.fillStyle = row.accent;
+    ctx.font = font(800, 15);
+    ctx.fillText(row.icon, 48 + 17 - ctx.measureText(row.icon).width / 2, y - 2);
+
+    ctx.fillStyle = '#64708A';
+    ctx.font = font(700, 15);
+    ctx.fillText(row.label, 94, y - 2);
+
+    // 값: base → compare
+    ctx.fillStyle = '#3D4E6E';
+    ctx.font = font(700, 20);
+    const baseW = ctx.measureText(row.baseVal).width;
+    ctx.fillText(row.baseVal, 170, y);
+    ctx.fillStyle = '#B9C1D0';
+    ctx.fillText('→', 170 + baseW + 14, y);
+    ctx.fillStyle = '#14213D';
+    ctx.font = font(800, 20);
+    ctx.fillText(row.compareVal, 170 + baseW + 44, y);
+
+    // 변동률 뱃지 (우측 정렬)
+    if (row.pct !== null) {
+      const up = row.pct >= 0;
+      const txt = `${up ? '▲' : '▼'} ${Math.abs(row.pct).toFixed(1)}%`;
+      ctx.font = font(800, 17);
+      const tw = ctx.measureText(txt).width + 36;
+      ctx.fillStyle = up ? 'rgba(111,192,138,0.16)' : 'rgba(232,93,93,0.14)';
+      roundRect(ctx, width - 48 - tw, y - 22, tw, 32, 16);
+      ctx.fill();
+      ctx.fillStyle = up ? '#2E7A4C' : '#C92F2F';
+      ctx.fillText(txt, width - 48 - tw + 18, y);
+    }
+
+    // 행 구분선
+    ctx.strokeStyle = '#E9EDF5';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(48, y + 20);
+    ctx.lineTo(width - 48, y + 20);
+    ctx.stroke();
+
+    y += rowH;
+  }
+
+  // 해석 문장 박스
+  if (data.insight) {
+    const bx = 48;
+    const by = y + 4;
+    ctx.fillStyle = '#EEF2FB';
+    roundRect(ctx, bx, by, width - 96, 78, 14);
+    ctx.fill();
+    ctx.fillStyle = '#1B4DDB';
+    ctx.font = font(800, 16);
+    ctx.fillText('💡', bx + 20, by + 32);
+    ctx.fillStyle = '#2C3A55';
+    ctx.font = font(600, 16);
+    wrapText(ctx, data.insight, bx + 52, by + 32, width - 96 - 72, 26, 2);
+  }
+
+  // 푸터
+  ctx.strokeStyle = '#E4E9F2';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(48, height - 66);
+  ctx.lineTo(width - 48, height - 66);
+  ctx.stroke();
+  ctx.fillStyle = '#8A94A8';
+  ctx.font = font(500, 15);
+  ctx.fillText('출처 국토교통부 · 한국은행 ECOS · ₿·Au 환산은 참고용', 48, height - 32);
+  ctx.fillStyle = '#1B4DDB';
+  ctx.font = font(700, 15);
+  const rvUrl = 'naezipkorea.com/dollar';
+  ctx.fillText(rvUrl, width - 48 - ctx.measureText(rvUrl).width, height - 32);
+
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+}
+
+/** 단어 단위 줄바꿈 (maxLines 초과분은 말줄임) */
+function wrapText(
+  ctx: CanvasRenderingContext2D,
+  text: string, x: number, y: number,
+  maxW: number, lineH: number, maxLines: number,
+) {
+  const words = text.split(' ');
+  let line = '';
+  let lineNo = 0;
+  for (let i = 0; i < words.length; i++) {
+    const test = line ? `${line} ${words[i]}` : words[i];
+    if (ctx.measureText(test).width > maxW && line) {
+      if (lineNo === maxLines - 1) {
+        ctx.fillText(truncate(ctx, `${line} ${words.slice(i).join(' ')}`, maxW), x, y + lineNo * lineH);
+        return;
+      }
+      ctx.fillText(line, x, y + lineNo * lineH);
+      line = words[i];
+      lineNo++;
+    } else {
+      line = test;
+    }
+  }
+  if (line) ctx.fillText(line, x, y + lineNo * lineH);
+}
+
 /**
  * 공유 이미지 배포 공통 헬퍼 — navigator.share(files) 지원 시 네이티브 공유,
  * 아니면 a[download] 다운로드 폴백. (DealFeed·랭킹·주요거래 공용)

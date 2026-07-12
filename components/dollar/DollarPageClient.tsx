@@ -136,7 +136,7 @@ export default function DollarPageClient() {
       <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '48px 24px' }}>
 
         {/* 페이지 헤더 */}
-        <div style={{ marginBottom: '36px' }}>
+        <div style={{ marginBottom: '20px' }}>
           <h1 style={{ fontSize: 'clamp(22px, 4vw, 34px)', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '8px' }}>
             실질 가치 비교
           </h1>
@@ -144,6 +144,22 @@ export default function DollarPageClient() {
             아파트 매매가를 달러, 비트코인, 금으로 환산하여 실질 가치 변동을 분석합니다. 출처: 국토교통부, 한국은행
           </p>
         </div>
+
+        {/* 개념 안내 — 첫 방문자용 접이식 */}
+        <details style={{
+          marginBottom: '28px', padding: '14px 18px', borderRadius: '12px',
+          backgroundColor: 'var(--accent-bg)', border: '1px solid var(--border-light)',
+        }}>
+          <summary style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--accent)', cursor: 'pointer' }}>
+            💡 왜 금·비트코인으로 재나요?
+          </summary>
+          <p style={{ fontSize: '13px', lineHeight: 1.7, color: 'var(--text-secondary)', margin: '10px 0 0' }}>
+            집값이 올라도 <b>돈의 가치가 그만큼 떨어졌다면</b> 실제로 오른 걸까요?
+            원화 대신 달러·금·비트코인처럼 다른 잣대로 같은 아파트를 재보면,
+            상승분 중 얼마가 진짜 가치 상승이고 얼마가 화폐 가치 하락분인지 가늠할 수 있습니다.
+            예컨대 원화로 70% 올랐는데 금으로 재면 30% 줄었다면 — 금 보유자 입장에선 이 아파트가 오히려 싸진 셈입니다.
+          </p>
+        </details>
 
         {/* 가격 티커 (달러·비트코인·금 현황) */}
         <CryptoTicker
@@ -168,21 +184,10 @@ export default function DollarPageClient() {
         {/* 단지 추가 검색 */}
         <ApartmentSearch onAdd={handleAdd} loading={isAnyLoading} />
 
-        {/* 범례 */}
-        <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-dim)', marginRight: '4px' }}>변동 뱃지:</span>
-          {/* 달러 */}
-          <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(111,192,138,0.12)', color: '#2E7A4C' }}>달러 환산 이익</span>
-          <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(232,93,93,0.12)', color: '#E85D5D' }}>달러 환산 손실</span>
-          <span style={{ width: '1px', height: '14px', backgroundColor: 'var(--border)', display: 'inline-block' }} />
-          {/* BTC */}
-          <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(45,212,191,0.12)', color: '#2DD4BF' }}>BTC 환산 이익</span>
-          <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(249,115,22,0.12)', color: '#F0A24B' }}>BTC 환산 손실</span>
-          <span style={{ width: '1px', height: '14px', backgroundColor: 'var(--border)', display: 'inline-block' }} />
-          {/* 금 */}
-          <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(163,230,53,0.12)', color: '#A3E635' }}>금 환산 이익</span>
-          <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', backgroundColor: 'rgba(251,191,36,0.12)', color: '#EBC15C' }}>금 환산 손실</span>
-        </div>
+        {/* 안내 — 뱃지 범례는 카드별 해석 문장으로 대체 (2026-07-12) */}
+        <p style={{ fontSize: '11.5px', color: 'var(--text-dim)', marginBottom: '12px' }}>
+          카드의 💡 문장이 각 단지의 실질 가치 변화를 요약합니다 · 각 카드에서 이미지·텍스트로 공유할 수 있어요
+        </p>
 
         {/* 비교 테이블 */}
         <ApartmentDollarTable
