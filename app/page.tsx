@@ -387,10 +387,25 @@ export default async function HomePage() {
                 display: 'flex', gap: 14, paddingBottom: 14, borderBottom: '1px solid #F1F3F7',
                 marginBottom: 12, textDecoration: 'none',
               }}>
+                {/* 칼럼 목록(PostCard)과 동일한 OG 룩 미니 썸네일 — 빗금 자리표시자 대체 (2026-07-12).
+                    제목은 바로 옆에 있으므로 썸네일 안에는 카테고리 필+브랜드만. */}
                 <span style={{
-                  width: 120, height: 78, flexShrink: 0, borderRadius: 11,
-                  background: 'repeating-linear-gradient(45deg, #E6EBF4, #E6EBF4 10px, #EEF2F8 10px, #EEF2F8 20px)',
-                }} />
+                  width: 120, height: 78, flexShrink: 0, borderRadius: 11, overflow: 'hidden',
+                  background: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
+                  display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+                  padding: '7px 9px',
+                }}>
+                  <span style={{
+                    alignSelf: 'flex-start', fontSize: 8.5, fontWeight: 700, color: '#FFFFFF',
+                    background: '#0f172a', padding: '2px 7px', borderRadius: 99,
+                    maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {featured.category}
+                  </span>
+                  <span style={{ alignSelf: 'flex-end', fontSize: 8.5, fontWeight: 800, color: '#0f172a' }}>
+                    내집(My.ZIP)
+                  </span>
+                </span>
                 <span style={{ minWidth: 0 }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                     <span style={{ fontSize: 10.5, fontWeight: 700, color: BLUE, background: '#EEF2FE', padding: '3px 8px', borderRadius: 6 }}>
