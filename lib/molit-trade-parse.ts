@@ -1,6 +1,8 @@
-import { normalizeMLTMName } from '@/lib/normalize-mltm-name';
-import { buildDedupeKey } from '@/lib/tx-dedupe-key';
-import type { NewTransaction } from '@/lib/db/schema';
+// 상대경로 import — 이 파일은 Next 라우트와 로컬 백필 스크립트(tsx) 양쪽에서
+// 재사용되므로, tsx 별칭(@/) 해석에 의존하지 않도록 상대경로를 쓴다.
+import { normalizeMLTMName } from './normalize-mltm-name';
+import { buildDedupeKey } from './tx-dedupe-key';
+import type { NewTransaction } from './db/schema';
 
 /**
  * MOLIT 매매 실거래 XML 전체 필드 파서 — Phase 2 (자체 DB 적재).
