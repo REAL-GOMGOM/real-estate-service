@@ -15,6 +15,13 @@
       "when": 1778313069621,
       "tag": "0001_far_mysterio",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784040403094,
+      "tag": "0002_tiny_manta",
+      "breakpoints": true
     }
   ]
 }

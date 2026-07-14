@@ -219,3 +219,60 @@ export const aptScores = pgTable('apt_scores', {
 }));
 
 export type AptScore = typeof aptScores.$inferSelect;
+
+/**
+ * 실거래 매매 원장 — Phase 2 (자체 DB 적재, 2026-07-14).
+ *
+ * 배경: /api/transactions 는 국토부 실시간 프록시라 첫 조회가 수 초.
+ * 전국 실거래를 여기에 적재하고 조회를 DB 우선으로 전환한다
+ * (프리워밍 크론 Phase 1의 근본 해법).
+ *
+ * 식별: 국토부는 안정적 거래 ID를 제공하지 않으므로, 물리적 거래를
+ * 식별하는 자연 복합키를 정규화·조인한 dedupeKey 를 PK 로 쓴다
+ * (aptHighs.id 파이프조인 관례 확장). 같은 거래의 재적재·해제 통보는
+ * 같은 dedupeKey 로 매핑되어 신규 행이 아니라 기존 행을 갱신한다.
+ * 키 생성 규칙은 lib/tx-dedupe-key.ts 단일 지점.
+ */
+export const transactions = pgTable('transactions', {
+  dedupeKey: text('dedupe_key').primaryKey(),
+
+  // ── 위치 ──
+  lawdCd:  text('lawd_cd').notNull(),   // 5자리 지역코드 (조회 LAWD_CD = MOLIT sggCd)
+  sigungu: text('sigungu').notNull(),   // 사이트 표기 시군구 (예 '강남구')
+  umdNm:   text('umd_nm').notNull(),    // 법정동명 (MOLIT umdNm)
+  jibun:   text('jibun'),               // 지번 (MOLIT jibun, nullable 방어)
+
+  // ── 단지·물건 ──
+  aptName:     text('apt_name').notNull(),      // MOLIT aptNm 원문
+  aptNameNorm: text('apt_name_norm').notNull(), // normalizeMLTMName 결과 (검색·매칭·키)
+  masterId:    text('master_id'),               // apartments PK (적재 시 null, 조회 시 조인)
+  areaM2:      real('area_m2').notNull(),        // 전용면적 원값 ㎡ (반올림 X — 키 충돌 방지)
+  floor:       integer('floor'),                 // 층 (nullable 방어)
+  buildYear:   integer('build_year'),            // 건축년도
+
+  // ── 거래 ──
+  dealDate:   text('deal_date').notNull(),                 // 계약일 YYYY-MM-DD
+  dealAmount: integer('deal_amount').notNull(),            // 거래금액 (만원)
+  dealType:   text('deal_type').notNull().default('buy'),  // 'buy' (전월세·분양권은 후속 확장)
+  dealingGbn: text('dealing_gbn'),                         // 거래유형 중개/직거래 (nullable)
+  rgstDate:   text('rgst_date'),                           // 등기일자 (nullable, 늦게 확정)
+
+  // ── 취소(해제) — 결정: 별도 표시 ──
+  isCanceled:   boolean('is_canceled').notNull().default(false), // MOLIT cdealType='O'
+  canceledDate: text('canceled_date'),                           // 해제사유발생일 (MOLIT cdealDay 원문)
+
+  // ── 메타 ──
+  source:    text('source').notNull().default('molit'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+}, (table) => ({
+  lawdDateIdx: index('tx_lawd_date_idx').on(table.lawdCd, table.dealDate), // 지역+최근순 (주 조회)
+  aptNormIdx:  index('tx_apt_norm_idx').on(table.aptNameNorm),             // 단지명 검색
+  masterIdIdx: index('tx_master_id_idx').on(table.masterId),              // 마스터 단지 조인
+}));
+
+export type Transaction = typeof transactions.$inferSelect;
+export type NewTransaction = typeof transactions.$inferInsert;
