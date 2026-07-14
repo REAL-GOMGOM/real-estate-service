@@ -1,3 +1,8 @@
 {
-  "crons": []
+  "crons": [
+    {
+      "path": "/api/cron/warm-transactions",
+      "schedule": "0 20 * * *"
+    }
+  ]
 }
