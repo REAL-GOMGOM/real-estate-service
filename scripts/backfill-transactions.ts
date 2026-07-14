@@ -5,6 +5,7 @@ import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
 import * as schema from '../lib/db/schema';
 import { DISTRICT_CODE } from '../lib/district-codes';
+import { fetchMolitXml } from '../lib/molit-fetch';
 import { parseTradeXml, molitItemToTransaction } from '../lib/molit-trade-parse';
 import { upsertTransactions } from '../lib/tx-upsert';
 import type { NewTransaction } from '../lib/db/schema';
@@ -31,7 +32,6 @@ const MAX_PAGES = 3;              // 한 구·월 최대 3,000건 (molit-months 
 const PER_PAGE = 1000;
 const CONCURRENCY = 6;            // 국토부 동시 요청 (구 단위)
 const RATE_LIMIT_DELAY_MS = 120;  // 국토부 부하 예의 (구 내 월별 fetch 간격)
-const USER_AGENT = 'Mozilla/5.0 (compatible; naezip-backfill/1.0)';
 const PROGRESS_EVERY = 20;        // N개 구마다 진행 로그
 
 // ─────── 인자 파싱 ───────
@@ -61,21 +61,27 @@ function monthList(months: number): string[] {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** 한 구·한 달 매매 XML 전체 페이지 (캐시 없이 fresh fetch) */
+/**
+ * 한 구·한 달 매매 XML 전체 페이지.
+ * 라이브 조회와 동일한 fetchMolitXml 재사용 — totalCount 누락(rate-limit 등
+ * 소프트 에러) 시 캐시 우회로 1회 재시도한다. 재시도 후에도 totalCount 가
+ * 없으면 소프트 에러로 throw 해서 호출부가 '실패'로 집계한다(조용한 누락 방지).
+ */
 async function fetchTradeXml(apiKey: string, lawdCd: string, yyyymm: string): Promise<string> {
   const makeUrl = (pageNo: number) =>
     `${TRADE_BASE_URL}?serviceKey=${apiKey}` +
     `&LAWD_CD=${lawdCd}&DEAL_YMD=${yyyymm}&numOfRows=${PER_PAGE}&pageNo=${pageNo}`;
 
-  const first = await fetch(makeUrl(1), { headers: { 'User-Agent': USER_AGENT } }).then((r) => r.text());
+  const first = await fetchMolitXml(makeUrl(1), 0);
+  if (!first.includes('<totalCount>')) {
+    throw new Error(`국토부 소프트 에러(totalCount 없음) — ${lawdCd} ${yyyymm}`);
+  }
   const total = parseInt(first.match(/<totalCount>(\d+)<\/totalCount>/)?.[1] ?? '0', 10);
   if (total <= PER_PAGE) return first;
 
   const pages = Math.min(Math.ceil(total / PER_PAGE), MAX_PAGES);
   const rest = await Promise.all(
-    Array.from({ length: pages - 1 }, (_, i) =>
-      fetch(makeUrl(i + 2), { headers: { 'User-Agent': USER_AGENT } }).then((r) => r.text()),
-    ),
+    Array.from({ length: pages - 1 }, (_, i) => fetchMolitXml(makeUrl(i + 2), 0)),
   );
   return [first, ...rest].join('\n');
 }
