@@ -1,7 +1,7 @@
 {
   "crons": [
     {
-      "path": "/api/cron/warm-transactions",
+      "path": "/api/cron/sync-transactions",
       "schedule": "0 20 * * *"
     }
   ]
