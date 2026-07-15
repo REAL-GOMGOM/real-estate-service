@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { lt } from 'drizzle-orm';
 import { DISTRICT_CODE } from '@/lib/district-codes';
 import { getMonthList, fetchTradeMonthAllPages, revalidateForMonth } from '@/lib/molit-months';
 import { parseTradeXml, molitItemToTransaction } from '@/lib/molit-trade-parse';
 import { upsertTransactions } from '@/lib/tx-upsert';
 import { getBlogDb } from '@/lib/db/client';
-import type { NewTransaction } from '@/lib/db/schema';
+import { transactions, type NewTransaction } from '@/lib/db/schema';
 
 /**
  * 실거래 일일 증분 sync 크론 — Phase 2 (자체 DB 적재, 2026-07-14).
@@ -20,9 +21,10 @@ import type { NewTransaction } from '@/lib/db/schema';
 
 export const maxDuration = 60;
 
-const SYNC_MONTHS = 1;         // 당월 재적재 (과거는 백필 담당)
-const CONCURRENCY = 8;         // 국토부 동시 요청 (warm 실측 기반, 60s 예산 내 238구 흡수)
-const TIME_BUDGET_MS = 55_000; // maxDuration 60s 안전 마진 — 초과분은 다음 실행에서 이어짐
+const SYNC_MONTHS = 1;          // 당월 재적재 (과거는 백필 담당)
+const CONCURRENCY = 8;          // 국토부 동시 요청 (warm 실측 기반, 60s 예산 내 238구 흡수)
+const TIME_BUDGET_MS = 55_000;  // maxDuration 60s 안전 마진 — 초과분은 다음 실행에서 이어짐
+const RETENTION_MONTHS = 13;    // 무료 티어 512MB 방어 — 최근 약 1년만 유지, 초과분 매일 정리
 
 export async function GET(req: NextRequest) {
   // CRON_SECRET 인증 (fail-closed: 미설정 시 호출 거부)
@@ -88,9 +90,22 @@ export async function GET(req: NextRequest) {
   }
   await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 
+  // 보존 정책 — deal_date 기준 RETENTION_MONTHS 개월 초과분 삭제 (스토리지 상한 방어).
+  // 실패는 fail-open: 적재는 이미 끝났으므로 정리만 다음 실행으로 미룬다.
+  let purged = 0;
+  try {
+    const cut = new Date();
+    cut.setMonth(cut.getMonth() - RETENTION_MONTHS);
+    const cutoff = `${cut.getFullYear()}-${String(cut.getMonth() + 1).padStart(2, '0')}-01`;
+    const res = await db.delete(transactions).where(lt(transactions.dealDate, cutoff));
+    purged = (res as { rowCount?: number }).rowCount ?? 0;
+  } catch (e) {
+    console.warn('[sync-transactions] 보존 정리 실패 (fail-open):', e instanceof Error ? e.message : e);
+  }
+
   const ms = Date.now() - started;
   console.log(
-    `[sync-transactions] 완료 — upserted=${upserted} failed=${failed} skipped=${skipped} ${ms}ms`,
+    `[sync-transactions] 완료 — upserted=${upserted} failed=${failed} skipped=${skipped} purged=${purged} ${ms}ms`,
   );
-  return NextResponse.json({ upserted, failed, skipped, totalJobs: jobs.length, ms });
+  return NextResponse.json({ upserted, failed, skipped, purged, totalJobs: jobs.length, ms });
 }
