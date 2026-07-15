@@ -313,14 +313,20 @@ export async function GET(req: NextRequest) {
     let txRows: TxRow[];
 
     if (source === 'db') {
-      txRows = await fetchDbTxRows(lawdCd, district, months);
-      // 안전망: 해당 지역·기간이 아직 DB에 없으면 국토부로 폴백
+      // DB 조회 실패는 사용자에게 노출하지 않고 국토부 라이브로 폴백 (안전한 롤아웃)
+      try {
+        txRows = await fetchDbTxRows(lawdCd, district, months);
+      } catch (e) {
+        console.error('[transactions API] DB 조회 실패 — live 폴백:', e instanceof Error ? e.message : e);
+        txRows = [];
+      }
+      // 안전망: DB 미적재(빈 결과)거나 조회 실패면 국토부로 폴백
       if (txRows.length === 0) {
         if (!apiKey) {
           console.error('[transactions API] DB 미적재 + PUBLIC_DATA_API_KEY 미설정');
           return NextResponse.json({ error: '거래 데이터를 불러올 수 없습니다' }, { status: 500 });
         }
-        console.warn(`[transactions API] DB 미적재(${district}/${lawdCd}) — live 폴백`);
+        console.warn(`[transactions API] DB 미적재/실패(${district}/${lawdCd}) — live 폴백`);
         txRows = await fetchLiveTxRows(apiKey, lawdCd, district, months);
       }
     } else {
