@@ -7,6 +7,7 @@ import { AnalysisPromoBar } from '@/components/shared/AnalysisPromoBar';
 import { findDistrictByLawdCd } from '@/lib/district-codes';
 import { DISTRICT_GROUPS } from '@/lib/district-groups';
 import { matchesQuery } from '@/lib/search-utils';
+import { normalizeMLTMName } from '@/lib/normalize-mltm-name';
 import Header from '@/components/layout/Header';
 import { AptAutocomplete, type ApartmentSearchResult } from '@/components/search/AptAutocomplete';
 import { type AptGroup, type DistrictStat, detectNewHigh } from './types';
@@ -103,6 +104,8 @@ export default function TransactionsClient() {
   const [error,     setError]     = useState<string | null>(null);
   const [fetched,   setFetched]   = useState('');
   const [activeApt, setActiveApt] = useState<AptGroup | null>(null);
+  // 자동완성에서 정확히 고른 단지 — 있으면 퍼지 매칭 대신 이 단지만 정확 표시
+  const [selectedApt, setSelectedApt] = useState<ApartmentSearchResult | null>(null);
 
   const [viewMode, setViewMode] = useState<'summary' | 'detail'>(districtParam ? 'detail' : 'summary');
 
@@ -140,6 +143,7 @@ export default function TransactionsClient() {
       setDistrict(districtParam);
       setGroupIdx(Math.max(0, findGroupIndexOfDistrict(districtParam)));
       if (queryParam) setQuery(queryParam);
+      setSelectedApt(null); // URL 딥링크의 q 는 정확 선택이 아니므로 퍼지 매칭 경로
       setViewMode('detail');
       setFetched('');
     }
@@ -249,7 +253,19 @@ export default function TransactionsClient() {
 
   // 검색·필터·정렬 파이프라인
   const filtered = useMemo(() => {
-    let list = query.trim() ? groups.filter((g) => matchesQuery(g.name, query.trim())) : groups;
+    let list: AptGroup[];
+    if (selectedApt) {
+      // 자동완성에서 정확히 고른 단지 — 퍼지 매칭 금지 (마스터ID 우선, 없으면 정규화명 정확 일치)
+      const normSel = normalizeMLTMName(selectedApt.name);
+      list = groups.filter((g) =>
+        (g.masterId != null && g.masterId === selectedApt.id) ||
+        normalizeMLTMName(g.name) === normSel,
+      );
+    } else if (query.trim()) {
+      list = groups.filter((g) => matchesQuery(g.name, query.trim()));
+    } else {
+      list = groups;
+    }
 
     if (newHighOnly) list = list.filter(detectNewHigh);
 
@@ -270,7 +286,7 @@ export default function TransactionsClient() {
       if (sortKey === 'price') return latestPriceOf(b) - latestPriceOf(a);
       return b.transactions.length - a.transactions.length;
     });
-  }, [groups, query, newHighOnly, areaFilter, sortKey]);
+  }, [groups, query, selectedApt, newHighOnly, areaFilter, sortKey]);
 
   const totalTx    = filtered.reduce((s, g) => s + g.transactions.length, 0);
   const newHighCnt = filtered.filter(detectNewHigh).length;
@@ -532,7 +548,7 @@ export default function TransactionsClient() {
           districts={DISTRICT_GROUPS[groupIdx]?.districts ?? []}
           stats={districtStats[groupLabel] ?? null}
           active={district}
-          onPick={(d) => { setDistrict(d); setFetched(''); }}
+          onPick={(d) => { setDistrict(d); setSelectedApt(null); setQuery(''); setFetched(''); }}
         />
 
         {/* 통계 바 + 정렬·필터 (매매) */}
@@ -656,6 +672,7 @@ export default function TransactionsClient() {
                 const matched = findGroupIndexOfDistrict(districtLabel);
                 if (matched >= 0) setGroupIdx(matched);
                 setDistrict(districtLabel);
+                setSelectedApt(apt);   // 정확 매칭 경로 (퍼지 필터 회피)
                 setQuery(apt.name);
                 setFetched('');
               }}
@@ -686,9 +703,45 @@ export default function TransactionsClient() {
                 <style>{`@keyframes pulse{0%,100%{opacity:.3}50%{opacity:.6}}`}</style>
               </>
             ) : filtered.length === 0 && !error ? (
-              <TxEmptyState
-                onReset={() => { setQuery(''); setNewHighOnly(false); setAreaFilter('all'); setMonths(6); setFetched(''); }}
-              />
+              selectedApt ? (
+                <div style={{
+                  textAlign: 'center', padding: '48px 24px',
+                  backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-light)',
+                  borderRadius: '16px',
+                }}>
+                  <p style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px' }}>
+                    「{selectedApt.name}」의 최근 {months >= 12 ? `${months / 12}년` : `${months}개월`} 매매 거래가 없어요
+                  </p>
+                  <p style={{ fontSize: '13px', color: 'var(--text-dim)', marginBottom: '16px' }}>
+                    기간을 늘리면 과거 거래가 보일 수 있어요.
+                  </p>
+                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => { setMonths(36); setFetched(''); }}
+                      style={{
+                        padding: '9px 16px', borderRadius: '10px', fontSize: '13px', fontWeight: 700,
+                        backgroundColor: 'var(--accent)', color: '#FFFFFF', border: 'none', cursor: 'pointer',
+                      }}
+                    >
+                      기간 3년으로 넓히기
+                    </button>
+                    <button
+                      onClick={() => { setSelectedApt(null); setQuery(''); }}
+                      style={{
+                        padding: '9px 16px', borderRadius: '10px', fontSize: '13px', fontWeight: 600,
+                        backgroundColor: 'var(--bg-card)', color: 'var(--text-muted)',
+                        border: '1px solid var(--border)', cursor: 'pointer',
+                      }}
+                    >
+                      이 지역 전체 보기
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <TxEmptyState
+                  onReset={() => { setSelectedApt(null); setQuery(''); setNewHighOnly(false); setAreaFilter('all'); setMonths(6); setFetched(''); }}
+                />
+              )
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
                 {filtered.map((apt) => (
