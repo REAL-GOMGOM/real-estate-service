@@ -299,6 +299,8 @@ export default function TransactionsClient() {
   const enterDistrict = (d: string) => {
     setGroupIdx(Math.max(0, findGroupIndexOfDistrict(d)));
     setDistrict(d);
+    setSelectedApt(null);   // 지역 바꾸면 이전 단지 선택·검색 초기화
+    setQuery('');
     setViewMode('detail');
     setFetched('');
     setPicker(null);
@@ -347,18 +349,36 @@ export default function TransactionsClient() {
           </div>
         ) : (
           <div style={{ marginBottom: '6px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
-              <h1 style={{ fontSize: 'clamp(20px, 3vw, 30px)', fontWeight: 800, color: 'var(--text-primary)' }}>
-                최신 실거래
+            {/* 현재 지역 (크게) + 지역 변경 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '8px' }}>
+              <h1 style={{
+                fontSize: 'clamp(22px, 4vw, 30px)', fontWeight: 800, color: 'var(--text-primary)',
+                margin: 0, display: 'inline-flex', alignItems: 'center', gap: '6px', letterSpacing: '-0.5px',
+              }}>
+                <span aria-hidden="true" style={{ color: 'var(--accent)' }}>📍</span>{district}
               </h1>
+              <button
+                onClick={() => setPicker({ label: groupLabel, districts: DISTRICT_GROUPS[groupIdx]?.districts ?? [] })}
+                aria-label="지역 변경"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '4px',
+                  padding: '7px 14px', borderRadius: '9px', fontSize: '13px', fontWeight: 700,
+                  backgroundColor: 'var(--accent)', color: '#FFFFFF', border: 'none', cursor: 'pointer',
+                }}
+              >
+                지역 변경 ▾
+              </button>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-muted)' }}>최신 실거래</span>
               <span style={{
-                padding: '4px 12px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
+                padding: '3px 10px', borderRadius: '8px', fontSize: '12.5px', fontWeight: 600,
                 backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-muted)',
               }}>
                 {today.getFullYear() > 2000 ? todayLabel(today) : '—'}
               </span>
+              <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>· 출처: 국토교통부 실거래가 공개시스템</span>
             </div>
-            <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>출처: 국토교통부 실거래가 공개시스템</p>
           </div>
         )}
 
