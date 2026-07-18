@@ -2,6 +2,7 @@
 // 재사용되므로, tsx 별칭(@/) 해석에 의존하지 않도록 상대경로를 쓴다.
 import { normalizeMLTMName } from './normalize-mltm-name';
 import { buildDedupeKey } from './tx-dedupe-key';
+import { decodeXmlEntities } from './xml-entities';
 import type { NewTransaction } from './db/schema';
 
 /**
@@ -40,7 +41,7 @@ export function parseTradeXml(xml: string): MolitTradeItem[] {
     const get = (tag: string) =>
       item.match(new RegExp('<' + tag + '>([^<]*)<\\/' + tag + '>'))?.[1]?.trim() ?? '';
     return {
-      aptNm:      get('aptNm'),
+      aptNm:      decodeXmlEntities(get('aptNm')),
       excluUseAr: get('excluUseAr'),
       dealAmount: get('dealAmount'),
       dealYear:   get('dealYear'),

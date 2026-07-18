@@ -6,6 +6,7 @@ import { getBlogDb } from '@/lib/db/client';
 import { apartments, transactions as transactionsTable } from '@/lib/db/schema';
 import { normalizeMLTMName } from '@/lib/normalize-mltm-name';
 import { getMonthList, fetchTradeMonthAllPages, revalidateForMonth } from '@/lib/molit-months';
+import { decodeXmlEntities } from '@/lib/xml-entities';
 
 const APT_NAME_MAX_LEN = 50;
 
@@ -73,7 +74,7 @@ async function fetchLiveTxRows(
 
       const price = parseInt(get('dealAmount').replace(/,/g, ''));
       const area  = parseFloat(get('excluUseAr'));
-      const aptNm = get('aptNm');
+      const aptNm = decodeXmlEntities(get('aptNm'));
       const year  = get('dealYear');
       const month = get('dealMonth').padStart(2, '0');
       const day   = get('dealDay').padStart(2, '0');

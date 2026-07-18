@@ -6,6 +6,7 @@
  */
 import type { ShareCardData } from '@/lib/share-image';
 import type { Pt } from '@/lib/svg-smooth';
+import { decodeXmlEntities } from '@/lib/xml-entities';
 
 export interface RentTransaction {
   aptName:      string;
@@ -61,7 +62,7 @@ export function parseRentXml(xml: string, district: string): RentTransaction[] {
     const get = (tag: string) =>
       item.match(new RegExp('<' + tag + '>([^<]*)<\\/' + tag + '>'))?.[1]?.trim() ?? '';
 
-    const aptNm   = get('aptNm');
+    const aptNm   = decodeXmlEntities(get('aptNm'));
     const area    = parseFloat(get('excluUseAr'));
     const deposit = toInt(get('deposit'));
     const year    = get('dealYear');
