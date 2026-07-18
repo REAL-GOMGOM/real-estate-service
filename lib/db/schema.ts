@@ -276,3 +276,45 @@ export const transactions = pgTable('transactions', {
 
 export type Transaction = typeof transactions.$inferSelect;
 export type NewTransaction = typeof transactions.$inferInsert;
+
+/**
+ * 전월세 실거래 원장 — Phase 2 확장 (2026-07-18).
+ *
+ * 매매(transactions)와 같은 원리의 자체 적재. 전월세는 거래량이 매매의
+ * 약 2.5배(전국 월 ~10만 건)라 무료 512MB 안에서 버티기 위해 다이어트 설계:
+ * - dedupeKey 는 자연키의 md5 해시(32자) — 긴 파이프조인 대비 컬럼·PK 인덱스 절약
+ * - 인덱스 1개(lawd_cd+deal_date), jibun·정규화명은 해시 입력으로만 쓰고 저장 안 함
+ * - 보존 7개월 (기본 조회 6개월 + 버퍼) — sync 크론이 매일 정리
+ * 키 생성은 lib/molit-rent-parse.ts 단일 지점.
+ */
+export const rentTransactions = pgTable('rent_transactions', {
+  dedupeKey: text('dedupe_key').primaryKey(), // md5(lawdCd|umdNm|jibun|norm명|면적|층|계약일|보증금|월세)
+
+  lawdCd:  text('lawd_cd').notNull(),
+  sigungu: text('sigungu').notNull(),
+  umdNm:   text('umd_nm').notNull(),
+  aptName: text('apt_name').notNull(),
+
+  areaM2:    real('area_m2').notNull(),
+  floor:     integer('floor'),
+  buildYear: integer('build_year'),
+
+  dealDate:    text('deal_date').notNull(),                 // 계약일 YYYY-MM-DD
+  deposit:     integer('deposit').notNull(),                // 보증금 (만원)
+  monthlyRent: integer('monthly_rent').notNull().default(0), // 월세 (만원, 0=전세)
+
+  contractType:    text('contract_type'),      // '신규' | '갱신' | null
+  prevDeposit:     integer('prev_deposit'),    // 갱신 계약의 종전 보증금
+  prevMonthlyRent: integer('prev_monthly_rent'),
+
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+}, (table) => ({
+  rentLawdDateIdx: index('rent_lawd_date_idx').on(table.lawdCd, table.dealDate),
+}));
+
+export type RentTransactionRow = typeof rentTransactions.$inferSelect;
+export type NewRentTransactionRow = typeof rentTransactions.$inferInsert;
