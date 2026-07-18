@@ -1,33 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { lt } from 'drizzle-orm';
+import { lt, sql } from 'drizzle-orm';
 import { DISTRICT_CODE } from '@/lib/district-codes';
-import { getMonthList, fetchTradeMonthAllPages, revalidateForMonth } from '@/lib/molit-months';
+import { getMonthList, fetchTradeMonthAllPages, fetchRentMonthAllPages, revalidateForMonth } from '@/lib/molit-months';
 import { parseTradeXml, molitItemToTransaction } from '@/lib/molit-trade-parse';
+import { parseRentXmlFull, molitItemToRentRow } from '@/lib/molit-rent-parse';
 import { upsertTransactions } from '@/lib/tx-upsert';
+import { upsertRentTransactions } from '@/lib/rent-tx-upsert';
 import { getBlogDb } from '@/lib/db/client';
-import { transactions, type NewTransaction } from '@/lib/db/schema';
+import { transactions, rentTransactions, type NewTransaction, type NewRentTransactionRow } from '@/lib/db/schema';
 
 /**
- * 실거래 일일 증분 sync 크론 — Phase 2 (자체 DB 적재, 2026-07-14).
+ * 실거래 일일 증분 sync 크론 — Phase 2 (매매) + 전월세 확장 (2026-07-18).
  *
- * 전국 시군구 × 당월 매매 실거래를 국토부에서 받아 transactions 테이블에
- * 멱등 upsert. 당월을 매일 재적재하므로 지연신고·해제(취소)가 자연 반영된다.
- * 과거분은 scripts/backfill-transactions.ts(1회)가 담당.
+ * 전국 시군구 × 당월을 매일 재적재(멱등 upsert)해 지연신고·해제·갱신을
+ * 자연 반영한다. 매매 먼저, 남은 예산으로 전월세 — Hobby 크론 2개 제한
+ * 때문에 한 크론이 두 원장을 처리한다. 예산 초과로 스킵된 전월세 구는
+ * 일별 시작점 로테이션(day-of-month offset)으로 다음 날 우선 처리된다.
  *
- * 인증: CRON_SECRET (fail-closed) — warm-transactions/generate-report 동일 패턴.
- * 참고: DB 조회 전환(Phase 2 커밋3) 후 warm-transactions 크론을 이 크론으로
- *       교체(vercel.json)해 Hobby 크론 슬롯 순증을 0으로 둔다.
+ * 보존: 매매 13개월 / 전월세 7개월 — 무료 512MB 상한 방어 (설계 근거:
+ * 매매 221MB/12개월 + 전월세 다이어트 행 ~190MB/7개월 ≈ 총 480MB).
+ * 인증: CRON_SECRET (fail-closed).
  */
 
 export const maxDuration = 60;
 
-const SYNC_MONTHS = 1;          // 당월 재적재 (과거는 백필 담당)
-const CONCURRENCY = 8;          // 국토부 동시 요청 (warm 실측 기반, 60s 예산 내 238구 흡수)
-const TIME_BUDGET_MS = 55_000;  // maxDuration 60s 안전 마진 — 초과분은 다음 실행에서 이어짐
-const RETENTION_MONTHS = 13;    // 무료 티어 512MB 방어 — 최근 약 1년만 유지, 초과분 매일 정리
+const SYNC_MONTHS = 1;               // 당월 재적재 (과거는 백필 담당)
+const CONCURRENCY = 8;
+const TIME_BUDGET_MS = 55_000;       // maxDuration 60s 안전 마진
+const TRADE_RETENTION_MONTHS = 13;   // 매매 — 최근 약 1년
+const RENT_RETENTION_MONTHS = 7;     // 전월세 — 기본 조회 6개월 + 버퍼
+
+function retentionCutoff(months: number): string {
+  const cut = new Date();
+  cut.setMonth(cut.getMonth() - months);
+  return `${cut.getFullYear()}-${String(cut.getMonth() + 1).padStart(2, '0')}-01`;
+}
+
+interface PhaseResult { upserted: number; failed: number; skipped: number }
 
 export async function GET(req: NextRequest) {
-  // CRON_SECRET 인증 (fail-closed: 미설정 시 호출 거부)
   const secret = process.env.CRON_SECRET;
   if (!secret) {
     console.error('[sync-transactions] CRON_SECRET 미설정 — fail-closed');
@@ -49,63 +60,91 @@ export async function GET(req: NextRequest) {
   const started = Date.now();
   const months = getMonthList(SYNC_MONTHS);
   const districts = Object.entries(DISTRICT_CODE); // [sigungu, lawdCd][]
-
-  const jobs: Array<{ sigungu: string; lawdCd: string; yyyymm: string }> = [];
-  for (const [sigungu, lawdCd] of districts) {
-    for (const yyyymm of months) jobs.push({ sigungu, lawdCd, yyyymm });
-  }
-
   const db = getBlogDb();
-  let upserted = 0;
-  let failed = 0;
-  let skipped = 0;
 
-  // 동시성 제한 워커 풀 — 시간 예산 초과 시 남은 작업은 다음 실행으로
-  let cursor = 0;
-  async function worker() {
-    while (cursor < jobs.length) {
-      if (Date.now() - started > TIME_BUDGET_MS) {
-        skipped = jobs.length - cursor;
-        return;
-      }
-      const job = jobs[cursor++];
-      try {
-        const xml = await fetchTradeMonthAllPages(
-          apiKey, job.lawdCd, job.yyyymm, revalidateForMonth(job.yyyymm),
-        );
-        const rows: NewTransaction[] = [];
-        for (const item of parseTradeXml(xml)) {
-          const row = molitItemToTransaction(item, { lawdCd: job.lawdCd, sigungu: job.sigungu });
-          if (row) rows.push(row);
+  const deadline = () => Date.now() - started > TIME_BUDGET_MS;
+
+  /** 공용 워커 풀 — startOffset 부터 wrap-around 순회 (스킵 공평 분산) */
+  async function runPhase(
+    startOffset: number,
+    processJob: (sigungu: string, lawdCd: string, yyyymm: string) => Promise<number>,
+  ): Promise<PhaseResult> {
+    const jobs: Array<{ sigungu: string; lawdCd: string; yyyymm: string }> = [];
+    for (let i = 0; i < districts.length; i++) {
+      const [sigungu, lawdCd] = districts[(startOffset + i) % districts.length];
+      for (const yyyymm of months) jobs.push({ sigungu, lawdCd, yyyymm });
+    }
+
+    const result: PhaseResult = { upserted: 0, failed: 0, skipped: 0 };
+    let cursor = 0;
+    async function worker() {
+      while (cursor < jobs.length) {
+        if (deadline()) {
+          result.skipped = jobs.length - cursor;
+          return;
         }
-        if (rows.length) upserted += await upsertTransactions(db, rows);
-      } catch (e) {
-        failed++;
-        console.warn(
-          `[sync-transactions] 실패 ${job.sigungu} ${job.yyyymm}:`,
-          e instanceof Error ? e.message : e,
-        );
+        const job = jobs[cursor++];
+        try {
+          result.upserted += await processJob(job.sigungu, job.lawdCd, job.yyyymm);
+        } catch (e) {
+          result.failed++;
+          console.warn(
+            `[sync-transactions] 실패 ${job.sigungu} ${job.yyyymm}:`,
+            e instanceof Error ? e.message : e,
+          );
+        }
       }
     }
+    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+    return result;
   }
-  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 
-  // 보존 정책 — deal_date 기준 RETENTION_MONTHS 개월 초과분 삭제 (스토리지 상한 방어).
-  // 실패는 fail-open: 적재는 이미 끝났으므로 정리만 다음 실행으로 미룬다.
-  let purged = 0;
+  // ── 매매 (항상 처음부터 — 주 데이터) ──
+  const trade = await runPhase(0, async (sigungu, lawdCd, yyyymm) => {
+    const xml = await fetchTradeMonthAllPages(apiKey, lawdCd, yyyymm, revalidateForMonth(yyyymm));
+    const rows: NewTransaction[] = [];
+    for (const item of parseTradeXml(xml)) {
+      const row = molitItemToTransaction(item, { lawdCd, sigungu });
+      if (row) rows.push(row);
+    }
+    return rows.length ? upsertTransactions(db, rows) : 0;
+  });
+
+  // ── 전월세 (남은 예산 — 일별 시작점 로테이션으로 스킵 구가 매일 바뀜) ──
+  const rentOffset = new Date().getUTCDate() % districts.length;
+  const rent = await runPhase(rentOffset, async (sigungu, lawdCd, yyyymm) => {
+    const xml = await fetchRentMonthAllPages(apiKey, lawdCd, yyyymm, revalidateForMonth(yyyymm));
+    const rows: NewRentTransactionRow[] = [];
+    for (const item of parseRentXmlFull(xml)) {
+      const row = molitItemToRentRow(item, { lawdCd, sigungu });
+      if (row) rows.push(row);
+    }
+    return rows.length ? upsertRentTransactions(db, rows) : 0;
+  });
+
+  // ── 보존 정리 + 용량 모니터링 (fail-open) ──
+  const purged = { trade: 0, rent: 0 };
+  let dbMB: number | null = null;
   try {
-    const cut = new Date();
-    cut.setMonth(cut.getMonth() - RETENTION_MONTHS);
-    const cutoff = `${cut.getFullYear()}-${String(cut.getMonth() + 1).padStart(2, '0')}-01`;
-    const res = await db.delete(transactions).where(lt(transactions.dealDate, cutoff));
-    purged = (res as { rowCount?: number }).rowCount ?? 0;
+    const t = await db.delete(transactions)
+      .where(lt(transactions.dealDate, retentionCutoff(TRADE_RETENTION_MONTHS)));
+    purged.trade = (t as { rowCount?: number }).rowCount ?? 0;
+    const r = await db.delete(rentTransactions)
+      .where(lt(rentTransactions.dealDate, retentionCutoff(RENT_RETENTION_MONTHS)));
+    purged.rent = (r as { rowCount?: number }).rowCount ?? 0;
+    const size = await db.execute(
+      sql`SELECT round(pg_database_size(current_database()) / 1048576.0)::int AS mb`,
+    );
+    dbMB = (size as unknown as { rows?: Array<{ mb: number }> }).rows?.[0]?.mb ?? null;
   } catch (e) {
-    console.warn('[sync-transactions] 보존 정리 실패 (fail-open):', e instanceof Error ? e.message : e);
+    console.warn('[sync-transactions] 보존 정리/용량 조회 실패 (fail-open):', e instanceof Error ? e.message : e);
   }
 
   const ms = Date.now() - started;
   console.log(
-    `[sync-transactions] 완료 — upserted=${upserted} failed=${failed} skipped=${skipped} purged=${purged} ${ms}ms`,
+    `[sync-transactions] 완료 — trade(u=${trade.upserted} f=${trade.failed} s=${trade.skipped}) ` +
+    `rent(u=${rent.upserted} f=${rent.failed} s=${rent.skipped}) ` +
+    `purged(t=${purged.trade} r=${purged.rent}) db=${dbMB}MB ${ms}ms`,
   );
-  return NextResponse.json({ upserted, failed, skipped, purged, totalJobs: jobs.length, ms });
+  return NextResponse.json({ trade, rent, purged, dbMB, ms });
 }
