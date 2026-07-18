@@ -126,8 +126,13 @@ async function main() {
         }
         await sleep(RATE_LIMIT_DELAY_MS);
       }
-      if (rows.length && !dry) totalUpserted += await upsertRentTransactions(db, rows);
-      else if (dry) totalUpserted += rows.length;
+      if (rows.length && !dry) {
+        // `x += await f()` 레이스 방지 — await 후 가산 (backfill-transactions 와 동일 픽스)
+        const upserted = await upsertRentTransactions(db, rows);
+        totalUpserted += upserted;
+      } else if (dry) {
+        totalUpserted += rows.length;
+      }
 
       if (++doneDistricts % PROGRESS_EVERY === 0) {
         const sec = Math.round((Date.now() - started) / 1000);

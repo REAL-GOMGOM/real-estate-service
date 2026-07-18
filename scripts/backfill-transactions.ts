@@ -135,8 +135,14 @@ async function main() {
         }
         await sleep(RATE_LIMIT_DELAY_MS);
       }
-      if (rows.length && !dry) totalUpserted += await upsertTransactions(db, rows);
-      else if (dry) totalUpserted += rows.length;
+      if (rows.length && !dry) {
+        // `x += await f()` 는 좌변을 await 전에 읽어 동시 워커의 가산을 덮어쓴다
+        // (카운터 유실 버그 — 데이터는 PK 로 무결, 집계만 틀렸음). await 후 가산.
+        const upserted = await upsertTransactions(db, rows);
+        totalUpserted += upserted;
+      } else if (dry) {
+        totalUpserted += rows.length;
+      }
 
       if (++doneDistricts % PROGRESS_EVERY === 0) {
         const sec = Math.round((Date.now() - started) / 1000);

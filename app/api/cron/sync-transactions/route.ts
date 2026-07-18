@@ -85,7 +85,9 @@ export async function GET(req: NextRequest) {
         }
         const job = jobs[cursor++];
         try {
-          result.upserted += await processJob(job.sigungu, job.lawdCd, job.yyyymm);
+          // `x += await f()` 는 좌변을 await 전에 읽어 동시 워커 가산을 덮어씀 — await 후 가산
+          const upserted = await processJob(job.sigungu, job.lawdCd, job.yyyymm);
+          result.upserted += upserted;
         } catch (e) {
           result.failed++;
           console.warn(
