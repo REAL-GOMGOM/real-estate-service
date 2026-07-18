@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ilike, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { getBlogDb } from '@/lib/db/client';
 import { apartments } from '@/lib/db/schema';
 
@@ -50,7 +50,8 @@ export async function GET(req: NextRequest) {
         lawdCd:  apartments.lawdCd,
       })
       .from(apartments)
-      .where(ilike(apartments.name, `%${escapeLike(q)}%`))
+      // 공백 무시 매칭 — 마스터 '철산자이 더 헤리티지'를 '철산자이더헤리티지'로도 찾도록
+      .where(sql`replace(${apartments.name}, ' ', '') ILIKE ${'%' + escapeLike(q.replace(/\s+/g, '')) + '%'}`)
       .orderBy(sql`length(${apartments.name}) ASC`)
       .limit(limit);
 

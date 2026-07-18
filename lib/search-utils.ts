@@ -60,15 +60,9 @@ export function matchesQuery(aptName: string, query: string): boolean {
     return tokens.every(token => normalizedName.includes(token));
   }
 
-  // 3순위: prefix + brand 매칭
-  // "금호센트럴자이" → "금호" + "자이" → "금호자이1차" 매칭
-  if (normalizedQuery.length >= 4) {
-    const prefix = normalizedQuery.slice(0, 2);
-    const matchedBrand = APT_BRANDS.find(b => normalizedQuery.includes(b) && b !== prefix);
-    if (matchedBrand && normalizedName.includes(prefix) && normalizedName.includes(matchedBrand)) {
-      return true;
-    }
-  }
-
+  // (구 3순위 "앞 2글자 + 브랜드" 룰 제거 — '철산자이더헤리티지' 검색 시 '철산래미안자이'
+  //  까지 잡히는 오매칭을 유발했다. 의도된 매칭(금호센트럴자이→금호자이1차)은 2순위
+  //  브랜드 토큰 매칭이 이미 커버하고, 정확 검색은 전국 단지 자동완성 선택이 담당하므로
+  //  이 느슨한 폴백은 제거한다.)
   return false;
 }
