@@ -7,6 +7,7 @@ import { apartments, transactions as transactionsTable } from '@/lib/db/schema';
 import { normalizeMLTMName } from '@/lib/normalize-mltm-name';
 import { getMonthList, fetchTradeMonthAllPages, revalidateForMonth } from '@/lib/molit-months';
 import { decodeXmlEntities } from '@/lib/xml-entities';
+import { txSource } from '@/lib/tx-source';
 
 const APT_NAME_MAX_LEN = 50;
 
@@ -39,17 +40,7 @@ function escapeLike(input: string): string {
   return input.replace(/[\\%_]/g, (ch) => `\\${ch}`);
 }
 
-/**
- * 조회 소스 — Phase 2 자체 DB 적재 롤아웃용 flag. 기본 live 라 회귀 0.
- *   'live'   국토부 실시간 프록시 (기존 동작)
- *   'db'     transactions 테이블 조회 (해당 지역·기간 미적재면 live 폴백)
- *   'shadow' 응답은 live, db 도 함께 조회해 건수 차이만 로깅 (검증용)
- */
-type TxSource = 'live' | 'db' | 'shadow';
-function txSource(): TxSource {
-  const v = process.env.TRANSACTIONS_SOURCE;
-  return v === 'db' || v === 'shadow' ? v : 'live';
-}
+// 조회 소스 flag — lib/tx-source.ts 공용 (전월세 라우트와 공유)
 
 /** 국토부 실시간 조회 → TxRow[] (기존 동작 그대로 추출) */
 async function fetchLiveTxRows(
