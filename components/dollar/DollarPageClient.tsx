@@ -11,20 +11,14 @@ import type { ApartmentEntry, DollarApiResult } from '@/lib/types';
 // ────────────────────────────────────────────────
 // 인기 단지 초기 목록
 // ────────────────────────────────────────────────
-// 2026-07-12 Eric 선정 — 상징성 있는 구축·재건축 대장 위주.
+// 2026-07-19 4개로 축소 — 초기 진입 시 단지당 /api/dollar 병렬 호출이 나가
+// 11개는 첫 로딩이 과도하게 느렸음. 상징성 큰 4개만 기본, 나머지는 검색 추가.
 // aptName 은 MOLIT aptNm 매칭 검색어 (봇 DB 실표기 검증), label 은 표시명.
 const POPULAR_APARTMENTS = [
   { district: '강남구', aptName: '은마아파트' },
   { district: '강남구', aptName: '신현대',   label: '압구정 신현대' },
   { district: '강남구', aptName: '도곡렉슬' },
   { district: '송파구', aptName: '잠실엘스' },
-  { district: '송파구', aptName: '리센츠' },
-  { district: '송파구', aptName: '트리지움' },
-  { district: '송파구', aptName: '헬리오시티' },
-  { district: '강동구', aptName: '올림픽파크포레온' },
-  { district: '마포구', aptName: '마포래미안푸르지오' },
-  { district: '용산구', aptName: '한강맨션', label: '이촌 한강맨션' },
-  { district: '용산구', aptName: '신동아',   label: '서빙고 신동아' },
 ] as const;
 
 // re-export for sub-components
