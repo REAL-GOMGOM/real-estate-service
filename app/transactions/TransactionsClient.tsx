@@ -893,11 +893,11 @@ export default function TransactionsClient() {
         )}
       </div>
 
-      {/* 구 선택 모달 */}
+      {/* 지역 선택 모달 — 전국화 (시/도 전환 가능) */}
       {picker && (
         <RegionPickerModal
-          label={picker.label}
-          districts={picker.districts}
+          initialLabel={picker.label}
+          activeDistrict={viewMode === 'detail' ? district : undefined}
           onPick={enterDistrict}
           onClose={() => setPicker(null)}
         />
