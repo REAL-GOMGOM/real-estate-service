@@ -1,8 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { getAllRegionIds } from '@/lib/region-data';
 import { getAllPublishedSlugs, getAllCategories } from '@/lib/blog/queries';
-import { getBlogDb } from '@/lib/db/client';
-import { apartments } from '@/lib/db/schema';
 import { SITE_URL } from '@/lib/site';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -54,22 +52,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
-  // 단지 전용 페이지 전체 (사이클 DD — "단지명 실거래" 검색 유입).
-  // 실패는 fail-open: 단지 URL 만 생략하고 기존 sitemap 은 유지.
-  let aptUrls: MetadataRoute.Sitemap = [];
-  try {
-    const rows = await getBlogDb()
-      .select({ id: apartments.id, updatedAt: apartments.updatedAt })
-      .from(apartments);
-    aptUrls = rows.map((a) => ({
-      url: `${baseUrl}/apt/${encodeURIComponent(a.id)}`,
-      lastModified: a.updatedAt,
-      changeFrequency: 'weekly',
-      priority: 0.6,
-    }));
-  } catch (e) {
-    console.error('[sitemap] 단지 목록 조회 실패 (단지 URL 생략):', e);
-  }
+  // 단지 전용 페이지(/apt/[id])는 sitemap 에서 의도적으로 제외 (SEO 개선 2026-07-19).
+  //
+  // 배경: 단지 마스터 29,334개 전체를 나열하니 신생 도메인의 크롤 예산이
+  // 자동생성 단지 페이지에 소진되어 핵심 콘텐츠(region 146·블로그·도구)가
+  // 색인되지 않았다 (GSC 색인 2페이지 사고). 단지 페이지는 색인 금지가
+  // 아니라 미나열일 뿐 — 내부 링크로 자연 발견·색인된다.
+  // 색인 안정화 후(2~3개월) 세대수 상위 단지부터 선별 재도입 예정.
 
-  return [...staticPages, ...regionUrls, ...categoryUrls, ...postUrls, ...aptUrls];
+  return [...staticPages, ...regionUrls, ...categoryUrls, ...postUrls];
 }
