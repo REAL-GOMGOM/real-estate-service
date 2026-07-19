@@ -9,12 +9,13 @@ import PriceComboChart from '@/components/apt/PriceComboChart';
 import { AnalysisPromoBar } from '@/components/shared/AnalysisPromoBar';
 import { getApartmentById, getAptPageData, APT_PAGE_MONTHS, APT_RENT_MONTHS } from '@/lib/apt-detail';
 import {
-  fmtPrice, fmtPriceFull, fmtContractDate, detectNewHigh, peakRecovery,
+  fmtPrice, fmtContractDate, detectNewHigh, peakRecovery,
 } from '@/lib/tx-shared';
 import { fmtRentPrice } from '@/lib/rent-shared';
 import { SITE_URL } from '@/lib/site';
 import AptShareActions from './AptShareActions';
 import AptDealTabs from './AptDealTabs';
+import AptTxTable from './AptTxTable';
 
 /**
  * 단지 전용 페이지 — 사이클 DD (SEO 유입 엔진).
@@ -203,6 +204,80 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
         </div>
       ) : (
         <>
+          {/* 공유 액션 — 상단 배치 (2026-07-19): 지도·공유를 스크롤 없이 바로 */}
+          <div style={{ marginBottom: '18px' }}>
+            <AptShareActions group={group} pageUrl={`${SITE_URL}/apt/${encodeURIComponent(master.id)}`} />
+          </div>
+
+          {/* 입지 분석 (사이클 MM) — 상단 배치 (2026-07-19): 가격 탭보다 먼저 노출, 주요 단지만 */}
+          {aptScore && (
+            <section style={{
+              backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
+              borderRadius: '16px', padding: '18px', marginBottom: '16px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  입지 분석
+                </h2>
+                <span style={{
+                  display: 'inline-flex', alignItems: 'baseline', gap: '6px',
+                  backgroundColor: 'var(--border-light)', borderRadius: '99px', padding: '4px 13px',
+                }}>
+                  <span style={{ fontSize: '17px', fontWeight: 800, color: 'var(--accent)', fontFamily: 'Roboto Mono, monospace' }}>
+                    {aptScore.score.toFixed(2)}
+                  </span>
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>{scoreGrade}</span>
+                </span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
+                {aptScore.stationM !== null && (
+                  <div>
+                    <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-dim)' }}>역세권</p>
+                    <p style={{ margin: '3px 0 0', fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                      도보 {aptScore.stationM}m
+                    </p>
+                  </div>
+                )}
+                {aptScore.elemSchool !== null && (
+                  <div>
+                    <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-dim)' }}>초품아</p>
+                    <p style={{ margin: '3px 0 0', fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {aptScore.elemSchool ? 'O (단지 내 초교)' : 'X'}
+                    </p>
+                  </div>
+                )}
+                {aptScore.far !== null && (
+                  <div>
+                    <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-dim)' }}>용적률</p>
+                    <p style={{ margin: '3px 0 0', fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {Math.round(aptScore.far)}%{aptScore.farLimit ? ` / 허용 ${Math.round(aptScore.farLimit)}%` : ''}
+                    </p>
+                  </div>
+                )}
+                {aptScore.parkingPerHh !== null && (
+                  <div>
+                    <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-dim)' }}>세대당 주차</p>
+                    <p style={{ margin: '3px 0 0', fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {aptScore.parkingPerHh.toFixed(2)}대
+                    </p>
+                  </div>
+                )}
+                {aptScore.buildYear !== null && (
+                  <div>
+                    <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-dim)' }}>준공 (실측)</p>
+                    <p style={{ margin: '3px 0 0', fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {aptScore.buildYear}년
+                    </p>
+                  </div>
+                )}
+              </div>
+              <p style={{ margin: '12px 0 0', fontSize: '11px', color: 'var(--text-dim)', lineHeight: 1.7 }}>
+                입지점수는 내집 자체 산정(지역 기반 50% + 단지 프리미엄 50%, 1.0 최상)이며
+                용적률·주차는 공동주택관리정보시스템(K-apt) 실측 기준입니다.
+              </p>
+            </section>
+          )}
+
           <AptDealTabs hasRent={rentTransactions.length > 0}>
           <div>
           {/* 통계 카드 */}
@@ -242,39 +317,16 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
                 최근 {APT_PAGE_MONTHS}개월 · 계약일순
               </span>
             </div>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ backgroundColor: 'var(--bg-tertiary)' }}>
-                    {['계약일', '면적', '층', '거래가', '평당가'].map((h) => (
-                      <th key={h} style={thStyle}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {sorted.slice(0, TABLE_LIMIT).map((tx, i) => {
-                    const isMax = tx.price === maxPrice && maxTx !== null &&
-                      i === sorted.findIndex((t) => t.price === maxPrice);
-                    return (
-                      <tr key={i} style={{ borderTop: '1px solid var(--border-light)' }}>
-                        <td style={tdStyle}>{fmtContractDate(tx.date)}</td>
-                        <td style={tdStyle}>{tx.area}㎡ · {Math.round(tx.area / 3.3058)}평</td>
-                        <td style={tdStyle}>{tx.floor}층</td>
-                        <td style={{
-                          ...tdStyle, fontWeight: 700, fontFamily: 'Roboto Mono, monospace',
-                          color: isMax ? 'var(--up-color, #C92F2F)' : 'var(--text-primary)',
-                        }}>
-                          {fmtPriceFull(tx.price)}
-                        </td>
-                        <td style={{ ...tdStyle, fontSize: '12px', fontFamily: 'Roboto Mono, monospace', color: 'var(--text-dim)' }}>
-                          {fmtPrice(tx.pricePerArea)}/평
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            {/* 클라이언트 테이블 — 행 클릭 상세·건별 공유 (모달과 대칭, 2026-07-19) */}
+            <AptTxTable
+              aptName={group.name}
+              district={district}
+              dong={group.dong ?? null}
+              transactions={sorted}
+              months={APT_PAGE_MONTHS}
+              maxPrice={maxPrice}
+              limit={TABLE_LIMIT}
+            />
             {sorted.length > TABLE_LIMIT && (
               <div style={{ padding: '12px 18px', borderTop: '1px solid var(--border-light)' }}>
                 <Link href={deepLink} style={{ fontSize: '13px', fontWeight: 700, color: 'var(--accent)', textDecoration: 'none' }}>
@@ -346,75 +398,6 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
           </div>
           </AptDealTabs>
 
-          {/* 입지 분석 (사이클 MM) — analysis 스코어링 산출물, 주요 단지만 */}
-          {aptScore && (
-            <section style={{
-              backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
-              borderRadius: '16px', padding: '18px', marginBottom: '10px',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '14px' }}>
-                <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>
-                  입지 분석
-                </h2>
-                <span style={{
-                  display: 'inline-flex', alignItems: 'baseline', gap: '6px',
-                  backgroundColor: 'var(--border-light)', borderRadius: '99px', padding: '4px 13px',
-                }}>
-                  <span style={{ fontSize: '17px', fontWeight: 800, color: 'var(--accent)', fontFamily: 'Roboto Mono, monospace' }}>
-                    {aptScore.score.toFixed(2)}
-                  </span>
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>{scoreGrade}</span>
-                </span>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
-                {aptScore.stationM !== null && (
-                  <div>
-                    <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-dim)' }}>역세권</p>
-                    <p style={{ margin: '3px 0 0', fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                      도보 {aptScore.stationM}m
-                    </p>
-                  </div>
-                )}
-                {aptScore.elemSchool !== null && (
-                  <div>
-                    <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-dim)' }}>초품아</p>
-                    <p style={{ margin: '3px 0 0', fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                      {aptScore.elemSchool ? 'O (단지 내 초교)' : 'X'}
-                    </p>
-                  </div>
-                )}
-                {aptScore.far !== null && (
-                  <div>
-                    <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-dim)' }}>용적률</p>
-                    <p style={{ margin: '3px 0 0', fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                      {Math.round(aptScore.far)}%{aptScore.farLimit ? ` / 허용 ${Math.round(aptScore.farLimit)}%` : ''}
-                    </p>
-                  </div>
-                )}
-                {aptScore.parkingPerHh !== null && (
-                  <div>
-                    <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-dim)' }}>세대당 주차</p>
-                    <p style={{ margin: '3px 0 0', fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                      {aptScore.parkingPerHh.toFixed(2)}대
-                    </p>
-                  </div>
-                )}
-                {aptScore.buildYear !== null && (
-                  <div>
-                    <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-dim)' }}>준공 (실측)</p>
-                    <p style={{ margin: '3px 0 0', fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                      {aptScore.buildYear}년
-                    </p>
-                  </div>
-                )}
-              </div>
-              <p style={{ margin: '12px 0 0', fontSize: '11px', color: 'var(--text-dim)', lineHeight: 1.7 }}>
-                입지점수는 내집 자체 산정(지역 기반 50% + 단지 프리미엄 50%, 1.0 최상)이며
-                용적률·주차는 공동주택관리정보시스템(K-apt) 실측 기준입니다.
-              </p>
-            </section>
-          )}
-
           <p style={{ fontSize: '11px', color: 'var(--text-dim)', margin: '0 0 24px', lineHeight: 1.8 }}>
             ※ 출처: 국토교통부 실거래가 공개시스템 (자체 원장, 매일 갱신 · 취소거래 제외) · 신고 지연으로 실제와 차이가 있을 수 있습니다.
             {allTimeHigh
@@ -422,11 +405,6 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
               : ` 전고점 회복률은 최근 ${APT_PAGE_MONTHS}개월 내 대표 면적 최고가 기준입니다.`}
             {jeonseRatio !== null && ' 전세가율은 대표 면적 최신 전세 보증금 ÷ 최근 매매가입니다.'}
           </p>
-
-          {/* 공유 액션 */}
-          <div style={{ marginBottom: '24px' }}>
-            <AptShareActions group={group} pageUrl={`${SITE_URL}/apt/${encodeURIComponent(master.id)}`} />
-          </div>
 
           <AnalysisPromoBar />
         </>
