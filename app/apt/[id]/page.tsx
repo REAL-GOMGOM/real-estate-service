@@ -416,7 +416,7 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
           )}
 
           <p style={{ fontSize: '11px', color: 'var(--text-dim)', margin: '0 0 24px', lineHeight: 1.8 }}>
-            ※ 출처: 국토교통부 실거래가 공개시스템 · 신고 지연·해제 거래로 실제와 차이가 있을 수 있습니다.
+            ※ 출처: 국토교통부 실거래가 공개시스템 (자체 원장, 매일 갱신 · 취소거래 제외) · 신고 지연으로 실제와 차이가 있을 수 있습니다.
             {allTimeHigh
               ? ' 역대 전고점은 2019년 이후 신고 최고가 기준입니다.'
               : ` 전고점 회복률은 최근 ${APT_PAGE_MONTHS}개월 내 대표 면적 최고가 기준입니다.`}

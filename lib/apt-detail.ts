@@ -1,24 +1,26 @@
 import 'server-only';
 import { and, desc, eq, gte, inArray, lte } from 'drizzle-orm';
 import { getBlogDb } from '@/lib/db/client';
-import { apartments, aptHighs, aptScores, type Apartment, type AptScore } from '@/lib/db/schema';
-import { findDistrictByLawdCd } from '@/lib/district-codes';
 import {
-  getMonthList, fetchTradeMonthAllPages, fetchRentMonthAllPages, revalidateForMonth,
-} from '@/lib/molit-months';
+  apartments, aptHighs, aptScores, transactions, rentTransactions as rentTxTable,
+  type Apartment, type AptScore,
+} from '@/lib/db/schema';
+import { findDistrictByLawdCd } from '@/lib/district-codes';
 import { buildNameCandidates, aptNameMatches } from '@/lib/apt-name-match';
-import { parseRentXml, isJeonse, type RentTransaction } from '@/lib/rent-shared';
+import { isJeonse, type RentTransaction } from '@/lib/rent-shared';
 import { representativeArea, type AptGroup, type Transaction } from '@/lib/tx-shared';
 
 /**
- * 단지 전용 페이지 데이터 로더 — 사이클 DD.
+ * 단지 전용 페이지 데이터 로더 — 사이클 DD → DB 전환 (2026-07-19).
  *
- * id(kaptCode) → 단지 마스터 → MOLIT 최근 N개월 매매 → 해당 단지 거래만
- * 골라 AptGroup 으로. fetchMolitXml 캐시(24h)를 /api/transactions 와
- * 공유하므로 페이지 추가로 인한 MOLIT 부하 증가는 없다.
+ * 기존: 콜드 진입마다 MOLIT 라이브 최대 42콜(매매 36개월 + 전월세 6개월)
+ * → 수십 초 로딩 사고. 개편: 자체 원장(transactions·rent_transactions)
+ * 조회 → 1초 미만. 원장 보존이 매매 13·전월세 7개월이라 표시 기간은
+ * 12개월 — 역대 전고점은 apt_highs 가 역대 기준으로 계속 커버한다.
+ * (무료 티어 512MB 상한의 구조적 한계 — 유료 전환 시 36개월 복원 백로그)
  */
 
-export const APT_PAGE_MONTHS = 36;
+export const APT_PAGE_MONTHS = 12;
 /** 전세 시세 조회 기간 — 전세가율은 최근 계약이면 충분 (MOLIT 부하 최소화) */
 export const APT_RENT_MONTHS = 6;
 /** 전월세 탭 테이블 최대 행수 */
@@ -47,13 +49,20 @@ export async function getApartmentById(id: string): Promise<Apartment | null> {
   return rows[0] ?? null;
 }
 
+/** 이번 달 포함 최근 N개월의 시작일 (YYYY-MM-01) — getMonthList 와 동일 창 */
+function monthsWindowStart(months: number): string {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - (months - 1));
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+}
+
 export async function getAptPageData(id: string): Promise<AptPageData | null> {
   const master = await getApartmentById(id);
   if (!master) return null;
 
   const district = findDistrictByLawdCd(master.lawdCd) ?? master.sigungu;
 
-  const rawKey = process.env.PUBLIC_DATA_API_KEY;
   const group: AptGroup = {
     id:           master.id,
     name:         master.name,
@@ -64,81 +73,103 @@ export async function getAptPageData(id: string): Promise<AptPageData | null> {
     areas:        [],
     transactions: [],
   };
-  if (!rawKey) return { master, district, group, allTimeHigh: null, recentJeonse: [], rentTransactions: [], aptScore: null };
 
-  const apiKey     = decodeURIComponent(rawKey);
   const candidates = buildNameCandidates({ name: master.name, aliases: master.aliases ?? [] });
+  const db = getBlogDb();
 
+  // 매매 — 자체 원장 최근 12개월 (구 slim 조회 후 단지명 매칭, 취소 제외)
   try {
-    const xmls = await Promise.all(
-      getMonthList(APT_PAGE_MONTHS).map((yyyymm) =>
-        fetchTradeMonthAllPages(apiKey, master.lawdCd, yyyymm, revalidateForMonth(yyyymm)).catch(() => '')
-      )
-    );
+    const rows = await db
+      .select({
+        aptName:   transactions.aptName,
+        umdNm:     transactions.umdNm,
+        areaM2:    transactions.areaM2,
+        floor:     transactions.floor,
+        price:     transactions.dealAmount,
+        dealDate:  transactions.dealDate,
+        buildYear: transactions.buildYear,
+      })
+      .from(transactions)
+      .where(and(
+        eq(transactions.lawdCd, master.lawdCd),
+        gte(transactions.dealDate, monthsWindowStart(APT_PAGE_MONTHS)),
+        eq(transactions.isCanceled, false),
+      ))
+      .orderBy(desc(transactions.dealDate));
 
-    for (const xml of xmls) {
-      const items = xml.match(/<item>([\s\S]*?)<\/item>/g) ?? [];
-      for (const item of items) {
-        const get = (tag: string) =>
-          item.match(new RegExp('<' + tag + '>([^<]*)<\\/' + tag + '>'))?.[1]?.trim() ?? '';
-
-        const aptNm = get('aptNm');
-        if (!aptNm || !aptNameMatches(aptNm, candidates)) continue;
-
-        const price = parseInt(get('dealAmount').replace(/,/g, ''));
-        const area  = parseFloat(get('excluUseAr'));
-        const year  = get('dealYear');
-        if (!price || !area || !year) continue;
-
-        const month = get('dealMonth').padStart(2, '0');
-        const day   = get('dealDay').padStart(2, '0');
-
-        const tx: Transaction = {
-          aptName:      master.name,
-          district,
-          dong:         get('umdNm') || master.dong,
-          area:         Math.round(area),
-          floor:        parseInt(get('floor')) || 1,
-          price,
-          pricePerArea: Math.round(price / area),
-          date:         year + '-' + month + (day !== '00' ? '-' + day : ''),
-          buildYear:    parseInt(get('buildYear')) || null,
-        };
-        group.transactions.push(tx);
-        if (!group.areas.includes(tx.area)) group.areas.push(tx.area);
-        if (!group.buildYear && tx.buildYear) group.buildYear = tx.buildYear;
-      }
+    for (const r of rows) {
+      if (!aptNameMatches(r.aptName, candidates)) continue;
+      const tx: Transaction = {
+        aptName:      master.name,
+        district,
+        dong:         r.umdNm || master.dong,
+        area:         Math.round(r.areaM2),
+        floor:        r.floor || 1,
+        price:        r.price,
+        pricePerArea: Math.round(r.price / r.areaM2),
+        date:         r.dealDate.endsWith('-00') ? r.dealDate.slice(0, 7) : r.dealDate,
+        buildYear:    r.buildYear,
+      };
+      group.transactions.push(tx);
+      if (!group.areas.includes(tx.area)) group.areas.push(tx.area);
+      if (!group.buildYear && tx.buildYear) group.buildYear = tx.buildYear;
     }
   } catch (e) {
-    console.error('[apt-detail] MOLIT 조회 실패 (fail-open, 거래 없이 렌더):', e);
+    console.error('[apt-detail] 원장 조회 실패 (fail-open, 거래 없이 렌더):', e);
   }
 
-  group.transactions.sort((a, b) => b.date.localeCompare(a.date));
   group.areas.sort((a, b) => a - b);
 
-  // 최근 전세 계약 (사이클 LL — 전세가율) — 대표 면적대(±6㎡), fail-open
+  // 전월세 (사이클 LL — 전세가율 + 전월세 탭) — 자체 원장 최근 6개월, fail-open
   let recentJeonse: RentTransaction[] = [];
   let rentTransactions: RentTransaction[] = [];
   if (group.transactions.length > 0) {
     try {
       const repArea = representativeArea(group);
-      const rentXmls = await Promise.all(
-        getMonthList(APT_RENT_MONTHS).map((yyyymm) =>
-          fetchRentMonthAllPages(apiKey, master.lawdCd, yyyymm, revalidateForMonth(yyyymm)).catch(() => '')
-        )
-      );
-      // 해당 단지 전월세 전체 (전세+월세·전 면적) — 같은 XML 재사용이라 MOLIT 부하 추가 없음
-      const allRent = rentXmls
-        .flatMap((xml) => parseRentXml(xml, district))
-        .filter((tx) => aptNameMatches(tx.aptName, candidates))
-        .sort((a, b) => b.date.localeCompare(a.date));
+      const rentRows = await db
+        .select({
+          aptName:         rentTxTable.aptName,
+          umdNm:           rentTxTable.umdNm,
+          areaM2:          rentTxTable.areaM2,
+          floor:           rentTxTable.floor,
+          deposit:         rentTxTable.deposit,
+          monthlyRent:     rentTxTable.monthlyRent,
+          dealDate:        rentTxTable.dealDate,
+          buildYear:       rentTxTable.buildYear,
+          contractType:    rentTxTable.contractType,
+          prevDeposit:     rentTxTable.prevDeposit,
+          prevMonthlyRent: rentTxTable.prevMonthlyRent,
+        })
+        .from(rentTxTable)
+        .where(and(
+          eq(rentTxTable.lawdCd, master.lawdCd),
+          gte(rentTxTable.dealDate, monthsWindowStart(APT_RENT_MONTHS)),
+        ))
+        .orderBy(desc(rentTxTable.dealDate));
+
+      const allRent: RentTransaction[] = rentRows
+        .filter((r) => aptNameMatches(r.aptName, candidates))
+        .map((r) => ({
+          aptName:      r.aptName,
+          district,
+          dong:         r.umdNm,
+          area:         Math.round(r.areaM2),
+          floor:        r.floor || 1,
+          deposit:      r.deposit,
+          monthlyRent:  r.monthlyRent,
+          date:         r.dealDate.endsWith('-00') ? r.dealDate.slice(0, 7) : r.dealDate,
+          buildYear:    r.buildYear,
+          contractType: r.contractType ?? '',
+          prevDeposit:      r.prevDeposit,
+          prevMonthlyRent:  r.prevMonthlyRent,
+        }));
       rentTransactions = allRent.slice(0, APT_RENT_TABLE_LIMIT);
       // 전세가율용 — 대표 면적대(±6㎡) 전세만 최신 5건
       recentJeonse = allRent
         .filter((tx) => isJeonse(tx) && Math.abs(tx.area - repArea) <= 6)
         .slice(0, 5);
     } catch (e) {
-      console.error('[apt-detail] 전월세 조회 실패 (fail-open):', e);
+      console.error('[apt-detail] 전월세 원장 조회 실패 (fail-open):', e);
     }
   }
 
