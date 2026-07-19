@@ -26,8 +26,19 @@ export interface AptGroup {
   households?:  number | null;
   /** 단지 마스터 PK (kaptCode) — 있으면 /apt/[id] 전용 페이지 존재 (사이클 DD) */
   masterId?:    string | null;
+  /** 입지 점수 (사이클 MM 산출물, 주요 단지만) — 모달 배지용 (2026-07-19) */
+  score?:       number | null;
   areas:        number[];
   transactions: Transaction[];
+}
+
+/** 입지 점수 → 등급 라벨 — 단지 페이지(/apt/[id])와 동일 구간 */
+export function scoreGradeLabel(score: number): string {
+  if (score <= 1.5) return '최상급';
+  if (score <= 2.0) return '상급';
+  if (score <= 2.5) return '중상급';
+  if (score <= 3.0) return '중급';
+  return '보통';
 }
 
 export interface DistrictStat {

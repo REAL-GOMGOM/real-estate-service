@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { eq, ilike, sql, and, gte, desc } from 'drizzle-orm';
+import { eq, ilike, sql, and, gte, desc, inArray } from 'drizzle-orm';
 import { DISTRICT_CODE, findDistrictByLawdCd } from '@/lib/district-codes';
 import { matchesQuery } from '@/lib/search-utils';
 import { getBlogDb } from '@/lib/db/client';
-import { apartments, transactions as transactionsTable } from '@/lib/db/schema';
+import { apartments, aptScores, transactions as transactionsTable } from '@/lib/db/schema';
 import { normalizeMLTMName } from '@/lib/normalize-mltm-name';
 import { getMonthList, fetchTradeMonthAllPages, revalidateForMonth } from '@/lib/molit-months';
 import { decodeXmlEntities } from '@/lib/xml-entities';
@@ -32,6 +32,7 @@ interface AptGroupRow {
   buildYear:    number | null;
   households:   number | null;
   masterId:     string | null;   // 단지 마스터 PK — /apt/[id] 전용 페이지 링크용
+  score:        number | null;   // 입지 점수 (주요 단지만) — 모달 배지용 (2026-07-19)
   areas:        number[];
   transactions: TxRow[];
 }
@@ -157,6 +158,7 @@ async function buildGroupedResponse(
         buildYear:    tx.buildYear,
         households:   null,
         masterId:     null,
+        score:        null,
         areas:        [],
         transactions: [],
       };
@@ -193,6 +195,19 @@ async function buildGroupedResponse(
       }
     }
 
+    // 입지 점수 (사이클 MM 산출물, 주요 단지만) — 있으면 모달 배지 표시용
+    const masterIds = masterRows.map((r) => r.id);
+    const scoreByMaster = new Map<string, number>();
+    if (masterIds.length > 0) {
+      const scoreRows = await db
+        .select({ masterId: aptScores.masterId, score: aptScores.score })
+        .from(aptScores)
+        .where(inArray(aptScores.masterId, masterIds));
+      for (const s of scoreRows) {
+        if (s.masterId) scoreByMaster.set(s.masterId, s.score);
+      }
+    }
+
     Object.values(grouped).forEach((apt) => {
       const matched =
         masterByName.get(apt.name) ??
@@ -200,6 +215,7 @@ async function buildGroupedResponse(
       if (matched) {
         apt.masterId = matched.id;
         if (matched.households != null) apt.households = matched.households;
+        apt.score = scoreByMaster.get(matched.id) ?? null;
       }
     });
   } catch (e) {

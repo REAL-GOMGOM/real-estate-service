@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { X } from 'lucide-react';
 import {
   type AptGroup, type Transaction,
-  fmtPrice, fmtContractDate, detectNewHigh, buildSparkPts,
+  fmtPrice, fmtContractDate, detectNewHigh, buildSparkPts, scoreGradeLabel,
 } from '../types';
 import { buildShareImage, shareOrDownloadImage } from '@/lib/share-image';
 import { buildPeakLine, buildTxShareText, pricePerPyeong, txKey } from '@/lib/tx-share-text';
@@ -160,6 +160,30 @@ export default function AptDetailModal({ apt, onClose, months, initialTx }: AptD
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialTx]);
 
+  // 링크·텍스트 공유 — 헤더(상단)·하단 버튼 공용 (공유 상단 배치 2026-07-19)
+  const shareText = async () => {
+    const url = latest
+      ? deepLinkUrl(latest)
+      : `${window.location.origin}/transactions?district=${encodeURIComponent(apt.district)}&q=${encodeURIComponent(apt.name)}`;
+    const text = latest
+      ? buildTxShareText({
+          aptName: apt.name,
+          location: `${apt.district}${apt.dong ? ' ' + apt.dong : ''}`,
+          price: latest.price, areaM2: latest.area, floor: latest.floor, date: latest.date,
+          peakLine: txDerived(latest).peakLine, fmt: fmtPrice, fmtDate: fmtContractDate,
+        })
+      : `${apt.name} · 내집 My.ZIP`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: apt.name, text, url });
+      } else {
+        await navigator.clipboard.writeText(`${text}\n${url}`);
+        setShareCopied(true);
+        setTimeout(() => setShareCopied(false), 1500);
+      }
+    } catch { /* 공유 취소 무시 */ }
+  };
+
   // 이미지 공유 (사이클 CC-2) — 현재 면적 필터 상태의 브랜드 카드 생성
   const saveAsImage = async () => {
     if (!latest || imageSaving) return;
@@ -240,6 +264,17 @@ export default function AptDetailModal({ apt, onClose, months, initialTx }: AptD
                   단지 페이지 ↗
                 </Link>
               )}
+              {apt.score != null && (
+                <span
+                  title="내집 자체 산정 입지점수 (1.0 최상) — 자세한 분석은 단지 페이지"
+                  style={{
+                    fontSize: '11px', fontWeight: 700, padding: '3px 9px', borderRadius: '6px',
+                    backgroundColor: '#EEF2FB', color: '#1B4DDB', whiteSpace: 'nowrap',
+                  }}
+                >
+                  입지 {apt.score.toFixed(2)} {scoreGradeLabel(apt.score)}
+                </span>
+              )}
             </div>
             <p style={{ fontSize: '13px', color: 'var(--text-dim)' }}>
               {apt.district}{apt.dong ? ` ${apt.dong}` : ''}
@@ -247,13 +282,43 @@ export default function AptDetailModal({ apt, onClose, months, initialTx }: AptD
               {apt.households ? ` · ${apt.households.toLocaleString()}세대` : ''}
             </p>
           </div>
-          <button
-            onClick={onClose}
-            aria-label="닫기"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-dim)', padding: '4px' }}
-          >
-            <X size={20} />
-          </button>
+          {/* 상단 액션 — 공유 2종 + 닫기 (공유 상단 배치 2026-07-19, 하단 버튼도 유지) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+            <button
+              onClick={saveAsImage}
+              disabled={imageSaving || !latest}
+              aria-label="이미지로 공유"
+              title="이미지로 공유"
+              style={{
+                padding: '6px 10px', borderRadius: '8px', fontSize: '14px',
+                backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
+                cursor: imageSaving ? 'wait' : 'pointer', opacity: imageSaving ? 0.6 : 1,
+              }}
+            >
+              🖼
+            </button>
+            <button
+              onClick={shareText}
+              disabled={!latest}
+              aria-label="공유하기"
+              title="공유하기"
+              style={{
+                padding: '6px 10px', borderRadius: '8px', fontSize: '14px', fontWeight: 700,
+                backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
+                color: shareCopied ? 'var(--success-text, #2E7A4C)' : 'var(--text-primary)',
+                cursor: 'pointer',
+              }}
+            >
+              {shareCopied ? '✓' : '↗'}
+            </button>
+            <button
+              onClick={onClose}
+              aria-label="닫기"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-dim)', padding: '4px' }}
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         {/* 면적 필터 */}
@@ -481,28 +546,7 @@ export default function AptDetailModal({ apt, onClose, months, initialTx }: AptD
               {imageSaving ? '생성 중…' : '🖼 이미지로 공유'}
             </button>
             <button
-              onClick={async () => {
-                const url = latest
-                  ? deepLinkUrl(latest)
-                  : `${window.location.origin}/transactions?district=${encodeURIComponent(apt.district)}&q=${encodeURIComponent(apt.name)}`;
-                const text = latest
-                  ? buildTxShareText({
-                      aptName: apt.name,
-                      location: `${apt.district}${apt.dong ? ' ' + apt.dong : ''}`,
-                      price: latest.price, areaM2: latest.area, floor: latest.floor, date: latest.date,
-                      peakLine: txDerived(latest).peakLine, fmt: fmtPrice, fmtDate: fmtContractDate,
-                    })
-                  : `${apt.name} · 내집 My.ZIP`;
-                try {
-                  if (navigator.share) {
-                    await navigator.share({ title: apt.name, text, url });
-                  } else {
-                    await navigator.clipboard.writeText(`${text}\n${url}`);
-                    setShareCopied(true);
-                    setTimeout(() => setShareCopied(false), 1500);
-                  }
-                } catch { /* 공유 취소 무시 */ }
-              }}
+              onClick={shareText}
               style={{
                 flex: 1, border: 0, backgroundColor: 'var(--accent)', color: '#FFFFFF',
                 fontWeight: 800, fontSize: '14px', padding: '14px', borderRadius: '12px',
