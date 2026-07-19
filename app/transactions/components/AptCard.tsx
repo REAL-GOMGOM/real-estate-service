@@ -9,6 +9,7 @@ import {
 } from '../types';
 import { smoothPath, type Pt } from '@/lib/svg-smooth';
 import { buildShareImage, shareOrDownloadImage } from '@/lib/share-image';
+import { buildPeakLine, buildTxShareText, pricePerPyeong, txKey } from '@/lib/tx-share-text';
 
 /**
  * 아실형 단지 카드 — 사이클 W
@@ -23,6 +24,8 @@ import { buildShareImage, shareOrDownloadImage } from '@/lib/share-image';
 interface AptCardProps {
   apt:     AptGroup;
   onClick: () => void;
+  /** 조회 기간 (개월) — 공유 카드의 전고점 기간 캡션용 */
+  months:  number;
 }
 
 /** 대표 면적 거래 → 시간축 비례 좌표 (silgga 스타일, sparkSeries 공용) */
@@ -44,7 +47,7 @@ function buildSparkline(apt: AptGroup, width: number, height: number) {
   return { coords, rising: series.rising, count: coords.length };
 }
 
-export default function AptCard({ apt, onClick }: AptCardProps) {
+export default function AptCard({ apt, onClick, months }: AptCardProps) {
   const [shareOpen, setShareOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const shareRef = useRef<HTMLDivElement>(null);
@@ -70,6 +73,20 @@ export default function AptCard({ apt, onClick }: AptCardProps) {
     .map((t) => t.price);
   const peak = samePrices.length ? Math.max(...samePrices) : latest.price;
   const gapToPeak = peak - latest.price;
+
+  // 공유용 파생값 (공유 강화 2026-07-19) — latest 면적 기준 동일면적(±6㎡) 전고점
+  const sameAsLatest  = apt.transactions.filter((t) => Math.abs(t.area - latest.area) <= 6);
+  const sharePeak     = sameAsLatest.length ? Math.max(...sameAsLatest.map((t) => t.price)) : latest.price;
+  const shareOthers   = sameAsLatest.filter((t) => t !== latest).map((t) => t.price);
+  const sharePrevPeak = shareOthers.length ? Math.max(...shareOthers) : null;
+  const sharePeakLine = buildPeakLine({
+    price: latest.price, peak: sharePeak, prevPeak: sharePrevPeak, months, fmt: fmtPrice,
+  });
+  const sharePerPy = `평당 ${fmtPrice(pricePerPyeong(latest.price, latest.area))}`;
+  // 딥링크 — 받은 사람이 이 계약 건으로 정확히 착지 (months·tx 포함)
+  const shareUrl = () =>
+    `${window.location.origin}/transactions?district=${encodeURIComponent(apt.district)}` +
+    `&q=${encodeURIComponent(apt.name)}&months=${months}&tx=${encodeURIComponent(txKey(latest))}`;
 
   // 최근 3개월 거래 수
   const threeMonthsAgo = new Date();
@@ -117,6 +134,8 @@ export default function AptCard({ apt, onClick }: AptCardProps) {
         meta:     `${latest.area}㎡ · ${Math.round(latest.area / 3.3058)}평 · ${latest.floor}층 · ${fmtContractDate(latest.date)} 계약`,
         spark:    sparkPts,
         high:     newHigh,
+        pricePerPy: sharePerPy,
+        peakLine:   sharePeakLine,
       });
       if (!blob) return;
       await shareOrDownloadImage(blob, `${apt.name}-실거래.png`, apt.name);
@@ -130,8 +149,13 @@ export default function AptCard({ apt, onClick }: AptCardProps) {
   const shareLink = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const url = `${window.location.origin}/transactions?district=${encodeURIComponent(apt.district)}&q=${encodeURIComponent(apt.name)}`;
-    const text = `${apt.name} 최근 실거래 ${fmtPrice(latest.price)} (${latest.area}㎡·${latest.floor}층) · 전고점 ${fmtPrice(peak)}`;
+    const url = shareUrl();
+    const text = buildTxShareText({
+      aptName: apt.name,
+      location: apt.dong ? `${apt.district} ${apt.dong}` : apt.district,
+      price: latest.price, areaM2: latest.area, floor: latest.floor, date: latest.date,
+      peakLine: sharePeakLine, fmt: fmtPrice, fmtDate: fmtContractDate,
+    });
     try {
       if (navigator.share) {
         await navigator.share({ title: apt.name, text, url });

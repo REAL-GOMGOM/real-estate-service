@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { X } from 'lucide-react';
 import {
@@ -8,6 +8,7 @@ import {
   fmtPrice, fmtContractDate, detectNewHigh, buildSparkPts,
 } from '../types';
 import { buildShareImage, shareOrDownloadImage } from '@/lib/share-image';
+import { buildPeakLine, buildTxShareText, pricePerPyeong, txKey } from '@/lib/tx-share-text';
 import PriceComboChart from '@/components/apt/PriceComboChart';
 
 /**
@@ -22,6 +23,8 @@ interface AptDetailModalProps {
   apt:     AptGroup;
   onClose: () => void;
   months:  number;
+  /** 딥링크 착지 — 공유 URL 의 tx 식별자 (해당 계약 행 자동 확장·스크롤) */
+  initialTx?: string | null;
 }
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -38,10 +41,15 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-export default function AptDetailModal({ apt, onClose, months }: AptDetailModalProps) {
+export default function AptDetailModal({ apt, onClose, months, initialTx }: AptDetailModalProps) {
   const [selArea, setSelArea] = useState<number | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
   const [imageSaving, setImageSaving] = useState(false);
+  // 계약 건별 아코디언 (공유 강화 2026-07-19)
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+  const [txCopied,    setTxCopied]    = useState(false);
+  const [txSaving,    setTxSaving]    = useState(false);
+  const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
 
   // 모달 열림 중 배경 페이지 스크롤 잠금 (스크롤바 이중 노출 방지)
   useEffect(() => {
@@ -73,6 +81,85 @@ export default function AptDetailModal({ apt, onClose, months }: AptDetailModalP
     ? Math.round((latest.price / maxPrice) * 1000) / 10
     : null;
 
+  // ── 계약 건별 파생값 (공유 강화 2026-07-19) ──
+  const txDerived = (tx: Transaction) => {
+    const sameArea = filtered.filter((t) => Math.abs(t.area - tx.area) <= 6);
+    const peak     = sameArea.length ? Math.max(...sameArea.map((t) => t.price)) : tx.price;
+    const others   = sameArea.filter((t) => t !== tx).map((t) => t.price);
+    const prevPeak = others.length ? Math.max(...others) : null;
+    // 직전 동일면적 계약 (날짜 역순 목록에서 이 건 다음에 오는 첫 동일면적)
+    const idx  = filtered.indexOf(tx);
+    const prev = idx >= 0 ? filtered.slice(idx + 1).find((t) => Math.abs(t.area - tx.area) <= 6) ?? null : null;
+    return {
+      sameArea, peak, prevPeak, prev,
+      peakLine: buildPeakLine({ price: tx.price, peak, prevPeak, months, fmt: fmtPrice }),
+      perPy: pricePerPyeong(tx.price, tx.area),
+      isPeak: tx.price >= peak,
+    };
+  };
+
+  const deepLinkUrl = (tx: Transaction) =>
+    `${window.location.origin}/transactions?district=${encodeURIComponent(apt.district)}` +
+    `&q=${encodeURIComponent(apt.name)}&months=${months}&tx=${encodeURIComponent(txKey(tx))}`;
+
+  // 건별 이미지 공유 — 그 계약 건 기준 카드 (동일면적 시리즈 스파크)
+  const shareTxImage = async (tx: Transaction) => {
+    if (txSaving) return;
+    setTxSaving(true);
+    try {
+      const d = txDerived(tx);
+      const delta = d.prev ? tx.price - d.prev.price : null;
+      const spark = buildSparkPts({ ...apt, transactions: d.sameArea });
+      const blob = await buildShareImage({
+        apt: apt.name,
+        location: `${apt.district}${apt.dong ? ' ' + apt.dong : ''}`,
+        price: fmtPrice(tx.price),
+        delta: delta !== null && delta !== 0 ? `${delta > 0 ? '▲' : '▼'} ${fmtPrice(Math.abs(delta))}` : '',
+        up: delta !== null ? delta >= 0 : true,
+        meta: `${tx.area}㎡ · ${Math.round(tx.area / 3.3058)}평 · ${tx.floor}층 · ${fmtContractDate(tx.date)} 계약`,
+        spark: spark?.pts ?? [],
+        high: d.isPeak && d.sameArea.length >= 2,
+        pricePerPy: `평당 ${fmtPrice(d.perPy)}`,
+        peakLine: d.peakLine,
+      });
+      if (blob) await shareOrDownloadImage(blob, `${apt.name}-${tx.date}-실거래.png`, apt.name);
+    } catch { /* 공유 취소 무시 */ }
+    setTxSaving(false);
+  };
+
+  // 건별 텍스트 공유 — 딥링크 포함 (받은 사람이 이 계약으로 정확히 착지)
+  const shareTxText = async (tx: Transaction) => {
+    const d = txDerived(tx);
+    const text = buildTxShareText({
+      aptName: apt.name,
+      location: `${apt.district}${apt.dong ? ' ' + apt.dong : ''}`,
+      price: tx.price, areaM2: tx.area, floor: tx.floor, date: tx.date,
+      peakLine: d.peakLine, fmt: fmtPrice, fmtDate: fmtContractDate,
+    });
+    const url = deepLinkUrl(tx);
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: apt.name, text, url });
+      } else {
+        await navigator.clipboard.writeText(`${text}\n${url}`);
+        setTxCopied(true);
+        setTimeout(() => setTxCopied(false), 1500);
+      }
+    } catch { /* 공유 취소 무시 */ }
+  };
+
+  // 딥링크 착지 — initialTx 매칭 행 자동 확장 + 중앙 스크롤
+  useEffect(() => {
+    if (!initialTx) return;
+    const idx = sorted.findIndex((t) => txKey(t) === initialTx);
+    if (idx < 0) return;
+    setExpandedIdx(idx);
+    requestAnimationFrame(() => {
+      rowRefs.current.get(idx)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialTx]);
+
   // 이미지 공유 (사이클 CC-2) — 현재 면적 필터 상태의 브랜드 카드 생성
   const saveAsImage = async () => {
     if (!latest || imageSaving) return;
@@ -92,6 +179,8 @@ export default function AptDetailModal({ apt, onClose, months }: AptDetailModalP
         meta: `${latest.area}㎡ · ${Math.round(latest.area / 3.3058)}평 · ${latest.floor}층 · ${fmtContractDate(latest.date)} 계약`,
         spark: spark?.pts ?? [],
         high: newHigh,
+        pricePerPy: `평당 ${fmtPrice(pricePerPyeong(latest.price, latest.area))}`,
+        peakLine: txDerived(latest).peakLine,
       });
       if (blob) await shareOrDownloadImage(blob, `${apt.name}-실거래.png`, apt.name);
     } catch { /* 공유 취소 무시 */ }
@@ -244,12 +333,20 @@ export default function AptDetailModal({ apt, onClose, months }: AptDetailModalP
               {filtered.map((tx, i) => {
                 const ratio = maxPrice > 0 ? (tx.price / maxPrice) * 100 : null;
                 const isMax = tx.price === maxPrice && i === filtered.findIndex((t) => t.price === maxPrice);
+                const isOpen = expandedIdx === i;
+                const d = isOpen ? txDerived(tx) : null;
+                const prevDelta = d?.prev ? tx.price - d.prev.price : null;
                 return (
+                  <Fragment key={i}>
                   <tr
-                    key={i}
-                    style={{ borderTop: '1px solid var(--border-light)' }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(27,77,219,0.05)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '')}
+                    ref={(el) => { if (el) rowRefs.current.set(i, el); }}
+                    onClick={() => setExpandedIdx(isOpen ? null : i)}
+                    style={{
+                      borderTop: '1px solid var(--border-light)', cursor: 'pointer',
+                      backgroundColor: isOpen ? 'rgba(27,77,219,0.06)' : undefined,
+                    }}
+                    onMouseEnter={(e) => { if (!isOpen) e.currentTarget.style.backgroundColor = 'rgba(27,77,219,0.05)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = isOpen ? 'rgba(27,77,219,0.06)' : ''; }}
                   >
                     <td style={{ padding: '11px 12px', fontSize: '13px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
                       {fmtContractDate(tx.date)}
@@ -286,9 +383,61 @@ export default function AptDetailModal({ apt, onClose, months }: AptDetailModalP
                       padding: '11px 12px', fontSize: '12px', color: 'var(--text-dim)',
                       fontFamily: 'Roboto Mono, monospace', whiteSpace: 'nowrap',
                     }}>
-                      {fmtPrice(tx.pricePerArea)}/평
+                      {/* 진짜 평당가 — 기존 pricePerArea 는 ㎡당 값이라 /평 표기가 3.3배 틀렸음 (2026-07-19 정정) */}
+                      {fmtPrice(pricePerPyeong(tx.price, tx.area))}/평
                     </td>
                   </tr>
+
+                  {/* 계약 건별 상세 아코디언 (공유 강화 2026-07-19) */}
+                  {isOpen && d && (
+                    <tr style={{ backgroundColor: 'rgba(27,77,219,0.04)' }}>
+                      <td colSpan={6} style={{ padding: '14px 16px 16px', borderTop: '1px dashed var(--border)' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '12.5px', color: 'var(--text-muted)' }}>
+                            <span>거래가 <strong style={{ color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>{fmtPrice(tx.price)}</strong></span>
+                            <span>평당 <strong style={{ color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>{fmtPrice(d.perPy)}</strong></span>
+                            {ratio !== null && <span>고점대비 <strong style={{ color: ratio >= 100 ? 'var(--up-color, #C92F2F)' : 'var(--text-primary)' }}>{ratio.toFixed(1)}%</strong></span>}
+                            <span>
+                              직전 동일면적 대비{' '}
+                              {prevDelta !== null ? (
+                                <strong style={{ color: prevDelta >= 0 ? 'var(--up-color, #C92F2F)' : '#1636A8' }}>
+                                  {prevDelta === 0 ? '보합' : `${prevDelta > 0 ? '▲' : '▼'} ${fmtPrice(Math.abs(prevDelta))}`}
+                                </strong>
+                              ) : (
+                                <span style={{ color: 'var(--text-dim)' }}>비교 대상 없음</span>
+                              )}
+                            </span>
+                          </div>
+                          <p style={{ fontSize: '12px', color: 'var(--text-dim)', margin: 0 }}>{d.peakLine}</p>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); shareTxImage(tx); }}
+                              disabled={txSaving}
+                              style={{
+                                padding: '8px 14px', borderRadius: '9px', fontSize: '12.5px', fontWeight: 700,
+                                backgroundColor: 'var(--bg-card)', color: 'var(--text-primary)',
+                                border: '1px solid var(--border)', cursor: txSaving ? 'wait' : 'pointer',
+                                opacity: txSaving ? 0.6 : 1, fontFamily: 'inherit',
+                              }}
+                            >
+                              {txSaving ? '생성 중…' : '🖼 이미지 공유'}
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); shareTxText(tx); }}
+                              style={{
+                                padding: '8px 14px', borderRadius: '9px', fontSize: '12.5px', fontWeight: 700,
+                                backgroundColor: 'var(--accent)', color: '#FFFFFF',
+                                border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                              }}
+                            >
+                              {txCopied ? '✓ 복사됨' : '🔗 텍스트 공유'}
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -333,8 +482,17 @@ export default function AptDetailModal({ apt, onClose, months }: AptDetailModalP
             </button>
             <button
               onClick={async () => {
-                const url = `${window.location.origin}/transactions?district=${encodeURIComponent(apt.district)}&q=${encodeURIComponent(apt.name)}`;
-                const text = `${apt.name} 최근 실거래 ${latest ? fmtPrice(latest.price) : ''} · 내집 My.ZIP`;
+                const url = latest
+                  ? deepLinkUrl(latest)
+                  : `${window.location.origin}/transactions?district=${encodeURIComponent(apt.district)}&q=${encodeURIComponent(apt.name)}`;
+                const text = latest
+                  ? buildTxShareText({
+                      aptName: apt.name,
+                      location: `${apt.district}${apt.dong ? ' ' + apt.dong : ''}`,
+                      price: latest.price, areaM2: latest.area, floor: latest.floor, date: latest.date,
+                      peakLine: txDerived(latest).peakLine, fmt: fmtPrice, fmtDate: fmtContractDate,
+                    })
+                  : `${apt.name} · 내집 My.ZIP`;
                 try {
                   if (navigator.share) {
                     await navigator.share({ title: apt.name, text, url });

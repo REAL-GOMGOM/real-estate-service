@@ -16,6 +16,9 @@ export interface ShareCardData {
   meta:     string;   // "60㎡ · 18평 · 22층 · 26.06.27 계약"
   spark:    Pt[];     // 0~100 × 0~56 좌표계
   high:     boolean;
+  /** 공유 강화 (2026-07-19) — 옵션. 미전달 시 기존 카드 그대로 (회귀 0) */
+  pricePerPy?: string; // "평당 3,824만"
+  peakLine?:   string; // "3년 내 최고가 · 종전 14.9억 +6,000만" (기간 캡션 필수)
 }
 
 const W = 900;
@@ -84,6 +87,14 @@ export async function buildShareImage(data: ShareCardData): Promise<Blob | null>
   ctx.fillStyle = '#64708A';
   ctx.font = font(500, 18);
   ctx.fillText(data.meta, 48, 306);
+
+  // 평당가 · 전고점 라인 (공유 강화 2026-07-19) — 긴 문구는 truncate
+  const subLine = [data.pricePerPy, data.peakLine].filter(Boolean).join('  ·  ');
+  if (subLine) {
+    ctx.fillStyle = '#3D4E6E';
+    ctx.font = font(700, 18);
+    ctx.fillText(truncate(ctx, subLine, W - 96), 48, 342);
+  }
 
   // 스파크라인 (우측 상단 영역)
   if (data.spark.length > 1) {

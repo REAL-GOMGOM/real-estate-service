@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { TxErrorState, TxEmptyState } from '@/components/shared/TxStates';
 import { AnalysisPromoBar } from '@/components/shared/AnalysisPromoBar';
@@ -91,13 +91,19 @@ export default function TransactionsClient() {
   const searchParams  = useSearchParams();
   const districtParam = searchParams.get('district');
   const queryParam    = searchParams.get('q');
+  // 계약 건 딥링크 (공유 강화 2026-07-19) — tx 식별자 + 공유 시점의 조회 기간
+  const txParam       = searchParams.get('tx');
+  const monthsParam   = parseInt(searchParams.get('months') ?? '', 10);
 
   const [today, setToday] = useState(new Date(0));
   useEffect(() => { setToday(new Date()); }, []);
 
   const [district,  setDistrict]  = useState(districtParam || '강남구');
   const [groupIdx,  setGroupIdx]  = useState(() => Math.max(0, findGroupIndexOfDistrict(districtParam || '강남구')));
-  const [months,    setMonths]    = useState(6);
+  // 딥링크의 months 를 복원해야 공유된 계약 건이 조회 범위에 들어온다
+  const [months,    setMonths]    = useState<number>(
+    [3, 6, 12, 24, 36].includes(monthsParam) ? monthsParam : 6,
+  );
   const [query,     setQuery]     = useState(queryParam ?? '');
   const [groups,    setGroups]    = useState<AptGroup[]>([]);
   const [loading,   setLoading]   = useState(false);
@@ -148,6 +154,19 @@ export default function TransactionsClient() {
       setFetched('');
     }
   }, [districtParam, queryParam]);
+
+  // 계약 건 딥링크 — 로드 완료 후 대상 단지 모달 자동 오픈 (1회, 정확명 우선)
+  const autoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (autoOpenedRef.current || !txParam || !queryParam || loading) return;
+    if (groups.length === 0) return;
+    const q = queryParam.trim();
+    const target = groups.find((g) => g.name === q) ?? groups.find((g) => matchesQuery(g.name, q));
+    if (target) {
+      setActiveApt(target);
+      autoOpenedRef.current = true;
+    }
+  }, [groups, loading, txParam, queryParam]);
 
   const load = useCallback(async (d: string, m: number) => {
     const key = `${d}-${m}`;
@@ -765,7 +784,7 @@ export default function TransactionsClient() {
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
                 {filtered.map((apt) => (
-                  <AptCard key={apt.id} apt={apt} onClick={() => setActiveApt(apt)} />
+                  <AptCard key={apt.id} apt={apt} months={months} onClick={() => setActiveApt(apt)} />
                 ))}
               </div>
             )}
@@ -835,7 +854,7 @@ export default function TransactionsClient() {
               return (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
                   {list.map((apt) => (
-                    <AptCard key={apt.id} apt={apt} onClick={() => setActiveApt(apt)} />
+                    <AptCard key={apt.id} apt={apt} months={months} onClick={() => setActiveApt(apt)} />
                   ))}
                 </div>
               );
@@ -870,6 +889,7 @@ export default function TransactionsClient() {
           apt={activeApt}
           onClose={() => setActiveApt(null)}
           months={months}
+          initialTx={txParam}
         />
       )}
 
