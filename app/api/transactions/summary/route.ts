@@ -1,26 +1,25 @@
 import { NextResponse } from 'next/server';
-import { fetchMolitXml } from '@/lib/molit-fetch';
-import { DISTRICT_CODE } from '@/lib/district-codes';
+import { and, eq, gte } from 'drizzle-orm';
 import { DISTRICT_GROUPS } from '@/lib/district-groups';
-import { eq } from 'drizzle-orm';
 import { getBlogDb } from '@/lib/db/client';
-import { dailyStats } from '@/lib/db/schema';
+import { dailyStats, transactions } from '@/lib/db/schema';
 import { countNewHighs, type SummaryDeal } from '@/lib/summary-highs';
 
 /**
- * 시도별 실거래 집계 API — 사이클 Z5 (추정치 → 전 시군구 실집계)
+ * 시도별 실거래 집계 API — DB 전환 (2026-07-19).
  *
- * 기존: 시도별 대표 2개 구 × 비율 추정 → 실측과 큰 오차 (치명적).
- * 개편: 등록된 전 시군구(~190개)를 당월 실제 집계. MOLIT 부하 보호를
- * 위해 15개 동시 배치, 응답은 6시간 CDN 캐시 (콜드 1회만 수 초).
+ * 기존: 콜드 히트마다 전 시군구(~190개) MOLIT 실시간 배치 → 수십 초 +
+ * 함수 타임아웃으로 간헐 500 (랜딩·특이실거래 로딩 사고의 뿌리).
+ * 개편: 자체 원장(transactions) 당월 단일 조회 → 수백 ms.
+ * sync 크론이 당월을 매일 재적재하므로 최대 1일 지연 — "오늘 공개분"은
+ * 봇 dailyStats 가 담당(기존과 동일). 취소거래는 집계에서 제외(정확도 개선).
  */
 
-const BASE_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade';
-const BATCH_SIZE = 15;
-
-function latestMonth(): string {
+function currentMonth(): { yyyymm: string; fromDate: string } {
   const now = new Date();
-  return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  return { yyyymm: `${y}${m}`, fromDate: `${y}-${m}-01` };
 }
 
 interface DistrictAgg {
@@ -30,117 +29,78 @@ interface DistrictAgg {
   prices84: number[];
 }
 
-/** 한 구의 당월 XML → 집계 (건수·신고가·59/84 가격 표본) */
-function aggregate(xml: string): DistrictAgg {
-  const agg: DistrictAgg = { count: 0, newHighs: 0, prices59: [], prices84: [] };
-
-  const total = xml.match(/<totalCount>(\d+)<\/totalCount>/)?.[1];
-  if (total !== undefined) agg.count = parseInt(total);
-
-  const items = xml.match(/<item>([\s\S]*?)<\/item>/g) ?? [];
-  const deals: SummaryDeal[] = [];
-
-  items.forEach((item) => {
-    const get = (tag: string) =>
-      item.match(new RegExp('<' + tag + '>([^<]*)<\\/' + tag + '>'))?.[1]?.trim() ?? '';
-    const price = parseInt(get('dealAmount').replace(/,/g, ''));
-    const area  = parseFloat(get('excluUseAr'));
-    const aptNm = get('aptNm');
-    if (!price || !area) return;
-
-    if (area >= 55 && area <= 63) agg.prices59.push(price);
-    if (area >= 80 && area <= 88) agg.prices84.push(price);
-
-    if (aptNm) {
-      const y = get('dealYear');
-      const m = get('dealMonth').padStart(2, '0');
-      const d = get('dealDay').padStart(2, '0');
-      deals.push({ aptName: aptNm, area, price, date: `${y}${m}${d}` });
-    }
-  });
-
-  // 신고가: 최초 거래 제외 + 직전 최고가 경신 기준 (lib/summary-highs)
-  agg.newHighs = countNewHighs(deals);
-  return agg;
-}
-
 function avg(arr: number[]): number | null {
   if (arr.length === 0) return null;
   return Math.round(arr.reduce((s, v) => s + v, 0) / arr.length);
 }
 
-/** 동시성 제한 배치 실행 — MOLIT rate limit 보호 */
-async function mapBatched<T, R>(items: T[], size: number, fn: (t: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = [];
-  for (let i = 0; i < items.length; i += size) {
-    out.push(...(await Promise.all(items.slice(i, i + size).map(fn))));
-  }
-  return out;
-}
-
 export async function GET() {
-  const rawKey = process.env.PUBLIC_DATA_API_KEY;
-  if (!rawKey) {
-    console.error('[transactions/summary API] PUBLIC_DATA_API_KEY 미설정');
-    return NextResponse.json({ error: '거래 집계 데이터를 불러올 수 없습니다' }, { status: 500 });
-  }
-  const apiKey = decodeURIComponent(rawKey);
-  const yyyymm = latestMonth();
+  const { yyyymm, fromDate } = currentMonth();
 
   try {
-    // 전 시군구 flat 목록 (그룹 라벨 유지)
-    const targets = DISTRICT_GROUPS.flatMap((g) =>
-      g.districts
-        .filter((d) => DISTRICT_CODE[d])
-        .map((d) => ({ group: g.label, district: d, lawdCd: DISTRICT_CODE[d] }))
-    );
+    const db = getBlogDb();
+    const rows = await db
+      .select({
+        sigungu:  transactions.sigungu,
+        aptName:  transactions.aptName,
+        areaM2:   transactions.areaM2,
+        price:    transactions.dealAmount,
+        dealDate: transactions.dealDate,
+      })
+      .from(transactions)
+      .where(and(gte(transactions.dealDate, fromDate), eq(transactions.isCanceled, false)));
 
-    const results = await mapBatched(targets, BATCH_SIZE, async (t) => {
-      const params = new URLSearchParams({
-        LAWD_CD: t.lawdCd, DEAL_YMD: yyyymm, numOfRows: '1000', pageNo: '1',
-      });
-      try {
-        const xml = await fetchMolitXml(BASE_URL + '?serviceKey=' + apiKey + '&' + params.toString(), 21600);
-        return { group: t.group, agg: aggregate(xml) };
-      } catch {
-        return { group: t.group, agg: { count: 0, newHighs: 0, prices59: [], prices84: [] } as DistrictAgg };
+    // 구별 집계 — 기존과 동일 단위로 count·가격표본·신고가(countNewHighs) 산출
+    const byDistrict = new Map<string, { agg: DistrictAgg; deals: SummaryDeal[] }>();
+    for (const r of rows) {
+      let e = byDistrict.get(r.sigungu);
+      if (!e) {
+        e = { agg: { count: 0, newHighs: 0, prices59: [], prices84: [] }, deals: [] };
+        byDistrict.set(r.sigungu, e);
       }
-    });
-
-    // 그룹별 합산
-    const byGroup = new Map<string, DistrictAgg>();
-    for (const r of results) {
-      const acc = byGroup.get(r.group) ?? { count: 0, newHighs: 0, prices59: [], prices84: [] };
-      acc.count += r.agg.count;
-      acc.newHighs += r.agg.newHighs;
-      acc.prices59.push(...r.agg.prices59);
-      acc.prices84.push(...r.agg.prices84);
-      byGroup.set(r.group, acc);
+      e.agg.count++;
+      if (r.areaM2 >= 55 && r.areaM2 <= 63) e.agg.prices59.push(r.price);
+      if (r.areaM2 >= 80 && r.areaM2 <= 88) e.agg.prices84.push(r.price);
+      e.deals.push({
+        aptName: r.aptName,
+        area:    r.areaM2,
+        price:   r.price,
+        date:    r.dealDate.replace(/-/g, ''),
+      });
     }
+    byDistrict.forEach((e) => { e.agg.newHighs = countNewHighs(e.deals); });
 
+    // 그룹(시도) 합산 — 응답 schema 기존과 동일 (프론트 무변경)
     const summary = DISTRICT_GROUPS.map((g) => {
-      const agg = byGroup.get(g.label) ?? { count: 0, newHighs: 0, prices59: [], prices84: [] };
+      const acc: DistrictAgg = { count: 0, newHighs: 0, prices59: [], prices84: [] };
+      for (const d of g.districts) {
+        const e = byDistrict.get(d);
+        if (!e) continue;
+        acc.count += e.agg.count;
+        acc.newHighs += e.agg.newHighs;
+        acc.prices59.push(...e.agg.prices59);
+        acc.prices84.push(...e.agg.prices84);
+      }
       return {
         label:          g.label,
         districtCount:  g.districts.length,
-        // 필드명은 프론트 호환 유지 — 의미는 이제 "실측 누계"
-        estimatedCount: agg.count,
-        sampleCount:    agg.count,
-        newHighs:       agg.newHighs,
-        avg59:          avg(agg.prices59),
-        avg84:          avg(agg.prices84),
+        // 필드명은 프론트 호환 유지 — 의미는 "당월 실집계 (취소 제외)"
+        estimatedCount: acc.count,
+        sampleCount:    acc.count,
+        newHighs:       acc.newHighs,
+        avg59:          avg(acc.prices59),
+        avg84:          avg(acc.prices84),
         firstDistrict:  g.districts[0],
       };
     });
 
-    // 봇이 push 한 "오늘 공개분"이 있으면 병기 (사이클 AA — 실까식 지표)
+    // 봇이 push 한 "오늘 공개분"이 있으면 병기 (사이클 AA — 기존 그대로)
     let daily: { date: string; totalCount: number; totalNewHighs: number } | null = null;
     try {
       const kstNow = new Date(Date.now() + 9 * 3600_000);
       const todayKst = kstNow.toISOString().slice(0, 10);
-      const db = getBlogDb();
-      const rows = await db.select().from(dailyStats).where(eq(dailyStats.date, todayKst)).limit(1);
-      const row = rows[0];
+      const drows = await db.select().from(dailyStats).where(eq(dailyStats.date, todayKst)).limit(1);
+      const row = drows[0];
       if (row) {
         daily = { date: row.date, totalCount: row.totalCount, totalNewHighs: row.totalNewHighs };
         const byLabel = new Map(row.regions.map((r) => [r.label, r]));
@@ -162,9 +122,8 @@ export async function GET() {
         daily,
         month: yyyymm,
         updatedAt: new Date().toISOString(),
-        note: '등록 시군구 전체 실집계 (당월 신고 누계)',
+        note: '자체 원장 당월 실집계 (취소 제외, 매일 갱신)',
       },
-      // daily 반영 지연 최소화 — 캐시 1시간으로 단축
       { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } }
     );
   } catch (error) {
