@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, connection } from 'next/server';
 import { and, eq, gte } from 'drizzle-orm';
 import { DISTRICT_GROUPS } from '@/lib/district-groups';
 import { getBlogDb } from '@/lib/db/client';
@@ -35,6 +35,9 @@ function avg(arr: number[]): number | null {
 }
 
 export async function GET() {
+  // 프리렌더 제외 (Cache Components 호환) — 빌드 시점 DB 조회 거부 에러 방지 (highlights 와 동일 패턴)
+  await connection();
+
   const { yyyymm, fromDate } = currentMonth();
 
   try {
