@@ -93,6 +93,8 @@ export default function TransactionsClient() {
   const queryParam    = searchParams.get('q');
   // 계약 건 딥링크 (공유 강화 2026-07-19) — tx 식별자 + 공유 시점의 조회 기간
   const txParam       = searchParams.get('tx');
+  const rtxParam      = searchParams.get('rtx');       // 전월세 계약 건 (전월세 대칭)
+  const dealTypeParam = searchParams.get('dealType');  // 탭 복원 (jeonse|monthly|bunyang)
   const monthsParam   = parseInt(searchParams.get('months') ?? '', 10);
 
   const [today, setToday] = useState(new Date(0));
@@ -116,7 +118,12 @@ export default function TransactionsClient() {
   const [viewMode, setViewMode] = useState<'summary' | 'detail'>(districtParam ? 'detail' : 'summary');
 
   // 거래 유형 (사이클 II) — 전월세는 별도 데이터·카드 경로
-  const [dealType, setDealType] = useState<DealType>('buy');
+  // 딥링크의 dealType 을 복원해야 전월세 공유가 해당 탭으로 착지한다
+  const [dealType, setDealType] = useState<DealType>(
+    dealTypeParam === 'jeonse' || dealTypeParam === 'monthly' || dealTypeParam === 'bunyang'
+      ? dealTypeParam
+      : 'buy',
+  );
   const [rentGroups,  setRentGroups]  = useState<RentAptGroup[]>([]);
   const [rentLoading, setRentLoading] = useState(false);
   const [rentError,   setRentError]   = useState(false);
@@ -167,6 +174,19 @@ export default function TransactionsClient() {
       autoOpenedRef.current = true;
     }
   }, [groups, loading, txParam, queryParam]);
+
+  // 전월세 계약 건 딥링크 (전월세 대칭 2026-07-19) — rentGroups 로드 후 자동 오픈 (1회)
+  const rentAutoOpenedRef = useRef(false);
+  useEffect(() => {
+    if (rentAutoOpenedRef.current || !rtxParam || !queryParam || rentLoading) return;
+    if (rentGroups.length === 0) return;
+    const q = queryParam.trim();
+    const target = rentGroups.find((g) => g.name === q) ?? rentGroups.find((g) => matchesQuery(g.name, q));
+    if (target) {
+      setActiveRent(target);
+      rentAutoOpenedRef.current = true;
+    }
+  }, [rentGroups, rentLoading, rtxParam, queryParam]);
 
   const load = useCallback(async (d: string, m: number) => {
     const key = `${d}-${m}`;
@@ -899,6 +919,7 @@ export default function TransactionsClient() {
           apt={activeRent}
           onClose={() => setActiveRent(null)}
           months={months}
+          initialTx={rtxParam}
         />
       )}
     </main>
