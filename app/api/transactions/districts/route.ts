@@ -78,7 +78,16 @@ export async function GET(req: NextRequest) {
       { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } }
     );
   } catch (error) {
-    console.error('[transactions/districts API] 집계 실패:', error);
-    return NextResponse.json({ error: '거래 데이터를 불러올 수 없습니다' }, { status: 500 });
+    // DB 불가 시 빈 목록 강등 (500 방지) — 짧은 캐시로 복구 시 빠른 재반영
+    console.error('[transactions/districts API] 집계 실패 — 빈 목록 강등:', error);
+    return NextResponse.json(
+      {
+        group: group.label,
+        month: yyyymm,
+        districts: [],
+        note: '집계 데이터 일시 점검 중입니다. 잠시 후 다시 확인해주세요.',
+      },
+      { headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' } }
+    );
   }
 }

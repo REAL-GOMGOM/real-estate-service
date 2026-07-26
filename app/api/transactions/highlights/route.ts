@@ -168,7 +168,19 @@ export async function GET() {
       { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } }
     );
   } catch (error) {
-    console.error('[transactions/highlights API] 집계 실패:', error);
-    return NextResponse.json({ error: '주요거래 데이터를 불러올 수 없습니다' }, { status: 500 });
+    // DB 불가 시 빈 집계 강등 (500 방지) — 짧은 캐시로 복구 시 빠른 재반영
+    console.error('[transactions/highlights API] 집계 실패 — 빈 집계 강등:', error);
+    return NextResponse.json(
+      {
+        month: yyyymm,
+        coverage: '집계 데이터 일시 점검 중',
+        newHighs: [],
+        surges: [],
+        pyeong84: [],
+        updatedAt: new Date().toISOString(),
+        note: '집계 데이터 일시 점검 중입니다. 잠시 후 다시 확인해주세요.',
+      },
+      { headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' } }
+    );
   }
 }

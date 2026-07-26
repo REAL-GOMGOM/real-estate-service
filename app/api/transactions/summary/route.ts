@@ -130,7 +130,18 @@ export async function GET() {
       { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } }
     );
   } catch (error) {
-    console.error('시도별 집계 실패:', error);
-    return NextResponse.json({ error: '집계 실패' }, { status: 500 });
+    // DB 불가(전송량 차단 등) 시 500 대신 빈 집계로 우아하게 강등 —
+    // 랜딩·크롤러가 에러 페이지를 만나지 않게. 짧은 캐시로 복구 시 빠른 재반영.
+    console.error('시도별 집계 실패 — 빈 집계 강등:', error);
+    return NextResponse.json(
+      {
+        summary: [],
+        daily: null,
+        month: yyyymm,
+        updatedAt: new Date().toISOString(),
+        note: '집계 데이터 일시 점검 중입니다. 잠시 후 다시 확인해주세요.',
+      },
+      { headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' } }
+    );
   }
 }
