@@ -22,7 +22,7 @@ export default function Footer() {
   return (
     <>
     {/* 쿠팡 파트너스 배너 — 전역 "골고루" 노출을 푸터 상단 1곳으로 통일 (관리 포인트 최소화) */}
-    <CoupangBanner />
+    <CoupangBanner subId="footer" />
     <footer style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)', padding: '48px 24px', borderTop: '1px solid var(--border)' }}>
       <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'clamp(20px, 4vw, 48px)' }}>

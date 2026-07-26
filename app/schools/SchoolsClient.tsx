@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import sggCodesJson from '@/data/sido-sgg-codes.json';
+import CoupangBanner from '@/components/ads/CoupangBanner';
 
 /**
  * 학교 랭킹 리스트 (2026-07) — 집피드식 심플 리스트 UX.
@@ -195,8 +196,8 @@ export default function SchoolsClient() {
             const net = netMoveIn(s);
             const dong = dongFromAddress(s.address);
             return (
+              <Fragment key={s.id}>
               <div
-                key={s.id}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '14px',
                   padding: '14px 16px', borderRadius: '14px',
@@ -251,6 +252,9 @@ export default function SchoolsClient() {
                   )}
                 </div>
               </div>
+              {/* 인피드 광고 — 10위 카드 뒤 1개 */}
+              {rank === 10 && <CoupangBanner variant="inline" subId="schools-feed" />}
+              </Fragment>
             );
           })}
         </div>
