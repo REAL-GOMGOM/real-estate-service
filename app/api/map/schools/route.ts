@@ -1,197 +1,98 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { NextRequest, NextResponse } from 'next/server';
-import path from 'path';
 
-const NEIS_URL = 'https://open.neis.go.kr/hub/schoolInfo';
-const LEVEL_MAP: Record<string, string> = {
-  elementary: '초등학교',
-  middle: '중학교',
-  high: '고등학교',
-};
-const ATPT_CODES: Record<string, string> = {
-  '서울': 'B10', '인천': 'E10', '경기': 'J10',
-};
+/**
+ * 학교 지도 API — 정적 JSON 전환 (2026-07).
+ *
+ * 기존 구조의 이중 결함을 제거했다:
+ *   1) 로컬 SQLite 경로 — data/*.db 는 gitignore 라 프로덕션에 배포된 적이 없음 (항상 실패)
+ *   2) NEIS 라이브 + Kakao 지오코딩 폴백 — 느리고(외부 2단 호출) 최대 50개 제한, 등급 정보 전무
+ *
+ * 개편: 학교알리미 공시 기반 빌드 산출물(data/schools-map.json, 전국 11,973개교)을
+ * 서버 기동 시 1회 로드 — 외부 호출 0회, 응답 수 ms.
+ * 갱신 주기 연 1회: sync-schoolinfo.ts → build-school-map.ts → 커밋.
+ *
+ * grade·진학률 필드는 KESS/경기 진로 데이터 합류 시 채운다 (현재 null — 프론트 호환 유지).
+ * 화면 출처 표기: 학교알리미(초·중등 교육정보 공시서비스)
+ */
 
-// ── SQLite 시도 ─────────────────────────────────────
-async function tryDbSchools(district?: string, level?: string) {
-  try {
-    // 동적 import — better-sqlite3 를 못 쓰는 환경에서는 catch 로 fallback
-    const { default: Database } = await import('better-sqlite3');
-    const db = new Database(path.join(process.cwd(), 'data', 'realestate.db'), { readonly: true });
-    let sql = `
-      SELECT s.*, r.grade, r.special_high_rate, r.science_high_rate,
-             r.foreign_high_rate, r.autonomous_high_rate, r.nationwide_pct, r.region_pct
-      FROM schools s
-      LEFT JOIN school_rankings r ON s.id = r.school_id
-      WHERE s.latitude IS NOT NULL
-    `;
-    const params: string[] = [];
-    if (district) { sql += ' AND s.district LIKE ?'; params.push(`%${district}%`); }
-    if (level) { sql += ' AND s.school_level = ?'; params.push(level); }
-    sql += ' ORDER BY r.grade ASC NULLS LAST LIMIT 200';
-    const rows = db.prepare(sql).all(...params);
-    db.close();
-    return rows;
-  } catch {
-    return null;
-  }
-}
-
-// ── Kakao 키워드 검색으로 학교 좌표 조회 ────────────
-async function geocodeSchool(
-  schoolName: string,
-  kakaoKey: string,
-): Promise<{ lat: number; lng: number } | null> {
-  try {
-    // 학교 카테고리(SC4)로 키워드 검색 — 정확도 높음
-    const res = await fetch(
-      `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(schoolName)}&category_group_code=SC4&size=1`,
-      { headers: { Authorization: `KakaoAK ${kakaoKey}` } },
-    );
-    const json = await res.json();
-    const doc = json.documents?.[0];
-    if (doc) {
-      return { lat: parseFloat(doc.y), lng: parseFloat(doc.x) };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-// ── NEIS API + Kakao geocoding ──────────────────────
-// NEIS 조회 결과 학교 레코드 (DB 응답과 동일한 필드 구성)
-interface NeisSchool {
+interface MapSchool {
   id: string;
   name: string;
   school_level: 'elementary' | 'middle' | 'high';
   address: string;
-  latitude: number | null;
-  longitude: number | null;
+  latitude: number;
+  longitude: number;
   establish_type: string | null;
   coedu_type: string | null;
   student_count: number | null;
-  teacher_count: number | null;
-  district: string | null;
-  grade: number | null;
-  nationwide_pct: number | null;
-  region_pct: number | null;
-  special_high_rate: number | null;
-  science_high_rate: number | null;
-  foreign_high_rate: number | null;
-  autonomous_high_rate: number | null;
+  district: string;
+  sido: string;
+  class_count: number | null;
+  per_class: number | null;
+  move_in: number | null;
+  move_out: number | null;
+  hs_type: string | null;
 }
 
-async function fetchNeisSchools(
-  apiKey: string,
-  kakaoKey: string,
-  district?: string,
-  level?: string,
-) {
-  const atptCode = district
-    ? Object.entries(ATPT_CODES).find(([k]) => district.includes(k))?.[1] || 'B10'
-    : 'B10';
+const LEVELS = new Set(['elementary', 'middle', 'high']);
+const DEFAULT_LIMIT = 800;
+const MAX_LIMIT = 3000;
 
-  const params = new URLSearchParams({
-    KEY: apiKey,
-    Type: 'json',
-    ATPT_OFCDC_SC_CODE: atptCode,
-    pSize: '100',
-    pIndex: '1',
-  });
+/** 진학률 데이터 합류 전 프론트(SchoolData) 호환 자리표시 */
+const RATE_PLACEHOLDER = {
+  teacher_count: null as number | null,
+  grade: null as string | null,
+  nationwide_pct: null as number | null,
+  region_pct: null as number | null,
+  special_high_rate: null as number | null,
+  science_high_rate: null as number | null,
+  foreign_high_rate: null as number | null,
+  autonomous_high_rate: null as number | null,
+};
 
-  if (level && LEVEL_MAP[level]) {
-    params.set('SCHUL_KND_SC_NM', LEVEL_MAP[level]);
-  }
-
-  const res = await fetch(`${NEIS_URL}?${params}`, {
-    headers: { 'User-Agent': 'Mozilla/5.0' },
-    next: { revalidate: 86400 },
-  });
-  const data = await res.json();
-  const rows = data?.schoolInfo?.[1]?.row || [];
-
-  const raw: NeisSchool[] = [];
-  for (const r of rows) {
-    const addr = `${r.ORG_RDNMA || ''} ${r.ORG_RDNDA || ''}`.trim();
-    if (district && !addr.includes(district)) continue;
-
-    const kind = r.SCHUL_KND_SC_NM;
-    const schoolLevel = kind === '초등학교' ? 'elementary' : kind === '중학교' ? 'middle' : kind === '고등학교' ? 'high' : null;
-    if (!schoolLevel) continue;
-
-    raw.push({
-      id: `${r.ATPT_OFCDC_SC_CODE}-${r.SD_SCHUL_CODE}`,
-      name: r.SCHUL_NM,
-      school_level: schoolLevel,
-      address: addr,
-      latitude: null,
-      longitude: null,
-      establish_type: r.FOND_SC_NM,
-      coedu_type: r.COEDU_SC_NM,
-      student_count: null,
-      teacher_count: null,
-      district: district || null,
-      grade: null,
-      nationwide_pct: null,
-      region_pct: null,
-      special_high_rate: null,
-      science_high_rate: null,
-      foreign_high_rate: null,
-      autonomous_high_rate: null,
-    });
-  }
-
-  // Kakao geocoding (최대 50개, 10개씩 배치)
-  const limited = raw.slice(0, 50);
-  for (let i = 0; i < limited.length; i += 10) {
-    const batch = limited.slice(i, i + 10);
-    const results = await Promise.allSettled(
-      batch.map(async (school) => {
-        const coord = await geocodeSchool(school.name, kakaoKey);
-        if (coord) {
-          school.latitude = coord.lat;
-          school.longitude = coord.lng;
-        }
-        return school;
-      }),
-    );
-    for (const r of results) {
-      if (r.status === 'fulfilled' && !r.value.latitude) {
-        // geocoding 실패 — 해당 학교는 좌표 없음
-      }
-    }
-  }
-
-  // 좌표 있는 학교만 반환
-  return limited.filter((s) => s.latitude && s.longitude);
+// 모듈 스코프 1회 로드 — 콜드스타트에서만 파싱 비용 발생 (~4.6MB)
+let allSchools: MapSchool[] | null = null;
+function loadSchools(): MapSchool[] {
+  if (allSchools) return allSchools;
+  const filePath = path.join(process.cwd(), 'data', 'schools-map.json');
+  const doc = JSON.parse(readFileSync(filePath, 'utf8')) as { schools: MapSchool[] };
+  allSchools = doc.schools;
+  return allSchools;
 }
 
-// ── GET ─────────────────────────────────────────────
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = request.nextUrl;
-    const district = searchParams.get('district') || undefined;
-    const level = searchParams.get('level') || undefined;
+    const district = (searchParams.get('district') ?? '').trim();
+    // 시도 필터 — '중구'처럼 전국 중복 시군구명 구분용 (리스트 페이지에서 함께 전달)
+    const sido = (searchParams.get('sido') ?? '').trim();
+    const level = searchParams.get('level') ?? '';
+    const limitParam = parseInt(searchParams.get('limit') ?? '', 10);
+    const limit = Number.isFinite(limitParam)
+      ? Math.min(Math.max(limitParam, 1), MAX_LIMIT)
+      : DEFAULT_LIMIT;
 
-    // 1) SQLite 시도
-    const dbSchools = await tryDbSchools(district, level);
-    if (dbSchools && dbSchools.length > 0) {
-      return NextResponse.json({ schools: dbSchools }, {
-        headers: { 'Cache-Control': 's-maxage=86400' },
-      });
+    let list = loadSchools();
+    if (LEVELS.has(level)) {
+      list = list.filter((s) => s.school_level === level);
+    }
+    if (sido) {
+      list = list.filter((s) => s.sido.includes(sido));
+    }
+    if (district) {
+      // '서울'(시도)·'강남구'(시군구)·주소 부분 문자열 모두 허용 — 기존 호출부 호환
+      list = list.filter(
+        (s) => s.sido.includes(district) || s.district.includes(district) || s.address.includes(district),
+      );
     }
 
-    // 2) NEIS + Kakao geocoding fallback
-    const apiKey = process.env.NEIS_API_KEY;
-    const kakaoKey = process.env.KAKAO_REST_API_KEY;
-    if (!apiKey || !kakaoKey) {
-      return NextResponse.json({ schools: [] });
-    }
-
-    const schools = await fetchNeisSchools(apiKey, kakaoKey, district, level);
-    return NextResponse.json({ schools }, {
-      headers: { 'Cache-Control': 's-maxage=86400' },
-    });
+    const schools = list.slice(0, limit).map((s) => ({ ...s, ...RATE_PLACEHOLDER }));
+    return NextResponse.json(
+      { schools, total: list.length, source: '학교알리미(초·중등 교육정보 공시서비스)' },
+      { headers: { 'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=604800' } },
+    );
   } catch (error: unknown) {
     console.error('[map/schools API]', error instanceof Error ? error.message : error);
     return NextResponse.json({ error: '학교 데이터를 불러올 수 없습니다', schools: [] }, { status: 500 });

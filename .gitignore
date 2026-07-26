@@ -46,6 +46,8 @@ data/*.db-shm
 data/*.db-wal
 data/raw/
 data/processed/
+# 학교알리미 수집 원본 (5.8MB — 재생성 가능, 배포 산출물은 schools-map.json만 커밋)
+data/school-disclosure.json
 .env*.local
 
 # DB 마이그레이션 원문 백업 (커밋 금지 — 글 전문 포함)
