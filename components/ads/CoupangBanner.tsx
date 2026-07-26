@@ -18,7 +18,14 @@ const TRACKING_CODE = 'AF2740428';
 const BASE_W = 680;
 const BASE_H = 140;
 
-export default function CoupangBanner() {
+interface CoupangBannerProps {
+  /** footer: 전역 푸터 상단 (배경·보더) / inline: 콘텐츠 사이 인피드 (투명·컴팩트) */
+  variant?: 'footer' | 'inline';
+  /** 파트너스 성과 추적용 지면 식별자 (예: footer, blog-end, tx-feed) */
+  subId?: string;
+}
+
+export default function CoupangBanner({ variant = 'footer', subId = '' }: CoupangBannerProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
 
@@ -33,15 +40,17 @@ export default function CoupangBanner() {
   }, []);
 
   return (
-    <div style={{
+    <div style={variant === 'footer' ? {
       backgroundColor: 'var(--bg-tertiary)',
       borderTop: '1px solid var(--border-light)',
       padding: '20px 24px 10px',
+    } : {
+      padding: '6px 0 2px',
     }}>
       <div ref={wrapRef} style={{ maxWidth: `${BASE_W}px`, margin: '0 auto' }}>
         <div style={{ height: `${Math.round(BASE_H * scale)}px`, overflow: 'hidden' }}>
           <iframe
-            src={`https://ads-partners.coupang.com/widgets.html?id=${BANNER_ID}&template=carousel&trackingCode=${TRACKING_CODE}&subId=&width=${BASE_W}&height=${BASE_H}&tsource=`}
+            src={`https://ads-partners.coupang.com/widgets.html?id=${BANNER_ID}&template=carousel&trackingCode=${TRACKING_CODE}&subId=${encodeURIComponent(subId)}&width=${BASE_W}&height=${BASE_H}&tsource=`}
             width={BASE_W}
             height={BASE_H}
             frameBorder="0"

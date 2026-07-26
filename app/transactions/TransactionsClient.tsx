@@ -14,6 +14,7 @@ import { type AptGroup, type DistrictStat, detectNewHigh } from './types';
 import { sortRentGroups, type RentAptGroup, type RentSortKey } from '@/lib/rent-shared';
 import AptCard from './components/AptCard';
 import RentAptCard from './components/RentAptCard';
+import CoupangBanner from '@/components/ads/CoupangBanner';
 import RentAptDetailModal from './components/RentAptDetailModal';
 import AptDetailModal from './components/AptDetailModal';
 import RegionPickerModal from './components/RegionPickerModal';
@@ -802,11 +803,22 @@ export default function TransactionsClient() {
                 />
               )
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
-                {filtered.map((apt) => (
-                  <AptCard key={apt.id} apt={apt} months={months} onClick={() => setActiveApt(apt)} />
-                ))}
-              </div>
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
+                  {/* 인피드 광고를 6번째 카드 뒤에 끼우기 위한 분할 렌더 (페이지당 인피드 1개 원칙) */}
+                  {filtered.slice(0, 6).map((apt) => (
+                    <AptCard key={apt.id} apt={apt} months={months} onClick={() => setActiveApt(apt)} />
+                  ))}
+                </div>
+                <CoupangBanner variant="inline" subId="tx-feed" />
+                {filtered.length > 6 && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px', marginTop: '12px' }}>
+                    {filtered.slice(6).map((apt) => (
+                      <AptCard key={apt.id} apt={apt} months={months} onClick={() => setActiveApt(apt)} />
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </>
         )}
