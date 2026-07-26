@@ -7,6 +7,7 @@ const FOOTER_LINKS = {
   '서비스': [
     { label: '부동산 지도', href: '/location-map' },
     { label: '실거래 조회', href: '/transactions' },
+    { label: '학교 랭킹', href: '/schools' },
     { label: '청약 정보', href: '/subscription' },
     { label: '변동률 지도', href: '/price-map' },
   ],
