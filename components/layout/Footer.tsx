@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { CookieSettingsButton } from './CookieSettingsButton';
+import CoupangBanner from '@/components/ads/CoupangBanner';
 
 const FOOTER_LINKS = {
   '서비스': [
@@ -18,6 +19,9 @@ const FOOTER_LINKS = {
 
 export default function Footer() {
   return (
+    <>
+    {/* 쿠팡 파트너스 배너 — 전역 "골고루" 노출을 푸터 상단 1곳으로 통일 (관리 포인트 최소화) */}
+    <CoupangBanner />
     <footer style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)', padding: '48px 24px', borderTop: '1px solid var(--border)' }}>
       <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'clamp(20px, 4vw, 48px)' }}>
@@ -57,12 +61,13 @@ export default function Footer() {
         <div style={{ marginTop: '48px', paddingTop: '32px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
           <p style={{ fontSize: '13px', color: 'var(--text-dim)' }}>© 2026 내집(My.ZIP). All rights reserved.</p>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '13px', color: 'var(--text-dim)' }}>
-            <span>데이터: 국토교통부 · 한국부동산원 · NEIS</span>
+            <span>데이터: 국토교통부 · 한국부동산원 · 학교알리미</span>
             <span style={{ color: 'var(--border-hover)' }}>|</span>
             <CookieSettingsButton />
           </div>
         </div>
       </div>
     </footer>
+    </>
   );
 }
