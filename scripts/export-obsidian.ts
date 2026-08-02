@@ -34,6 +34,9 @@ function yamlEscape(s: string): string {
 }
 
 async function exportPosts(): Promise<number> {
+  // 자동 관리 폴더 — 카테고리 이동·슬러그 변경 시 옛 파일이 남지 않게 전체 재생성.
+  // 사용자 자체 노트는 이 폴더 밖에 둘 것 (홈.md 에 안내).
+  fs.rmSync(path.join(VAULT, '내집 칼럼'), { recursive: true, force: true });
   const sql = neon(process.env.DATABASE_URL!);
   const rows = (await sql`
     SELECT p.slug, p.title, p.excerpt, p.mdx_content, p.status, p.view_count,
@@ -79,6 +82,7 @@ function exportNews(): number {
     console.warn('[export-obsidian] 봇 DB 없음 — 뉴스 아카이브 스킵:', BOT_DB);
     return 0;
   }
+  fs.rmSync(path.join(VAULT, '뉴스 아카이브'), { recursive: true, force: true });
   const json = execFileSync('sqlite3', ['-json', BOT_DB,
     `SELECT date(fetched_at) d, category, title, source, url, published_at
        FROM news_archive ORDER BY d, category, id`,
@@ -127,8 +131,8 @@ async function main() {
     `> 마지막 갱신: ${new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}`, '',
     `- **내집 칼럼** — 발행글 ${posts}편 (사이트 posts 원본, MDX 그대로)`,
     `- **뉴스 아카이브** — ${newsDays}일치 (뉴스봇 큐레이션 링크)`, '',
-    '텔레그램 봇의 발송 메시지 원문은 봇이 따로 저장하지 않아 여기 없음 —',
-    '발송분 아카이빙은 봇 코드에 저장 훅 추가 필요 (백로그).', '',
+    '⚠️ **내집 칼럼**·**뉴스 아카이브** 폴더는 매일 전체 재생성됩니다 —',
+    '직접 쓰는 노트는 이 두 폴더 밖에 만들어 주세요.', '',
   ].join('\n'));
 
   console.log(`[export-obsidian] 완료 — 칼럼 ${posts}편 · 뉴스 ${newsDays}일치 → ${VAULT}`);
