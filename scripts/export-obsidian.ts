@@ -19,7 +19,9 @@ import { neon } from '@neondatabase/serverless';
  *   정기 실행:  launchd com.gomgom.obsidian-export (매일 07:00)
  */
 
-const VAULT = process.env.OBSIDIAN_VAULT ?? '/Users/bangjoohan/Obsidian/글창고';
+// iCloud Drive 볼트 — 맥북 옵시디언과 자동 동기화 (2026-08-02 이동)
+const VAULT = process.env.OBSIDIAN_VAULT
+  ?? '/Users/bangjoohan/Library/Mobile Documents/com~apple~CloudDocs/Obsidian/글창고';
 const SITE = 'https://www.naezipkorea.com';
 const BOT_DB = '/Users/bangjoohan/bots/realestate-alert/realestate.db';
 
