@@ -404,7 +404,7 @@ export default function TransactionsClient() {
                 {today.getFullYear() > 2000 ? fullDateLabel(today) : '—'} · 국토교통부 실거래가 공개시스템 기준
               </p>
             </div>
-            {!summaryLoading && summaryData.length > 0 && (
+            {!summaryLoading && summaryData.length > 0 && dealType !== 'bunyang' && (
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', justifyContent: 'flex-end' }}>
                   <span style={{ fontSize: '13px', color: 'var(--text-dim)' }}>총</span>
@@ -492,13 +492,13 @@ export default function TransactionsClient() {
                 분양권 시세는{' '}
                 <strong style={{ color: 'var(--text-primary)' }}>지역(구) 단위</strong>로 제공됩니다.
                 아래 시/도를 눌러 구를 선택하면 확인할 수 있어요.
-                <span style={{ color: 'var(--text-dim)' }}> (아래 카드 숫자는 매매 기준)</span>
               </div>
             )}
 
             {/* 섹션 헤더 + 집계 윈도우 토글 (2026-08-02 — 월초 공백 해소·지난달 조회) */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '20px 0 14px', gap: '10px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)' }}>시/도별 거래 현황</span>
+              {dealType !== 'bunyang' && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', gap: '4px', padding: '3px', borderRadius: '10px', backgroundColor: 'var(--border-light)' }}>
                   {[
@@ -525,8 +525,38 @@ export default function TransactionsClient() {
                   거래량순 · {sumDealType === 'buy' ? '평균가' : sumDealType === 'jeonse' ? '평균 보증금' : '평균 보증금/월세'}는 전용면적 기준
                 </span>
               </div>
+              )}
             </div>
-            {summaryLoading ? (
+            {dealType === 'bunyang' ? (
+              /* 분양권 — DB 원장이 없어 시도별 숫자 집계 미제공, 지역 선택 전용 그리드 */
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '12px' }}>
+                {DISTRICT_GROUPS.map((g) => (
+                  <button
+                    key={g.label}
+                    onClick={() => setPicker({ label: g.label, districts: g.districts })}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '18px 16px', borderRadius: '14px',
+                      backgroundColor: 'var(--bg-card)',
+                      border: '1px solid var(--border)',
+                      cursor: 'pointer', textAlign: 'left',
+                      transition: 'border-color 0.15s, box-shadow 0.15s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = 'var(--accent)';
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(20,33,61,0.08)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = 'var(--border)';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
+                  >
+                    <span style={{ fontSize: '15.5px', fontWeight: 800, color: 'var(--text-primary)' }}>{g.label}</span>
+                    <span style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--text-dim)' }}>구 선택 →</span>
+                  </button>
+                ))}
+              </div>
+            ) : summaryLoading ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px', marginTop: '20px' }}>
                 {[...Array(6)].map((_, i) => (
                   <div key={i} style={{
@@ -622,6 +652,7 @@ export default function TransactionsClient() {
               </div>
             )}
 
+            {dealType !== 'bunyang' && (
             <p style={{ margin: '16px 0 20px', fontSize: '11px', color: 'var(--text-dim)' }}>
               {sumWindow === 'today' && dailyMeta
                 ? `※ ${dailyMeta.date} 공개분 (아침 봇 집계) · 평균가는 최근 30일 기준`
@@ -630,6 +661,7 @@ export default function TransactionsClient() {
                   : `※ 최근 30일 ${sumDealType === 'buy' ? '계약 신고분 실집계 (취소 제외, 매일 갱신)' : `${sumDealType === 'jeonse' ? '전세' : '월세'} 계약 신고분 실집계 (매일 갱신)`}`}
               {sumDealType === 'monthly' ? ' · 금액은 평균 보증금/평균 월세' : sumDealType === 'jeonse' ? ' · 금액은 평균 보증금' : ''} · 지역을 클릭해 구를 선택하면 상세 거래를 확인할 수 있습니다.
             </p>
+            )}
 
             {/* 조회를 넘어 분석까지 — 내집만의 기능 프로모 */}
             <AnalysisPromoBar />
