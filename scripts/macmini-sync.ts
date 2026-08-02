@@ -8,13 +8,18 @@ import { Pool } from 'pg';
 import { drizzle as drizzlePg } from 'drizzle-orm/node-postgres';
 import { lt, sql } from 'drizzle-orm';
 import * as schema from '../lib/db/schema';
-import { transactions, rentTransactions, type NewTransaction, type NewRentTransactionRow } from '../lib/db/schema';
+import {
+  transactions, rentTransactions, silvTransactions,
+  type NewTransaction, type NewRentTransactionRow, type NewSilvTransactionRow,
+} from '../lib/db/schema';
 import { DISTRICT_CODE } from '../lib/district-codes';
-import { getMonthList, fetchTradeMonthAllPages, fetchRentMonthAllPages, revalidateForMonth } from '../lib/molit-months';
+import { getMonthList, fetchTradeMonthAllPages, fetchRentMonthAllPages, fetchSilvMonthAllPages, revalidateForMonth } from '../lib/molit-months';
 import { parseTradeXml, molitItemToTransaction } from '../lib/molit-trade-parse';
 import { parseRentXmlFull, molitItemToRentRow } from '../lib/molit-rent-parse';
+import { parseSilvXmlFull, molitItemToSilvRow } from '../lib/molit-silv-parse';
 import { upsertTransactions, type TxDb } from '../lib/tx-upsert';
 import { upsertRentTransactions, type RentTxDb } from '../lib/rent-tx-upsert';
+import { upsertSilvTransactions, type SilvTxDb } from '../lib/silv-tx-upsert';
 
 /**
  * 실거래 일일 sync — 맥미니 이전판 (2026-08-02, Neon 의존도 완화 2단계).
@@ -34,6 +39,7 @@ const SYNC_MONTHS = 2;
 const CONCURRENCY = 8;
 const TRADE_RETENTION_MONTHS = 13;
 const RENT_RETENTION_MONTHS = 7;
+const SILV_RETENTION_MONTHS = 13;   // 분양권 — 거래량 미미, 매매와 동일 보존
 // 사용자 명시 필수 — .env.local 의 Neon PGUSER/PGPASSWORD 가 빈 필드를 채우는 것 방지
 const LOCAL_DB_URL = process.env.NAEZIP_LOCAL_DB_URL ?? `postgresql://${os.userInfo().username}@localhost:5432/naezip`;
 
@@ -119,10 +125,27 @@ async function main() {
   });
   console.log(`[${ts()}] rent — local u=${rent.localUp} f=${rent.localFail} · neon u=${rent.neonUp} f=${rent.neonFail} · fetch f=${rent.fetchFail}`);
 
+  // ── 분양권 (2026-08-02 원장 신설 — 유형 탭 시/도 집계용) ──
+  const silv = await runPhase('silv', async (sigungu, lawdCd, yyyymm, r) => {
+    const xml = await fetchSilvMonthAllPages(apiKey, lawdCd, yyyymm, revalidateForMonth(yyyymm));
+    const rows: NewSilvTransactionRow[] = [];
+    for (const item of parseSilvXmlFull(xml)) {
+      const row = molitItemToSilvRow(item, { lawdCd, sigungu });
+      if (row) rows.push(row);
+    }
+    if (!rows.length) return;
+    try { const n = await upsertSilvTransactions(localDb as unknown as SilvTxDb, rows); r.localUp += n; }
+    catch (e) { r.localFail++; console.warn(`[macmini-sync] 로컬 silv upsert 실패 ${sigungu} ${yyyymm}:`, e instanceof Error ? e.message : e); }
+    try { const n = await upsertSilvTransactions(neonDb as unknown as SilvTxDb, rows); r.neonUp += n; }
+    catch (e) { r.neonFail++; console.warn(`[macmini-sync] Neon silv upsert 실패 ${sigungu} ${yyyymm}:`, e instanceof Error ? e.message : e); }
+  });
+  console.log(`[${ts()}] silv — local u=${silv.localUp} f=${silv.localFail} · neon u=${silv.neonUp} f=${silv.neonFail} · fetch f=${silv.fetchFail}`);
+
   // ── Neon 보존 정리 + 용량 (fail-open) — 로컬은 무제한 보존 ──
   try {
     const t = await neonDb.delete(transactions).where(lt(transactions.dealDate, retentionCutoff(TRADE_RETENTION_MONTHS)));
     const rr = await neonDb.delete(rentTransactions).where(lt(rentTransactions.dealDate, retentionCutoff(RENT_RETENTION_MONTHS)));
+    await neonDb.delete(silvTransactions).where(lt(silvTransactions.dealDate, retentionCutoff(SILV_RETENTION_MONTHS)));
     const size = await neonDb.execute(sql`SELECT round(pg_database_size(current_database()) / 1048576.0)::int AS mb`);
     const dbMB = (size as unknown as { rows?: Array<{ mb: number }> }).rows?.[0]?.mb ?? null;
     console.log(`[${ts()}] neon purge t=${(t as { rowCount?: number }).rowCount ?? 0} r=${(rr as { rowCount?: number }).rowCount ?? 0} · neon db=${dbMB}MB`);
@@ -136,7 +159,7 @@ async function main() {
   console.log(`[${ts()}] 로컬 원장 — 매매 ${localCnt.rows[0].t} · 전월세 ${localCnt.rows[0].r}`);
   await pool.end();
 
-  const failTotal = trade.fetchFail + trade.localFail + rent.fetchFail + rent.localFail;
+  const failTotal = trade.fetchFail + trade.localFail + rent.fetchFail + rent.localFail + silv.fetchFail + silv.localFail;
   console.log(`[${ts()}] ── 완료 (${Math.round((Date.now() - started) / 1000)}s) ──`);
   // Neon 실패는 다음 날 upsert 로 수렴하므로 종료코드에 반영하지 않음 (로컬·수집 실패만)
   process.exit(failTotal > 0 ? 1 : 0);

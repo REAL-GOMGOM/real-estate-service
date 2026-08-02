@@ -318,3 +318,40 @@ export const rentTransactions = pgTable('rent_transactions', {
 
 export type RentTransactionRow = typeof rentTransactions.$inferSelect;
 export type NewRentTransactionRow = typeof rentTransactions.$inferInsert;
+
+/**
+ * 분양권 전매 원장 — 유형 탭 시/도 집계용 (2026-08-02).
+ *
+ * rent_transactions 와 같은 다이어트 설계 (md5 해시 PK, 인덱스 1개).
+ * 거래량이 매매의 ~5% 수준이라 스토리지 부담 미미. 취소(해제)는 매매와
+ * 동일하게 플래그로 보존. 적재는 macmini-sync(분양권 페이즈)가 담당.
+ */
+export const silvTransactions = pgTable('silv_transactions', {
+  dedupeKey: text('dedupe_key').primaryKey(), // md5(lawdCd|umdNm|jibun|norm명|면적|층|계약일|금액)
+
+  lawdCd:  text('lawd_cd').notNull(),
+  sigungu: text('sigungu').notNull(),
+  umdNm:   text('umd_nm').notNull(),
+  aptName: text('apt_name').notNull(),
+
+  areaM2:    real('area_m2').notNull(),
+  floor:     integer('floor'),
+  buildYear: integer('build_year'),
+
+  dealDate:   text('deal_date').notNull(),      // 계약일 YYYY-MM-DD
+  dealAmount: integer('deal_amount').notNull(), // 거래금액 (만원)
+
+  isCanceled:   boolean('is_canceled').notNull().default(false),
+  canceledDate: text('canceled_date'),
+
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+}, (table) => ({
+  silvLawdDateIdx: index('silv_lawd_date_idx').on(table.lawdCd, table.dealDate),
+}));
+
+export type SilvTransactionRow = typeof silvTransactions.$inferSelect;
+export type NewSilvTransactionRow = typeof silvTransactions.$inferInsert;

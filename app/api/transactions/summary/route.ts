@@ -4,7 +4,7 @@ import { DISTRICT_GROUPS } from '@/lib/district-groups';
 import { getBlogDb } from '@/lib/db/client';
 import { dailyStats } from '@/lib/db/schema';
 import { resolveAggWindow, kstCurrentYyyymm } from '@/lib/agg-window';
-import { fetchDistrictAggs, fetchRentDistrictAggs } from '@/lib/agg-queries';
+import { fetchDistrictAggs, fetchRentDistrictAggs, fetchSilvDistrictAggs } from '@/lib/agg-queries';
 
 /**
  * 시도별 실거래 집계 API — SQL 푸시다운 전환 (2026-08-02).
@@ -19,7 +19,8 @@ import { fetchDistrictAggs, fetchRentDistrictAggs } from '@/lib/agg-queries';
  * 유형 탭 지원 (2026-08-02): ?dealType=jeonse|monthly 면 rent_transactions
  * 집계 — avg59/avg84 는 평균 보증금, avgRent59/84(월세만)는 평균 월세.
  * 전월세엔 신고가·봇 공개분(daily) 개념이 없어 newHighs=0, daily=null.
- * 분양권은 DB 원장이 없어 유형 집계 미지원 (프론트가 매매 기준 안내).
+ * ?dealType=bunyang 은 silv_transactions 집계 — 의미론 매매와 동일
+ * (신고가 포함, 취소 제외), daily 만 없음 (봇 집계는 매매 전용).
  */
 
 function avgOf(sum: number, cnt: number): number | null {
@@ -41,15 +42,55 @@ export async function GET(req: NextRequest) {
   const yyyymm = window.type === 'month' ? window.yyyymm! : kstCurrentYyyymm();
 
   const dealTypeParam = req.nextUrl.searchParams.get('dealType');
-  if (dealTypeParam && !['buy', 'jeonse', 'monthly'].includes(dealTypeParam)) {
+  if (dealTypeParam && !['buy', 'jeonse', 'monthly', 'bunyang'].includes(dealTypeParam)) {
     return NextResponse.json(
-      { error: 'dealType 은 buy(기본)·jeonse·monthly 만 지원합니다.' },
+      { error: 'dealType 은 buy(기본)·jeonse·monthly·bunyang 만 지원합니다.' },
       { status: 400 },
     );
   }
-  const dealType = (dealTypeParam ?? 'buy') as 'buy' | 'jeonse' | 'monthly';
+  const dealType = (dealTypeParam ?? 'buy') as 'buy' | 'jeonse' | 'monthly' | 'bunyang';
 
   try {
+    // ── 분양권 집계 (2026-08-02) — 의미론 매매와 동일, daily 만 없음 ──
+    if (dealType === 'bunyang') {
+      const aggRows = await fetchSilvDistrictAggs(window.from, window.to);
+      const byDistrict = new Map(aggRows.map((r) => [r.sigungu, r]));
+      const summary = DISTRICT_GROUPS.map((g) => {
+        let cnt = 0, newHighs = 0, sum59 = 0, cnt59 = 0, sum84 = 0, cnt84 = 0;
+        for (const d of g.districts) {
+          const e = byDistrict.get(d);
+          if (!e) continue;
+          cnt      += e.cnt;
+          newHighs += e.newHighs;
+          sum59    += e.sum59;
+          cnt59    += e.cnt59;
+          sum84    += e.sum84;
+          cnt84    += e.cnt84;
+        }
+        return {
+          label:          g.label,
+          districtCount:  g.districts.length,
+          estimatedCount: cnt,
+          sampleCount:    cnt,
+          newHighs,
+          avg59:          avgOf(sum59, cnt59),
+          avg84:          avgOf(sum84, cnt84),
+          firstDistrict:  g.districts[0],
+        };
+      });
+      return NextResponse.json(
+        {
+          summary,
+          daily: null,
+          month: yyyymm,
+          window: { type: window.type, from: window.from, to: window.to },
+          updatedAt: new Date().toISOString(),
+          note: `자체 분양권 원장 ${window.type === 'rolling30' ? '최근 30일' : '월별'} 실집계 (취소 제외, 매일 갱신)`,
+        },
+        { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } }
+      );
+    }
+
     // ── 전월세 유형 집계 (2026-08-02) — 신고가·daily 없음 ──
     if (dealType !== 'buy') {
       const rentRows = await fetchRentDistrictAggs(window.from, window.to, dealType);

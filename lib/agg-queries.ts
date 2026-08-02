@@ -92,6 +92,64 @@ export async function fetchDistrictAggs(from: string, to: string): Promise<Distr
   return rows;
 }
 
+/**
+ * 분양권 구별 집계 — summary 유형 탭용 (2026-08-02, silv_transactions 원장 신설).
+ * 의미론은 매매(fetchDistrictAggs)와 동일 (신고가 포함, 취소 제외).
+ */
+export async function fetchSilvDistrictAggs(from: string, to: string): Promise<DistrictAggRow[]> {
+  const sql = sqlClient();
+  const rows = (await sql`
+    WITH w AS (
+      SELECT sigungu, apt_name, round(area_m2::numeric)::int AS area_r, area_m2, deal_amount, deal_date
+        FROM silv_transactions
+       WHERE deal_date >= ${from} AND deal_date < ${to} AND is_canceled = false
+    ),
+    ranked AS (
+      SELECT sigungu, apt_name, area_r, deal_amount,
+             row_number() OVER (
+               PARTITION BY sigungu, apt_name, area_r
+               ORDER BY deal_date DESC, deal_amount DESC
+             ) AS rn
+        FROM w
+       WHERE apt_name <> '' AND deal_amount > 0 AND area_r > 0
+    ),
+    apt_stats AS (
+      SELECT sigungu, apt_name, area_r,
+             count(*)                                  AS n,
+             max(deal_amount) FILTER (WHERE rn = 1)    AS latest_amt,
+             max(deal_amount) FILTER (WHERE rn > 1)    AS prior_max
+        FROM ranked
+       GROUP BY sigungu, apt_name, area_r
+    ),
+    highs AS (
+      SELECT sigungu, count(*)::int AS new_highs
+        FROM apt_stats
+       WHERE n >= 2 AND latest_amt > prior_max
+       GROUP BY sigungu
+    ),
+    aggs AS (
+      SELECT sigungu,
+             count(*)::int AS cnt,
+             coalesce(sum(deal_amount) FILTER (WHERE area_m2 BETWEEN 55 AND 63), 0)::float8 AS sum59,
+             count(*)          FILTER (WHERE area_m2 BETWEEN 55 AND 63)::int                AS cnt59,
+             coalesce(sum(deal_amount) FILTER (WHERE area_m2 BETWEEN 80 AND 88), 0)::float8 AS sum84,
+             count(*)          FILTER (WHERE area_m2 BETWEEN 80 AND 88)::int                AS cnt84
+        FROM w
+       GROUP BY sigungu
+    )
+    SELECT a.sigungu,
+           a.cnt,
+           coalesce(h.new_highs, 0)::int AS "newHighs",
+           a.sum59, a.cnt59, a.sum84, a.cnt84
+      FROM aggs a
+      LEFT JOIN highs h USING (sigungu)
+  `) as Array<{
+    sigungu: string; cnt: number; newHighs: number;
+    sum59: number; cnt59: number; sum84: number; cnt84: number;
+  }>;
+  return rows;
+}
+
 export interface RentDistrictAggRow {
   sigungu: string;
   cnt:     number;
