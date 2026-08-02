@@ -1,17 +1,19 @@
-import { NextResponse, connection } from 'next/server';
-import { and, eq, gte, inArray } from 'drizzle-orm';
+import { NextRequest, NextResponse, connection } from 'next/server';
+import { inArray } from 'drizzle-orm';
 import { DISTRICT_CODE } from '@/lib/district-codes';
 import { getBlogDb } from '@/lib/db/client';
-import { apartments, transactions } from '@/lib/db/schema';
+import { apartments } from '@/lib/db/schema';
 import { normalizeMLTMName } from '@/lib/normalize-mltm-name';
+import { resolveAggWindow, kstCurrentYyyymm } from '@/lib/agg-window';
+import { fetchHighlightLists, type RawHighlightRow } from '@/lib/agg-queries';
 
 /**
- * 오늘의 주요거래 API — DB 전환 (2026-07-19).
+ * 오늘의 주요거래 API — SQL 푸시다운 전환 (2026-08-02).
  *
- * 기존: 콜드 히트마다 전 시군구(~190개) MOLIT 실시간 배치 → 수십 초 +
- * 함수 타임아웃 간헐 500 ("특이실거래 진입 불가" 사고의 원인).
- * 개편: 자체 원장(transactions) 당월 단일 조회 → 수백 ms. 취소 제외.
- * 하이라이트 선정 로직(신고가·급등·국평 TOP)은 기존 그대로.
+ * 기존(7/19 버전): 당월 원장 행 전체 전송 → JS 선정 (전송량 폭탄 + 월초 공백).
+ * 개편: 신고가·급등·국평 선정을 Postgres 에서 끝내고 카테고리당 최대
+ * PER_CATEGORY 행만 전송. ?window=rolling30(기본)|YYYYMM 지원.
+ * 선정 의미론은 기존 그대로 (lib/agg-queries.ts fetchHighlightLists 참조).
  */
 
 const PER_CATEGORY = 8;
@@ -25,6 +27,18 @@ interface Deal {
   date:     string;
   /** 단지 마스터 PK — 있으면 프론트가 /apt/[id] 전용 페이지로 링크 (사이클 JJ) */
   masterId?: string | null;
+}
+
+/** 원시 행 → Deal (일자 '00'(일 미상)이면 월까지만 · floor 0/null 은 1층 폴백 — 기존 규칙) */
+function toDeal(r: RawHighlightRow): Deal {
+  return {
+    district: r.sigungu,
+    apt:      r.aptName,
+    area:     r.area,
+    floor:    r.floor || 1,
+    price:    r.price,
+    date:     r.dealDate.endsWith('-00') ? r.dealDate.slice(0, 7) : r.dealDate,
+  };
 }
 
 /**
@@ -66,92 +80,33 @@ async function attachMasterIds(deals: Deal[]): Promise<void> {
   }
 }
 
-function currentMonth(): { yyyymm: string; fromDate: string } {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  return { yyyymm: `${y}${m}`, fromDate: `${y}-${m}-01` };
-}
-
-export async function GET() {
+export async function GET(req: NextRequest) {
   // 프리렌더 제외 (Cache Components 호환 방식 — 기존 그대로)
   await connection();
 
-  const { yyyymm, fromDate } = currentMonth();
+  const window = resolveAggWindow(req.nextUrl.searchParams.get('window'));
+  if (!window) {
+    return NextResponse.json(
+      { error: 'window 는 rolling30 또는 YYYYMM(미래 월 불가) 형식입니다.' },
+      { status: 400 },
+    );
+  }
+  const yyyymm = window.type === 'month' ? window.yyyymm! : kstCurrentYyyymm();
 
   try {
-    const db = getBlogDb();
-    const rows = await db
-      .select({
-        sigungu:  transactions.sigungu,
-        aptName:  transactions.aptName,
-        areaM2:   transactions.areaM2,
-        floor:    transactions.floor,
-        price:    transactions.dealAmount,
-        dealDate: transactions.dealDate,
-      })
-      .from(transactions)
-      .where(and(gte(transactions.dealDate, fromDate), eq(transactions.isCanceled, false)));
+    const lists = await fetchHighlightLists(window.from, window.to, PER_CATEGORY);
 
-    // DB 행 → Deal (기존 parseDeals 와 동일 포맷 — 일자 '00' 이면 월까지만)
-    const all: Deal[] = rows.map((r) => ({
-      district: r.sigungu,
-      apt:      r.aptName,
-      area:     Math.round(r.areaM2),
-      floor:    r.floor || 1,
-      price:    r.price,
-      date:     r.dealDate.endsWith('-00') ? r.dealDate.slice(0, 7) : r.dealDate,
-    }));
-
-    // 단지·면적 키로 이력 그룹 (이하 선정 로직은 기존 그대로)
-    const byApt = new Map<string, Deal[]>();
-    all.forEach((d) => {
-      const key = `${d.district}|${d.apt}|${d.area}`;
-      if (!byApt.has(key)) byApt.set(key, []);
-      byApt.get(key)!.push(d);
+    const topNewHighs = lists.newHighs.map((r) => ({ ...toDeal(r), prevHigh: r.prevHigh ?? 0 }));
+    const topSurges   = lists.surges.map((r) => {
+      const prevPrice = r.prevPrice ?? 0;
+      return {
+        ...toDeal(r),
+        prevPrice,
+        // 기존 JS 와 동일: 소수 1자리 반올림 상승률
+        ratePct: prevPrice > 0 ? Math.round(((r.price - prevPrice) / prevPrice) * 1000) / 10 : 0,
+      };
     });
-
-    const newHighs: (Deal & { prevHigh: number })[] = [];
-    const surges:   (Deal & { prevPrice: number; ratePct: number })[] = [];
-
-    byApt.forEach((deals) => {
-      if (deals.length < 2) return;
-      const sorted = [...deals].sort((a, b) => b.date.localeCompare(a.date));
-      const latest = sorted[0];
-      const others = sorted.slice(1);
-      const prevMax = Math.max(...others.map((d) => d.price));
-
-      if (latest.price >= prevMax) {
-        newHighs.push({ ...latest, prevHigh: prevMax });
-      }
-      const prev = others[0];
-      if (prev && prev.price > 0 && latest.price > prev.price) {
-        surges.push({
-          ...latest,
-          prevPrice: prev.price,
-          ratePct: Math.round(((latest.price - prev.price) / prev.price) * 1000) / 10,
-        });
-      }
-    });
-
-    newHighs.sort((a, b) => b.price - a.price);
-    surges.sort((a, b) => b.ratePct - a.ratePct);
-
-    // 국평 고가 — 80~88㎡ 최고가 (단지당 1건)
-    const seen = new Set<string>();
-    const pyeong84 = all
-      .filter((d) => d.area >= 80 && d.area <= 88)
-      .sort((a, b) => b.price - a.price)
-      .filter((d) => {
-        const key = `${d.district}|${d.apt}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      })
-      .slice(0, PER_CATEGORY);
-
-    const topNewHighs = newHighs.slice(0, PER_CATEGORY);
-    const topSurges   = surges.slice(0, PER_CATEGORY);
+    const pyeong84 = lists.pyeong84.map(toDeal);
 
     // 최종 결과에만 단지 마스터 id 부여 (사이클 JJ — 단지 페이지 내부 링크)
     await attachMasterIds([...topNewHighs, ...topSurges, ...pyeong84]);
@@ -159,7 +114,10 @@ export async function GET() {
     return NextResponse.json(
       {
         month: yyyymm,
-        coverage: '등록 시군구 전체 기준 (자체 원장, 취소 제외)',
+        window: { type: window.type, from: window.from, to: window.to },
+        coverage: window.type === 'rolling30'
+          ? '등록 시군구 전체 · 최근 30일 신고분 (자체 원장, 취소 제외)'
+          : '등록 시군구 전체 · 월별 신고분 (자체 원장, 취소 제외)',
         newHighs: topNewHighs,
         surges:   topSurges,
         pyeong84,

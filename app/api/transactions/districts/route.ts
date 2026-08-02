@@ -1,23 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { and, eq, gte, inArray } from 'drizzle-orm';
 import { DISTRICT_GROUPS } from '@/lib/district-groups';
-import { getBlogDb } from '@/lib/db/client';
-import { transactions } from '@/lib/db/schema';
+import { resolveAggWindow, kstCurrentYyyymm } from '@/lib/agg-window';
+import { fetchDistrictAggs } from '@/lib/agg-queries';
 
 /**
- * 구별 거래 현황 API — DB 전환 (2026-07-19).
+ * 구별 거래 현황 API — SQL 푸시다운 전환 (2026-08-02).
  *
- * 기존: 그룹 내 전 구(경기 41개)를 MOLIT 실시간 병렬 조회 — 콜드 수 초~타임아웃.
- * 개편: 자체 원장(transactions) 당월 단일 조회 → 수백 ms. 취소 제외.
- * 간이 신고가: 동일 단지·면적 내 최신(계약일 기준) 거래가 기간 최고가면 집계.
+ * 기존(7/19 버전): 그룹 내 전 구의 당월 원장 행 전체 전송 → JS 집계.
+ * 개편: Postgres 집계 결과만 전송 + ?window=rolling30(기본)|YYYYMM.
+ *
+ * 버그 픽스: 기존 "간이 신고가"(latest >= max)는 거래 1건짜리 단지도
+ * 전부 신고가로 세던 옛 버그(summary 는 7월에 수정, 여기엔 미반영)를
+ * 그대로 갖고 있었다. countNewHighs 와 동일 의미론(2건 이상 &&
+ * 직전 최고가 '초과')으로 통일 — 구 칩 신고가 수치가 낮아지는 게 정상.
  */
-
-function currentMonth(): { yyyymm: string; fromDate: string } {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  return { yyyymm: `${y}${m}`, fromDate: `${y}-${m}-01` };
-}
 
 export async function GET(req: NextRequest) {
   const groupLabel = req.nextUrl.searchParams.get('group')?.trim() ?? '';
@@ -26,55 +22,34 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: '지원하지 않는 그룹: ' + groupLabel }, { status: 400 });
   }
 
-  const { yyyymm, fromDate } = currentMonth();
+  const window = resolveAggWindow(req.nextUrl.searchParams.get('window'));
+  if (!window) {
+    return NextResponse.json(
+      { error: 'window 는 rolling30 또는 YYYYMM(미래 월 불가) 형식입니다.' },
+      { status: 400 },
+    );
+  }
+  const yyyymm = window.type === 'month' ? window.yyyymm! : kstCurrentYyyymm();
 
   try {
-    const db = getBlogDb();
-    const rows = await db
-      .select({
-        sigungu:  transactions.sigungu,
-        aptName:  transactions.aptName,
-        areaM2:   transactions.areaM2,
-        price:    transactions.dealAmount,
-        dealDate: transactions.dealDate,
-      })
-      .from(transactions)
-      .where(and(
-        inArray(transactions.sigungu, [...group.districts]),
-        gte(transactions.dealDate, fromDate),
-        eq(transactions.isCanceled, false),
-      ));
-
-    // 구별 count + 간이 신고가 (계약일 오름차순 기준 최신가 = 기간 최고가)
-    const byDistrict = new Map<string, Map<string, { max: number; latest: number; latestDate: string }>>();
-    const counts = new Map<string, number>();
-    for (const r of rows) {
-      counts.set(r.sigungu, (counts.get(r.sigungu) ?? 0) + 1);
-      let apts = byDistrict.get(r.sigungu);
-      if (!apts) { apts = new Map(); byDistrict.set(r.sigungu, apts); }
-      const key = `${r.aptName}-${Math.round(r.areaM2)}`;
-      const cur = apts.get(key);
-      if (!cur) {
-        apts.set(key, { max: r.price, latest: r.price, latestDate: r.dealDate });
-      } else {
-        if (r.price > cur.max) cur.max = r.price;
-        if (r.dealDate >= cur.latestDate) { cur.latest = r.price; cur.latestDate = r.dealDate; }
-      }
-    }
+    const aggRows = await fetchDistrictAggs(window.from, window.to);
+    const byDistrict = new Map(aggRows.map((r) => [r.sigungu, r]));
 
     const districts = group.districts.map((district) => {
-      const apts = byDistrict.get(district);
-      const newHighs = apts
-        ? [...apts.values()].filter((v) => v.latest >= v.max && v.max > 0).length
-        : 0;
-      return { district, count: counts.get(district) ?? 0, newHighs };
+      const e = byDistrict.get(district);
+      return { district, count: e?.cnt ?? 0, newHighs: e?.newHighs ?? 0 };
     });
 
     // 아실형: 건수 많은 순 정렬
     districts.sort((a, b) => b.count - a.count);
 
     return NextResponse.json(
-      { group: group.label, month: yyyymm, districts },
+      {
+        group: group.label,
+        month: yyyymm,
+        window: { type: window.type, from: window.from, to: window.to },
+        districts,
+      },
       { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } }
     );
   } catch (error) {
