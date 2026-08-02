@@ -139,6 +139,8 @@ export default function TransactionsClient() {
   const [summaryData, setSummaryData] = useState<SummaryRegion[]>([]);
   const [dailyMeta, setDailyMeta] = useState<DailyMeta | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
+  // 집계 윈도우 (2026-08-02 월초 공백 해소) — 'today'(봇 공개분) | 'rolling30' | 'YYYYMM'
+  const [sumWindow, setSumWindow] = useState<string>('today');
 
   // 구 선택 모달 (아실형) — 열려 있으면 해당 시도 그룹
   const [picker, setPicker] = useState<{ label: string; districts: string[] } | null>(null);
@@ -263,19 +265,37 @@ export default function TransactionsClient() {
     return () => { cancelled = true; };
   }, [viewMode, dealType, district, months, silvFetched]);
 
-  // 시도별 요약
+  // 시도별 요약 — 윈도우 선택 반영.
+  // 'today'와 'rolling30'은 같은 서버 기본(최근 30일) 응답을 공유하므로
+  // 파생 키(sumFetchKey)로 묶어 탭 전환 시 중복 페치를 막는다.
+  const sumFetchKey = /^\d{6}$/.test(sumWindow) ? sumWindow : 'default';
   useEffect(() => {
     if (viewMode !== 'summary') return;
     setSummaryLoading(true);
-    fetch('/api/transactions/summary')
+    const windowParam = sumFetchKey === 'default' ? '' : `?window=${sumFetchKey}`;
+    fetch(`/api/transactions/summary${windowParam}`)
       .then(r => r.json())
       .then(json => {
         setSummaryData(json.summary || []);
         setDailyMeta(json.daily ?? null);
+        // 봇 공개분이 없는 날은 '오늘 공개' 탭 무의미 — 최근 30일로 자동 전환
+        if (!json.daily) setSumWindow((w) => (w === 'today' ? 'rolling30' : w));
         setSummaryLoading(false);
       })
       .catch(() => setSummaryLoading(false));
-  }, [viewMode]);
+  }, [viewMode, sumFetchKey]);
+
+  // 월 탭 옵션 — 당월·전월 (클라이언트 로컬 = KST 사용자 기준)
+  const windowMonths = useMemo(() => {
+    if (today.getFullYear() < 2001) return [];
+    const cur  = new Date(today.getFullYear(), today.getMonth(), 1);
+    const prev = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const key  = (d: Date) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
+    return [
+      { key: key(cur),  label: `${cur.getMonth() + 1}월` },
+      { key: key(prev), label: `${prev.getMonth() + 1}월` },
+    ];
+  }, [today]);
 
   // 구별 칩 통계 — detail 진입 시 그룹 단위로 1회 조회
   const groupLabel = DISTRICT_GROUPS[groupIdx]?.label ?? '';
@@ -363,7 +383,11 @@ export default function TransactionsClient() {
                 borderRadius: '99px', marginBottom: '12px',
               }}>
                 <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#E23B3B', display: 'inline-block' }} />
-                {dailyMeta ? '오늘 아침 공개' : '이번 달 신고 집계'}
+                {sumWindow === 'today' && dailyMeta
+                  ? '오늘 아침 공개'
+                  : /^\d{6}$/.test(sumWindow)
+                    ? `${parseInt(sumWindow.slice(4, 6), 10)}월 신고 집계`
+                    : '최근 30일 신고 집계'}
               </div>
               <h1 style={{ margin: '0 0 6px', fontSize: 'clamp(22px, 3vw, 29px)', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.6px' }}>
                 오늘 공개된 최신 실거래
@@ -377,12 +401,12 @@ export default function TransactionsClient() {
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', justifyContent: 'flex-end' }}>
                   <span style={{ fontSize: '13px', color: 'var(--text-dim)' }}>총</span>
                   <span style={{ fontSize: '26px', fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>
-                    {(dailyMeta ? dailyMeta.totalCount : summaryData.reduce((s, r) => s + r.estimatedCount, 0)).toLocaleString()}
+                    {(sumWindow === 'today' && dailyMeta ? dailyMeta.totalCount : summaryData.reduce((s, r) => s + r.estimatedCount, 0)).toLocaleString()}
                   </span>
                   <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-muted)' }}>건</span>
                 </div>
                 <div style={{ fontSize: '13px', fontWeight: 700, color: '#E23B3B', marginTop: '2px' }}>
-                  신고가 {dailyMeta ? dailyMeta.totalNewHighs : summaryData.reduce((s, r) => s + r.newHighs, 0)}건 🔥
+                  신고가 {sumWindow === 'today' && dailyMeta ? dailyMeta.totalNewHighs : summaryData.reduce((s, r) => s + r.newHighs, 0)}건 🔥
                 </div>
               </div>
             )}
@@ -458,10 +482,33 @@ export default function TransactionsClient() {
               </div>
             )}
 
-            {/* 섹션 헤더 */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '20px 0 14px' }}>
+            {/* 섹션 헤더 + 집계 윈도우 토글 (2026-08-02 — 월초 공백 해소·지난달 조회) */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '20px 0 14px', gap: '10px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-primary)' }}>시/도별 거래 현황</span>
-              <span style={{ fontSize: '12.5px', color: 'var(--text-dim)' }}>거래량순 · 평균가는 전용면적 기준</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: '4px', padding: '3px', borderRadius: '10px', backgroundColor: 'var(--border-light)' }}>
+                  {[
+                    ...(dailyMeta ? [{ key: 'today', label: '오늘 공개' }] : []),
+                    { key: 'rolling30', label: '최근 30일' },
+                    ...windowMonths,
+                  ].map(({ key, label }) => (
+                    <button
+                      key={key}
+                      onClick={() => setSumWindow(key)}
+                      style={{
+                        padding: '5px 12px', borderRadius: '7px', fontSize: '12px', fontWeight: 700,
+                        border: 'none', cursor: 'pointer',
+                        backgroundColor: sumWindow === key ? 'var(--bg-card)' : 'transparent',
+                        color: sumWindow === key ? 'var(--text-primary)' : 'var(--text-dim)',
+                        boxShadow: sumWindow === key ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <span style={{ fontSize: '12.5px', color: 'var(--text-dim)' }}>거래량순 · 평균가는 전용면적 기준</span>
+              </div>
             </div>
             {summaryLoading ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px', marginTop: '20px' }}>
@@ -477,8 +524,9 @@ export default function TransactionsClient() {
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '12px' }}>
                 {[...summaryData]
-                  .sort((a, b) =>
-                    (b.todayCount ?? b.estimatedCount) - (a.todayCount ?? a.estimatedCount))
+                  .sort((a, b) => sumWindow === 'today'
+                    ? (b.todayCount ?? 0) - (a.todayCount ?? 0)
+                    : b.estimatedCount - a.estimatedCount)
                   .map((region, i) => (
                   <button
                     key={region.label}
@@ -521,11 +569,11 @@ export default function TransactionsClient() {
 
                     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '10px' }}>
                       <span style={{ fontSize: '20px', fontWeight: 800, fontFamily: 'Roboto Mono, monospace', color: 'var(--text-primary)' }}>
-                        {(region.todayCount !== undefined ? region.todayCount : region.estimatedCount).toLocaleString()}<span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-muted)' }}>건{region.todayCount === undefined && dailyMeta ? ' (월)' : ''}</span>
+                        {(sumWindow === 'today' ? (region.todayCount ?? 0) : region.estimatedCount).toLocaleString()}<span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-muted)' }}>건</span>
                       </span>
-                      {(region.todayCount !== undefined ? (region.todayNewHighs ?? 0) : region.newHighs) > 0 && (
+                      {(sumWindow === 'today' ? (region.todayNewHighs ?? 0) : region.newHighs) > 0 && (
                         <span style={{ fontSize: '12px', fontWeight: 700, color: '#E23B3B' }}>
-                          신고가 {region.todayCount !== undefined ? region.todayNewHighs : region.newHighs}
+                          신고가 {sumWindow === 'today' ? (region.todayNewHighs ?? 0) : region.newHighs}
                         </span>
                       )}
                     </div>
@@ -557,7 +605,11 @@ export default function TransactionsClient() {
             )}
 
             <p style={{ margin: '16px 0 20px', fontSize: '11px', color: 'var(--text-dim)' }}>
-              {dailyMeta ? `※ ${dailyMeta.date} 공개분 (아침 봇 집계) · 평균가는 당월 기준` : '※ 등록 시군구 전체 실집계 (당월 신고 누계)'} · 지역을 클릭해 구를 선택하면 상세 거래를 확인할 수 있습니다.
+              {sumWindow === 'today' && dailyMeta
+                ? `※ ${dailyMeta.date} 공개분 (아침 봇 집계) · 평균가는 최근 30일 기준`
+                : /^\d{6}$/.test(sumWindow)
+                  ? `※ ${sumWindow.slice(0, 4)}년 ${parseInt(sumWindow.slice(4, 6), 10)}월 계약 신고분 실집계 (취소 제외, 매일 갱신)`
+                  : '※ 최근 30일 계약 신고분 실집계 (취소 제외, 매일 갱신)'} · 지역을 클릭해 구를 선택하면 상세 거래를 확인할 수 있습니다.
             </p>
 
             {/* 조회를 넘어 분석까지 — 내집만의 기능 프로모 */}

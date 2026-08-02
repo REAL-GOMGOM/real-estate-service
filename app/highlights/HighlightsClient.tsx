@@ -186,7 +186,7 @@ export default function HighlightsClient() {
     const dateStr = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
     const blob = await buildRankingShareImage({
       title: `오늘의 주요거래 — ${sectionTitle}`,
-      subtitle: `${dateStr} 공개 · 최근 1개월 신고분 기준`,
+      subtitle: `${dateStr} 기준 · 최근 30일 신고분`,
       rows: rows.slice(0, 5),
     });
     if (blob) {
@@ -209,7 +209,7 @@ export default function HighlightsClient() {
               borderRadius: '99px', marginBottom: '12px',
             }}>
               <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#E23B3B', display: 'inline-block' }} />
-              {today.getFullYear() > 2000 ? fullDateLabel(today) : '—'} · 오늘 공개된 거래
+              {today.getFullYear() > 2000 ? fullDateLabel(today) : '—'} · 최근 30일 신고분
             </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
               <h1 style={{ margin: '0 0 6px', fontSize: 'clamp(22px, 3vw, 29px)', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.6px' }}>
@@ -374,7 +374,7 @@ export default function HighlightsClient() {
               )}
 
               <p style={{ fontSize: '11px', color: 'var(--text-dim)', lineHeight: 1.8 }}>
-                ※ 최근 1개월 공개분 · {data.coverage} · 출처: 국토교통부 실거래가 공개시스템
+                ※ 최근 30일 신고분 · {data.coverage} · 출처: 국토교통부 실거래가 공개시스템
               </p>
 
               <AnalysisPromoBar />
