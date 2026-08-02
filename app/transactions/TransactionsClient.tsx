@@ -59,8 +59,10 @@ interface SummaryRegion {
   label:          string;
   estimatedCount: number;
   newHighs:       number;
-  avg59:          number | null;
+  avg59:          number | null;  // 매매=평균 거래가, 전월세=평균 보증금 (만원)
   avg84:          number | null;
+  avgRent59?:     number | null;  // 월세 탭 전용 — 평균 월세 (만원)
+  avgRent84?:     number | null;
   firstDistrict:  string;
   todayCount?:    number;   // 봇 공개분 (있으면 오늘 공개 기준 표시)
   todayNewHighs?: number;
@@ -265,25 +267,31 @@ export default function TransactionsClient() {
     return () => { cancelled = true; };
   }, [viewMode, dealType, district, months, silvFetched]);
 
-  // 시도별 요약 — 윈도우 선택 반영.
+  // 시도별 요약 — 윈도우·유형 선택 반영.
   // 'today'와 'rolling30'은 같은 서버 기본(최근 30일) 응답을 공유하므로
   // 파생 키(sumFetchKey)로 묶어 탭 전환 시 중복 페치를 막는다.
+  // 유형: 전세·월세는 rent 집계(dealType 파라미터), 분양권은 원장이 없어 매매 기준.
   const sumFetchKey = /^\d{6}$/.test(sumWindow) ? sumWindow : 'default';
+  const sumDealType: 'buy' | 'jeonse' | 'monthly' =
+    dealType === 'jeonse' || dealType === 'monthly' ? dealType : 'buy';
   useEffect(() => {
     if (viewMode !== 'summary') return;
     setSummaryLoading(true);
-    const windowParam = sumFetchKey === 'default' ? '' : `?window=${sumFetchKey}`;
-    fetch(`/api/transactions/summary${windowParam}`)
+    const params = new URLSearchParams();
+    if (sumFetchKey !== 'default') params.set('window', sumFetchKey);
+    if (sumDealType !== 'buy') params.set('dealType', sumDealType);
+    const qs = params.toString();
+    fetch(`/api/transactions/summary${qs ? `?${qs}` : ''}`)
       .then(r => r.json())
       .then(json => {
         setSummaryData(json.summary || []);
         setDailyMeta(json.daily ?? null);
-        // 봇 공개분이 없는 날은 '오늘 공개' 탭 무의미 — 최근 30일로 자동 전환
+        // 봇 공개분이 없는 날(또는 전월세 탭)은 '오늘 공개' 탭 무의미 — 최근 30일로 자동 전환
         if (!json.daily) setSumWindow((w) => (w === 'today' ? 'rolling30' : w));
         setSummaryLoading(false);
       })
       .catch(() => setSummaryLoading(false));
-  }, [viewMode, sumFetchKey]);
+  }, [viewMode, sumFetchKey, sumDealType]);
 
   // 월 탭 옵션 — 당월·전월 (클라이언트 로컬 = KST 사용자 기준)
   const windowMonths = useMemo(() => {
@@ -405,9 +413,15 @@ export default function TransactionsClient() {
                   </span>
                   <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-muted)' }}>건</span>
                 </div>
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#E23B3B', marginTop: '2px' }}>
-                  신고가 {sumWindow === 'today' && dailyMeta ? dailyMeta.totalNewHighs : summaryData.reduce((s, r) => s + r.newHighs, 0)}건 🔥
-                </div>
+                {sumDealType === 'buy' ? (
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#E23B3B', marginTop: '2px' }}>
+                    신고가 {sumWindow === 'today' && dailyMeta ? dailyMeta.totalNewHighs : summaryData.reduce((s, r) => s + r.newHighs, 0)}건 🔥
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-muted)', marginTop: '2px' }}>
+                    {sumDealType === 'jeonse' ? '전세 계약' : '월세 계약'} 기준
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -468,14 +482,14 @@ export default function TransactionsClient() {
               ))}
             </div>
 
-            {/* 전월세 탭 안내 — summary(시도별)는 매매 전용 집계라, 전세/월세는 구 선택 후 제공 */}
-            {dealType !== 'buy' && (
+            {/* 분양권 탭 안내 — 분양권은 DB 원장이 없어 시도별 집계 미지원, 구 선택 후 제공 */}
+            {dealType === 'bunyang' && (
               <div style={{
                 marginTop: '12px', padding: '12px 14px', borderRadius: '10px',
                 backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border)',
                 fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6,
               }}>
-                {dealType === 'jeonse' ? '전세' : dealType === 'monthly' ? '월세' : '분양권'} 시세는{' '}
+                분양권 시세는{' '}
                 <strong style={{ color: 'var(--text-primary)' }}>지역(구) 단위</strong>로 제공됩니다.
                 아래 시/도를 눌러 구를 선택하면 확인할 수 있어요.
                 <span style={{ color: 'var(--text-dim)' }}> (아래 카드 숫자는 매매 기준)</span>
@@ -488,7 +502,7 @@ export default function TransactionsClient() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', gap: '4px', padding: '3px', borderRadius: '10px', backgroundColor: 'var(--border-light)' }}>
                   {[
-                    ...(dailyMeta ? [{ key: 'today', label: '오늘 공개' }] : []),
+                    ...(dailyMeta && sumDealType === 'buy' ? [{ key: 'today', label: '오늘 공개' }] : []),
                     { key: 'rolling30', label: '최근 30일' },
                     ...windowMonths,
                   ].map(({ key, label }) => (
@@ -507,7 +521,9 @@ export default function TransactionsClient() {
                     </button>
                   ))}
                 </div>
-                <span style={{ fontSize: '12.5px', color: 'var(--text-dim)' }}>거래량순 · 평균가는 전용면적 기준</span>
+                <span style={{ fontSize: '12.5px', color: 'var(--text-dim)' }}>
+                  거래량순 · {sumDealType === 'buy' ? '평균가' : sumDealType === 'jeonse' ? '평균 보증금' : '평균 보증금/월세'}는 전용면적 기준
+                </span>
               </div>
             </div>
             {summaryLoading ? (
@@ -587,6 +603,7 @@ export default function TransactionsClient() {
                           59㎡{' '}
                           <strong style={{ color: 'var(--text-secondary)', fontFamily: 'Roboto Mono, monospace' }}>
                             {region.avg59 >= 10000 ? `${(region.avg59 / 10000).toFixed(1)}억` : `${region.avg59.toLocaleString()}만`}
+                            {sumDealType === 'monthly' && region.avgRent59 ? `/${region.avgRent59.toLocaleString()}만` : ''}
                           </strong>
                         </span>
                       )}
@@ -595,6 +612,7 @@ export default function TransactionsClient() {
                           84㎡{' '}
                           <strong style={{ color: 'var(--text-secondary)', fontFamily: 'Roboto Mono, monospace' }}>
                             {region.avg84 >= 10000 ? `${(region.avg84 / 10000).toFixed(1)}억` : `${region.avg84.toLocaleString()}만`}
+                            {sumDealType === 'monthly' && region.avgRent84 ? `/${region.avgRent84.toLocaleString()}만` : ''}
                           </strong>
                         </span>
                       )}
@@ -608,8 +626,9 @@ export default function TransactionsClient() {
               {sumWindow === 'today' && dailyMeta
                 ? `※ ${dailyMeta.date} 공개분 (아침 봇 집계) · 평균가는 최근 30일 기준`
                 : /^\d{6}$/.test(sumWindow)
-                  ? `※ ${sumWindow.slice(0, 4)}년 ${parseInt(sumWindow.slice(4, 6), 10)}월 계약 신고분 실집계 (취소 제외, 매일 갱신)`
-                  : '※ 최근 30일 계약 신고분 실집계 (취소 제외, 매일 갱신)'} · 지역을 클릭해 구를 선택하면 상세 거래를 확인할 수 있습니다.
+                  ? `※ ${sumWindow.slice(0, 4)}년 ${parseInt(sumWindow.slice(4, 6), 10)}월 ${sumDealType === 'buy' ? '계약 신고분 실집계 (취소 제외, 매일 갱신)' : `${sumDealType === 'jeonse' ? '전세' : '월세'} 계약 신고분 실집계 (매일 갱신)`}`
+                  : `※ 최근 30일 ${sumDealType === 'buy' ? '계약 신고분 실집계 (취소 제외, 매일 갱신)' : `${sumDealType === 'jeonse' ? '전세' : '월세'} 계약 신고분 실집계 (매일 갱신)`}`}
+              {sumDealType === 'monthly' ? ' · 금액은 평균 보증금/평균 월세' : sumDealType === 'jeonse' ? ' · 금액은 평균 보증금' : ''} · 지역을 클릭해 구를 선택하면 상세 거래를 확인할 수 있습니다.
             </p>
 
             {/* 조회를 넘어 분석까지 — 내집만의 기능 프로모 */}

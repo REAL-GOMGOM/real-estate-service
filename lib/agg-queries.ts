@@ -92,6 +92,47 @@ export async function fetchDistrictAggs(from: string, to: string): Promise<Distr
   return rows;
 }
 
+export interface RentDistrictAggRow {
+  sigungu: string;
+  cnt:     number;
+  /** 보증금 합계 (만원) — float8 캐스팅 */
+  sumDep59:  number;
+  cnt59:     number;
+  sumDep84:  number;
+  cnt84:     number;
+  /** 월세 합계 (만원) — 월세(kind='monthly') 집계에서만 의미 */
+  sumRent59: number;
+  sumRent84: number;
+}
+
+/**
+ * 전월세 구별 집계 (건수·59/84 보증금·월세 합계) — summary 유형 탭용 (2026-08-02).
+ * kind='jeonse' 는 monthly_rent = 0, 'monthly' 는 > 0 (rent-shared 분류와 동일).
+ * rent_transactions 엔 취소 개념 없음. 전송량: 시군구 수만큼(≤ ~250행).
+ */
+export async function fetchRentDistrictAggs(
+  from: string,
+  to: string,
+  kind: 'jeonse' | 'monthly',
+): Promise<RentDistrictAggRow[]> {
+  const sql = sqlClient();
+  const rows = (await sql`
+    SELECT sigungu,
+           count(*)::int AS cnt,
+           coalesce(sum(deposit) FILTER (WHERE area_m2 BETWEEN 55 AND 63), 0)::float8      AS "sumDep59",
+           count(*)              FILTER (WHERE area_m2 BETWEEN 55 AND 63)::int             AS cnt59,
+           coalesce(sum(deposit) FILTER (WHERE area_m2 BETWEEN 80 AND 88), 0)::float8      AS "sumDep84",
+           count(*)              FILTER (WHERE area_m2 BETWEEN 80 AND 88)::int             AS cnt84,
+           coalesce(sum(monthly_rent) FILTER (WHERE area_m2 BETWEEN 55 AND 63), 0)::float8 AS "sumRent59",
+           coalesce(sum(monthly_rent) FILTER (WHERE area_m2 BETWEEN 80 AND 88), 0)::float8 AS "sumRent84"
+      FROM rent_transactions
+     WHERE deal_date >= ${from} AND deal_date < ${to}
+       AND (monthly_rent = 0) = ${kind === 'jeonse'}
+     GROUP BY sigungu
+  `) as unknown as RentDistrictAggRow[];
+  return rows;
+}
+
 /** 하이라이트 공통 행 (가공 전 — 일자 '-00' 처리·floor 폴백은 호출부 몫) */
 export interface RawHighlightRow {
   sigungu:  string;

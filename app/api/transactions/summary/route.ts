@@ -4,7 +4,7 @@ import { DISTRICT_GROUPS } from '@/lib/district-groups';
 import { getBlogDb } from '@/lib/db/client';
 import { dailyStats } from '@/lib/db/schema';
 import { resolveAggWindow, kstCurrentYyyymm } from '@/lib/agg-window';
-import { fetchDistrictAggs } from '@/lib/agg-queries';
+import { fetchDistrictAggs, fetchRentDistrictAggs } from '@/lib/agg-queries';
 
 /**
  * 시도별 실거래 집계 API — SQL 푸시다운 전환 (2026-08-02).
@@ -15,6 +15,11 @@ import { fetchDistrictAggs } from '@/lib/agg-queries';
  * 개편: 집계를 Postgres 안에서 끝내고 구 단위 결과만 전송 (~250행).
  *   윈도우 파라미터 지원 — ?window=rolling30(기본) | YYYYMM.
  * 신고가 의미론은 기존 countNewHighs 와 동일 (lib/agg-queries.ts 참조).
+ *
+ * 유형 탭 지원 (2026-08-02): ?dealType=jeonse|monthly 면 rent_transactions
+ * 집계 — avg59/avg84 는 평균 보증금, avgRent59/84(월세만)는 평균 월세.
+ * 전월세엔 신고가·봇 공개분(daily) 개념이 없어 newHighs=0, daily=null.
+ * 분양권은 DB 원장이 없어 유형 집계 미지원 (프론트가 매매 기준 안내).
  */
 
 function avgOf(sum: number, cnt: number): number | null {
@@ -35,7 +40,61 @@ export async function GET(req: NextRequest) {
   }
   const yyyymm = window.type === 'month' ? window.yyyymm! : kstCurrentYyyymm();
 
+  const dealTypeParam = req.nextUrl.searchParams.get('dealType');
+  if (dealTypeParam && !['buy', 'jeonse', 'monthly'].includes(dealTypeParam)) {
+    return NextResponse.json(
+      { error: 'dealType 은 buy(기본)·jeonse·monthly 만 지원합니다.' },
+      { status: 400 },
+    );
+  }
+  const dealType = (dealTypeParam ?? 'buy') as 'buy' | 'jeonse' | 'monthly';
+
   try {
+    // ── 전월세 유형 집계 (2026-08-02) — 신고가·daily 없음 ──
+    if (dealType !== 'buy') {
+      const rentRows = await fetchRentDistrictAggs(window.from, window.to, dealType);
+      const byDistrict = new Map(rentRows.map((r) => [r.sigungu, r]));
+      const summary = DISTRICT_GROUPS.map((g) => {
+        let cnt = 0, sumDep59 = 0, cnt59 = 0, sumDep84 = 0, cnt84 = 0, sumRent59 = 0, sumRent84 = 0;
+        for (const d of g.districts) {
+          const e = byDistrict.get(d);
+          if (!e) continue;
+          cnt       += e.cnt;
+          sumDep59  += e.sumDep59;
+          cnt59     += e.cnt59;
+          sumDep84  += e.sumDep84;
+          cnt84     += e.cnt84;
+          sumRent59 += e.sumRent59;
+          sumRent84 += e.sumRent84;
+        }
+        return {
+          label:          g.label,
+          districtCount:  g.districts.length,
+          estimatedCount: cnt,
+          sampleCount:    cnt,
+          newHighs:       0,
+          // avg59/84 = 평균 보증금 (프론트 카드 슬롯 재사용)
+          avg59:          avgOf(sumDep59, cnt59),
+          avg84:          avgOf(sumDep84, cnt84),
+          ...(dealType === 'monthly'
+            ? { avgRent59: avgOf(sumRent59, cnt59), avgRent84: avgOf(sumRent84, cnt84) }
+            : {}),
+          firstDistrict:  g.districts[0],
+        };
+      });
+      return NextResponse.json(
+        {
+          summary,
+          daily: null,
+          month: yyyymm,
+          window: { type: window.type, from: window.from, to: window.to },
+          updatedAt: new Date().toISOString(),
+          note: `자체 전월세 원장 ${window.type === 'rolling30' ? '최근 30일' : '월별'} 실집계 (매일 갱신)`,
+        },
+        { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } }
+      );
+    }
+
     const aggRows = await fetchDistrictAggs(window.from, window.to);
     const byDistrict = new Map(aggRows.map((r) => [r.sigungu, r]));
 
