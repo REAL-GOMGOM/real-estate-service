@@ -74,6 +74,14 @@ describe('groupRentTransactions', () => {
     expect(raemian.areas.sort((a, b) => a - b)).toEqual([60, 85]);
     expect(raemian.buildYear).toBe(2015);
   });
+
+  it('이름이 같아도 법정동이 다르면 별도 단지로 묶는다', () => {
+    const xml =
+      item({ ...BASE, aptNm: '현대', umdNm: '압구정동', deposit: '150,000', monthlyRent: '0' }) +
+      item({ ...BASE, aptNm: '현대', umdNm: '대치동', deposit: '100,000', monthlyRent: '0' });
+
+    expect(groupRentTransactions(parseRentXml(xml, '강남구'))).toHaveLength(2);
+  });
 });
 
 describe('fmtRentPrice', () => {

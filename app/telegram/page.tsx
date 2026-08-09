@@ -1,6 +1,8 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import type { Metadata } from 'next';
 import { SITE_URL } from '@/lib/site';
+import { TrackedTelegramLink } from '@/components/shared/TrackedTelegramLink';
 
 /**
  * 텔레그램 채널 경유 랜딩 — /telegram (2026-07-12)
@@ -14,13 +16,14 @@ import { SITE_URL } from '@/lib/site';
 
 const CHANNEL_URL = process.env.NEXT_PUBLIC_TELEGRAM_CHANNEL_URL || 'https://t.me/realMyzip';
 
-export const metadata = {
-  title: '내집 텔레그램 채널 — 실거래 신고가·시장 분석을 가장 빠르게',
-  description: '매일 아침 실거래 다이제스트, 신고가 알림, 새 칼럼 소식. 내집(My.ZIP) 공식 텔레그램 채널입니다.',
+export const metadata: Metadata = {
+  title: '내집 텔레그램 채널 — 실거래 신고가·시장 분석 알림',
+  description: '주요 실거래 다이제스트, 신고가 알림, 새 칼럼 소식을 선별해 전하는 내집(My.ZIP) 공식 텔레그램 채널입니다.',
   alternates: { canonical: `${SITE_URL}/telegram` },
+  robots: { index: false, follow: true },
   openGraph: {
     title: '내집 텔레그램 채널',
-    description: '실거래 신고가 · 시장 분석 · 새 칼럼 소식을 가장 빠르게',
+    description: '실거래 신고가 · 시장 분석 · 새 칼럼 소식을 선별해 전달합니다',
     url: `${SITE_URL}/telegram`,
     siteName: '내집(My.ZIP)',
     locale: 'ko_KR',
@@ -31,10 +34,10 @@ export const metadata = {
 };
 
 const PERKS = [
-  { icon: '🌅', title: '아침 실거래 다이제스트', desc: '전날 신고분 요약 — 수도권 TOP10 + 지방 주요 거래' },
-  { icon: '🔥', title: '신고가 알림', desc: '주요 단지 신고가 경신을 실시간으로' },
-  { icon: '📰', title: '뉴스 브리핑', desc: '부동산 뉴스 3줄 요약, 하루 3회' },
-  { icon: '📝', title: '새 칼럼 소식', desc: '정책 분석·지역 리포트 발행 즉시' },
+  { icon: '🌅', title: '실거래 다이제스트', desc: '공개 신고분 중 수도권과 지방의 주요 거래를 선별' },
+  { icon: '🔥', title: '신고가 알림', desc: '주요 단지의 신고가 경신 소식' },
+  { icon: '📰', title: '뉴스 브리핑', desc: '주요 부동산 뉴스를 짧게 요약' },
+  { icon: '📝', title: '새 칼럼 소식', desc: '새 정책 분석과 지역 리포트 안내' },
 ];
 
 export default function TelegramLandingPage() {
@@ -50,7 +53,7 @@ export default function TelegramLandingPage() {
           내집 텔레그램 채널
         </h1>
         <p style={{ margin: 0, fontSize: 14, color: '#5B6472', lineHeight: 1.6 }}>
-          실거래 신고가 · 시장 분석 · 새 칼럼 소식을<br />가장 빠르게 받아보세요
+          실거래 신고가 · 시장 분석 · 새 칼럼 소식을<br />운영 일정에 따라 선별해 받아보세요
         </p>
 
         {/* 혜택 */}
@@ -73,10 +76,9 @@ export default function TelegramLandingPage() {
         </div>
 
         {/* CTA */}
-        <a
+        <TrackedTelegramLink
           href={CHANNEL_URL}
-          target="_blank"
-          rel="noopener noreferrer"
+          placement="telegram_landing_cta"
           style={{
             display: 'block', padding: '15px 0', borderRadius: 13,
             background: '#1B4DDB', color: '#FFFFFF', fontSize: 15.5, fontWeight: 700,
@@ -84,9 +86,9 @@ export default function TelegramLandingPage() {
           }}
         >
           텔레그램에서 채널 열기 →
-        </a>
+        </TrackedTelegramLink>
         <p style={{ margin: '10px 0 0', fontSize: 11.5, color: '#98A1B0' }}>
-          @realMyzip · 무료 · 광고 없음
+          내집 텔레그램 채널 · 구독 무료
         </p>
 
         <p style={{ marginTop: 28 }}>

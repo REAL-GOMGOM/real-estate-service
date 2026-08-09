@@ -1,13 +1,14 @@
 import Link from 'next/link';
+import { TrackedTelegramLink } from '@/components/shared/TrackedTelegramLink';
 
 /**
  * "조회를 넘어 분석까지" 프로모 바 — 사이클 X (최종 디자인 시안)
  *
  * 다크 네이비 배너 + 내집만의 기능 4칩 (입지 점수·대출 계산기·
- * 실시간 신고가 알림·출처 100% 공개). 실거래 페이지 하단 배치.
+ * 주요 신고가 알림·출처 공개). 실거래 페이지 하단 배치.
  */
 
-const TELEGRAM_URL = process.env.NEXT_PUBLIC_TELEGRAM_CHANNEL_URL ?? 'https://t.me/realMyzip';
+const TELEGRAM_URL = process.env.NEXT_PUBLIC_TELEGRAM_CHANNEL_URL || 'https://t.me/realMyzip';
 
 interface PromoChip {
   href:     string;
@@ -38,7 +39,7 @@ const CHIPS: PromoChip[] = [
   },
   {
     href: TELEGRAM_URL, external: true,
-    label: '실시간 신고가', sub: '그날 아침 바로',
+    label: '주요 신고가', sub: '선별 알림',
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1B4DDB" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M22 2 11 13" /><path d="M22 2 15 22l-4-9-9-4 20-7Z" />
@@ -47,7 +48,7 @@ const CHIPS: PromoChip[] = [
   },
   {
     href: '/transactions', external: false,
-    label: '출처 100% 공개', sub: '국토부·부동산원',
+    label: '공개자료 기반', sub: '국토부·자체 가공',
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1B4DDB" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M9 12l2 2 4-4" /><circle cx="12" cy="12" r="9" />
@@ -99,9 +100,9 @@ export function AnalysisPromoBar() {
             padding: '10px 12px', textDecoration: 'none',
           };
           return chip.external ? (
-            <a key={chip.label} href={chip.href} target="_blank" rel="noopener noreferrer" style={style} className="hover:opacity-85 transition-opacity">
+            <TrackedTelegramLink key={chip.label} href={chip.href} placement="transactions_promo_bar" style={style} className="hover:opacity-85 transition-opacity">
               {inner}
-            </a>
+            </TrackedTelegramLink>
           ) : (
             <Link key={chip.label} href={chip.href} style={style} className="hover:opacity-85 transition-opacity">
               {inner}

@@ -5,14 +5,27 @@
 # 맥미니 로컬 Postgres 에 무제한 보존한다. Neon 보존정책(매매 13개월·
 # 전월세 7개월)이 지워도 로컬엔 남는다 — 미러는 DELETE 를 전파하지 않음.
 #
-# 방식: 각 테이블의 로컬 max(updated_at) - 1일(중복 안전 오버랩)을
-# 하이워터마크로, Neon 에서 그 이후 갱신분만 CSV 로 끌어와 PK upsert.
-# 전송량: 일 ~10-20MB 수준 (sync 크론이 갱신하는 최근 2개월 신고분만).
+# 과거 방식: 각 테이블의 로컬 max(updated_at) - 1일을 하이워터마크로 삼아
+# Neon 갱신분을 CSV로 받았다. 하지만 daily sync의 conflict update와 겹치면서
+# 최근 2개월 원장 및 apartments 배치를 반복 다운로드했으므로 정기 실행하지 않는다.
 #
-#   수동 실행:  bash scripts/macmini-mirror.sh
-#   정기 실행:  launchd com.gomgom.naezip-mirror (매일 06:30)
+#   재해 복구용 일회성 실행:
+#     NAEZIP_ENABLE_NEON_MIRROR=1 bash scripts/macmini-mirror.sh
+#   정기 실행: 사용하지 않음 (기존 launchd 작업이 남아 있어도 아래 가드가 차단)
 set -euo pipefail
 export PATH="/opt/homebrew/opt/postgresql@17/bin:$PATH"
+
+# macmini-sync.ts가 로컬 원장을 먼저 적재하므로 이 Neon → 로컬 경로는 평상시
+# 중복이며 Neon egress를 추가로 소비한다. 재해 복구 때 운영자가 명시적으로
+# 승인한 일회성 실행만 허용한다.
+if [ "${NAEZIP_ENABLE_NEON_MIRROR:-}" != "1" ]; then
+  cat >&2 <<'EOF'
+[naezip-mirror] 실행 중단: Neon → 맥미니 미러는 기본적으로 비활성화되어 있습니다.
+[naezip-mirror] macmini-sync.ts가 로컬 원장을 직접 적재하므로 평상시 미러는 중복이며 Neon 전송량을 소비합니다.
+[naezip-mirror] 재해 복구가 꼭 필요할 때만 NAEZIP_ENABLE_NEON_MIRROR=1 을 명시해 일회성으로 실행하세요.
+EOF
+  exit 2
+fi
 
 ENV_FILE=/Users/bangjoohan/real-estate-service/.env.local
 LOCAL_DB=naezip

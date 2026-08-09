@@ -1,5 +1,6 @@
 import {
   getBaseRate,
+  hasDirectDidimdolRate,
   calcTotalDiscount,
   LOAN_PRODUCTS,
   MIN_RATE_GENERAL,
@@ -44,6 +45,10 @@ export interface LoanResult {
   monthlyPayment: number;
   totalInterest: number;
   totalPayment: number;
+  /** 약정 기간 말 상환 후 잔액. 정상 완납 계산이면 0. */
+  maturityBalance: number;
+  rateBasis: 'stored_table' | 'term_proxy_assumption' | 'range_midpoint_assumption' | 'unavailable';
+  rateNote: string;
   dsr: number;
   dti: number;  // 총부채상환비율 (정책대출 한도 60% 기준)
   ltvUsed: number;
@@ -72,42 +77,57 @@ export function calcEqualPrincipalFirstMonth(
   return principal / months + principal * r;
 }
 
-// 체증식: 초기 상환액이 적고 매년 일정 비율로 증가
-// 총 상환액은 원리금균등과 동일하되 초기에 적게, 후기에 많이 내는 구조
+function graduatedGrowthRate(months: number): number {
+  return months <= 120 ? 0.06 : months <= 180 ? 0.04 : months <= 240 ? 0.03 : 0.02;
+}
+
+// 체증식: 월 납입액은 한 해 동안 일정하고 매년 정해진 비율로 증가한다.
+// 각 납입액의 현재가치 합이 원금과 같아지도록 1년차 납입액을 역산해야
+// 이자를 반영한 뒤에도 만기에 잔액이 남지 않는다.
 export function calcGraduatedPayment(
   principal: number,
   annualRate: number,
   months: number,
   year: number
 ): number {
-  const growthRate = months <= 120 ? 0.06 : months <= 180 ? 0.04 : months <= 240 ? 0.03 : 0.02;
-
+  if (principal <= 0 || months <= 0 || year <= 0) return 0;
+  const growthRate = graduatedGrowthRate(months);
   const r = annualRate / 100 / 12;
-  const equalPayment = r === 0
-    ? principal / months
-    : principal * r * Math.pow(1 + r, months) / (Math.pow(1 + r, months) - 1);
-
-  const years = months / 12;
-  let sumFactor = 0;
-  for (let y = 0; y < years; y++) {
-    sumFactor += Math.pow(1 + growthRate, y) * 12;
+  let presentValueFactor = 0;
+  for (let month = 1; month <= months; month++) {
+    const paymentGrowth = Math.pow(1 + growthRate, Math.floor((month - 1) / 12));
+    presentValueFactor += paymentGrowth / Math.pow(1 + r, month);
   }
-  const firstYearMonthly = (equalPayment * months) / sumFactor;
+  if (!Number.isFinite(presentValueFactor) || presentValueFactor <= 0) return 0;
+  const firstYearMonthly = principal / presentValueFactor;
 
   return firstYearMonthly * Math.pow(1 + growthRate, year - 1);
 }
 
-function buildSchedule(
+interface AmortizationProjection {
+  schedule: MonthlySchedule[];
+  totalInterest: number;
+  totalPayment: number;
+  maturityBalance: number;
+}
+
+function projectAmortization(
   principal: number,
   annualRate: number,
   months: number,
   repaymentType: LoanInput['repaymentType']
-): MonthlySchedule[] {
+): AmortizationProjection {
+  if (principal <= 0 || months <= 0) {
+    return { schedule: [], totalInterest: 0, totalPayment: 0, maturityBalance: 0 };
+  }
+
   const r = annualRate / 100 / 12;
   const schedule: MonthlySchedule[] = [];
   let remaining = principal;
+  let totalInterest = 0;
+  let totalPayment = 0;
 
-  for (let m = 1; m <= Math.min(months, 12); m++) {
+  for (let m = 1; m <= months; m++) {
     const interest = remaining * r;
     let principalPay: number;
     let payment: number;
@@ -124,36 +144,28 @@ function buildSchedule(
       payment = principalPay + interest;
     }
 
-    remaining -= principalPay;
+    // 부동소수점 오차까지 포함해 마지막 회차에 원리금을 정확히 완납한다.
+    if (m === months || payment > remaining + interest) {
+      payment = remaining + interest;
+      principalPay = remaining;
+    }
 
-    schedule.push({
-      month: m,
-      principal: Math.round(principalPay * 100) / 100,
-      interest: Math.round(interest * 100) / 100,
-      payment: Math.round(payment * 100) / 100,
-      remainingBalance: Math.round(Math.max(remaining, 0) * 100) / 100,
-    });
+    remaining = Math.max(0, remaining - principalPay);
+    totalInterest += interest;
+    totalPayment += payment;
+
+    if (m <= 12) {
+      schedule.push({
+        month: m,
+        principal: Math.round(principalPay * 100) / 100,
+        interest: Math.round(interest * 100) / 100,
+        payment: Math.round(payment * 100) / 100,
+        remainingBalance: Math.round(remaining * 100) / 100,
+      });
+    }
   }
 
-  return schedule;
-}
-
-function calcTotalInterest(
-  principal: number,
-  annualRate: number,
-  months: number,
-  repaymentType: LoanInput['repaymentType']
-): number {
-  const r = annualRate / 100 / 12;
-
-  if (repaymentType === 'equal_principal_interest' || repaymentType === 'graduated') {
-    // 체증식도 총 상환액은 원리금균등과 동일
-    const monthlyPayment = calcEqualPrincipalInterest(principal, annualRate, months);
-    return monthlyPayment * months - principal;
-  }
-
-  // 원금균등: 총이자 = 원금 * 월이율 * (개월수 + 1) / 2
-  return principal * r * (months + 1) / 2;
+  return { schedule, totalInterest, totalPayment, maturityBalance: remaining };
 }
 
 export function simulateLoan(input: LoanInput): LoanResult {
@@ -169,6 +181,9 @@ export function simulateLoan(input: LoanInput): LoanResult {
       monthlyPayment: 0,
       totalInterest: 0,
       totalPayment: 0,
+      maturityBalance: 0,
+      rateBasis: 'unavailable',
+      rateNote: '상품을 확인할 수 없어 금리도 계산하지 않았습니다.',
       dsr: 0,
       dti: 0,
       ltvUsed: 0,
@@ -261,9 +276,18 @@ export function simulateLoan(input: LoanInput): LoanResult {
   let baseRate: number;
   let discountRate = 0;
   let appliedRate: number;
+  let rateBasis: LoanResult['rateBasis'];
+  let rateNote: string;
 
   if (isDidimdol) {
     baseRate = getBaseRate(input.income, input.loanTerm, input.isNewlywedFirstTime);
+    if (hasDirectDidimdolRate(input.loanTerm)) {
+      rateBasis = 'stored_table';
+      rateNote = `${input.loanTerm}년 저장 금리표와 사용자가 선택한 우대 조건을 적용했습니다.`;
+    } else {
+      rateBasis = 'term_proxy_assumption';
+      rateNote = `${input.loanTerm}년 별도 금리값이 저장되어 있지 않아 20년 금리표 값을 계산 가정으로 사용했습니다. 실제 ${input.loanTerm}년 금리가 아닙니다.`;
+    }
 
     // 지방 소재 우대
     const localDiscount = input.isLocalHouse ? 0.2 : 0;
@@ -277,10 +301,12 @@ export function simulateLoan(input: LoanInput): LoanResult {
     const minRate = input.isNewlywedFirstTime ? MIN_RATE_NEWLYWED_FIRST : MIN_RATE_GENERAL;
     appliedRate = Math.max(baseRate - discountRate, minRate);
   } else {
-    // 보금자리론, 신생아특례: rateRange 중간값
+    // 보금자리론, 신생아특례: 개인 적용금리를 알 수 없어 저장 범위 중간값을 가정.
     const range = (product as { rateRange: { min: number; max: number } }).rateRange;
     baseRate = (range.min + range.max) / 2;
     appliedRate = baseRate;
+    rateBasis = 'range_midpoint_assumption';
+    rateNote = `저장된 금리 범위 ${range.min}~${range.max}%의 단순 중간값을 계산 가정으로 사용했습니다. 개인 적용금리나 공식 대표금리가 아닙니다.`;
   }
 
   // 월 상환액
@@ -310,11 +336,16 @@ export function simulateLoan(input: LoanInput): LoanResult {
     }));
   }
 
-  // 총이자, 총상환
-  const totalInterest = Math.round(
-    calcTotalInterest(loanAmount, appliedRate, months, input.repaymentType) * 100
-  ) / 100;
-  const totalPayment = Math.round((loanAmount + totalInterest) * 100) / 100;
+  // 전 기간 월별 현금흐름으로 총이자·총상환·만기잔액을 함께 검증한다.
+  const amortization = projectAmortization(
+    loanAmount,
+    appliedRate,
+    months,
+    input.repaymentType,
+  );
+  const totalInterest = Math.round(amortization.totalInterest * 100) / 100;
+  const totalPayment = Math.round(amortization.totalPayment * 100) / 100;
+  const maturityBalance = Math.round(amortization.maturityBalance * 100) / 100;
 
   // DSR 계산 (체증식은 1년차 기준)
   const annualRepayment = monthlyPayment * 12;
@@ -326,7 +357,7 @@ export function simulateLoan(input: LoanInput): LoanResult {
       : 0;
 
   if (dsr > 40) {
-    rejectReasons.push(`DSR ${dsr}% > 40% 초과 (경고: 대출 심사 시 제한 가능)`);
+    rejectReasons.push(`DSR ${dsr}% > 40%: 시뮬레이터의 일반 한도를 초과했습니다.`);
   }
 
   // DTI 계산 (보조 지표 — 정책대출 통상 한도 60%)
@@ -336,12 +367,7 @@ export function simulateLoan(input: LoanInput): LoanResult {
     income: input.income,
   });
 
-  // 상환 스케줄
-  const schedule = buildSchedule(loanAmount, appliedRate, months, input.repaymentType);
-
-  const feasible = rejectReasons.filter(
-    (r) => !r.startsWith('DSR')
-  ).length === 0;
+  const feasible = rejectReasons.length === 0;
 
   return {
     loanAmount,
@@ -351,12 +377,15 @@ export function simulateLoan(input: LoanInput): LoanResult {
     monthlyPayment,
     totalInterest,
     totalPayment,
+    maturityBalance,
+    rateBasis,
+    rateNote,
     dsr,
     dti,
     ltvUsed,
     graduatedYears,
     feasible,
     rejectReasons,
-    schedule,
+    schedule: amortization.schedule,
   };
 }

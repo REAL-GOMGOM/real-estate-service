@@ -1,57 +1,67 @@
 import { NextRequest, NextResponse } from 'next/server';
-import path from 'path';
-import { getCalendarEvents, type CalendarEvent } from '@/lib/calendar-events';
+import {
+  CALENDAR_NOTE,
+  CALENDAR_SOURCES,
+  CALENDAR_VERIFIED_AT,
+  getCalendarEvents,
+} from '@/lib/calendar-events';
 
-async function tryDbEvents(year: number, month: number) {
-  try {
-    // 동적 import — better-sqlite3 를 못 쓰는 환경에서는 catch 로 fallback
-    const { default: Database } = await import('better-sqlite3');
-    const db = new Database(path.join(process.cwd(), 'data', 'calendar.db'), { readonly: true });
-    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-    const endDate = month === 12 ? `${year + 1}-01-01` : `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    const rows = db.prepare(
-      'SELECT id, event_date, category, title, description, source_url, icon, importance FROM calendar_events WHERE event_date >= ? AND event_date < ? ORDER BY event_date ASC'
-    ).all(startDate, endDate);
-    db.close();
-    return rows as CalendarEvent[];
-  } catch {
-    return null;
-  }
+function currentKoreanYearMonth() {
+  const koreaNow = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  return {
+    year: koreaNow.getUTCFullYear(),
+    month: koreaNow.getUTCMonth() + 1,
+  };
+}
+
+function parseYear(value: string | null, fallback: number): number | null {
+  if (value === null) return fallback;
+  if (!/^\d{4}$/.test(value)) return null;
+  const year = Number(value);
+  return year >= 2000 && year <= 2100 ? year : null;
+}
+
+function parseMonth(value: string | null, fallback: number): number | null {
+  if (value === null) return fallback;
+  if (!/^(?:0?[1-9]|1[0-2])$/.test(value)) return null;
+  return Number(value);
 }
 
 export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = request.nextUrl;
-    const now = new Date();
-    const year = Number(searchParams.get('year')) || now.getFullYear();
-    const month = Number(searchParams.get('month')) || now.getMonth() + 1;
+  const current = currentKoreanYearMonth();
+  const year = parseYear(request.nextUrl.searchParams.get('year'), current.year);
+  const month = parseMonth(request.nextUrl.searchParams.get('month'), current.month);
 
-    // 1) SQLite 시도
-    const dbEvents = await tryDbEvents(year, month);
-
-    // 2) 확정 정기 이벤트
-    const fixedEvents = getCalendarEvents(year, month);
-
-    // DB 이벤트 + 확정 정기 이벤트 합치기
-    const allEvents = [...(dbEvents || []), ...fixedEvents];
-
-    // 중복 제거 (같은 날짜 + 같은 타이틀)
-    const seen = new Set<string>();
-    const deduped = allEvents.filter((e) => {
-      const key = `${e.event_date}-${e.title}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    }).sort((a, b) => a.event_date.localeCompare(b.event_date));
-
-    // id 재할당 (충돌 방지)
-    const events = deduped.map((e, i) => ({ ...e, id: i + 1 }));
-
-    return NextResponse.json({ events }, {
-      headers: { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=86400' },
-    });
-  } catch (error: unknown) {
-    console.error('[calendar API]', error instanceof Error ? error.message : error);
-    return NextResponse.json({ error: '달력 데이터를 불러올 수 없습니다' }, { status: 500 });
+  if (year === null || month === null) {
+    return NextResponse.json(
+      {
+        status: 'error',
+        error: 'year는 2000~2100 사이의 4자리 연도, month는 1~12 사이여야 합니다.',
+      },
+      { status: 400 },
+    );
   }
+
+  const events = getCalendarEvents(year, month).map((event, index) => ({
+    ...event,
+    id: index + 1,
+  }));
+
+  return NextResponse.json(
+    {
+      status: 'ok',
+      year,
+      month,
+      events,
+      note:
+        year === 2026
+          ? CALENDAR_NOTE
+          : `${year}년 공식 경제 일정은 아직 수록하지 않았습니다. 한국부동산원 일정은 통상 발표일을 표시한 미확정 참고 일정이며 변경될 수 있습니다.`,
+      sources: CALENDAR_SOURCES,
+      verifiedAt: CALENDAR_VERIFIED_AT,
+    },
+    {
+      headers: { 'Cache-Control': 's-maxage=3600, stale-while-revalidate=86400' },
+    },
+  );
 }

@@ -42,11 +42,13 @@ export default function SubscriptionFilter({
     }}>
 
       {/* 상태 필터 */}
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+      <div role="group" aria-label="청약 상태" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
         {STATUS_OPTIONS.map((opt) => (
           <button
+            type="button"
             key={opt.value}
             onClick={() => onStatusChange(opt.value)}
+            aria-pressed={selectedStatus === opt.value}
             style={{
               padding: '8px 16px',
               borderRadius: '10px',
@@ -69,6 +71,7 @@ export default function SubscriptionFilter({
 
       {/* 지역 필터 */}
       <select
+        aria-label="지역 선택"
         value={selectedDistrict}
         onChange={(e) => onDistrictChange(e.target.value)}
         style={{
@@ -92,6 +95,7 @@ export default function SubscriptionFilter({
       {/* 검색 */}
       <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
         <Search
+          aria-hidden="true"
           size={14}
           style={{
             position: 'absolute',
@@ -102,7 +106,8 @@ export default function SubscriptionFilter({
           }}
         />
         <input
-          type="text"
+          type="search"
+          aria-label="청약 단지명 검색"
           placeholder="단지명 검색..."
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}

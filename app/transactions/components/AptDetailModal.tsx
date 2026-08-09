@@ -98,9 +98,15 @@ export default function AptDetailModal({ apt, onClose, months, initialTx }: AptD
     };
   };
 
+  const apartmentQuery = () =>
+    `district=${encodeURIComponent(apt.district)}` +
+    `&q=${encodeURIComponent(apt.name)}` +
+    (apt.masterId ? `&aptId=${encodeURIComponent(apt.masterId)}` : '') +
+    (apt.dong ? `&aptDong=${encodeURIComponent(apt.dong)}` : '');
+
   const deepLinkUrl = (tx: Transaction) =>
-    `${window.location.origin}/transactions?district=${encodeURIComponent(apt.district)}` +
-    `&q=${encodeURIComponent(apt.name)}&months=${months}&tx=${encodeURIComponent(txKey(tx))}`;
+    `${window.location.origin}/transactions?${apartmentQuery()}` +
+    `&months=${months}&tx=${encodeURIComponent(txKey(tx))}`;
 
   // 건별 이미지 공유 — 그 계약 건 기준 카드 (동일면적 시리즈 스파크)
   const shareTxImage = async (tx: Transaction) => {
@@ -164,7 +170,7 @@ export default function AptDetailModal({ apt, onClose, months, initialTx }: AptD
   const shareText = async () => {
     const url = latest
       ? deepLinkUrl(latest)
-      : `${window.location.origin}/transactions?district=${encodeURIComponent(apt.district)}&q=${encodeURIComponent(apt.name)}`;
+      : `${window.location.origin}/transactions?${apartmentQuery()}`;
     const text = latest
       ? buildTxShareText({
           aptName: apt.name,

@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 
 /**
- * 랜딩 '수도권 국평 실거래가' — 구별 84㎡ 최근 30일 평균 + 직전 30일 대비 변동률 라이브.
- * /api/transactions 로 6개 구를 병렬 조회해 클라이언트 집계 (표본 즉시 표시, 도착하면 교체).
+ * 랜딩 84㎡ 실거래 평균.
+ * 전용 API가 6개 구를 한 번의 SQL로 집계하며, 클라이언트는 실제 응답만 표시한다.
  */
 
 const BLUE = '#1B4DDB';
@@ -12,19 +12,33 @@ const INK = '#0B1524';
 const INK2 = '#2B333F';
 const MUTED = '#8A93A3';
 const BORDER = '#E7EAF0';
+const EXPECTED_REGION_COUNT = 6;
 
-const REGIONS = ['강남구', '서초구', '송파구', '마포구', '용산구', '성동구'];
+interface Row {
+  region:          string;
+  recentAverage:   number | null;
+  recentCount:     number;
+  previousAverage: number | null;
+  previousCount:   number;
+  changePct:       number | null;
+}
 
-interface Row { region: string; price: string; change: number | null }
+interface MarketLiveResponse {
+  status?: 'ok' | 'degraded';
+  rows?: Row[];
+  aggregation?: {
+    label?: string;
+  };
+  note?: string;
+}
 
-const SAMPLE: Row[] = [
-  { region: '강남구', price: '25.7억', change: -15.5 },
-  { region: '서초구', price: '25.1억', change: -25.6 },
-  { region: '송파구', price: '18.9억', change: -8.2 },
-  { region: '마포구', price: '14.5억', change: -12.6 },
-  { region: '용산구', price: '21.5억', change: -1.1 },
-  { region: '성동구', price: '17.2억', change: 2.4 },
-];
+type MarketView =
+  | { kind: 'loading' }
+  | { kind: 'ready'; rows: Row[]; partial: boolean; aggregationLabel: string }
+  | { kind: 'empty'; rows: Row[]; aggregationLabel: string }
+  | { kind: 'degraded'; message: string };
+
+const DEFAULT_AGGREGATION_LABEL = '거래 1건당 동일 가중치의 단순 산술평균';
 
 function fmtEok(manwon: number): string {
   if (manwon >= 10000) {
@@ -35,44 +49,49 @@ function fmtEok(manwon: number): string {
 }
 
 export default function MarketLive() {
-  const [rows, setRows] = useState<Row[]>(SAMPLE);
+  const [view, setView] = useState<MarketView>({ kind: 'loading' });
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      const D = 24 * 3600 * 1000;
-      const now = Date.now();
-      const live = await Promise.all(REGIONS.map(async (region): Promise<Row | null> => {
-        try {
-          const res = await fetch(`/api/transactions?district=${encodeURIComponent(region)}&months=2`);
-          const json: { data?: Array<{ transactions: Array<{ area: number; price: number; date: string }> }> } = await res.json();
-          const recent: number[] = [];
-          const prior: number[] = [];
-          for (const g of json.data ?? []) {
-            for (const t of g.transactions) {
-              if (t.area < 80 || t.area > 88) continue;
-              const ts = new Date(t.date).getTime();
-              if (Number.isNaN(ts)) continue;
-              const age = now - ts;
-              if (age <= 30 * D) recent.push(t.price);
-              else if (age <= 60 * D) prior.push(t.price);
-            }
-          }
-          const avg = (a: number[]) => (a.length ? a.reduce((s, v) => s + v, 0) / a.length : null);
-          const rAvg = avg(recent);
-          if (rAvg === null) return null;
-          const pAvg = avg(prior);
-          const change = pAvg && pAvg > 0 ? Math.round(((rAvg - pAvg) / pAvg) * 1000) / 10 : null;
-          return { region, price: fmtEok(Math.round(rAvg)), change };
-        } catch {
-          return null;
+
+    fetch('/api/transactions/market-live')
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`market-live HTTP ${res.status}`);
+        return res.json() as Promise<MarketLiveResponse>;
+      })
+      .then((json) => {
+        if (cancelled) return;
+        if (json.status !== 'ok' || !Array.isArray(json.rows)) {
+          setView({
+            kind: 'degraded',
+            message: json.note ?? '84㎡ 실거래 평균을 잠시 불러오지 못했습니다.',
+          });
+          return;
         }
-      }));
-      if (cancelled) return;
-      setRows((prev) => prev.map((row) => live.find((l) => l && l.region === row.region) ?? row));
-    })();
+
+        const aggregationLabel = json.aggregation?.label ?? DEFAULT_AGGREGATION_LABEL;
+        const rowsWithRecentDeals = json.rows.filter((row) => row.recentCount > 0);
+        if (rowsWithRecentDeals.length === 0) {
+          setView({ kind: 'empty', rows: json.rows, aggregationLabel });
+          return;
+        }
+
+        setView({
+          kind: 'ready',
+          rows: json.rows,
+          partial: rowsWithRecentDeals.length < EXPECTED_REGION_COUNT,
+          aggregationLabel,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setView({ kind: 'degraded', message: '84㎡ 실거래 평균을 잠시 불러오지 못했습니다.' });
+        }
+      });
+
     return () => { cancelled = true; };
-  }, []);
+  }, [attempt]);
 
   return (
     <div style={{
@@ -80,28 +99,89 @@ export default function MarketLive() {
       padding: 20, minWidth: 0, display: 'flex', flexDirection: 'column',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
-        <span style={{ fontWeight: 800, fontSize: 15, color: INK, letterSpacing: '-0.01em' }}>수도권 국평 시세</span>
-        <span style={{ fontSize: 11, color: MUTED }}>84㎡ · 최근 30일 · 직전 대비</span>
+        <span style={{ fontWeight: 800, fontSize: 15, color: INK, letterSpacing: '-0.01em' }}>수도권 84㎡ 실거래 평균</span>
+        <span style={{ fontSize: 11, color: MUTED }}>최근 30일 · 직전 30일 대비</span>
       </div>
-      {rows.map((m) => {
-        const up = m.change !== null && m.change > 0;
-        return (
-          <div key={m.region} style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '10px 0', borderBottom: '1px solid #F1F3F7',
-          }}>
-            <span style={{ fontSize: 13.5, fontWeight: 600, color: INK2 }}>{m.region}</span>
-            <span style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-              <span style={{ fontSize: 14, fontWeight: 800, color: INK, fontFamily: 'Roboto Mono, monospace' }}>{m.price}</span>
-              {m.change !== null && (
-                <span style={{ fontSize: 12, fontWeight: 700, color: up ? '#E5484D' : BLUE, fontFamily: 'Roboto Mono, monospace', minWidth: 56, textAlign: 'right' }}>
-                  {up ? '▲' : '▼'} {up ? '+' : ''}{m.change}%
+
+      {view.kind === 'loading' && (
+        <div role="status" style={{ color: MUTED, fontSize: 13, padding: '28px 0' }}>
+          84㎡ 실거래 평균을 불러오는 중입니다.
+        </div>
+      )}
+
+      {view.kind === 'empty' && (
+        <div role="status" style={{ color: MUTED, fontSize: 13, padding: '12px 0 5px', lineHeight: 1.5 }}>
+          선택 지역의 최근 30일 84㎡ 매매 실거래가 없습니다.
+        </div>
+      )}
+
+      {view.kind === 'degraded' && (
+        <div role="alert" style={{ color: MUTED, fontSize: 13, padding: '18px 0', lineHeight: 1.5 }}>
+          <div>{view.message}</div>
+          <button
+            type="button"
+            onClick={() => {
+              setView({ kind: 'loading' });
+              setAttempt((n) => n + 1);
+            }}
+            style={{
+              marginTop: 10, border: '1px solid #D9DEEA', borderRadius: 8, background: '#FFFFFF',
+              color: BLUE, fontWeight: 700, fontSize: 12, padding: '6px 10px', cursor: 'pointer',
+            }}
+          >
+            다시 시도
+          </button>
+        </div>
+      )}
+
+      {(view.kind === 'ready' || view.kind === 'empty') && (
+        <>
+          {view.rows.map((row) => {
+            const up = row.changePct !== null && row.changePct > 0;
+            const unchanged = row.changePct === 0;
+            return (
+              <div key={row.region} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                padding: '9px 0', borderBottom: '1px solid #F1F3F7',
+              }}>
+                <span style={{ fontSize: 13.5, fontWeight: 600, color: INK2 }}>{row.region}</span>
+                <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, minWidth: 0 }}>
+                  <span style={{ display: 'flex', alignItems: 'baseline', gap: 9 }}>
+                    <span style={{ fontSize: 14, fontWeight: 800, color: INK, fontFamily: 'Roboto Mono, monospace' }}>
+                      {row.recentAverage === null ? '최근 거래 없음' : fmtEok(row.recentAverage)}
+                    </span>
+                    {row.changePct !== null && (
+                      <span style={{
+                        fontSize: 12, fontWeight: 700,
+                        color: unchanged ? MUTED : (up ? '#E5484D' : BLUE),
+                        fontFamily: 'Roboto Mono, monospace', minWidth: 56, textAlign: 'right',
+                      }}>
+                        {unchanged ? '— 0%' : `${up ? '▲ +' : '▼ '}${row.changePct}%`}
+                      </span>
+                    )}
+                  </span>
+                  <span style={{ fontSize: 10.5, color: MUTED }}>
+                    최근 {row.recentCount}건 · 직전 {row.previousCount}건
+                    {row.previousCount === 0 ? ' · 비교 불가' : ''}
+                  </span>
                 </span>
-              )}
-            </span>
-          </div>
-        );
-      })}
+              </div>
+            );
+          })}
+          {view.kind === 'ready' && view.partial && (
+            <div role="status" style={{ fontSize: 10.5, color: MUTED, marginTop: 8 }}>
+              일부 지역은 최근 30일 표본이 없어 평균을 표시하지 않습니다.
+            </div>
+          )}
+        </>
+      )}
+
+      {(view.kind === 'ready' || view.kind === 'empty') && (
+        <div style={{ fontSize: 10.5, color: MUTED, lineHeight: 1.45, marginTop: 10 }}>
+          아파트 매매 · 전용 80~88㎡ · 취소 제외<br />
+          {view.aggregationLabel}
+        </div>
+      )}
     </div>
   );
 }

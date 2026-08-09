@@ -34,7 +34,14 @@ function cdata(s: string): string {
 }
 
 export async function GET() {
-  const items = await getRecentPublishedPostsForFeed(FEED_LIMIT);
+  let dataStatus: 'fresh' | 'degraded' = 'fresh';
+  let items: Awaited<ReturnType<typeof getRecentPublishedPostsForFeed>> = [];
+  try {
+    items = await getRecentPublishedPostsForFeed(FEED_LIMIT);
+  } catch (error) {
+    dataStatus = 'degraded';
+    console.error('[blog/rss] feed data unavailable', error);
+  }
   const lastBuildDate = new Date().toUTCString();
   const lastPubDate =
     items[0]?.publishedAt.toUTCString() ?? lastBuildDate;
@@ -76,7 +83,10 @@ ${itemsXml}
     headers: {
       'Content-Type': 'application/xml; charset=utf-8',
       'Cache-Control':
-        'public, max-age=600, s-maxage=3600, stale-while-revalidate=86400',
+        dataStatus === 'fresh'
+          ? 'public, max-age=600, s-maxage=3600, stale-while-revalidate=86400'
+          : 'public, max-age=60, s-maxage=300, stale-while-revalidate=600',
+      'X-Naezip-Data-Status': dataStatus,
     },
   });
 }

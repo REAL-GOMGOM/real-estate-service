@@ -5,8 +5,8 @@ import { AVAILABLE_YEARS } from '@/lib/exchange-rate';
 interface Props {
   baseYear:          number;
   compareYear:       number;
-  baseRate:          number;
-  compareRate:       number;
+  baseRate:          number | null;
+  compareRate:       number | null;
   onBaseYearChange:    (y: number) => void;
   onCompareYearChange: (y: number) => void;
 }
@@ -45,7 +45,7 @@ export default function ExchangeRateBanner({
           ))}
         </select>
         <span style={{ fontSize: '13px', fontFamily: 'Roboto Mono, monospace', color: 'var(--text-secondary)' }}>
-          ₩{baseRate.toLocaleString()} / $1
+          {baseRate !== null ? `₩${baseRate.toLocaleString()} / $1` : '환율 확인 중'}
         </span>
       </div>
 
@@ -60,7 +60,7 @@ export default function ExchangeRateBanner({
           ))}
         </select>
         <span style={{ fontSize: '13px', fontFamily: 'Roboto Mono, monospace', color: 'var(--text-secondary)' }}>
-          ₩{compareRate.toLocaleString()} / $1
+          {compareRate !== null ? `₩${compareRate.toLocaleString()} / $1` : '환율 확인 중'}
         </span>
       </div>
 

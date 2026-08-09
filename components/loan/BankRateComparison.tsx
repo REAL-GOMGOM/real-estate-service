@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   RefreshCw, Building2, AlertTriangle, CheckCircle, Info, ChevronDown, ChevronUp,
   Search, Loader2, X,
@@ -18,6 +18,7 @@ import {
   STRESS_RATE,
 } from '@/lib/bank-loan-calculator';
 import { simulateLoan, LoanInput } from '@/lib/loan-calculator';
+import { hasDirectDidimdolRate } from '@/lib/loan-products';
 
 const MONO = "'Roboto Mono', var(--font-mono, monospace)";
 
@@ -51,10 +52,11 @@ interface Summary {
 }
 
 interface BankRateData {
-  updatedAt?: string;
+  status: 'ok';
+  disclosureMonth: string | null;
+  fetchedOn: string;
   banks: BankGroup[];
   summary?: Summary;
-  message?: string;
 }
 
 type RateType = 'fixed' | 'variable';
@@ -107,6 +109,9 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
   // 단지 검색 — 최근 3개월 실거래 평균가를 매매가에 적용 (정부대출 탭과 동일 UX)
   const [showSearch, setShowSearch] = useState(false);
   const [priceLoading, setPriceLoading] = useState(false);
+  const [priceError, setPriceError] = useState<string | null>(null);
+  const priceControllerRef = useRef<AbortController | null>(null);
+  const priceSequenceRef = useRef(0);
   const [selectedApt, setSelectedApt] = useState<{
     name: string; district: string; count: number; avg: number;
     summary: AptPriceSummary | null;
@@ -114,14 +119,26 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
   } | null>(null);
 
   async function handleSelectApt(apt: ApartmentSearchResult) {
+    priceControllerRef.current?.abort();
+    const controller = new AbortController();
+    priceControllerRef.current = controller;
+    const sequence = ++priceSequenceRef.current;
     const district = findDistrictByLawdCd(apt.lawdCd) ?? apt.sigungu;
     setPriceLoading(true);
+    setPriceError(null);
     setSelectedApt({ name: apt.name, district, count: 0, avg: 0, summary: null, selArea: null });
     try {
-      const res = await fetch(`/api/transactions?aptId=${encodeURIComponent(apt.id)}&months=3`);
+      const res = await fetch(`/api/transactions?aptId=${encodeURIComponent(apt.id)}&months=3`, {
+        signal: controller.signal,
+      });
       const json = await res.json();
+      if (!res.ok || json?.error) {
+        throw new Error(typeof json?.error === 'string' ? json.error : `실거래 API HTTP ${res.status}`);
+      }
       const txns: { area: number; price: number; date: string }[] | undefined = json?.data?.[0]?.transactions;
-      const summary = txns ? summarizeAptTxns(txns) : null;
+      if (txns !== undefined && !Array.isArray(txns)) throw new Error('실거래 응답 형식을 확인하지 못했습니다.');
+      const summary = Array.isArray(txns) ? summarizeAptTxns(txns) : null;
+      if (sequence !== priceSequenceRef.current) return;
       if (summary) {
         // 기본 적용 = 최다 거래 평형 (정부대출 탭과 동일 정책)
         setHousePrice(summary.best.avg);
@@ -131,10 +148,17 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
           summary, selArea: summary.best.area,
         });
       }
-    } catch { /* 조회 실패 시 매매가 유지 */ }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      if (sequence === priceSequenceRef.current) {
+        setPriceError('실거래를 불러오지 못해 기존 입력값을 유지했습니다. 매매가를 직접 확인해 주세요.');
+      }
+    }
     finally {
-      setPriceLoading(false);
-      setShowSearch(false);
+      if (sequence === priceSequenceRef.current && !controller.signal.aborted) {
+        setPriceLoading(false);
+        setShowSearch(false);
+      }
     }
   }
 
@@ -156,16 +180,26 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
     setLoading(true);
     try {
       const res = await fetch('/api/loan/bank-rates');
-      const json: BankRateData = await res.json();
-      setData(json);
+      const json = await res.json();
+      if (
+        !res.ok
+        || json?.status !== 'ok'
+        || !Array.isArray(json?.banks)
+        || typeof json?.fetchedOn !== 'string'
+        || (json.disclosureMonth !== null && typeof json.disclosureMonth !== 'string')
+      ) {
+        throw new Error(typeof json?.error === 'string' ? json.error : `금감원 API HTTP ${res.status}`);
+      }
+      setData(json as BankRateData);
     } catch {
-      setData({ banks: [], message: '데이터를 불러올 수 없습니다.' });
+      setData(null);
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => { fetchRates(); }, []);
+  useEffect(() => () => priceControllerRef.current?.abort(), []);
 
   // useMemo 랩 — 매 렌더마다 새 배열 생성으로 하위 useMemo deps 가 흔들리는 것 방지
   const banks = useMemo(() => data?.banks ?? [], [data]);
@@ -202,14 +236,15 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
   }, [selectedRateRange, selectedBank, selectedProduct, housePrice, deposit, income, existingDebt, loanTerm, rateType, repaymentType, regulation]);
 
   // 정부대출 비교 (디딤돌 일반)
+  const policyTermComparable = hasDirectDidimdolRate(loanTerm);
   const policyResult = useMemo(() => {
-    if (!compareOpen) return null;
+    if (!compareOpen || !policyTermComparable) return null;
     const input: LoanInput = {
       housePrice,
       deposit,
       income,
       existingDebtPayment: existingDebt,
-      loanTerm: Math.min(loanTerm, 20), // 디딤돌 최대 20년 (일반)
+      loanTerm,
       productId: 'didimdol',
       isNewlywedFirstTime: false,
       isLocalHouse: false,
@@ -219,7 +254,7 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
       repaymentType,
     };
     return simulateLoan(input);
-  }, [compareOpen, housePrice, deposit, income, existingDebt, loanTerm, repaymentType]);
+  }, [compareOpen, policyTermComparable, housePrice, deposit, income, existingDebt, loanTerm, repaymentType]);
 
   /* ── Loading & Error UI ── */
 
@@ -244,7 +279,7 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
           데이터를 불러올 수 없습니다
         </h2>
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 16px', lineHeight: 1.6 }}>
-          {data?.message ?? '금감원 서버에서 데이터를 가져올 수 없습니다. 잠시 후 다시 시도해주세요.'}
+          금감원 서버에서 데이터를 가져올 수 없습니다. 잠시 후 다시 시도해 주세요.
         </p>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
           <button onClick={fetchRates} style={primaryBtn}>
@@ -344,7 +379,13 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
               position: 'relative',
             }}>
               <button
-                onClick={() => setSelectedApt(null)}
+                onClick={() => {
+                  priceControllerRef.current?.abort();
+                  priceSequenceRef.current += 1;
+                  setSelectedApt(null);
+                  setPriceError(null);
+                  setPriceLoading(false);
+                }}
                 aria-label="선택 해제"
                 style={{
                   position: 'absolute', top: 10, right: 10,
@@ -360,6 +401,10 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
               </div>
               {priceLoading ? (
                 <Loader2 size={14} style={{ color: 'var(--accent)', animation: 'spin 1s linear infinite' }} />
+              ) : priceError ? (
+                <p role="alert" style={{ fontSize: 12, color: 'var(--danger-text, #C92F2F)', margin: 0, lineHeight: 1.55 }}>
+                  {priceError}
+                </p>
               ) : selectedApt.count > 0 ? (
                 <>
                   <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', margin: 0 }}>
@@ -570,7 +615,7 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
               ? <CheckCircle size={18} style={{ color: 'var(--success)' }} />
               : <AlertTriangle size={18} style={{ color: 'var(--danger)' }} />}
             <span style={{ fontSize: 14, fontWeight: 700, color: result.feasible ? 'var(--success)' : 'var(--danger)' }}>
-              {selectedBank} · {selectedProduct}
+              {selectedBank} · {selectedProduct} — {result.feasible ? '입력 기준 한도 내' : 'DSR 또는 입력 요건 미충족'}
             </span>
           </div>
 
@@ -587,7 +632,7 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
 
           {/* 3 핵심 카드 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
-            <ResultCard label="대출가능액" value={fmtWonShort(result.loanAmount)} sub={`LTV ${result.ltvUsed}%`} />
+            <ResultCard label="LTV 기준 한도" value={fmtWonShort(result.loanAmount)} sub={`DSR 반영 전 · LTV ${result.ltvUsed}%`} />
             <ResultCard
               label="적용 금리"
               value={`${result.appliedRateMin.toFixed(2)}~${result.appliedRateMax.toFixed(2)}%`}
@@ -661,6 +706,22 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
       )}
 
       {/* 정부대출 비교 패널 */}
+      {compareOpen && result && !policyTermComparable && (
+        <div style={{
+          padding: 20, borderRadius: 14, marginBottom: 24,
+          backgroundColor: 'var(--warning-bg, rgba(200,150,50,0.08))',
+          border: '1px solid var(--warning-border, rgba(200,150,50,0.3))',
+        }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: 'var(--warning, #8A6A1F)', margin: '0 0 8px' }}>
+            동일 기간 비교 불가
+          </h3>
+          <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.65 }}>
+            현재 은행대출은 {loanTerm}년이지만 저장된 디딤돌 금리표는 10·15·20년만 기간별 값이 있습니다.
+            20년 값을 {loanTerm}년에 대입해 월 절약액을 만들지 않습니다. 은행대출 기간을 10·15·20년 중 하나로 바꾸면 같은 기간끼리 비교합니다.
+          </p>
+        </div>
+      )}
+
       {compareOpen && result && policyResult && (
         <div style={{
           padding: 20, borderRadius: 14, marginBottom: 24,
@@ -671,14 +732,15 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
           </h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
             <CompareCol
-              title="정책 (디딤돌 일반)"
+              title={`정책 (디딤돌 일반 · ${loanTerm}년)`}
               rate={`${policyResult.appliedRate}%`}
               monthly={`${fmt(Math.round(policyResult.monthlyPayment))}만`}
               totalInterest={fmtWonShort(policyResult.totalInterest)}
+              loanAmount={fmtWonShort(policyResult.loanAmount)}
               highlight
             />
             <CompareCol
-              title={`시중 (${selectedBank})`}
+              title={`시중 (${selectedBank} · ${loanTerm}년)`}
               rate={`${result.appliedRateMin.toFixed(2)}~${result.appliedRateMax.toFixed(2)}%`}
               monthly={
                 result.monthlyPaymentMin === result.monthlyPaymentMax
@@ -686,10 +748,11 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
                   : `${fmt(Math.round(result.monthlyPaymentMin))}~${fmt(Math.round(result.monthlyPaymentMax))}만`
               }
               totalInterest={`${fmtWonShort(result.totalInterestMin)}~${fmtWonShort(result.totalInterestMax)}`}
+              loanAmount={fmtWonShort(result.loanAmount)}
             />
           </div>
 
-          {policyResult.feasible && result.feasible && (
+          {policyResult.feasible && result.feasible && policyResult.loanAmount === result.loanAmount && (
             <div style={{
               padding: '12px 14px', borderRadius: 10, marginBottom: 10,
               backgroundColor: 'var(--accent-bg)',
@@ -702,10 +765,20 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
             </div>
           )}
 
+          {policyResult.loanAmount !== result.loanAmount && (
+            <p style={{
+              margin: '0 0 10px', padding: '10px 12px', borderRadius: 9,
+              backgroundColor: 'var(--warning-bg, rgba(200,150,50,0.08))',
+              color: 'var(--warning, #8A6A1F)', fontSize: 11.5, lineHeight: 1.55,
+            }}>
+              두 상품의 산출 대출원금이 달라 월 상환액 차이를 “절약액”으로 계산하지 않았습니다.
+            </p>
+          )}
+
           <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.6 }}>
-            ※ 정부대출(디딤돌)은 소득·자산·무주택 요건이 있습니다.
+            ※ 정책 금리 기준: {policyResult.rateNote}
             <br />
-            정부대출 탭에서 자격 여부를 확인하세요.
+            디딤돌의 무주택·세대주·순자산·CB점수 등은 이 비교에서 확인하지 않았습니다. 정부대출 탭의 결과도 최종 승인 판정이 아닙니다.
           </p>
           {onSwitchToPolicy && (
             <button onClick={onSwitchToPolicy} style={{ ...secondaryBtn, width: '100%', justifyContent: 'center' }}>
@@ -719,7 +792,7 @@ export default function BankRateComparison({ onSwitchToPolicy }: { onSwitchToPol
       <p style={{ fontSize: 11, color: 'var(--text-dim)', textAlign: 'center', lineHeight: 1.7 }}>
         ※ 금감원 금융상품통합비교공시 기준 (아파트 담보, 분할상환)
         <br />
-        기준일: {data.updatedAt ?? '-'}
+        공시월: {data.disclosureMonth ?? '원본 미제공'} · 조회일: {data.fetchedOn}
       </p>
     </div>
   );
@@ -827,7 +900,7 @@ function DsrRow({ label, value, warn }: { label: string; value: number; warn: bo
       <Info size={14} style={{ color: warn ? 'var(--danger)' : 'var(--text-muted)', flexShrink: 0 }} />
       <span style={{ fontSize: 13, color: warn ? 'var(--danger)' : 'var(--text-secondary)' }}>
         {label} <strong style={{ fontFamily: MONO }}>{value}%</strong>
-        {warn ? ' — 40% 초과' : ' — 정상'}
+        {warn ? ' — 40% 초과, 가능 판정 제외' : ' — 40% 이내'}
       </span>
     </div>
   );
@@ -845,8 +918,8 @@ function MiniStat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function CompareCol({ title, rate, monthly, totalInterest, highlight }: {
-  title: string; rate: string; monthly: string; totalInterest: string; highlight?: boolean;
+function CompareCol({ title, rate, monthly, totalInterest, loanAmount, highlight }: {
+  title: string; rate: string; monthly: string; totalInterest: string; loanAmount: string; highlight?: boolean;
 }) {
   return (
     <div style={{
@@ -857,6 +930,10 @@ function CompareCol({ title, rate, monthly, totalInterest, highlight }: {
       <p style={{ fontSize: 11, fontWeight: 600, color: highlight ? 'var(--accent)' : 'var(--text-muted)', margin: '0 0 10px' }}>
         {title}
       </p>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>산출 대출원금</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)', fontFamily: MONO, marginBottom: 8 }}>
+        {loanAmount}
+      </div>
       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>금리</div>
       <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-strong)', fontFamily: MONO, marginBottom: 8 }}>
         {rate}

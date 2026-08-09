@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
+  poweredByHeader: false,
   serverExternalPackages: ['better-sqlite3'],
   // Vercel Blob 업로드 이미지를 next/Image가 최적화하도록 허용
   images: {
@@ -22,6 +23,29 @@ const nextConfig: NextConfig = {
       { source: '/report', destination: '/blog', permanent: true },
       // 미래 추가될 하위 URL 대비 와일드카드 (현재는 동적 segment 없지만 방어적)
       { source: '/report/:path*', destination: '/blog', permanent: true },
+    ];
+  },
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin',
+          },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=()',
+          },
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=63072000; includeSubDomains; preload',
+          },
+        ],
+      },
     ];
   },
 };

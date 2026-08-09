@@ -1,6 +1,5 @@
 'use client';
 
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import type { LocationScore } from '@/lib/types';
 
 import { getScoreColor, getScoreBgColor } from '@/lib/score-utils';
@@ -20,12 +19,6 @@ interface Props {
   onToheoToggle: (val: boolean) => void;
   onLocationClick: (location: LocationScore) => void;
   layerToggle?: React.ReactNode;
-}
-
-function TrendIcon({ trend }: { trend: LocationScore['trend'] }) {
-  if (trend === 'up')   return <TrendingUp   size={12} style={{ color: 'var(--up-color)' }} />;
-  if (trend === 'down') return <TrendingDown size={12} style={{ color: 'var(--down-color)' }} />;
-  return <Minus size={12} style={{ color: 'var(--text-dim)' }} />;
 }
 
 function RegionTabRow({
@@ -85,7 +78,7 @@ export default function LocationSidebar({
         <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '3px' }}>
           내집 부동산 지도
         </h2>
-        <p style={{ fontSize: '11px', color: 'var(--text-dim)' }}>서울·수도권 주요 지역의 입지 점수를 지도에서 확인하세요. 학군, 교통, 생활인프라를 종합 평가합니다.</p>
+        <p style={{ fontSize: '11px', color: 'var(--text-dim)' }}>등록된 수도권·광역시 주요 권역의 자체 비교 점수입니다. 전국 전체를 대표하는 공식 등급이 아닙니다.</p>
       </div>
 
       {/* 권역 탭 */}
@@ -141,10 +134,10 @@ export default function LocationSidebar({
         <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px' }}>점수 범례</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
           {[
-            { score: 1.5, label: '1.0 ~ 1.9', desc: '최우수' },
-            { score: 2.5, label: '2.0 ~ 2.9', desc: '우수' },
-            { score: 3.5, label: '3.0 ~ 3.9', desc: '보통' },
-            { score: 4.5, label: '4.0 이상',  desc: '일반' },
+            { score: 1.5, label: '1.0 ~ 1.9', desc: '자체 상위 구간' },
+            { score: 2.5, label: '2.0 ~ 2.9', desc: '자체 중상 구간' },
+            { score: 3.5, label: '3.0 ~ 3.9', desc: '자체 중하 구간' },
+            { score: 4.5, label: '4.0 이상',  desc: '자체 하위 구간' },
           ].map((item) => (
             <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
               <span style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: getScoreColor(item.score), flexShrink: 0 }} />
@@ -163,7 +156,7 @@ export default function LocationSidebar({
       {/* TOP 10 */}
       <div style={{ padding: '12px 20px', flex: 1 }}>
         <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '10px' }}>
-          TOP 10 입지 ({filteredLocations.length}개 지역)
+          등록 항목 자체점수 상위 10 ({filteredLocations.length}개)
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
           {top10.map((loc, index) => (
@@ -199,7 +192,6 @@ export default function LocationSidebar({
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
-                <TrendIcon trend={loc.trend} />
                 <span style={{
                   padding: '2px 7px', borderRadius: '6px',
                   fontSize: '12px', fontWeight: 700,

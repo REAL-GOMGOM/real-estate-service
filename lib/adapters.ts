@@ -6,7 +6,7 @@ export interface Subscription {
   name:   string;
   loc:    string;
   period: string;
-  units:  number;
+  units:  number | null;
   comp:   string;
 }
 

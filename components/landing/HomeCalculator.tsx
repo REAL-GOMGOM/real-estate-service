@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { calcEqualPrincipalInterest } from '@/lib/loan-calculator';
 
 /**
@@ -16,7 +16,7 @@ type YearOption = (typeof YEAR_OPTIONS)[number];
 
 const DEFAULT_PRICE_EOK = 15;  // 집값 기본값 (억)
 const DEFAULT_DOWN_PCT  = 40;  // 자기자본 비율 기본값 (%)
-const DEFAULT_RATE_PCT  = 4.2; // 대출 금리 기본값 (연 %) — 라이브 도착 전 표본
+const DEFAULT_RATE_PCT  = 4.2; // 대출 금리 예시 초기값 (연 %) — 공시 확인 전에는 예시로 명시
 const DEFAULT_YEARS: YearOption = 30;
 const RATE_MIN = 2;            // 금리 슬라이더 하한 (%)
 const RATE_MAX = 7;            // 금리 슬라이더 상한 (%)
@@ -33,25 +33,36 @@ export default function HomeCalculator() {
   const [down, setDown]   = useState(DEFAULT_DOWN_PCT);
   const [rate, setRate]   = useState(DEFAULT_RATE_PCT);
   const [years, setYears] = useState<YearOption>(DEFAULT_YEARS);
+  const [rateStatus, setRateStatus] = useState<'loading' | 'live' | 'example' | 'manual'>('loading');
+  const rateTouched = useRef(false);
 
   // 기본 금리 라이브화 — /api/loan/rate-history 의 예금은행 대출평균금리(신규취급액) 최신값.
   // 응답 키 cofix 는 과거 명칭 유지분으로, 실제 시리즈는 121Y006/BECBLA01 (커밋 21634cd).
   // 사용자가 이미 슬라이더를 움직였으면(기본값에서 벗어남) 덮어쓰지 않는다.
   useEffect(() => {
-    let cancelled = false;
-    fetch('/api/loan/rate-history')
-      .then((r) => r.json())
+    const controller = new AbortController();
+    fetch('/api/loan/rate-history', { signal: controller.signal })
+      .then(async (response) => {
+        const json = await response.json();
+        if (!response.ok || json.error) throw new Error(json.error || 'rate unavailable');
+        return json as { cofix?: { points?: Array<{ period: string; rate: number }> } };
+      })
       .then((json: { cofix?: { points?: Array<{ period: string; rate: number }> } }) => {
-        if (cancelled) return;
         const pts = json.cofix?.points ?? [];
         const latest = pts[pts.length - 1]?.rate;
-        if (typeof latest === 'number' && latest >= RATE_MIN && latest <= RATE_MAX) {
-          const live = Math.round(latest * 10) / 10;
-          setRate((cur) => (cur === DEFAULT_RATE_PCT ? live : cur));
+        if (typeof latest !== 'number' || latest < RATE_MIN || latest > RATE_MAX) {
+          throw new Error('valid rate unavailable');
+        }
+        if (!rateTouched.current) {
+          setRate(Math.round(latest * 10) / 10);
+          setRateStatus('live');
         }
       })
-      .catch(() => { /* 실패 시 표본 금리 유지 */ });
-    return () => { cancelled = true; };
+      .catch((error: unknown) => {
+        if ((error as { name?: string }).name === 'AbortError') return;
+        if (!rateTouched.current) setRateStatus('example');
+      });
+    return () => controller.abort();
   }, []);
 
   const out = useMemo(() => {
@@ -74,8 +85,19 @@ export default function HomeCalculator() {
   const sliders = [
     { label: '집값',        display: `${price}억`,       min: 3,  max: 50, step: 1,   value: price, onChange: setPrice },
     { label: '자기자본 비율', display: `${down}%`,        min: 10, max: 80, step: 5,   value: down,  onChange: setDown },
-    { label: '대출 금리',    display: `${rateDisplay}%`, min: RATE_MIN, max: RATE_MAX, step: 0.1, value: rate, onChange: setRate },
+    {
+      label: '대출 금리', display: `${rateDisplay}%`, min: RATE_MIN, max: RATE_MAX, step: 0.1, value: rate,
+      onChange: setRate,
+    },
   ];
+
+  const rateSource = rateStatus === 'live'
+    ? '한국은행 ECOS 최신 공시를 초기값으로 사용'
+    : rateStatus === 'manual'
+      ? '사용자가 입력한 가정값'
+      : rateStatus === 'loading'
+        ? '공시 확인 중 · 현재 값은 계산용 예시'
+        : '계산용 예시값 · 실제 금융기관 조건 확인 필요';
 
   const results = [
     { label: '필요 대출액', value: out.loan },
@@ -117,8 +139,21 @@ export default function HomeCalculator() {
                   className="nz-range"
                   min={s.min} max={s.max} step={s.step} value={s.value}
                   aria-label={s.label}
-                  onChange={(e) => s.onChange(Number(e.target.value))}
+                  aria-valuetext={s.display}
+                  aria-describedby={s.label === '대출 금리' ? 'home-calculator-rate-source' : undefined}
+                  onChange={(e) => {
+                    if (s.label === '대출 금리') {
+                      rateTouched.current = true;
+                      setRateStatus('manual');
+                    }
+                    s.onChange(Number(e.target.value));
+                  }}
                 />
+                {s.label === '대출 금리' && (
+                  <div id="home-calculator-rate-source" style={{ marginTop: 6, fontSize: 10.5, color: '#8A93A3' }}>
+                    {rateSource}
+                  </div>
+                )}
               </div>
             ))}
             <div style={{ display: 'flex', gap: 6 }}>
@@ -127,6 +162,8 @@ export default function HomeCalculator() {
                 return (
                   <button
                     key={y}
+                    type="button"
+                    aria-pressed={active}
                     onClick={() => setYears(y)}
                     style={{
                       flex: 1, padding: '8px 0', borderRadius: 9, fontSize: 12, fontWeight: 700,

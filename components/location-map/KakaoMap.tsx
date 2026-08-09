@@ -38,8 +38,6 @@ const SCHOOL_LABELS: Record<string, string> = {
 
 function createMarkerElement(loc: LocationScore, onClick: () => void): HTMLDivElement {
   const color      = getScoreColor(loc.score);
-  const trendIcon  = loc.trend === 'up' ? '▲' : loc.trend === 'down' ? '▼' : '—';
-  const trendColor = loc.trend === 'up' ? 'var(--up-color)' : loc.trend === 'down' ? 'var(--down-color)' : 'var(--text-dim)';
 
   const wrapper = document.createElement('div');
   wrapper.style.cssText = 'display:inline-flex;flex-direction:column;align-items:center;cursor:pointer;';
@@ -83,12 +81,7 @@ function createMarkerElement(loc: LocationScore, onClick: () => void): HTMLDivEl
   scoreEl.style.cssText = `font-size:12px;font-weight:800;color:${color};font-family:'Roboto Mono',monospace;`;
   scoreEl.textContent = loc.score.toFixed(1);
 
-  const trendEl = document.createElement('span');
-  trendEl.style.cssText = `font-size:8px;font-weight:700;color:${trendColor};`;
-  trendEl.textContent = trendIcon;
-
   scoreRow.appendChild(scoreEl);
-  scoreRow.appendChild(trendEl);
   box.appendChild(nameEl);
   box.appendChild(scoreRow);
 

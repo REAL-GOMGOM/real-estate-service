@@ -16,8 +16,6 @@ const LINKS = [
   { label: '내집마련 도구', href: '/loan' },
   { label: '시장 동향', href: '/market' },
   { label: '칼럼', href: '/blog' },
-  { label: '뉴스', href: '/news' },
-  { label: '로그인', href: '/admin/login' },
 ];
 
 export default function MobileNav() {

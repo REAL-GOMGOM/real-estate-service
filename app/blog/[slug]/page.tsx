@@ -1,4 +1,4 @@
-import { Suspense } from 'react';
+import { cache, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -12,6 +12,7 @@ import { preprocessMdxContent } from '@/lib/blog/preprocessor';
 import { SITE_URL, SITE_NAME } from '@/lib/site';
 import { mdxComponents } from '../components/mdx-components';
 import CoupangBanner from '@/components/ads/CoupangBanner';
+import { BlogServiceUnavailable } from '../components/BlogServiceUnavailable';
 
 const SLUG_PATTERN = /^[a-z0-9-]{1,200}$/;
 
@@ -24,12 +25,33 @@ const KST_DATE_FORMAT: Intl.DateTimeFormatOptions = {
 
 type Params = Promise<{ slug: string }>;
 
+type CachedPostResult =
+  | { status: 'ok'; post: Awaited<ReturnType<typeof getPublishedPostBySlug>> }
+  | { status: 'unavailable'; post: null };
+
+const getCachedPublishedPost = cache(async (slug: string): Promise<CachedPostResult> => {
+  try {
+    return { status: 'ok', post: await getPublishedPostBySlug(slug) };
+  } catch (error) {
+    console.error('[blog/post] published post unavailable', error);
+    return { status: 'unavailable', post: null };
+  }
+});
+
 export async function generateMetadata({ params }: { params: Params }) {
   const { slug } = await params;
   if (!SLUG_PATTERN.test(slug)) {
     return { title: `칼럼 — ${SITE_NAME}` };
   }
-  const post = await getPublishedPostBySlug(slug);
+  const result = await getCachedPublishedPost(slug);
+  if (result.status === 'unavailable') {
+    return {
+      title: `칼럼을 불러올 수 없습니다 — ${SITE_NAME}`,
+      alternates: { canonical: `${SITE_URL}/blog/${slug}` },
+      robots: { index: false, follow: true },
+    };
+  }
+  const post = result.post;
   if (!post) {
     return { title: `칼럼 — ${SITE_NAME}` };
   }
@@ -93,7 +115,11 @@ async function PostDetail({ params }: { params: Params }) {
   const { slug } = await params;
   if (!SLUG_PATTERN.test(slug)) notFound();
 
-  const post = await getPublishedPostBySlug(slug);
+  const result = await getCachedPublishedPost(slug);
+  if (result.status === 'unavailable') {
+    return <BlogServiceUnavailable retryHref={`/blog/${slug}`} />;
+  }
+  const post = result.post;
   if (!post) notFound();
 
   const dateStr = new Intl.DateTimeFormat('ko-KR', KST_DATE_FORMAT).format(

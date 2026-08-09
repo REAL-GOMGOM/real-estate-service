@@ -10,7 +10,8 @@ import {
 } from '@/lib/loan-products';
 import { Calculator, ChevronDown, ChevronUp, AlertTriangle, CheckCircle, Info, Landmark, Building2, Search, X, Loader2 } from 'lucide-react';
 import { findDistrictByLawdCd } from '@/lib/district-codes';
-import { summarizeAptTxns, type AptPriceSummary } from '@/lib/apt-price-summary';
+import type { AptPriceSummary } from '@/lib/apt-price-summary';
+import { resolveLoanApartmentPrice } from '@/lib/loan-apartment-price';
 import { AptAutocomplete, type ApartmentSearchResult } from '@/components/search/AptAutocomplete';
 import RateTrendCard from './RateTrendCard';
 import {
@@ -93,30 +94,48 @@ export default function LoanSimulator() {
     selArea: number | null; // 선택 평형 (null = 전체 평균)
   } | null>(null);
   const [priceEdited, setPriceEdited] = useState(false);
+  const [priceError, setPriceError] = useState<string | null>(null);
+  const aptLookupSequence = useRef(0);
 
   async function handleSelectApt(apt: ApartmentSearchResult) {
+    const requestId = ++aptLookupSequence.current;
     const district = findDistrictByLawdCd(apt.lawdCd) ?? apt.sigungu;
     setPriceLoading(true);
-    setPriceEdited(false);
+    setPriceEdited(true);
+    setPriceError(null);
     setSelectedApt({ name: apt.name, district, count: 0, avg: 0, summary: null, selArea: null });
     try {
       const res = await fetch(`/api/transactions?aptId=${encodeURIComponent(apt.id)}&months=3`);
-      const data = await res.json();
-      const txns = data?.data?.[0]?.transactions;
-      const summary = txns ? summarizeAptTxns(txns) : null;
-      if (summary) {
-        // 기본 적용 = 최다 거래 평형 (평형 혼합 통합 평균은 대표성이 없음)
-        setHousePrice(summary.best.avg);
-        setSelectedApt({
-          name: apt.name, district,
-          count: summary.best.count, avg: summary.best.avg,
-          summary, selArea: summary.best.area,
-        });
+      const data: unknown = await res.json();
+      if (requestId !== aptLookupSequence.current) return;
+
+      const resolved = resolveLoanApartmentPrice(data);
+      if (!res.ok || !resolved.ok) {
+        setPriceError(
+          !resolved.ok ? resolved.error : '실거래 원본을 불러오지 못했습니다.',
+        );
+        return;
       }
-    } catch { /* 조회 실패 시 매매가 유지 */ }
+
+      const { summary } = resolved;
+      // 기본 적용 = 최다 거래 평형 (평형 혼합 통합 평균은 대표성이 없음)
+      setHousePrice(summary.best.avg);
+      setPriceEdited(false);
+      setSelectedApt({
+        name: apt.name, district,
+        count: summary.best.count, avg: summary.best.avg,
+        summary, selArea: summary.best.area,
+      });
+    } catch {
+      if (requestId === aptLookupSequence.current) {
+        setPriceError('실거래 조회에 실패했습니다. 네트워크 상태를 확인하고 다시 시도해 주세요.');
+      }
+    }
     finally {
-      setPriceLoading(false);
-      setShowSearch(false);
+      if (requestId === aptLookupSequence.current) {
+        setPriceLoading(false);
+        setShowSearch(false);
+      }
     }
   }
 
@@ -127,12 +146,22 @@ export default function LoanSimulator() {
     const g = area === null ? null : s.groups.find((x) => x.area === area);
     setHousePrice(g ? g.avg : s.totalAvg);
     setPriceEdited(false);
+    setPriceError(null);
     setSelectedApt({
       ...selectedApt,
       avg: g ? g.avg : s.totalAvg,
       count: g ? g.count : s.totalCount,
       selArea: g ? g.area : null,
     });
+  }
+
+  function clearSelectedApartment() {
+    aptLookupSequence.current += 1;
+    setSelectedApt(null);
+    setPriceLoading(false);
+    setPriceError(null);
+    // 적용된 숫자는 유지하되, 더는 선택 단지의 자동 적용값으로 표시하지 않는다.
+    setPriceEdited(true);
   }
 
   // Debounced numeric inputs
@@ -220,10 +249,10 @@ export default function LoanSimulator() {
               대출 시뮬레이터
             </h1>
           </div>
-          {/* 탭별 금리 기준 안내 — 정부대출은 공사 공시(분기), 은행대출은 금감원 공시 실시간 조회 */}
+          {/* 탭별 데이터 기준 안내 */}
           <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
             {activeTab === 'policy'
-              ? `한국주택금융공사 공시 금리 기준 (${LAST_UPDATED})`
+              ? `저장된 정책대출 금리 기준표 (${LAST_UPDATED}) · 계산 가정은 결과에서 별도 표시`
               : '금융감독원 은행별 상품 공시 금리 · 조회 시점 최신 반영'}
           </p>
         </div>
@@ -307,19 +336,31 @@ export default function LoanSimulator() {
             {selectedApt && (
               <div style={{
                 marginBottom: 12, padding: '14px 18px', borderRadius: 12,
-                backgroundColor: 'var(--accent-bg)',
-                borderLeft: '4px solid var(--accent)',
+                backgroundColor: priceError
+                  ? 'var(--danger-bg, rgba(185, 62, 50, 0.08))'
+                  : 'var(--accent-bg)',
+                borderLeft: `4px solid ${priceError ? 'var(--danger)' : 'var(--accent)'}`,
                 position: 'relative',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                   <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{selectedApt.name}</span>
                   <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{selectedApt.district}</span>
                 </div>
-                <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', margin: '0 0 8px' }}>
-                  {selectedApt.summary ? `${selectedApt.summary.periodLabel} 실거래 평균가 적용 중` : '실거래 평균가 적용 중'}
+                <p style={{ fontSize: 12, fontWeight: 600, color: priceError ? 'var(--danger)' : 'var(--accent)', margin: '0 0 8px' }}>
+                  {priceLoading
+                    ? '실거래 표본 조회 중'
+                    : selectedApt.summary
+                      ? priceEdited
+                        ? `${selectedApt.summary.periodLabel} 표본 확인됨 · 현재 매매가는 수동 입력값`
+                        : `${selectedApt.summary.periodLabel} 실거래 평균가 적용 중`
+                      : '실거래 평균가 미적용 · 현재 매매가는 수동 입력값'}
                 </p>
                 {priceLoading ? (
                   <Loader2 size={14} style={{ color: 'var(--accent)', animation: 'spin 1s linear infinite' }} />
+                ) : priceError ? (
+                  <p role="alert" style={{ fontSize: 12, color: 'var(--danger)', margin: 0, lineHeight: 1.55 }}>
+                    {priceError} 기존 매매가를 유지했으며 자동 적용하지 않았습니다.
+                  </p>
                 ) : selectedApt.count > 0 && (
                   <div style={{ borderTop: '1px solid var(--accent-border, rgba(196,101,74,0.2))', paddingTop: 8 }}>
                     {/* 평형 선택 칩 — 평형 혼합 단지의 통합 평균 문제 해소 */}
@@ -363,7 +404,7 @@ export default function LoanSimulator() {
                   </div>
                 )}
                 <button
-                  onClick={() => setSelectedApt(null)}
+                  onClick={clearSelectedApartment}
                   style={{
                     position: 'absolute', top: 12, right: 12,
                     background: 'none', border: 'none', cursor: 'pointer',
@@ -403,6 +444,7 @@ export default function LoanSimulator() {
             )}
             <input
               type="number"
+              aria-label="주택 매매가, 만원 단위"
               value={housePrice}
               onChange={(e) => { if (selectedApt) setPriceEdited(true); setHousePrice(Math.max(0, Number(e.target.value) || 0)); }}
               step={1000}
@@ -410,6 +452,8 @@ export default function LoanSimulator() {
             />
             <input
               type="range"
+              aria-label="주택 매매가"
+              aria-valuetext={fmtWon(housePrice)}
               min={10000}
               max={300000}
               step={1000}
@@ -433,6 +477,7 @@ export default function LoanSimulator() {
             </div>
             <input
               type="number"
+              aria-label="자기자금, 만원 단위"
               value={deposit}
               onChange={(e) => setDeposit(Math.max(0, Math.min(housePrice, Number(e.target.value) || 0)))}
               step={1000}
@@ -594,8 +639,22 @@ export default function LoanSimulator() {
               ? <CheckCircle size={20} style={{ color: 'var(--success)' }} />
               : <AlertTriangle size={20} style={{ color: 'var(--danger)' }} />}
             <span style={{ fontSize: 15, fontWeight: 700, color: result.feasible ? 'var(--success)' : 'var(--danger)' }}>
-              {result.feasible ? '대출 가능' : '대출 요건 미충족'}
+              {result.feasible ? '입력 기준 한도 내' : '한도 초과 또는 요건 미충족'}
             </span>
+          </div>
+
+          <div style={{
+            padding: '12px 14px', borderRadius: 10, marginBottom: 18,
+            backgroundColor: 'var(--warning-bg, rgba(200, 150, 50, 0.08))',
+            border: '1px solid var(--warning-border, rgba(200, 150, 50, 0.28))',
+            fontSize: 11.5, lineHeight: 1.65, color: 'var(--text-secondary)',
+          }}>
+            <strong style={{ color: 'var(--warning, #8A6A1F)' }}>판정 범위:</strong>{' '}
+            입력한 소득·주택가격·자기자금, 상품 한도·LTV, DSR·DTI와 선택한 우대 조건만 계산했습니다.
+            <br />
+            <strong style={{ color: 'var(--danger)' }}>미검증:</strong>{' '}
+            무주택·주택 수·세대주 여부, 순자산, CB점수, 혼인·자녀·신생아 출생일과 각 우대 증빙은 입력받지 않아 확인하지 않았습니다.
+            “입력 기준 한도 내”는 승인 또는 최종 자격 충족을 뜻하지 않습니다.
           </div>
 
           {/* 경고 박스 */}
@@ -617,13 +676,30 @@ export default function LoanSimulator() {
           {/* 핵심 3카드 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 18 }}>
             <ResultCard label="대출금액" value={fmtWonShort(result.loanAmount)} sub={`LTV ${result.ltvUsed}%`} />
-            <ResultCard label="적용금리" value={`${result.appliedRate}%`} sub={isDidimdol ? `기본 ${result.baseRate}%` : '고정금리'} />
+            <ResultCard
+              label="계산 적용금리"
+              value={`${result.appliedRate}%`}
+              sub={result.rateBasis === 'stored_table' ? `저장 기본금리 ${result.baseRate}%` : '확정 금리 아님 · 계산 가정'}
+            />
             <ResultCard
               label={repaymentType === 'graduated' ? '월 상환액 (1년차)' : '월 상환액'}
               value={`${fmt(Math.round(result.monthlyPayment))}만`}
               highlight
             />
           </div>
+
+          <p style={{
+            margin: '-6px 0 18px', padding: '10px 12px', borderRadius: 9,
+            backgroundColor: result.rateBasis === 'stored_table'
+              ? 'var(--border-light)'
+              : 'var(--warning-bg, rgba(200, 150, 50, 0.08))',
+            color: result.rateBasis === 'stored_table'
+              ? 'var(--text-muted)'
+              : 'var(--warning, #8A6A1F)',
+            fontSize: 11.5, lineHeight: 1.55,
+          }}>
+            금리 기준: {result.rateNote}
+          </p>
 
           {/* 체증식 연차별 변화 */}
           {repaymentType === 'graduated' && result.graduatedYears && (
@@ -650,7 +726,8 @@ export default function LoanSimulator() {
                 ))}
               </div>
               <p style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 10, marginBottom: 0, lineHeight: 1.5 }}>
-                체증식은 초기 부담이 적고 소득 증가에 맞춰 상환액이 늘어나는 방식입니다
+                체증식은 초기 부담이 적고 소득 증가에 맞춰 상환액이 늘어나는 방식입니다.
+                표시액은 매년 증가하는 납입액의 현재가치가 원금과 같아지도록 역산한 참고 추정치입니다.
               </p>
               {isDidimdol && (
                 <p style={{ fontSize: 11, color: 'var(--warning, #8A6A1F)', marginTop: 4, marginBottom: 0 }}>
@@ -706,9 +783,23 @@ export default function LoanSimulator() {
 
           {/* 상환 요약 */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 18 }}>
-            <MiniStat label="총 상환액" value={fmtWon(result.totalPayment)} />
-            <MiniStat label="총 이자" value={fmtWon(result.totalInterest)} />
+            <MiniStat label="전 기간 총 상환액" value={fmtWon(result.totalPayment)} />
+            <MiniStat label="전 기간 총 이자" value={fmtWon(result.totalInterest)} />
           </div>
+
+          {repaymentType === 'graduated' && (
+            <p style={{
+              margin: '-8px 0 18px', padding: '9px 12px', borderRadius: 9,
+              fontSize: 11.5, lineHeight: 1.55,
+              color: result.maturityBalance === 0 ? 'var(--text-muted)' : 'var(--danger)',
+              backgroundColor: result.maturityBalance === 0
+                ? 'var(--border-light)'
+                : 'var(--danger-bg, rgba(185, 62, 50, 0.08))',
+            }}>
+              계산상 만기 잔액: <strong style={{ fontFamily: MONO }}>{fmtWon(result.maturityBalance)}</strong>
+              {' '}· 실제 금융기관의 체증식 산식, 중도상환, 일할 이자에 따라 달라질 수 있습니다.
+            </p>
+          )}
 
           {/* DSR / DTI 행 — 소득 0이면 가드, 그 외에는 두 행 표시 */}
           {income > 0 ? (
@@ -735,7 +826,10 @@ export default function LoanSimulator() {
                   <span style={{ fontSize: 11, color: 'var(--text-dim)', marginLeft: 6 }}>
                     현행 심사 기준
                   </span>
-                  {result.dsr > 40 ? ' — 40% 초과, 심사 제한 가능' : result.dsr > 30 ? ' — 주의 구간' : ' — 40% 이내'}
+                  {result.dsr > 40 ? ' — 일반 한도 초과, 가능 판정 제외' : result.dsr > 30 ? ' — 주의 구간' : ' — 40% 이내'}
+                  {repaymentType === 'graduated' && (
+                    <span style={{ fontSize: 11, color: 'var(--text-dim)' }}> · 1년차 납입액 기준 단순 추정</span>
+                  )}
                 </span>
               </div>
 
@@ -839,7 +933,7 @@ export default function LoanSimulator() {
           <br />
           DSR/DTI 한도는 정책 기준에 따른 추정. 실제 한도는 신용도·소득 증빙 방식에 따라 달라질 수 있습니다.
           <br />
-          금리 기준일: {LAST_UPDATED} | 한국주택금융공사 공시
+          저장 금리표 기준일: {LAST_UPDATED} · 실제 적용금리는 취급기관 확인 필요
         </p>
         </>)}
       </div>

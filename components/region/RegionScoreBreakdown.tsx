@@ -28,7 +28,7 @@ export function RegionScoreBreakdown({ region }: Props) {
         지표별 점수
       </h2>
       <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }}>
-        교통·학군·산업·공급 4개 지표를 10점 만점으로 비교합니다.
+        교통·학군·산업·공급 입력값을 내부 기준으로 0~10에 정규화한 보조 점수입니다. 공식 등급이 아닙니다.
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10 items-center">

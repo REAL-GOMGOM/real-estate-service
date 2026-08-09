@@ -20,6 +20,8 @@ import { parseSilvXmlFull, molitItemToSilvRow } from '../lib/molit-silv-parse';
 import { upsertTransactions, type TxDb } from '../lib/tx-upsert';
 import { upsertRentTransactions, type RentTxDb } from '../lib/rent-tx-upsert';
 import { upsertSilvTransactions, type SilvTxDb } from '../lib/silv-tx-upsert';
+import { getMacMiniSyncExitCode } from '../lib/macmini-sync-health';
+import { isNeonQuotaError } from '../lib/neon-quota-error';
 
 /**
  * 실거래 일일 sync — 맥미니 이전판 (2026-08-02, Neon 의존도 완화 2단계).
@@ -49,7 +51,14 @@ function retentionCutoff(months: number): string {
   return `${cut.getFullYear()}-${String(cut.getMonth() + 1).padStart(2, '0')}-01`;
 }
 
-interface PhaseResult { fetchFail: number; localUp: number; localFail: number; neonUp: number; neonFail: number }
+interface PhaseResult {
+  fetchFail: number;
+  localUp: number;
+  localFail: number;
+  neonUp: number;
+  neonFail: number;
+  neonSkipped: number;
+}
 
 async function main() {
   const rawKey = process.env.PUBLIC_DATA_API_KEY;
@@ -64,6 +73,40 @@ async function main() {
   const months = getMonthList(SYNC_MONTHS);
   const districts = Object.entries(DISTRICT_CODE);
   const ts = () => new Date().toISOString().replace('T', ' ').slice(0, 19);
+  const neonCircuit = { open: false };
+
+  async function runNeonUpsert(
+    label: string,
+    rowCount: number,
+    result: PhaseResult,
+    upsert: () => Promise<number>,
+  ): Promise<void> {
+    if (neonCircuit.open) {
+      result.neonSkipped += rowCount;
+      return;
+    }
+
+    try {
+      const count = await upsert();
+      result.neonUp += count;
+    } catch (error) {
+      result.neonFail++;
+      if (isNeonQuotaError(error)) {
+        if (!neonCircuit.open) {
+          neonCircuit.open = true;
+          console.warn(
+            `[macmini-sync] Neon 전송량 한도/HTTP 402 감지 (${label}) — 회로를 열고 남은 Neon upsert·cleanup을 건너뜁니다. 로컬 적재는 계속합니다.`,
+          );
+        }
+        return;
+      }
+
+      console.warn(
+        `[macmini-sync] Neon upsert 실패 ${label}:`,
+        error instanceof Error ? error.message : error,
+      );
+    }
+  }
 
   async function runPhase(
     label: string,
@@ -73,7 +116,14 @@ async function main() {
     for (const [sigungu, lawdCd] of districts) {
       for (const yyyymm of months) jobs.push({ sigungu, lawdCd, yyyymm });
     }
-    const r: PhaseResult = { fetchFail: 0, localUp: 0, localFail: 0, neonUp: 0, neonFail: 0 };
+    const r: PhaseResult = {
+      fetchFail: 0,
+      localUp: 0,
+      localFail: 0,
+      neonUp: 0,
+      neonFail: 0,
+      neonSkipped: 0,
+    };
     let cursor = 0;
     async function worker() {
       while (cursor < jobs.length) {
@@ -104,10 +154,14 @@ async function main() {
     // `x += await f()` 는 좌변을 await 전에 읽어 동시 워커 가산을 덮어씀 — await 후 가산
     try { const n = await upsertTransactions(localDb as unknown as TxDb, rows); r.localUp += n; }
     catch (e) { r.localFail++; console.warn(`[macmini-sync] 로컬 upsert 실패 ${sigungu} ${yyyymm}:`, e instanceof Error ? e.message : e); }
-    try { const n = await upsertTransactions(neonDb as unknown as TxDb, rows); r.neonUp += n; }
-    catch (e) { r.neonFail++; console.warn(`[macmini-sync] Neon upsert 실패 ${sigungu} ${yyyymm}:`, e instanceof Error ? e.message : e); }
+    await runNeonUpsert(
+      `trade ${sigungu} ${yyyymm}`,
+      rows.length,
+      r,
+      () => upsertTransactions(neonDb as unknown as TxDb, rows),
+    );
   });
-  console.log(`[${ts()}] trade — local u=${trade.localUp} f=${trade.localFail} · neon u=${trade.neonUp} f=${trade.neonFail} · fetch f=${trade.fetchFail}`);
+  console.log(`[${ts()}] trade — local u=${trade.localUp} f=${trade.localFail} · neon u=${trade.neonUp} f=${trade.neonFail} skipped=${trade.neonSkipped} · fetch f=${trade.fetchFail}`);
 
   // ── 전월세 ──
   const rent = await runPhase('rent', async (sigungu, lawdCd, yyyymm, r) => {
@@ -120,10 +174,14 @@ async function main() {
     if (!rows.length) return;
     try { const n = await upsertRentTransactions(localDb as unknown as RentTxDb, rows); r.localUp += n; }
     catch (e) { r.localFail++; console.warn(`[macmini-sync] 로컬 rent upsert 실패 ${sigungu} ${yyyymm}:`, e instanceof Error ? e.message : e); }
-    try { const n = await upsertRentTransactions(neonDb as unknown as RentTxDb, rows); r.neonUp += n; }
-    catch (e) { r.neonFail++; console.warn(`[macmini-sync] Neon rent upsert 실패 ${sigungu} ${yyyymm}:`, e instanceof Error ? e.message : e); }
+    await runNeonUpsert(
+      `rent ${sigungu} ${yyyymm}`,
+      rows.length,
+      r,
+      () => upsertRentTransactions(neonDb as unknown as RentTxDb, rows),
+    );
   });
-  console.log(`[${ts()}] rent — local u=${rent.localUp} f=${rent.localFail} · neon u=${rent.neonUp} f=${rent.neonFail} · fetch f=${rent.fetchFail}`);
+  console.log(`[${ts()}] rent — local u=${rent.localUp} f=${rent.localFail} · neon u=${rent.neonUp} f=${rent.neonFail} skipped=${rent.neonSkipped} · fetch f=${rent.fetchFail}`);
 
   // ── 분양권 (2026-08-02 원장 신설 — 유형 탭 시/도 집계용) ──
   const silv = await runPhase('silv', async (sigungu, lawdCd, yyyymm, r) => {
@@ -136,21 +194,34 @@ async function main() {
     if (!rows.length) return;
     try { const n = await upsertSilvTransactions(localDb as unknown as SilvTxDb, rows); r.localUp += n; }
     catch (e) { r.localFail++; console.warn(`[macmini-sync] 로컬 silv upsert 실패 ${sigungu} ${yyyymm}:`, e instanceof Error ? e.message : e); }
-    try { const n = await upsertSilvTransactions(neonDb as unknown as SilvTxDb, rows); r.neonUp += n; }
-    catch (e) { r.neonFail++; console.warn(`[macmini-sync] Neon silv upsert 실패 ${sigungu} ${yyyymm}:`, e instanceof Error ? e.message : e); }
+    await runNeonUpsert(
+      `silv ${sigungu} ${yyyymm}`,
+      rows.length,
+      r,
+      () => upsertSilvTransactions(neonDb as unknown as SilvTxDb, rows),
+    );
   });
-  console.log(`[${ts()}] silv — local u=${silv.localUp} f=${silv.localFail} · neon u=${silv.neonUp} f=${silv.neonFail} · fetch f=${silv.fetchFail}`);
+  console.log(`[${ts()}] silv — local u=${silv.localUp} f=${silv.localFail} · neon u=${silv.neonUp} f=${silv.neonFail} skipped=${silv.neonSkipped} · fetch f=${silv.fetchFail}`);
 
   // ── Neon 보존 정리 + 용량 (fail-open) — 로컬은 무제한 보존 ──
-  try {
-    const t = await neonDb.delete(transactions).where(lt(transactions.dealDate, retentionCutoff(TRADE_RETENTION_MONTHS)));
-    const rr = await neonDb.delete(rentTransactions).where(lt(rentTransactions.dealDate, retentionCutoff(RENT_RETENTION_MONTHS)));
-    await neonDb.delete(silvTransactions).where(lt(silvTransactions.dealDate, retentionCutoff(SILV_RETENTION_MONTHS)));
-    const size = await neonDb.execute(sql`SELECT round(pg_database_size(current_database()) / 1048576.0)::int AS mb`);
-    const dbMB = (size as unknown as { rows?: Array<{ mb: number }> }).rows?.[0]?.mb ?? null;
-    console.log(`[${ts()}] neon purge t=${(t as { rowCount?: number }).rowCount ?? 0} r=${(rr as { rowCount?: number }).rowCount ?? 0} · neon db=${dbMB}MB`);
-  } catch (e) {
-    console.warn('[macmini-sync] Neon 보존 정리/용량 조회 실패 (fail-open):', e instanceof Error ? e.message : e);
+  if (neonCircuit.open) {
+    console.warn(`[${ts()}] neon purge/size — skipped (quota circuit open)`);
+  } else {
+    try {
+      const t = await neonDb.delete(transactions).where(lt(transactions.dealDate, retentionCutoff(TRADE_RETENTION_MONTHS)));
+      const rr = await neonDb.delete(rentTransactions).where(lt(rentTransactions.dealDate, retentionCutoff(RENT_RETENTION_MONTHS)));
+      await neonDb.delete(silvTransactions).where(lt(silvTransactions.dealDate, retentionCutoff(SILV_RETENTION_MONTHS)));
+      const size = await neonDb.execute(sql`SELECT round(pg_database_size(current_database()) / 1048576.0)::int AS mb`);
+      const dbMB = (size as unknown as { rows?: Array<{ mb: number }> }).rows?.[0]?.mb ?? null;
+      console.log(`[${ts()}] neon purge t=${(t as { rowCount?: number }).rowCount ?? 0} r=${(rr as { rowCount?: number }).rowCount ?? 0} · neon db=${dbMB}MB`);
+    } catch (e) {
+      if (isNeonQuotaError(e)) {
+        neonCircuit.open = true;
+        console.warn('[macmini-sync] Neon 보존 정리 중 전송량 한도/HTTP 402 감지 — 용량 조회를 중단합니다.');
+      } else {
+        console.warn('[macmini-sync] Neon 보존 정리/용량 조회 실패 (fail-open):', e instanceof Error ? e.message : e);
+      }
+    }
   }
 
   const localCnt = await pool.query(
@@ -160,9 +231,20 @@ async function main() {
   await pool.end();
 
   const failTotal = trade.fetchFail + trade.localFail + rent.fetchFail + rent.localFail + silv.fetchFail + silv.localFail;
+  const neonFailTotal = trade.neonFail + rent.neonFail + silv.neonFail;
+  const neonSkippedTotal = trade.neonSkipped + rent.neonSkipped + silv.neonSkipped;
+  const exitCode = getMacMiniSyncExitCode({
+    localFailureCount: failTotal,
+    neonFailureCount: neonFailTotal,
+    neonCircuitOpen: neonCircuit.open,
+  });
+  const status = exitCode === 0 ? 'HEALTHY' : exitCode === 2 ? 'DEGRADED' : 'FAILED';
+  console.log(
+    `[${ts()}] status=${status} · Neon circuit=${neonCircuit.open ? 'OPEN' : 'CLOSED'} failures=${neonFailTotal} skipped=${neonSkippedTotal} rows · exit=${exitCode}`,
+  );
   console.log(`[${ts()}] ── 완료 (${Math.round((Date.now() - started) / 1000)}s) ──`);
-  // Neon 실패는 다음 날 upsert 로 수렴하므로 종료코드에 반영하지 않음 (로컬·수집 실패만)
-  process.exit(failTotal > 0 ? 1 : 0);
+  // 2는 로컬 원장은 보존됐지만 Neon 서빙 캐시 동기화가 저하된 상태다.
+  process.exit(exitCode);
 }
 
 main().catch((e) => { console.error('[macmini-sync] 치명 오류:', e); process.exit(1); });

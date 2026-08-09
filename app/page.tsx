@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { cacheLife } from 'next/cache';
-import { Space_Grotesk } from 'next/font/google';
+import { Suspense } from 'react';
+import { connection } from 'next/server';
 import {
-  BarChart3, TrendingUp, CalendarDays, Target, MapPin, FileText, Search,
+  BarChart3, TrendingUp, CalendarDays, Target, MapPin, FileText,
 } from 'lucide-react';
 import MarketLive from '@/components/landing/MarketLive';
 import MobileNav from '@/components/landing/MobileNav';
@@ -13,29 +13,37 @@ import NotableDealsCard from '@/components/landing/NotableDealsCard';
 import HomeCalculator from '@/components/landing/HomeCalculator';
 import NewsCard from '@/components/landing/NewsCard';
 import RealValueCard from '@/components/landing/RealValueCard';
+import HomeBlogFeed from '@/components/landing/HomeBlogFeed';
 import AddToHomeCta from '@/components/landing/AddToHomeCta';
 import { toSubscription } from '@/lib/adapters';
 import { fetchSubscriptions } from '@/lib/subscription-api';
+import type { SubscriptionItem } from '@/lib/types';
 import { getTopLocations } from '@/lib/region-data';
+import { formatLocationScore, scoreToQualityPercent } from '@/lib/score-utils';
 import { DISTRICT_CODE } from '@/lib/district-codes';
-import { getRecentPublishedPostsForFeed, type FeedItem } from '@/lib/blog/queries';
+import HomeApartmentSearch from '@/components/search/HomeApartmentSearch';
+import { createPageMetadata } from '@/lib/metadata';
+import { TrackedTelegramLink } from '@/components/shared/TrackedTelegramLink';
+
+export const metadata = createPageMetadata({
+  title: '내집(My.ZIP) | 실거래가·입지분석·청약·내집마련 도구',
+  description: '국토교통부 실거래가, 입지 분석, 청약 일정과 내집마련 도구를 한 곳에서 확인하세요.',
+  path: '/',
+});
 
 /**
  * 메인 홈 — 대시보드형 리디자인 (2a 벤토 그리드 시안).
  *
  * 세로 랜딩 → 첫 화면 압축형 대시보드: 슬림 히어로 바 + 퀵액션 칩 + 벤토 3밴드
  * (실거래·특이거래·입지 / 국평 시세·계산기 / 청약·칼럼·뉴스).
- * 정적 콘텐츠(청약·칼럼·입지)는 서버 렌더(SEO), 라이브 카드는 클라 아일랜드
- * (표본 즉시 표시 → API 도착 시 교체 패턴).
+ * 정적 콘텐츠(청약·칼럼·입지)는 서버 렌더(SEO), 라이브 카드는 클라 아일랜드.
+ * 데이터 장애 시 임시값을 실제 정보처럼 노출하지 않고 명시적인 상태를 표시한다.
  */
-
-const sg = Space_Grotesk({ subsets: ['latin'], weight: ['400', '600', '700'], variable: '--font-sg', display: 'swap' });
 
 const BLUE = '#1B4DDB';
 const INK = '#0B1524';
 const INK2 = '#2B333F';
 const NAV = '#3A4453';
-const BODY = '#5B6472';
 const MUTED = '#8A93A3';
 const MUTED2 = '#98A1B0';
 const BORDER = '#E7EAF0';
@@ -46,7 +54,6 @@ const NAV_LINKS = [
   { label: '내집마련 도구', href: '/loan' },
   { label: '시장 동향', href: '/market' },
   { label: '칼럼', href: '/blog' },
-  { label: '뉴스', href: '/news' },
 ];
 
 const SHORTCUTS = [
@@ -58,61 +65,29 @@ const SHORTCUTS = [
   { title: '내집마련 도구', href: '/loan', Icon: FileText },
 ];
 
-// 입지 TOP5 — 실데이터(location-scores.json). 원점수 1.0(최상)~5.0 → 0~100 표시 스케일 변환.
+// 입지 TOP5 — 공개 점수는 원척도 1.0(최상)~5.0, 막대만 별도 백분율로 변환.
 const TOP_LOCATIONS = getTopLocations(5).map((t) => ({
   rank: t.rank,
   region: t.name,
   id: t.id, // 클릭 → /region/{id} 상세 이동 (2026-07-12)
-  score: Math.max(0, Math.min(100, Math.round(((5 - t.score) / 4) * 100))),
+  score: t.score,
+  qualityPercent: scoreToQualityPercent(t.score),
 }));
 
 // 히어로 스탯 — 시안의 마케팅 수치 대신 실데이터 기반 (커버리지는 등록 시군구 수 자동 집계)
 const HERO_STATS = [
-  { value: `${Object.keys(DISTRICT_CODE).length}개 시군구`, label: '실거래 데이터 커버리지' },
-  { value: '매일 09:00', label: '국토부 데이터 갱신' },
-  { value: '84㎡ 국평', label: '구별 시세 라이브 집계' },
+  { value: `${Object.keys(DISTRICT_CODE).length}개 시군구`, label: '실거래 조회 지원 지역' },
+  { value: '국토부 공개', label: '실거래 원천 데이터' },
+  { value: '84㎡ 국평', label: '구별 실거래 평균 집계' },
 ];
 
-interface Sub { status: string; name: string; loc: string; period: string; units: number }
-const SAMPLE_SUBS: Sub[] = [
-  { status: '청약 중', name: '대방역 여의도 더로드캐슬(4차)', loc: '서울 영등포구 신길동', period: '07.08 – 07.13', units: 5 },
-  { status: '청약 예정', name: '거제 푸르지오 마린피스', loc: '경남 거제시 장평동', period: '07.20 – 07.22', units: 423 },
-  { status: '청약 예정', name: '센텀 엘카사', loc: '울산 울주군 온양읍', period: '07.13 – 07.15', units: 74 },
-];
-
-// 칼럼 카드 표본 — DB 조회 실패/빈 결과 시에만 사용 (목록 페이지로만 링크)
-const SAMPLE_FEATURED = { category: '시장 분석', date: '07.09', title: '금리 인하기, 강남 국평은 왜 먼저 움직이나', href: '/blog' };
-const SAMPLE_COLUMNS = [
-  { category: '청약 전략', title: '무순위 줍줍, 지금 넣어도 될까? 체크리스트 5', href: '/blog' },
-  { category: '입지 분석', title: 'GTX-A 개통 1년, 실거래로 본 진짜 수혜지', href: '/blog' },
-  { category: '내집마련', title: 'DSR 3단계 시대, 대출 한도 이렇게 바뀐다', href: '/blog' },
-  { category: '시장 동향', title: '전세가율 70% 돌파 지역, 갭투자 주의보', href: '/blog' },
-];
+interface Sub { status: string; name: string; loc: string; period: string; units: number | null }
+type DataStatus = 'ok' | 'partial' | 'degraded';
 
 function statusChip(status: string) {
   if (status === '청약 중') return { text: '#0A7D4B', bg: '#E4F6EC', dot: '#12B76A' };
   if (status === '청약 예정') return { text: '#8A6D1F', bg: '#FBF1D9', dot: '#D9A93B' };
   return { text: '#5B6472', bg: '#EEF0F5', dot: '#98A1B0' };
-}
-
-function fmtPostDate(d: Date): string {
-  return `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
-}
-
-/**
- * 칼럼 피드 — 캐시 경계.
- * Cache Components 에서 비캐시 DB 접근은 프리렌더 오류가 되므로
- * subscription-api 와 동일하게 'use cache' + cacheLife 로 감싼다.
- * 실패 시 빈 배열 → 호출부에서 표본 폴백.
- */
-async function getLandingFeed(): Promise<FeedItem[]> {
-  'use cache';
-  cacheLife('hours');
-  try {
-    return await getRecentPublishedPostsForFeed(5);
-  } catch {
-    return [];
-  }
 }
 
 /** 카드 공통 헤더 (제목 + 우측 링크) */
@@ -129,36 +104,106 @@ function CardHeader({ title, moreHref, moreLabel }: { title: string; moreHref?: 
   );
 }
 
-export default async function HomePage() {
-  // 청약 — 실데이터 (실패 시 표본)
-  const allItems = await fetchSubscriptions().catch(() => []);
+async function SubscriptionScheduleCard() {
+  // 외부 청약홈 API를 정적 빌드와 분리한다. API 장애는 홈 전체 장애가 아니라
+  // 이 카드의 명시적인 unavailable 상태로만 제한한다.
+  await connection();
+
+  let subscriptionStatus: DataStatus = 'ok';
+  let subscriptionNote: string | undefined;
+  let allItems: SubscriptionItem[] = [];
+  try {
+    const result = await fetchSubscriptions();
+    allItems = result.items;
+    subscriptionStatus = result.status === 'unavailable'
+      ? 'degraded'
+      : result.status === 'partial'
+        ? 'partial'
+        : 'ok';
+    subscriptionNote = result.note;
+  } catch (error) {
+    subscriptionStatus = 'degraded';
+    console.error('[home] subscription feed unavailable', error);
+  }
   const real = allItems
     .filter((i) => i.status === 'ongoing' || i.status === 'upcoming')
     .slice(0, 3)
     .map(toSubscription) as unknown as Sub[];
-  const subs: Sub[] = real.length ? real : SAMPLE_SUBS;
-
-  // 칼럼 — 최근 발행 5건 (캐시 경계 통과, 실패 시 표본)
-  const feed = await getLandingFeed();
-  const featured = feed[0]
-    ? {
-        category: feed[0].categoryName ?? '칼럼',
-        date: fmtPostDate(feed[0].publishedAt),
-        title: feed[0].title,
-        href: `/blog/${encodeURIComponent(feed[0].slug)}`,
-      }
-    : SAMPLE_FEATURED;
-  const columns = feed.length > 1
-    ? feed.slice(1, 5).map((p) => ({
-        category: p.categoryName ?? '칼럼',
-        title: p.title,
-        href: `/blog/${encodeURIComponent(p.slug)}`,
-      }))
-    : SAMPLE_COLUMNS;
+  const subs: Sub[] = real;
 
   return (
-    <main className={`${sg.variable} nz-main`} style={{ fontFamily: 'Pretendard, system-ui, sans-serif', background: '#FFFFFF', color: INK, overflowX: 'hidden' }}>
+    <div style={{
+      background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 18,
+      padding: 20, display: 'flex', flexDirection: 'column',
+    }}>
+      <CardHeader title="주요 청약 일정" moreHref="/subscription" />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+        {subscriptionStatus === 'partial' && (
+          <div role="status" style={{ border: '1px solid #E9D39C', borderRadius: 12, padding: 12, background: '#FFF9EC' }}>
+            <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: '#71551C' }}>현재 수집된 일부 공고만 표시합니다.</p>
+            <p style={{ margin: '4px 0 0', fontSize: 11, lineHeight: 1.5, color: MUTED }}>{subscriptionNote ?? '일부 청약홈 자료가 응답하지 않았습니다.'}</p>
+          </div>
+        )}
+        {subscriptionStatus === 'degraded' ? (
+          <div role="status" style={{ border: '1px solid #F2D7D5', borderRadius: 12, padding: 16, background: '#FFF8F7' }}>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#8A2C25' }}>청약 데이터를 잠시 불러오지 못했습니다.</p>
+            <p style={{ margin: '5px 0 0', fontSize: 11.5, lineHeight: 1.5, color: MUTED }}>잠시 후 전체 일정에서 다시 확인해 주세요.</p>
+          </div>
+        ) : subs.length === 0 ? (
+          <div style={{ border: '1px dashed #D9DEE8', borderRadius: 12, padding: 16, background: '#FCFDFE' }}>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: INK2 }}>현재 접수 중이거나 예정된 주요 청약이 없습니다.</p>
+            <p style={{ margin: '5px 0 0', fontSize: 11.5, lineHeight: 1.5, color: MUTED }}>마감 공고를 포함한 전체 일정은 청약 페이지에서 확인할 수 있습니다.</p>
+          </div>
+        ) : (
+          subs.map((s) => {
+            const c = statusChip(s.status);
+            return (
+              <div key={`${s.name}-${s.period}`} style={{ border: '1px solid #EEF0F5', borderRadius: 12, padding: 13, background: '#FCFDFE' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    fontSize: 11, fontWeight: 700, color: c.text, background: c.bg,
+                    padding: '3px 9px', borderRadius: 999,
+                  }}>
+                    <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: 999, background: c.dot }} />
+                    {s.status}
+                  </span>
+                  <span style={{ fontSize: 11, color: MUTED2 }}>
+                    {s.units !== null ? `${s.units.toLocaleString()}세대` : '세대수 미표기'}
+                  </span>
+                </div>
+                <div style={{ fontSize: 13.5, fontWeight: 700, color: INK, lineHeight: 1.35 }}>{s.name}</div>
+                {s.loc && <div style={{ fontSize: 11.5, color: MUTED, marginTop: 4 }}>{s.loc}</div>}
+                <div style={{ fontSize: 11.5, color: MUTED, marginTop: 2 }}>{s.period}</div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SubscriptionScheduleFallback() {
+  return (
+    <div aria-busy="true" style={{
+      background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 18,
+      padding: 20, display: 'flex', flexDirection: 'column',
+    }}>
+      <CardHeader title="주요 청약 일정" moreHref="/subscription" />
+      <div role="status" style={{ border: '1px solid #EEF0F5', borderRadius: 12, padding: 16, background: '#FCFDFE' }}>
+        <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: INK2 }}>청약 일정을 불러오는 중입니다.</p>
+      </div>
+    </div>
+  );
+}
+
+export default function HomePage() {
+
+  return (
+    <main className="nz-main" style={{ fontFamily: 'Pretendard, system-ui, sans-serif', background: '#FFFFFF', color: INK, overflowX: 'hidden' }}>
       <style>{`
+        .nz-main{--font-sg:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
         .naezip-mobilenav{display:none}
         @media (max-width:720px){.naezip-navlinks,.naezip-login{display:none!important}.naezip-mobilenav{display:block!important}}
         @keyframes zipPulse{0%,100%{opacity:1}50%{opacity:.35}}
@@ -219,7 +264,6 @@ export default async function HomePage() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <Link href="/admin/login" style={{ fontSize: 14, color: BODY, textDecoration: 'none' }} className="naezip-login">로그인</Link>
             <Link href="/region" style={{
               padding: '9px 16px', borderRadius: 10, background: BLUE, color: '#FFFFFF',
               fontSize: 14, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap',
@@ -237,7 +281,7 @@ export default async function HomePage() {
           <div style={{ minWidth: 0 }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 11 }}>
               <span style={{ width: 7, height: 7, borderRadius: 999, background: '#12B76A', animation: 'zipPulse 2s ease-in-out infinite' }} />
-              <span style={{ fontSize: 12, fontWeight: 600, color: BLUE }}>실거래 데이터 매일 09:00 갱신 · 국토부 공개</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: BLUE }}>국토부 공개 실거래 기반 · 데이터별 기준일 확인</span>
             </div>
             <h1 style={{
               margin: 0, fontSize: 'clamp(24px, 4vw, 30px)', lineHeight: 1.15,
@@ -256,19 +300,7 @@ export default async function HomePage() {
           </div>
 
           <div className="nz-heroright">
-            <form action="/transactions" className="nz-searchform">
-              <Search size={18} color={MUTED2} style={{ flexShrink: 0 }} />
-              <input
-                type="text"
-                name="q"
-                placeholder="단지·지역 검색"
-                aria-label="단지·지역 검색"
-                style={{
-                  border: 'none', outline: 'none', fontFamily: 'inherit',
-                  fontSize: 14, color: INK, width: '100%', background: 'transparent',
-                }}
-              />
-            </form>
+            <HomeApartmentSearch />
             <Link href="/region" style={{
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
               background: BLUE, color: '#FFFFFF', fontWeight: 700, fontSize: 14.5,
@@ -309,11 +341,14 @@ export default async function HomePage() {
                 fontFamily: 'var(--font-sg, ui-monospace, monospace)',
                 fontSize: 11, letterSpacing: '0.1em', color: '#9DB6F5', fontWeight: 600,
               }}>
-                LOCATION SCORE · TOP 5
+                LOCATION SCORE · 1.00–5.00
               </span>
               <h3 style={{ margin: '7px 0 16px', fontSize: 17, fontWeight: 800, letterSpacing: '-0.02em', color: '#FFFFFF' }}>
-                이달의 최우수 입지
+                등록 지역 자체점수 상위
               </h3>
+              <p style={{ margin: '-10px 0 14px', fontSize: 11.5, color: '#9DB6F5' }}>
+                원점수 기준 · 낮을수록 우수
+              </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1, justifyContent: 'center' }}>
                 {TOP_LOCATIONS.map((t) => (
                   /* 행 전체 클릭 → 지역 상세 이동 (2026-07-12) */
@@ -327,10 +362,10 @@ export default async function HomePage() {
                         }}>{t.rank}</span>
                         <span style={{ fontWeight: 600, fontSize: 13.5 }}>{t.region}</span>
                       </div>
-                      <span style={{ fontFamily: 'var(--font-sg)', fontWeight: 700, fontSize: 13, color: '#BFD0FF' }}>{t.score} →</span>
+                      <span style={{ fontFamily: 'var(--font-sg)', fontWeight: 700, fontSize: 13, color: '#BFD0FF' }}>{formatLocationScore(t.score)} →</span>
                     </div>
                     <div style={{ height: 5, borderRadius: 99, background: 'rgba(255,255,255,0.12)', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${t.score}%`, borderRadius: 99, background: 'linear-gradient(90deg, #6E9BFF, #A9C2FF)' }} />
+                      <div style={{ height: '100%', width: `${t.qualityPercent}%`, borderRadius: 99, background: 'linear-gradient(90deg, #6E9BFF, #A9C2FF)' }} />
                     </div>
                   </Link>
                 ))}
@@ -348,34 +383,9 @@ export default async function HomePage() {
           {/* 밴드 3 — 청약 · 칼럼 · 뉴스 */}
           <div className="nz-band nz-band3">
             {/* 청약 일정 */}
-            <div style={{
-              background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 18,
-              padding: 20, display: 'flex', flexDirection: 'column',
-            }}>
-              <CardHeader title="주요 청약 일정" moreHref="/subscription" />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
-                {subs.map((s, i) => {
-                  const c = statusChip(s.status);
-                  return (
-                    <div key={i} style={{ border: '1px solid #EEF0F5', borderRadius: 12, padding: 13, background: '#FCFDFE' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <span style={{
-                          display: 'inline-flex', alignItems: 'center', gap: 5,
-                          fontSize: 11, fontWeight: 700, color: c.text, background: c.bg,
-                          padding: '3px 9px', borderRadius: 999,
-                        }}>
-                          <span style={{ width: 5, height: 5, borderRadius: 999, background: c.dot }} />
-                          {s.status}
-                        </span>
-                        <span style={{ fontSize: 11, color: MUTED2 }}>{s.units.toLocaleString()}세대</span>
-                      </div>
-                      <div style={{ fontSize: 13.5, fontWeight: 700, color: INK, lineHeight: 1.35 }}>{s.name}</div>
-                      <div style={{ fontSize: 11.5, color: MUTED, marginTop: 4 }}>{s.period}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <Suspense fallback={<SubscriptionScheduleFallback />}>
+              <SubscriptionScheduleCard />
+            </Suspense>
 
             {/* 부동산 인사이트 (칼럼) */}
             <div style={{
@@ -383,59 +393,7 @@ export default async function HomePage() {
               padding: 20, display: 'flex', flexDirection: 'column',
             }}>
               <CardHeader title="부동산 인사이트" moreHref="/blog" moreLabel="칼럼 전체 →" />
-              <Link href={featured.href} style={{
-                display: 'flex', gap: 14, paddingBottom: 14, borderBottom: '1px solid #F1F3F7',
-                marginBottom: 12, textDecoration: 'none',
-              }}>
-                {/* 칼럼 목록(PostCard)과 동일한 OG 룩 미니 썸네일 — 빗금 자리표시자 대체 (2026-07-12).
-                    제목은 바로 옆에 있으므로 썸네일 안에는 카테고리 필+브랜드만. */}
-                <span style={{
-                  width: 120, height: 78, flexShrink: 0, borderRadius: 11, overflow: 'hidden',
-                  background: 'linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)',
-                  display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-                  padding: '7px 9px',
-                }}>
-                  <span style={{
-                    alignSelf: 'flex-start', fontSize: 8.5, fontWeight: 700, color: '#FFFFFF',
-                    background: '#0f172a', padding: '2px 7px', borderRadius: 99,
-                    maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>
-                    {featured.category}
-                  </span>
-                  <span style={{ alignSelf: 'flex-end', fontSize: 8.5, fontWeight: 800, color: '#0f172a' }}>
-                    내집(My.ZIP)
-                  </span>
-                </span>
-                <span style={{ minWidth: 0 }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                    <span style={{ fontSize: 10.5, fontWeight: 700, color: BLUE, background: '#EEF2FE', padding: '3px 8px', borderRadius: 6 }}>
-                      {featured.category}
-                    </span>
-                    <span style={{ fontSize: 11, color: MUTED2 }}>{featured.date}</span>
-                  </span>
-                  <span style={{
-                    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-                    fontSize: 15, fontWeight: 800, color: INK, lineHeight: 1.32, letterSpacing: '-0.01em',
-                  }}>
-                    {featured.title}
-                  </span>
-                </span>
-              </Link>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
-                {columns.map((c, i) => (
-                  <Link key={i} href={c.href} style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-                    <span style={{ fontSize: 10.5, fontWeight: 700, color: BLUE, flexShrink: 0, width: 56, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {c.category}
-                    </span>
-                    <span style={{
-                      fontSize: 13, fontWeight: 600, color: INK2, lineHeight: 1.35,
-                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                    }}>
-                      {c.title}
-                    </span>
-                  </Link>
-                ))}
-              </div>
+              <HomeBlogFeed />
             </div>
 
             {/* 오늘의 뉴스 */}
@@ -455,21 +413,20 @@ export default async function HomePage() {
         }}>
           <div style={{ minWidth: 0 }}>
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#FFFFFF', letterSpacing: '-0.02em' }}>
-              내집 텔레그램에서 부동산 정보를 가장 빠르게
+              내집 텔레그램에서 주요 부동산 소식 받아보기
             </h2>
             <p style={{ margin: '6px 0 0', fontSize: 13, color: '#CBD8FF' }}>실거래 신고가 · 시장 분석 · 새 칼럼 소식</p>
           </div>
-          <a
+          <TrackedTelegramLink
             href={process.env.NEXT_PUBLIC_TELEGRAM_CHANNEL_URL || 'https://t.me/realMyzip'}
-            target="_blank"
-            rel="noopener noreferrer"
+            placement="home_footer_cta"
             style={{
               padding: '13px 24px', borderRadius: 12, background: '#FFFFFF', color: BLUE,
               fontSize: 14.5, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0,
             }}
           >
             채널 참여하기 →
-          </a>
+          </TrackedTelegramLink>
         </div>
       </section>
 
@@ -479,9 +436,9 @@ export default async function HomePage() {
           maxWidth: 1200, margin: '0 auto', padding: '24px 24px 0',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
         }}>
-          <p style={{ margin: 0, fontSize: 12.5, color: '#6B7488' }}>© 2026 내집(My.ZIP) · 데이터: 국토교통부 · 한국부동산원 · NEIS</p>
+          <p style={{ margin: 0, fontSize: 12.5, color: '#6B7488' }}>© 2026 내집(My.ZIP) · 데이터: 국토교통부 · 한국부동산원 · 학교알리미</p>
           <div style={{ display: 'flex', gap: 18 }}>
-            <Link href="/privacy" style={{ fontSize: 13, color: MUTED, textDecoration: 'none' }}>이용약관</Link>
+            <Link href="/terms" style={{ fontSize: 13, color: MUTED, textDecoration: 'none' }}>이용약관</Link>
             <Link href="/privacy" style={{ fontSize: 13, color: MUTED, textDecoration: 'none' }}>개인정보처리방침</Link>
             <Link href="/contact" style={{ fontSize: 13, color: MUTED, textDecoration: 'none' }}>문의하기</Link>
           </div>

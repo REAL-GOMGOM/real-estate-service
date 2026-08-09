@@ -1,13 +1,13 @@
 import type { RegionDetail } from '@/lib/types';
+import { buildRegionHeadline, buildRegionSummary } from '@/lib/region-copy';
 
 interface Props {
   region: RegionDetail;
 }
 
 export function RegionInsight({ region }: Props) {
-  const { insight } = region;
-
-  if (!insight.headline && !insight.summary) return null;
+  const headline = buildRegionHeadline(region);
+  const summary = buildRegionSummary(region);
 
   return (
     <section
@@ -15,40 +15,24 @@ export function RegionInsight({ region }: Props) {
       style={{ borderColor: 'var(--border)' }}
     >
       <div className="space-y-4">
-        {insight.headline && (
-          <h2
-            className="text-2xl md:text-3xl font-semibold leading-snug"
-            style={{ color: 'var(--text-strong)' }}
-          >
-            {insight.headline}
-          </h2>
-        )}
+        <h2
+          className="text-2xl md:text-3xl font-semibold leading-snug"
+          style={{ color: 'var(--text-strong)' }}
+        >
+          {headline}
+        </h2>
 
-        {insight.summary && (
-          <p
-            className="text-base md:text-lg leading-relaxed"
-            style={{ color: 'var(--text-primary)' }}
-          >
-            {insight.summary}
-          </p>
-        )}
+        <p
+          className="text-base md:text-lg leading-relaxed"
+          style={{ color: 'var(--text-primary)' }}
+        >
+          {summary}
+        </p>
 
-        {insight.tags.length > 0 && (
-          <div className="flex flex-wrap gap-2 pt-2">
-            {insight.tags.map((tag, idx) => (
-              <span
-                key={idx}
-                className="px-2.5 py-1 text-xs rounded-md"
-                style={{
-                  backgroundColor: 'var(--bg-tertiary)',
-                  color: 'var(--text-muted)',
-                }}
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
+        <p className="text-xs leading-relaxed" style={{ color: 'var(--text-dim)' }}>
+          기존 자동 생성 해설은 구조화 지표와 충돌할 수 있어 표시하지 않습니다.
+          아래 원지표와 산식 설명을 함께 확인하세요.
+        </p>
       </div>
     </section>
   );

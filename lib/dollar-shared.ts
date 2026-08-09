@@ -11,6 +11,8 @@
  * - 평형: 전용면적 반올림(㎡) 그룹, area 파라미터로 필터
  */
 
+import { kstTodayIso } from '@/lib/agg-window';
+
 export interface DealRow {
   price: number;   // 만원
   area:  number;   // 전용 ㎡ (원본)
@@ -18,10 +20,12 @@ export interface DealRow {
 
 /** 연도별 조회 대상 월. 현재 연도면 최근 3개월(당월 포함), 과거면 Q4. */
 export function monthsForYear(year: number, now: Date = new Date()): string[] {
-  const curYear = now.getFullYear();
+  const kstDate = kstTodayIso(now);
+  const curYear = Number(kstDate.slice(0, 4));
+  const curMonth = Number(kstDate.slice(5, 7));
   if (year < curYear) return ['10', '11', '12'];
   // 현재(또는 미래 입력 방어) 연도 — 당월부터 최대 3개월 역순, 연초엔 1월까지만
-  const m = year === curYear ? now.getMonth() + 1 : 12;
+  const m = year === curYear ? curMonth : 12;
   const months: string[] = [];
   for (let mm = m; mm >= Math.max(1, m - 2); mm--) {
     months.push(String(mm).padStart(2, '0'));
@@ -32,7 +36,10 @@ export function monthsForYear(year: number, now: Date = new Date()): string[] {
 /** 폴백 조회 월 — 기본 월을 제외한 해당 연도의 나머지 전체 */
 export function fallbackMonths(year: number, now: Date = new Date()): string[] {
   const primary = new Set(monthsForYear(year, now));
-  const maxMonth = year === now.getFullYear() ? now.getMonth() + 1 : 12;
+  const kstDate = kstTodayIso(now);
+  const currentYear = Number(kstDate.slice(0, 4));
+  const currentMonth = Number(kstDate.slice(5, 7));
+  const maxMonth = year === currentYear ? currentMonth : 12;
   const months: string[] = [];
   for (let mm = 1; mm <= maxMonth; mm++) {
     const s = String(mm).padStart(2, '0');

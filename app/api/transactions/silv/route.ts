@@ -17,7 +17,10 @@ const APT_NAME_MAX_LEN = 50;
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const district = searchParams.get('district')?.trim() || '강남구';
-  const months   = Math.min(parseInt(searchParams.get('months') ?? '3') || 3, 36);
+  const parsedMonths = parseInt(searchParams.get('months') ?? '3', 10);
+  const months   = Number.isFinite(parsedMonths)
+    ? Math.min(Math.max(parsedMonths, 1), 36)
+    : 3;
   const aptName  = (searchParams.get('aptName') ?? searchParams.get('q') ?? '').trim().slice(0, APT_NAME_MAX_LEN);
   const limit    = Math.min(Math.max(parseInt(searchParams.get('limit') ?? '60') || 60, 1), 100);
 
@@ -34,11 +37,15 @@ export async function GET(req: NextRequest) {
   const apiKey = decodeURIComponent(rawKey);
 
   try {
-    const xmls = await Promise.all(
-      getMonthList(months).map((yyyymm) =>
-        fetchSilvMonthAllPages(apiKey, lawdCd, yyyymm, revalidateForMonth(yyyymm)).catch(() => '')
+    const monthList = getMonthList(months);
+    const settled = await Promise.allSettled(
+      monthList.map((yyyymm) =>
+        fetchSilvMonthAllPages(apiKey, lawdCd, yyyymm, revalidateForMonth(yyyymm))
       )
     );
+    const failedMonths = monthList.filter((_, index) => settled[index].status === 'rejected');
+    const xmls = settled.flatMap((result) => result.status === 'fulfilled' ? [result.value] : []);
+    if (xmls.length === 0) throw new Error('all presale month requests failed');
 
     const transactions = xmls.flatMap((xml) => parseSilvXml(xml, district));
 
@@ -54,9 +61,17 @@ export async function GET(req: NextRequest) {
       // 페이로드 절감 — 카드는 최근 계약만 사용
       .map((g) => ({ ...g, txCount: g.transactions.length, transactions: g.transactions.slice(0, 10) }));
 
+    const isPartial = failedMonths.length > 0;
     return NextResponse.json(
-      { data: result, district, months, total: transactions.length },
-      { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } }
+      {
+        data: result,
+        district,
+        months,
+        total: transactions.length,
+        status: isPartial ? 'partial' : 'ok',
+        ...(isPartial ? { failedMonths } : {}),
+      },
+      { headers: { 'Cache-Control': isPartial ? 'no-store' : 'public, s-maxage=3600, stale-while-revalidate=86400' } }
     );
   } catch (error) {
     console.error('[transactions/silv API] 조회 실패:', error);

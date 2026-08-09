@@ -69,6 +69,13 @@ describe('detectNewHigh', () => {
     ]);
     expect(detectNewHigh(g)).toBe(false);
   });
+  it('종전 최고가와 같은 가격은 경신이 아니므로 false', () => {
+    const g = group([
+      tx({ price: 110000, date: '2026-05-01' }),
+      tx({ price: 110000, date: '2026-06-01' }),
+    ]);
+    expect(detectNewHigh(g)).toBe(false);
+  });
   it('거래 1건이면 false (비교 대상 없음)', () => {
     expect(detectNewHigh(group([tx({})]))).toBe(false);
   });

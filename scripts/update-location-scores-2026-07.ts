@@ -4,7 +4,7 @@
  * 입력:
  *   - data/research/location-2026-07/입지등급_확장144_전체.csv (144개 지역, 재산정점수)
  *   - data/research/location-2026-07/scored_sensitivity.csv   (시나리오, no로 조인)
- *   - data/location-scores.json                                (현행 v2, 126개)
+ *   - data/location-scores.json                                (현행 v2, 전체 지역)
  *
  * 조인 규칙:
  *   - 두 CSV는 `no` 컬럼으로 결합 (sensitivity의 세분 region이 동명 구 판별 키)

@@ -165,9 +165,14 @@ function DollarCard({ entry, baseYear, compareYear, onRemove, onAreaChange }: {
   const krwPct = hasBase && hasCompare
     ? ((comparePriceKrw! - basePriceKrw!) / basePriceKrw!) * 100 : null;
 
-  const baseUsd    = hasBase    ? (basePriceKrw!    * 10000) / baseExchangeRate    : null;
-  const compareUsd = hasCompare ? (comparePriceKrw! * 10000) / compareExchangeRate : null;
+  const baseUsd = hasBase && baseExchangeRate !== null && baseExchangeRate > 0
+    ? (basePriceKrw! * 10000) / baseExchangeRate
+    : null;
+  const compareUsd = hasCompare && compareExchangeRate !== null && compareExchangeRate > 0
+    ? (comparePriceKrw! * 10000) / compareExchangeRate
+    : null;
   const usdPct     = baseUsd && compareUsd ? ((compareUsd - baseUsd) / baseUsd) * 100 : null;
+  const usdUnavail = baseExchangeRate === null || compareExchangeRate === null;
 
   const baseBtc    = (hasBase    && baseBtcKrw    !== null) ? (basePriceKrw!    * 10000) / baseBtcKrw    : null;
   const compareBtc = (hasCompare && compareBtcKrw !== null) ? (comparePriceKrw! * 10000) / compareBtcKrw : null;
@@ -185,8 +190,8 @@ function DollarCard({ entry, baseYear, compareYear, onRemove, onAreaChange }: {
     krwPct, usdPct, btcPct, goldPct,
     krwBase:  hasBase    ? fmtKrw(basePriceKrw!)    : undefined,
     krwCompare: hasCompare ? fmtKrw(comparePriceKrw!) : undefined,
-    usdBase:  baseUsd    !== null ? fmtUsd(basePriceKrw!,    baseExchangeRate)    : undefined,
-    usdCompare: compareUsd !== null ? fmtUsd(comparePriceKrw!, compareExchangeRate) : undefined,
+    usdBase:  baseUsd    !== null ? fmtUsd(basePriceKrw!,    baseExchangeRate!)    : undefined,
+    usdCompare: compareUsd !== null ? fmtUsd(comparePriceKrw!, compareExchangeRate!) : undefined,
     btcBase:  baseBtc    !== null ? fmtBtc(basePriceKrw!,    baseBtcKrw!)    : undefined,
     btcCompare: compareBtc !== null ? fmtBtc(comparePriceKrw!, compareBtcKrw!) : undefined,
     goldBase: baseGrams  !== null ? fmtGold(basePriceKrw!,   baseGoldKrwPerGram!)    : undefined,
@@ -250,6 +255,16 @@ function DollarCard({ entry, baseYear, compareYear, onRemove, onAreaChange }: {
           <X size={15} />
         </button>
       </div>
+
+      <p style={{ fontSize: '10.5px', color: 'var(--text-dim)', margin: '3px 0 4px', lineHeight: 1.5 }}>
+        실거래 표본 {baseYear}년 {entry.data!.provenance.transactions.base.sampleCount}건 ·{' '}
+        {compareYear}년 {entry.data!.provenance.transactions.compare.sampleCount}건
+        {(entry.data!.provenance.transactions.base.canceledExcluded
+          + entry.data!.provenance.transactions.compare.canceledExcluded) > 0
+          ? ` · 해제 ${entry.data!.provenance.transactions.base.canceledExcluded
+            + entry.data!.provenance.transactions.compare.canceledExcluded}건 제외`
+          : ' · 거래 해제 제외 적용'}
+      </p>
 
       {/* 해석 문장 — 숫자에서 스토리로 */}
       {insight && (
@@ -330,15 +345,16 @@ function DollarCard({ entry, baseYear, compareYear, onRemove, onAreaChange }: {
       />
       <AssetRow
         icon="$" label="달러" accent="#FCD34D"
-        baseVal={baseUsd    ? fmtUsd(basePriceKrw!,    baseExchangeRate)    : '—'}
-        compareVal={compareUsd ? fmtUsd(comparePriceKrw!, compareExchangeRate) : '—'}
+        baseVal={baseUsd !== null ? fmtUsd(basePriceKrw!, baseExchangeRate!) : '—'}
+        compareVal={compareUsd !== null ? fmtUsd(comparePriceKrw!, compareExchangeRate!) : '—'}
         pct={usdPct}
         baseYear={baseYear} compareYear={compareYear} compareYtd={entry.data!.compareIsYtd}
+        unavailable={usdUnavail}
       />
       <AssetRow
         icon="₿" label="비트" accent="#F0A24B"
-        baseVal={baseBtc    !== null ? fmtBtc(basePriceKrw!,    baseBtcKrw!)    : (baseBtcKrw    === null ? 'BTC 미존재' : '—')}
-        compareVal={compareBtc !== null ? fmtBtc(comparePriceKrw!, compareBtcKrw!) : (compareBtcKrw === null ? 'BTC 미존재' : '—')}
+        baseVal={baseBtc !== null ? fmtBtc(basePriceKrw!, baseBtcKrw!) : (baseYear < 2011 ? 'BTC 미존재' : '자료 없음')}
+        compareVal={compareBtc !== null ? fmtBtc(comparePriceKrw!, compareBtcKrw!) : (compareYear < 2011 ? 'BTC 미존재' : '자료 없음')}
         pct={btcPct}
         baseYear={baseYear} compareYear={compareYear} compareYtd={entry.data!.compareIsYtd}
         unavailable={btcUnavail}
@@ -425,7 +441,7 @@ export default function ApartmentDollarTable({ entries, baseYear, compareYear, o
               <div>
                 <p style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>{entry.label ?? entry.aptName}</p>
                 <p style={{ fontSize: '13px', color: 'var(--text-dim)', lineHeight: 1.5 }}>
-                  {entry.error ?? '데이터 없음'} — 선택한 연도에 거래가 없거나 단지명이 다를 수 있어요.
+                  {entry.error ?? '데이터를 확인할 수 없습니다.'} 잠시 후 다시 조회하거나 다른 연도를 선택해 주세요.
                 </p>
               </div>
               <button onClick={() => onRemove(entry.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-dim)', padding: '4px', flexShrink: 0 }}>

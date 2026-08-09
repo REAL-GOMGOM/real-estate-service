@@ -1,166 +1,293 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { DISTRICT_CODE } from '@/lib/district-codes';
-import { matchesQuery } from '@/lib/search-utils';
+import {
+  parseGapRentsXml,
+  parseGapTradesXml,
+  selectGapRows,
+  type GapTradeRow,
+} from '@/lib/gap-analysis-data';
+import {
+  fetchRentMonthAllPages,
+  fetchTradeMonthAllPages,
+  getMonthList,
+  revalidateForMonth,
+} from '@/lib/molit-months';
 import type { GapResult, MonthlyPrice } from '@/types/gap-analysis';
 
-const API_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev';
-const RENT_API_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptRent/getRTMSDataSvcAptRent';
-
-async function fetchTrades(apiKey: string, lawdCd: string, dealYmd: string, aptName?: string) {
-  const url = `${API_URL}?serviceKey=${apiKey}&LAWD_CD=${lawdCd}&DEAL_YMD=${dealYmd}&numOfRows=1000&pageNo=1`;
-  const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, next: { revalidate: 3600 } });
-  const text = await res.text();
-
-  const trades: { name: string; price: number; area: number; date: string }[] = [];
-  const names = text.match(/<aptNm>([^<]+)<\/aptNm>/g) || [];
-  const amounts = text.match(/<dealAmount>([^<]+)<\/dealAmount>/g) || [];
-  const areas = text.match(/<excluUseAr>([^<]+)<\/excluUseAr>/g) || [];
-  const years = text.match(/<dealYear>([^<]+)<\/dealYear>/g) || [];
-  const months = text.match(/<dealMonth>([^<]+)<\/dealMonth>/g) || [];
-
-  for (let i = 0; i < names.length; i++) {
-    const name = names[i].replace(/<\/?aptNm>/g, '').trim();
-    if (aptName && !matchesQuery(name, aptName)) continue;
-    const price = parseInt((amounts[i] || '').replace(/<\/?dealAmount>/g, '').replace(/,/g, '').trim()) || 0;
-    const area = parseFloat((areas[i] || '').replace(/<\/?excluUseAr>/g, '').trim()) || 0;
-    const y = (years[i] || '').replace(/<\/?dealYear>/g, '').trim();
-    const m = (months[i] || '').replace(/<\/?dealMonth>/g, '').trim().padStart(2, '0');
-    if (price > 0) trades.push({ name, price, area, date: `${y}-${m}` });
-  }
-  return trades;
+interface ComplexTarget {
+  district: string;
+  name: string;
+  dong?: string;
+  size?: number;
 }
 
-async function fetchRents(apiKey: string, lawdCd: string, dealYmd: string, aptName?: string) {
-  const url = `${RENT_API_URL}?serviceKey=${apiKey}&LAWD_CD=${lawdCd}&DEAL_YMD=${dealYmd}&numOfRows=1000&pageNo=1`;
-  try {
-    const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, next: { revalidate: 3600 } });
-    const text = await res.text();
-    const trades: { name: string; deposit: number; area: number; date: string }[] = [];
-    const names = text.match(/<aptNm>([^<]+)<\/aptNm>/g) || [];
-    const deposits = text.match(/<deposit>([^<]+)<\/deposit>/g) || [];
-    const areas = text.match(/<excluUseAr>([^<]+)<\/excluUseAr>/g) || [];
-    for (let i = 0; i < names.length; i++) {
-      const name = names[i].replace(/<\/?aptNm>/g, '').trim();
-      if (aptName && !matchesQuery(name, aptName)) continue;
-      const dep = parseInt((deposits[i] || '').replace(/<\/?deposit>/g, '').replace(/,/g, '').trim()) || 0;
-      const area = parseFloat((areas[i] || '').replace(/<\/?excluUseAr>/g, '').trim()) || 0;
-      if (dep > 0) trades.push({ name, deposit: dep, area, date: '' });
+interface SourceCoverage {
+  requestedMonths: string[];
+  successfulMonths: string[];
+  failedMonths: string[];
+}
+
+interface LoadedRows<T> {
+  rows: T[];
+  coverage: SourceCoverage;
+}
+
+function validTarget(value: unknown): value is ComplexTarget {
+  if (!value || typeof value !== 'object') return false;
+  const target = value as Record<string, unknown>;
+  return (
+    typeof target.district === 'string'
+    && target.district.length > 0
+    && target.district.length <= 20
+    && typeof target.name === 'string'
+    && target.name.trim().length >= 1
+    && target.name.length <= 100
+    && (target.dong === undefined || (typeof target.dong === 'string' && target.dong.length <= 30))
+    && (
+      target.size === undefined
+      || (typeof target.size === 'number' && Number.isFinite(target.size) && target.size > 0 && target.size <= 500)
+    )
+  );
+}
+
+async function loadRows<T>(
+  apiKey: string,
+  lawdCd: string,
+  months: string[],
+  fetchMonth: (apiKey: string, lawdCd: string, month: string, revalidate: number) => Promise<string>,
+  parse: (xml: string) => T[],
+): Promise<LoadedRows<T>> {
+  const settled = await Promise.allSettled(
+    months.map(async (month) => ({
+      month,
+      rows: parse(await fetchMonth(apiKey, lawdCd, month, revalidateForMonth(month))),
+    })),
+  );
+
+  const successfulMonths: string[] = [];
+  const failedMonths: string[] = [];
+  const rows: T[] = [];
+  settled.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      successfulMonths.push(result.value.month);
+      rows.push(...result.value.rows);
+    } else {
+      failedMonths.push(months[index]);
     }
-    return trades;
-  } catch { return []; }
+  });
+
+  return {
+    rows,
+    coverage: { requestedMonths: months, successfulMonths, failedMonths },
+  };
 }
 
-function aggregateMonthly(trades: { price: number; date: string }[]): MonthlyPrice[] {
-  const map: Record<string, { total: number; count: number }> = {};
-  for (const t of trades) {
-    if (!map[t.date]) map[t.date] = { total: 0, count: 0 };
-    map[t.date].total += t.price;
-    map[t.date].count++;
+function aggregateMonthly(trades: GapTradeRow[]): MonthlyPrice[] {
+  const map = new Map<string, { total: number; count: number }>();
+  for (const trade of trades) {
+    const current = map.get(trade.date) ?? { total: 0, count: 0 };
+    current.total += trade.price;
+    current.count += 1;
+    map.set(trade.date, current);
   }
-  return Object.entries(map)
+  return [...map.entries()]
     .map(([date, { total, count }]) => ({ date, avgPrice: Math.round(total / count), count }))
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
+function average(values: number[]): number {
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function unavailableCoverage(coverage: SourceCoverage): boolean {
+  return coverage.successfulMonths.length === 0;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { complexA, complexB, period = 6 } = body;
-
-    if (!complexA?.district || !complexA?.name) {
-      return NextResponse.json({ error: 'complexA 필수' }, { status: 400 });
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ status: 'invalid_request', error: 'JSON 요청 본문을 확인해 주세요.' }, { status: 400 });
     }
 
-    const apiKey = process.env.PUBLIC_DATA_API_KEY;
-    if (!apiKey) {
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ status: 'invalid_request', error: '요청 본문을 확인해 주세요.' }, { status: 400 });
+    }
+    const input = body as Record<string, unknown>;
+    if (!validTarget(input.complexA)) {
+      return NextResponse.json({ status: 'invalid_request', error: '기준 단지와 지역을 다시 선택해 주세요.' }, { status: 400 });
+    }
+    if (input.complexB !== undefined && !validTarget(input.complexB)) {
+      return NextResponse.json({ status: 'invalid_request', error: '비교 단지와 지역을 다시 선택해 주세요.' }, { status: 400 });
+    }
+    const complexA = input.complexA;
+    const complexB = input.complexB as ComplexTarget | undefined;
+    const rawPeriod = input.period ?? 6;
+    if (!Number.isInteger(rawPeriod) || Number(rawPeriod) < 3 || Number(rawPeriod) > 12) {
+      return NextResponse.json({ status: 'invalid_request', error: '조회 기간은 3~12개월이어야 합니다.' }, { status: 400 });
+    }
+    const period = Number(rawPeriod);
+
+    const rawKey = process.env.PUBLIC_DATA_API_KEY;
+    if (!rawKey) {
       console.error('[gap-analysis API] PUBLIC_DATA_API_KEY 미설정');
-      return NextResponse.json({ error: '갭분석 데이터를 불러올 수 없습니다' }, { status: 500 });
+      return NextResponse.json(
+        { status: 'unavailable', error: '국토교통부 실거래가 연결 설정이 없어 현재 분석할 수 없습니다.' },
+        { status: 503 },
+      );
     }
 
     const lawdA = DISTRICT_CODE[complexA.district];
-    if (!lawdA) return NextResponse.json({ error: `${complexA.district} 코드 없음` }, { status: 400 });
-
-    // 최근 6개월 (성능 개선)
-    const now = new Date();
-    const monthList: string[] = [];
-    for (let i = 0; i < Math.min(period, 12); i++) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      monthList.push(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`);
+    const lawdB = complexB ? DISTRICT_CODE[complexB.district] : undefined;
+    if (!lawdA || (complexB && !lawdB)) {
+      return NextResponse.json({ status: 'invalid_request', error: '지원하지 않는 지역입니다.' }, { status: 400 });
     }
 
-    // 병렬 호출 (A 매매 + A 전세)
-    const [tradesAAll, rentsAAll] = await Promise.all([
-      Promise.all(monthList.map((m) => fetchTrades(apiKey, lawdA, m, complexA.name))),
-      Promise.all(monthList.map((m) => fetchRents(apiKey, lawdA, m, complexA.name))),
+    const monthList = getMonthList(period);
+    const [saleAResult, rentAResult, saleBResult] = await Promise.all([
+      loadRows(rawKey, lawdA, monthList, fetchTradeMonthAllPages, parseGapTradesXml),
+      loadRows(rawKey, lawdA, monthList, fetchRentMonthAllPages, parseGapRentsXml),
+      complexB && lawdB
+        ? loadRows(rawKey, lawdB, monthList, fetchTradeMonthAllPages, parseGapTradesXml)
+        : Promise.resolve(null),
     ]);
 
-    const tradesA = tradesAAll.flat();
-    const rentsA = rentsAAll.flat();
-
-    const filteredTradesA = complexA.size
-      ? tradesA.filter((x) => Math.abs(x.area - complexA.size) < 5)
-      : tradesA;
-
-    const filteredRentsA = complexA.size
-      ? rentsA.filter((x) => Math.abs(x.area - complexA.size) < 5)
-      : rentsA;
-
-    const pricesA = aggregateMonthly(filteredTradesA);
-    const avgRentA = filteredRentsA.length > 0
-      ? Math.round(filteredRentsA.reduce((s, r) => s + r.deposit, 0) / filteredRentsA.length)
-      : null;
-
-    // B 단지 (있으면 병렬)
-    let pricesB: MonthlyPrice[] = [];
-    if (complexB?.district && complexB?.name) {
-      const lawdB = DISTRICT_CODE[complexB.district] || lawdA;
-      const tradesBALL = await Promise.all(monthList.map((m) => fetchTrades(apiKey, lawdB, m, complexB.name)));
-      const tradesB = tradesBALL.flat();
-      const filtered = complexB.size ? tradesB.filter((x) => Math.abs(x.area - complexB.size) < 5) : tradesB;
-      pricesB = aggregateMonthly(filtered);
+    if (unavailableCoverage(saleAResult.coverage)) {
+      return NextResponse.json(
+        { status: 'unavailable', error: '기준 단지의 국토교통부 매매 원본을 확인하지 못했습니다.' },
+        { status: 502 },
+      );
+    }
+    if (saleBResult && unavailableCoverage(saleBResult.coverage)) {
+      return NextResponse.json(
+        { status: 'unavailable', error: '비교 단지의 국토교통부 매매 원본을 확인하지 못했습니다.' },
+        { status: 502 },
+      );
     }
 
-    // 갭 계산
-    const latestA = pricesA.length > 0 ? pricesA[pricesA.length - 1].avgPrice : 0;
-    const monthlyGap = pricesB.length > 0
-      ? pricesA.filter((p) => pricesB.find((b) => b.date === p.date))
-        .map((p) => ({ date: p.date, gap: p.avgPrice - (pricesB.find((b) => b.date === p.date)?.avgPrice || 0) }))
-      : pricesA.map((p) => ({ date: p.date, gap: p.avgPrice }));
+    const tradesA = selectGapRows(saleAResult.rows, complexA);
+    const rentsA = selectGapRows(rentAResult.rows, complexA);
+    const pricesA = aggregateMonthly(tradesA);
+    if (pricesA.length === 0) {
+      return NextResponse.json(
+        {
+          status: 'insufficient_data',
+          error: `${period}개월 안에 선택한 동·전용면적과 일치하는 기준 단지 매매가 없습니다.`,
+        },
+        { status: 422 },
+      );
+    }
 
-    const gaps = monthlyGap.map((g) => g.gap);
-    const historicalAvgGap = gaps.length > 0 ? gaps.reduce((s, g) => s + g, 0) / gaps.length : 0;
-    const recentGaps = gaps.slice(-3);
-    const currentGap = recentGaps.length > 0 ? recentGaps.reduce((s, g) => s + g, 0) / recentGaps.length : 0;
-    const margin = currentGap - historicalAvgGap;
-    const std = gaps.length > 0 ? Math.sqrt(gaps.reduce((s, g) => s + (g - historicalAvgGap) ** 2, 0) / gaps.length) : 0;
-    const zScore = std > 0 ? margin / std : 0;
-    const signal: GapResult['signal'] = zScore > 1 ? 'overvalued' : zScore < -1 ? 'undervalued' : 'normal';
+    let pricesB: MonthlyPrice[] = [];
+    if (complexB && saleBResult) {
+      pricesB = aggregateMonthly(selectGapRows(saleBResult.rows, complexB));
+      if (pricesB.length === 0) {
+        return NextResponse.json(
+          {
+            status: 'insufficient_data',
+            error: `${period}개월 안에 선택한 동·전용면적과 일치하는 비교 단지 매매가 없습니다.`,
+          },
+          { status: 422 },
+        );
+      }
+    }
 
-    // 전세가율 계산
-    const rentRatio = avgRentA && latestA > 0 ? +((avgRentA / latestA) * 100).toFixed(1) : null;
-    const investmentGap = avgRentA ? latestA - avgRentA : null;
+    const latestA = pricesA.at(-1)?.avgPrice ?? null;
+    const rentMonths = [...new Set(rentsA.map((row) => row.date))].sort().slice(-3);
+    const recentRents = rentsA.filter((row) => rentMonths.includes(row.date));
+    const avgRentA = recentRents.length > 0
+      ? Math.round(average(recentRents.map((row) => row.deposit)))
+      : null;
+
+    const monthlyGap = complexB
+      ? pricesA.flatMap((priceA) => {
+          const priceB = pricesB.find((candidate) => candidate.date === priceA.date);
+          return priceB ? [{ date: priceA.date, gap: priceA.avgPrice - priceB.avgPrice }] : [];
+        })
+      : pricesA.map((price) => ({ date: price.date, gap: price.avgPrice }));
+
+    if (complexB && monthlyGap.length < 2) {
+      return NextResponse.json(
+        { status: 'insufficient_data', error: '두 단지의 공통 거래월이 2개월 미만이라 갭 추이를 비교할 수 없습니다.' },
+        { status: 422 },
+      );
+    }
+
+    let signal: GapResult['signal'] = 'insufficient';
+    let zScore: number | null = null;
+    let historicalAvgGap = 0;
+    let currentGap = 0;
+    let margin = 0;
+    if (complexB) {
+      const gaps = monthlyGap.map((row) => row.gap);
+      const currentWindow = Math.min(3, Math.max(1, Math.floor(gaps.length / 2)));
+      const baseline = gaps.slice(0, -currentWindow);
+      const recent = gaps.slice(-currentWindow);
+      historicalAvgGap = average(baseline);
+      currentGap = average(recent);
+      margin = currentGap - historicalAvgGap;
+      if (baseline.length >= 3) {
+        const variance = average(baseline.map((gap) => (gap - historicalAvgGap) ** 2));
+        const standardDeviation = Math.sqrt(variance);
+        if (standardDeviation > 0) {
+          zScore = margin / standardDeviation;
+          signal = zScore > 1 ? 'above_baseline' : zScore < -1 ? 'below_baseline' : 'near_baseline';
+        }
+      }
+    }
+
+    const warnings: string[] = [];
+    const coverages = [saleAResult.coverage, rentAResult.coverage, saleBResult?.coverage].filter(Boolean) as SourceCoverage[];
+    if (coverages.some((coverage) => coverage.failedMonths.length > 0)) {
+      warnings.push('일부 조회 월의 원본 응답이 실패해 확인된 월만 집계했습니다.');
+    }
+    if (unavailableCoverage(rentAResult.coverage)) {
+      warnings.push('전세 원본을 확인하지 못해 전세가율과 단순 갭을 표시하지 않았습니다.');
+    } else if (recentRents.length === 0) {
+      warnings.push('선택 조건과 일치하는 최근 전세 표본이 없어 전세가율과 단순 갭을 표시하지 않았습니다.');
+    }
+    if (complexB && signal === 'insufficient') {
+      warnings.push('과거 기준 구간이 3개월 미만이거나 변동이 없어 통계적 위치 판정을 보류했습니다.');
+    }
 
     const result: GapResult = {
-      complexA: { name: complexA.name, district: complexA.district, prices: pricesA },
-      complexB: complexB?.name ? { name: complexB.name, district: complexB.district, prices: pricesB } : undefined,
+      status: warnings.length > 0 ? 'partial' : 'ok',
+      complexA: { name: complexA.name, district: complexA.district, dong: complexA.dong, size: complexA.size, prices: pricesA },
+      complexB: complexB
+        ? { name: complexB.name, district: complexB.district, dong: complexB.dong, size: complexB.size, prices: pricesB }
+        : undefined,
       monthlyGap,
       historicalAvgGap: Math.round(historicalAvgGap),
       currentGap: Math.round(currentGap),
       margin: Math.round(margin),
       signal,
-      zScore: +zScore.toFixed(2),
-      // 추가 데이터
+      zScore: zScore === null ? null : Number(zScore.toFixed(2)),
+      dataWarning: warnings.join(' '),
       rentAvg: avgRentA,
-      rentRatio,
-      investmentGap,
+      rentRatio: avgRentA !== null && latestA !== null ? Number(((avgRentA / latestA) * 100).toFixed(1)) : null,
+      investmentGap: avgRentA !== null && latestA !== null ? latestA - avgRentA : null,
       latestPrice: latestA,
-      tradeCount: filteredTradesA.length,
-      rentCount: filteredRentsA.length,
+      tradeCount: tradesA.length,
+      rentCount: recentRents.length,
+      coverage: {
+        requestedMonths: monthList,
+        saleA: saleAResult.coverage,
+        rentA: rentAResult.coverage,
+        saleB: saleBResult?.coverage,
+      },
+      method: '선택한 법정동·전용면적(±0.6㎡)의 취소 제외 실거래를 월별 산술평균했습니다. 전세는 최근 계약월 최대 3개월의 전세 보증금 산술평균입니다.',
     };
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, {
+      headers: { 'Cache-Control': 'private, no-store' },
+    });
   } catch (error: unknown) {
     console.error('[gap-analysis API]', error instanceof Error ? error.message : error);
-    return NextResponse.json({ error: '갭분석 데이터를 불러올 수 없습니다' }, { status: 500 });
+    return NextResponse.json(
+      { status: 'unavailable', error: '갭 분석 원본 데이터를 불러오지 못했습니다.' },
+      { status: 502 },
+    );
   }
 }

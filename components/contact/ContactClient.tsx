@@ -118,7 +118,7 @@ export default function ContactClient() {
           backgroundColor: 'var(--border-light)',
           fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.7,
         }}>
-          ※ 답변은 영업일 기준 2~3일 이내에 드립니다.
+          ※ 문의는 보통 영업일 기준 2~3일 안에 확인하며, 내용에 따라 답변까지 더 걸릴 수 있습니다.
           <br />
           ※ 데이터 오류 제보 시 구체적인 지역·단지명·스크린샷을 함께 보내주시면 빠른 확인이 가능합니다.
         </div>

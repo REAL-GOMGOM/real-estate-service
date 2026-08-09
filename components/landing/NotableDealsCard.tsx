@@ -6,8 +6,8 @@ import Link from 'next/link';
 /**
  * 특이 실거래 카드 — 홈 대시보드 (2a 시안, 벤토 밴드1).
  *
- * /api/transactions/highlights 의 3개 카테고리(신고가·급등·국평 TOP)에서 4건 구성.
- * 표본 즉시 표시 → 라이브 도착 시 교체. 데스크톱 2×2 그리드, 모바일 가로 스크롤.
+ * /api/transactions/highlights 의 3개 카테고리(신고가·급등·국평 TOP)에서 최대 4건 구성.
+ * 실제 응답만 표시하며 loading·부분·빈 결과·장애 상태를 분리한다.
  * 시안의 급락/갭축소 태그는 실제 API 카테고리로 대체.
  */
 
@@ -30,14 +30,6 @@ interface Mini {
   href:       string;
 }
 
-/** 표본 4건 — API 도착 전 즉시 표시용 */
-const SAMPLE: Mini[] = [
-  { tag: '신고가',    name: '아크로리버파크',     price: '47.5억', delta: '▲ 2.5억', deltaColor: '#C4341C', href: '/highlights' },
-  { tag: '급등',      name: '잠실엘스',           price: '27.3억', delta: '+4.2%',   deltaColor: '#C4341C', href: '/highlights' },
-  { tag: '국평 TOP', name: '래미안 원베일리',     price: '49.8억', delta: '84㎡',    deltaColor: '#6B7488', href: '/highlights' },
-  { tag: '신고가',    name: '마포프레스티지자이', price: '19.8억', delta: '▲ 0.6억', deltaColor: '#C4341C', href: '/highlights' },
-];
-
 interface Deal {
   district: string;
   apt:      string;
@@ -49,10 +41,18 @@ interface Deal {
 }
 
 interface HighlightsRes {
+  status?:   'ok' | 'degraded';
   newHighs?: (Deal & { prevHigh: number })[];
   surges?:   (Deal & { prevPrice: number; ratePct: number })[];
   pyeong84?: Deal[];
+  note?:      string;
 }
+
+type DealsView =
+  | { kind: 'loading' }
+  | { kind: 'ready'; minis: Mini[]; partial: boolean }
+  | { kind: 'empty' }
+  | { kind: 'degraded'; message: string };
 
 function fmtEok(manwon: number): string {
   if (manwon >= 10000) {
@@ -88,34 +88,51 @@ function buildMinis(res: HighlightsRes): Mini[] {
     delta: `${d.floor}층`, deltaColor: '#6B7488', href: dealHref(d),
   });
 
-  // 우선 배치 후 남는 슬롯은 카테고리 순환으로 보충
-  const queue: Mini[] = [
-    ...(highs[0]  ? [fromHigh(highs[0])]   : []),
-    ...(surges[0] ? [fromSurge(surges[0])] : []),
-    ...(p84[0]    ? [fromP84(p84[0])]      : []),
-    ...(highs[1]  ? [fromHigh(highs[1])]   : []),
-    ...(surges[1] ? [fromSurge(surges[1])] : []),
-    ...(p84[1]    ? [fromP84(p84[1])]      : []),
-    ...highs.slice(2).map(fromHigh),
-  ];
-  return queue.slice(0, 4);
+  // 카테고리를 순환하며 배치하고, 한 카테고리만 있어도 최대 4건까지 보충한다.
+  const categories = [highs.map(fromHigh), surges.map(fromSurge), p84.map(fromP84)];
+  const queue: Mini[] = [];
+  const longest = Math.max(0, ...categories.map((items) => items.length));
+  for (let index = 0; index < longest && queue.length < 4; index += 1) {
+    for (const items of categories) {
+      if (items[index]) queue.push(items[index]);
+      if (queue.length === 4) break;
+    }
+  }
+  return queue;
 }
 
 export default function NotableDealsCard() {
-  const [minis, setMinis] = useState<Mini[]>(SAMPLE);
+  const [view, setView] = useState<DealsView>({ kind: 'loading' });
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     fetch('/api/transactions/highlights')
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`highlights HTTP ${r.status}`);
+        return r.json() as Promise<HighlightsRes>;
+      })
       .then((json: HighlightsRes) => {
         if (cancelled) return;
+        if (json.status !== 'ok') {
+          setView({
+            kind: 'degraded',
+            message: json.note ?? '집계 데이터를 잠시 불러오지 못했습니다.',
+          });
+          return;
+        }
         const live = buildMinis(json);
-        if (live.length === 4) setMinis(live);
+        setView(live.length === 0
+          ? { kind: 'empty' }
+          : { kind: 'ready', minis: live, partial: live.length < 4 });
       })
-      .catch(() => { /* 실패 시 표본 유지 */ });
+      .catch(() => {
+        if (!cancelled) {
+          setView({ kind: 'degraded', message: '집계 데이터를 잠시 불러오지 못했습니다.' });
+        }
+      });
     return () => { cancelled = true; };
-  }, []);
+  }, [attempt]);
 
   return (
     <div style={{
@@ -141,35 +158,74 @@ export default function NotableDealsCard() {
         </Link>
       </div>
 
-      {/* 미니 카드 4건 */}
-      <div className="nz-notable">
-        {minis.map((n, i) => {
-          const tint = TAG_TINT[n.tag];
-          return (
-            <Link key={i} href={n.href} style={{
-              border: '1px solid #EEF0F5', borderRadius: 12, padding: 12,
-              display: 'flex', flexDirection: 'column', gap: 7,
-              background: '#FCFDFE', textDecoration: 'none', minWidth: 0,
-            }}>
-              <span style={{
-                alignSelf: 'flex-start', fontSize: 10.5, fontWeight: 700,
-                color: tint.color, background: tint.bg, padding: '3px 7px', borderRadius: 6,
-              }}>
-                {n.tag}
-              </span>
-              <span style={{ fontWeight: 700, fontSize: 12.5, color: INK, lineHeight: 1.3 }}>{n.name}</span>
-              <span style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 'auto' }}>
-                <span style={{ fontFamily: 'var(--font-sg, ui-monospace, monospace)', fontWeight: 700, fontSize: 16, color: INK }}>
-                  {n.price}
-                </span>
-                {n.delta && (
-                  <span style={{ fontWeight: 700, fontSize: 11.5, color: n.deltaColor }}>{n.delta}</span>
-                )}
-              </span>
-            </Link>
-          );
-        })}
-      </div>
+      {view.kind === 'loading' && (
+        <div role="status" style={{ color: '#6B7488', fontSize: 13, padding: '26px 4px' }}>
+          특이 실거래를 불러오는 중입니다.
+        </div>
+      )}
+
+      {view.kind === 'empty' && (
+        <div role="status" style={{ color: '#6B7488', fontSize: 13, padding: '26px 4px', lineHeight: 1.5 }}>
+          최근 30일 조건에 맞는 특이 실거래가 없습니다.
+        </div>
+      )}
+
+      {view.kind === 'degraded' && (
+        <div role="alert" style={{ color: '#6B7488', fontSize: 13, padding: '18px 4px', lineHeight: 1.5 }}>
+          <div>{view.message}</div>
+          <button
+            type="button"
+            onClick={() => {
+              setView({ kind: 'loading' });
+              setAttempt((n) => n + 1);
+            }}
+            style={{
+              marginTop: 10, border: '1px solid #D9DEEA', borderRadius: 8, background: '#FFFFFF',
+              color: '#1B4DDB', fontWeight: 700, fontSize: 12, padding: '6px 10px', cursor: 'pointer',
+            }}
+          >
+            다시 시도
+          </button>
+        </div>
+      )}
+
+      {view.kind === 'ready' && (
+        <>
+          <div className="nz-notable">
+            {view.minis.map((n, i) => {
+              const tint = TAG_TINT[n.tag];
+              return (
+                <Link key={`${n.tag}-${n.name}-${i}`} href={n.href} style={{
+                  border: '1px solid #EEF0F5', borderRadius: 12, padding: 12,
+                  display: 'flex', flexDirection: 'column', gap: 7,
+                  background: '#FCFDFE', textDecoration: 'none', minWidth: 0,
+                }}>
+                  <span style={{
+                    alignSelf: 'flex-start', fontSize: 10.5, fontWeight: 700,
+                    color: tint.color, background: tint.bg, padding: '3px 7px', borderRadius: 6,
+                  }}>
+                    {n.tag}
+                  </span>
+                  <span style={{ fontWeight: 700, fontSize: 12.5, color: INK, lineHeight: 1.3 }}>{n.name}</span>
+                  <span style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 'auto' }}>
+                    <span style={{ fontFamily: 'var(--font-sg, ui-monospace, monospace)', fontWeight: 700, fontSize: 16, color: INK }}>
+                      {n.price}
+                    </span>
+                    {n.delta && (
+                      <span style={{ fontWeight: 700, fontSize: 11.5, color: n.deltaColor }}>{n.delta}</span>
+                    )}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+          {view.partial && (
+            <div role="status" style={{ color: '#8A93A3', fontSize: 11, marginTop: 9 }}>
+              현재 집계된 {view.minis.length}건만 표시합니다.
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

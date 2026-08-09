@@ -3,12 +3,15 @@ import { inArray } from 'drizzle-orm';
 import { DISTRICT_CODE } from '@/lib/district-codes';
 import { getBlogDb } from '@/lib/db/client';
 import { apartments } from '@/lib/db/schema';
-import { normalizeMLTMName } from '@/lib/normalize-mltm-name';
+import {
+  findApartmentIdentity,
+  type ApartmentIdentity,
+} from '@/lib/transaction-identity';
 import { resolveAggWindow, kstCurrentYyyymm } from '@/lib/agg-window';
 import { fetchHighlightLists, type RawHighlightRow } from '@/lib/agg-queries';
 
 /**
- * 오늘의 주요거래 API — SQL 푸시다운 전환 (2026-08-02).
+ * 최근 30일 주요거래 API — SQL 푸시다운 전환 (2026-08-02).
  *
  * 기존(7/19 버전): 당월 원장 행 전체 전송 → JS 선정 (전송량 폭탄 + 월초 공백).
  * 개편: 신고가·급등·국평 선정을 Postgres 에서 끝내고 카테고리당 최대
@@ -20,6 +23,7 @@ const PER_CATEGORY = 8;
 
 interface Deal {
   district: string;
+  dong:     string;
   apt:      string;
   area:     number;
   floor:    number;
@@ -33,6 +37,7 @@ interface Deal {
 function toDeal(r: RawHighlightRow): Deal {
   return {
     district: r.sigungu,
+    dong:     r.umdNm,
     apt:      r.aptName,
     area:     r.area,
     floor:    r.floor || 1,
@@ -43,7 +48,8 @@ function toDeal(r: RawHighlightRow): Deal {
 
 /**
  * 최종 하이라이트(최대 24건)에 단지 마스터 id 부여 — fail-open.
- * 대상 구의 lawd_cd 로 일괄 조회 후 등록명·별칭·정제명 매칭 (transactions API 와 동일 규칙).
+ * 대상 구의 lawd_cd 로 일괄 조회 후 등록명·별칭과 법정동이 모두 맞을 때만
+ * 연결한다. 법정동 없는 이름 단독 연결은 동명 단지 오연결 위험 때문에 금지한다.
  */
 async function attachMasterIds(deals: Deal[]): Promise<void> {
   if (deals.length === 0) return;
@@ -55,25 +61,25 @@ async function attachMasterIds(deals: Deal[]): Promise<void> {
         name:    apartments.name,
         aliases: apartments.aliases,
         lawdCd:  apartments.lawdCd,
+        dong:    apartments.dong,
       })
       .from(apartments)
       .where(inArray(apartments.lawdCd, lawdCds));
 
-    // lawdCd 별 이름 → id 매핑
-    const byLawd = new Map<string, Map<string, string>>();
+    const byLawd = new Map<string, ApartmentIdentity[]>();
     for (const r of rows) {
-      if (!byLawd.has(r.lawdCd)) byLawd.set(r.lawdCd, new Map());
-      const m = byLawd.get(r.lawdCd)!;
-      if (!m.has(r.name)) m.set(r.name, r.id);
-      for (const alias of r.aliases ?? []) {
-        if (!m.has(alias)) m.set(alias, r.id);
-      }
+      const identities = byLawd.get(r.lawdCd) ?? [];
+      identities.push({ id: r.id, name: r.name, aliases: r.aliases, dong: r.dong });
+      byLawd.set(r.lawdCd, identities);
     }
 
     for (const d of deals) {
-      const m = byLawd.get(DISTRICT_CODE[d.district]);
-      if (!m) continue;
-      d.masterId = m.get(d.apt) ?? m.get(normalizeMLTMName(d.apt)) ?? null;
+      const identities = byLawd.get(DISTRICT_CODE[d.district]);
+      if (!identities) continue;
+      d.masterId = findApartmentIdentity(
+        { aptName: d.apt, dong: d.dong },
+        identities,
+      )?.id ?? null;
     }
   } catch (e) {
     console.error('[highlights API] 마스터 조인 실패 (fail-open):', e);
@@ -113,6 +119,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(
       {
+        status: 'ok',
         month: yyyymm,
         window: { type: window.type, from: window.from, to: window.to },
         coverage: window.type === 'rolling30'
@@ -130,6 +137,7 @@ export async function GET(req: NextRequest) {
     console.error('[transactions/highlights API] 집계 실패 — 빈 집계 강등:', error);
     return NextResponse.json(
       {
+        status: 'degraded',
         month: yyyymm,
         coverage: '집계 데이터 일시 점검 중',
         newHighs: [],

@@ -74,6 +74,8 @@ export default function SchoolsClient() {
   const [sortKey, setSortKey] = useState<SortKey>('netMoveIn');
   const [schools, setSchools] = useState<School[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
 
   const sggOptions = useMemo(
     () => SGG_CODES.filter((e) => e.sido === sido).map((e) => e.sgg),
@@ -82,17 +84,27 @@ export default function SchoolsClient() {
 
   useEffect(() => {
     let aborted = false;
-    setLoading(true);
     const params = new URLSearchParams({ sido, level, limit: '3000' });
     // 세종처럼 시도=시군구 단일 지역은 시군구 필터 생략
     if (sgg && sgg !== sido) params.set('district', sgg);
     fetch(`/api/map/schools?${params}`)
-      .then((res) => res.json())
-      .then((json) => { if (!aborted) setSchools(json.schools ?? []); })
-      .catch(() => { if (!aborted) setSchools([]); })
+      .then(async (response) => {
+        const json = await response.json();
+        if (!response.ok || !Array.isArray(json.schools)) {
+          throw new Error(json.error || `학교 API HTTP ${response.status}`);
+        }
+        return json.schools as School[];
+      })
+      .then((items) => { if (!aborted) setSchools(items); })
+      .catch(() => {
+        if (!aborted) {
+          setSchools([]);
+          setError(true);
+        }
+      })
       .finally(() => { if (!aborted) setLoading(false); });
     return () => { aborted = true; };
-  }, [sido, sgg, level]);
+  }, [sido, sgg, level, retryKey]);
 
   const sorted = useMemo(() => {
     const val = (s: School): number => {
@@ -124,6 +136,8 @@ export default function SchoolsClient() {
           value={sido}
           onChange={(e) => {
             const next = e.target.value;
+            setLoading(true);
+            setError(false);
             setSido(next);
             const firstSgg = SGG_CODES.find((c) => c.sido === next)?.sgg ?? '';
             setSgg(firstSgg);
@@ -133,17 +147,19 @@ export default function SchoolsClient() {
         >
           {SIDO_LIST.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
-        <select value={sgg} onChange={(e) => setSgg(e.target.value)} style={selectStyle} aria-label="시군구 선택">
+        <select value={sgg} onChange={(e) => { setLoading(true); setError(false); setSgg(e.target.value); }} style={selectStyle} aria-label="시군구 선택">
           {sggOptions.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
       </div>
 
       {/* 학교급 탭 */}
-      <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
+      <div role="group" aria-label="학교급" style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
         {LEVEL_TABS.map((t) => (
           <button
+            type="button"
             key={t.key}
-            onClick={() => setLevel(t.key)}
+            onClick={() => { setLoading(true); setError(false); setLevel(t.key); }}
+            aria-pressed={level === t.key}
             style={{
               padding: '9px 16px', borderRadius: '10px', fontSize: '13.5px', fontWeight: 700,
               backgroundColor: level === t.key ? 'var(--accent)' : 'var(--bg-card)',
@@ -158,11 +174,13 @@ export default function SchoolsClient() {
       </div>
 
       {/* 정렬 탭 */}
-      <div style={{ display: 'flex', gap: '6px', marginBottom: '18px', flexWrap: 'wrap' }}>
+      <div role="group" aria-label="학교 정렬 기준" style={{ display: 'flex', gap: '6px', marginBottom: '18px', flexWrap: 'wrap' }}>
         {SORT_TABS.map((t) => (
           <button
+            type="button"
             key={t.key}
             onClick={() => setSortKey(t.key)}
+            aria-pressed={sortKey === t.key}
             title={t.hint}
             style={{
               padding: '6px 12px', borderRadius: '8px', fontSize: '12.5px', fontWeight: 600,
@@ -183,6 +201,17 @@ export default function SchoolsClient() {
           {[...Array(6)].map((_, i) => (
             <div key={i} style={{ height: '74px', borderRadius: '14px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-light)' }} />
           ))}
+        </div>
+      ) : error ? (
+        <div role="alert" style={{ fontSize: '14px', color: 'var(--text-dim)', textAlign: 'center', padding: '40px 0' }}>
+          <p style={{ margin: 0 }}>학교 공시 데이터를 잠시 불러오지 못했습니다.</p>
+          <button
+            type="button"
+            onClick={() => { setLoading(true); setError(false); setRetryKey((key) => key + 1); }}
+            style={{ marginTop: '12px', padding: '8px 14px', borderRadius: '8px', border: 0, background: 'var(--accent)', color: '#fff', cursor: 'pointer' }}
+          >
+            다시 시도
+          </button>
         </div>
       ) : sorted.length === 0 ? (
         <p style={{ fontSize: '14px', color: 'var(--text-dim)', textAlign: 'center', padding: '48px 0' }}>

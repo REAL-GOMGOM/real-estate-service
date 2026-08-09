@@ -6,6 +6,7 @@ import { SITE_URL, SITE_NAME } from '@/lib/site';
 import { PostCard } from './components/PostCard';
 import { CategoryTabs } from './components/CategoryTabs';
 import { Pagination } from './components/Pagination';
+import { BlogServiceUnavailable } from './components/BlogServiceUnavailable';
 
 export const metadata = {
   title: `칼럼 — ${SITE_NAME}`,
@@ -20,11 +21,18 @@ export const metadata = {
     siteName: SITE_NAME,
     locale: 'ko_KR',
     type: 'website',
+    images: [{
+      url: `${SITE_URL}/opengraph-image`,
+      width: 1200,
+      height: 630,
+      alt: `${SITE_NAME} 부동산 칼럼`,
+    }],
   },
   twitter: {
     card: 'summary_large_image',
     title: `칼럼 — ${SITE_NAME}`,
     description: '부동산 시장·청약·대출·세금·정책에 대한 인사이트와 가이드.',
+    images: [`${SITE_URL}/opengraph-image`],
   },
 };
 
@@ -77,7 +85,13 @@ export default function BlogIndexPage({
 }
 
 async function Tabs() {
-  const cats = await getAllCategories();
+  let cats;
+  try {
+    cats = await getAllCategories();
+  } catch (error) {
+    console.error('[blog] category list unavailable', error);
+    return null;
+  }
   return <CategoryTabs categories={cats} currentSlug={null} />;
 }
 
@@ -109,10 +123,19 @@ function SearchSkeleton() {
 
 async function PostGrid({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
-  const page = Number(params.page ?? 1) || 1;
+  const parsedPage = Number(params.page ?? 1);
+  const page = Number.isSafeInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
   const q = (params.q ?? '').trim();
 
-  const { rows, total, totalPages } = await getPublishedPosts({ page, q: q || undefined });
+  let result;
+  try {
+    result = await getPublishedPosts({ page, q: q || undefined });
+  } catch (error) {
+    console.error('[blog] post list unavailable', error);
+    return <BlogServiceUnavailable retryHref={q ? `/blog?q=${encodeURIComponent(q)}` : '/blog'} />;
+  }
+
+  const { rows, total, totalPages } = result;
 
   if (rows.length === 0) {
     return (

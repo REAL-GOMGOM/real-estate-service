@@ -2,6 +2,8 @@
 
 export interface PriceChangeData {
   period: string;
+  /** 한국부동산원 월간 지수 비교. 주간 데이터로 해석하면 안 된다. */
+  frequency: 'monthly';
   type: 'sale' | 'rent';
   summary: {
     nationwide: number;
@@ -19,4 +21,4 @@ export interface RegionChange {
 }
 
 export type TradeType = 'sale' | 'rent';
-export type PeriodType = 'weekly' | 'monthly';
+export type PeriodType = 'monthly';

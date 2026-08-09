@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import dynamic from 'next/dynamic';
@@ -9,15 +9,13 @@ import ApartmentSelector from '@/components/chart/ApartmentSelector';
 import PriceChart from '@/components/chart/PriceChart';
 import ErrorState from '@/components/common/ErrorState';
 import { AptAutocomplete, type ApartmentSearchResult } from '@/components/search/AptAutocomplete';
-import { findDistrictByLawdCd } from '@/lib/district-codes';
-import mockTransactions from '@/data/apartment-transactions.json';
 
 const TransactionTable = dynamic(
   () => import('@/components/chart/TransactionTable'),
   { ssr: false }
 );
 
-// 실거래 데이터 형태 (목업 JSON · /api/transactions 응답 공통)
+// 실거래 데이터 형태 (/api/transactions 응답)
 interface TxRecord {
   id?: string;
   area: number;
@@ -36,7 +34,31 @@ interface ApartmentRecord {
   transactions: TxRecord[];
 }
 
-const MOCK_DATA: ApartmentRecord[] = mockTransactions;
+type TransactionTarget =
+  | { kind: 'district'; district: string }
+  | { kind: 'name'; aptName: string }
+  | { kind: 'id'; aptId: string; district: string };
+
+interface ActiveRequest {
+  id: number;
+  controller: AbortController;
+}
+
+function sameTarget(a: TransactionTarget, b: TransactionTarget): boolean {
+  if (a.kind !== b.kind) return false;
+  if (a.kind === 'district' && b.kind === 'district') return a.district === b.district;
+  if (a.kind === 'name' && b.kind === 'name') return a.aptName === b.aptName;
+  if (a.kind === 'id' && b.kind === 'id') return a.aptId === b.aptId;
+  return false;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException
+    ? error.name === 'AbortError'
+    : (error as { name?: string } | null)?.name === 'AbortError';
+}
+
+const EMPTY_APARTMENTS: ApartmentRecord[] = [];
 
 const PERIOD_OPTIONS = [
   { label: '3개월', months: 3  },
@@ -45,25 +67,26 @@ const PERIOD_OPTIONS = [
   { label: '1년',   months: 12 },
 ];
 
-// 단지명 전국 검색 대상 — 주요 서울/경기 구 (불변 상수라 모듈 스코프)
-const SEARCH_DISTRICTS = [
-  '강남구', '서초구', '송파구', '용산구', '마포구', '성동구',
-  '영등포구', '양천구', '강동구', '광진구', '동작구',
-  '성남시 분당구', '과천시', '하남시', '용인시 수지구',
-];
-
 function ChartContent() {
   const searchParams  = useSearchParams();
   const districtParam = searchParams.get('district');
+  const searchParam = searchParams.get('search')?.trim() ?? '';
 
   const [selectedPeriod, setSelectedPeriod] = useState(12);
-  const [selectedId,     setSelectedId]     = useState<string>(MOCK_DATA[0].id);
+  const [selectedId,     setSelectedId]     = useState<string>('');
   const [selectedArea,   setSelectedArea]   = useState<number | 'all'>('all');
   const [apiData,        setApiData]        = useState<ApartmentRecord[] | null>(null);
-  const [isLoading,      setIsLoading]      = useState(false);
+  const [isLoading,      setIsLoading]      = useState(true);
   const [apiError,       setApiError]       = useState<string | null>(null);
   const [activeDistrict, setActiveDistrict] = useState<string>(districtParam ?? '강남구');
   const [isMobile,       setIsMobile]       = useState(false);
+  const [requestTarget, setRequestTarget] = useState<TransactionTarget>(() =>
+    searchParam.length >= 2
+      ? { kind: 'name', aptName: searchParam }
+      : { kind: 'district', district: districtParam ?? '강남구' },
+  );
+  const requestSequence = useRef(0);
+  const activeRequest = useRef<ActiveRequest | null>(null);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -72,78 +95,90 @@ function ChartContent() {
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  const fetchApiData = useCallback(async (district: string, months: number) => {
+  const loadTransactions = useCallback(async (target: TransactionTarget, months: number) => {
+    activeRequest.current?.controller.abort();
+    const request: ActiveRequest = {
+      id: ++requestSequence.current,
+      controller: new AbortController(),
+    };
+    activeRequest.current = request;
+
+    const isCurrentRequest = () => activeRequest.current?.id === request.id;
+    const params = new URLSearchParams({ months: String(months) });
+    if (target.kind === 'district') params.set('district', target.district);
+    if (target.kind === 'name') params.set('aptName', target.aptName);
+    if (target.kind === 'id') params.set('aptId', target.aptId);
+
+    if (target.kind === 'district') setActiveDistrict(target.district);
+    if (target.kind === 'id' && target.district) setActiveDistrict(target.district);
     setIsLoading(true);
     setApiError(null);
+    setApiData(null);
+    setSelectedId('');
     try {
-      const res  = await fetch(`/api/transactions?district=${encodeURIComponent(district)}&months=${months}`);
+      const res = await fetch(`/api/transactions?${params.toString()}`, {
+        signal: request.controller.signal,
+      });
       const json = await res.json();
+      if (!isCurrentRequest()) return;
 
-      if (json.error) {
-        if (json.error.includes('지원하지 않는')) {
-          setApiError(`"${district}"은(는) 아직 지원하지 않는 지역입니다. 구를 직접 선택해주세요.`);
-          setApiData(null);
+      if (!res.ok || json.error) {
+        const message = typeof json.error === 'string' ? json.error : `실거래 API HTTP ${res.status}`;
+        if (message.includes('지원하지 않는')) {
+          const label = target.kind === 'district' ? target.district : '선택한 지역';
+          setApiError(`"${label}"은(는) 아직 지원하지 않는 지역입니다. 구를 직접 선택해주세요.`);
           return;
         }
-        throw new Error(json.error);
+        throw new Error(message);
       }
 
+      if (!Array.isArray(json.data)) throw new Error('실거래 API 응답 형식이 올바르지 않습니다.');
       setApiData(json.data);
-      if (json.data.length > 0) setSelectedId(json.data[0].id);
+      setSelectedId(json.data[0]?.id ?? '');
+      const resolvedDistrict = json.district ?? json.data[0]?.district;
+      if (typeof resolvedDistrict === 'string' && resolvedDistrict) {
+        setActiveDistrict(resolvedDistrict);
+      }
     } catch (e) {
+      if (isAbortError(e) || !isCurrentRequest()) return;
       setApiError(e instanceof Error ? e.message : String(e));
       setApiData(null);
     } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // 단지명 전국 검색 — SEARCH_DISTRICTS(모듈 상수)에 병렬 호출
-  const searchByAptName = useCallback(async (aptName: string) => {
-    if (aptName.length < 2) return;
-    setIsLoading(true);
-    setApiError(null);
-    try {
-      const results = await Promise.all(
-        SEARCH_DISTRICTS.map((d) =>
-          fetch(`/api/transactions?district=${encodeURIComponent(d)}&months=12&aptName=${encodeURIComponent(aptName)}`)
-            .then((r) => r.json())
-            .then((j) => j.data ?? [])
-            .catch(() => [])
-        )
-      );
-      const merged = results.flat();
-      setApiData(merged.length > 0 ? merged : []);
-      if (merged.length > 0) {
-        setActiveDistrict(merged[0].district);
-        setSelectedId(merged[0].id);
+      if (isCurrentRequest()) {
+        setIsLoading(false);
+        activeRequest.current = null;
       }
-    } catch (e) {
-      setApiError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setIsLoading(false);
     }
   }, []);
 
-  // 마운트 + districtParam 변경 시 호출
-  useEffect(() => {
-    const district = districtParam ?? '강남구';
-    setActiveDistrict(district);
-    fetchApiData(district, selectedPeriod);
-    // 의도: districtParam 변경에만 반응. selectedPeriod 를 deps에 넣으면
-    // 기간 변경 시 아래 전용 효과와 이중 fetch 발생. fetchApiData 는 useCallback([]) 안정.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [districtParam]);
+  const searchByAptName = useCallback((aptName: string) => {
+    const normalizedName = aptName.trim();
+    if (normalizedName.length < 2) return;
+    setSelectedArea('all');
+    setRequestTarget({ kind: 'name', aptName: normalizedName });
+  }, []);
 
-  // 기간 변경 시 재호출
+  // 브라우저 URL이 바뀌면 URL이 명시한 조회 대상을 우선한다.
   useEffect(() => {
-    fetchApiData(activeDistrict, selectedPeriod);
-    // 의도: selectedPeriod 변경에만 반응. activeDistrict 를 deps에 넣으면
-    // 단지 검색(setActiveDistrict) 직후 재fetch가 검색 결과를 덮어쓰는 회귀 발생.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPeriod]);
+    const nextTarget: TransactionTarget = searchParam.length >= 2
+      ? { kind: 'name', aptName: searchParam }
+      : { kind: 'district', district: districtParam ?? '강남구' };
+    setRequestTarget((current) => sameTarget(current, nextTarget) ? current : nextTarget);
+  }, [districtParam, searchParam]);
 
-  const sourceData = apiData ?? MOCK_DATA;
+  // 조회 대상이나 기간이 바뀌면 이전 요청을 취소하고 동일한 대상을 다시 조회한다.
+  // 따라서 자동완성으로 선택한 정확한 aptId도 기간 변경 뒤 유지된다.
+  useEffect(() => {
+    void loadTransactions(requestTarget, selectedPeriod);
+  }, [loadTransactions, requestTarget, selectedPeriod]);
+
+  useEffect(() => () => {
+    requestSequence.current += 1;
+    activeRequest.current?.controller.abort();
+    activeRequest.current = null;
+  }, []);
+
+  const sourceData = apiData ?? EMPTY_APARTMENTS;
 
   const apartments = useMemo(() => {
     return sourceData.map((apt) => {
@@ -216,7 +251,10 @@ function ChartContent() {
         activeDistrict={activeDistrict}
         onSelect={(id) => { setSelectedId(id); setSelectedArea('all'); }}
         onAreaChange={setSelectedArea}
-        onDistrictChange={(d) => { setActiveDistrict(d); fetchApiData(d, selectedPeriod); }}
+        onDistrictChange={(district) => {
+          setSelectedArea('all');
+          setRequestTarget({ kind: 'district', district });
+        }}
         onAptSearch={searchByAptName}
         isMobile={isMobile}
       />
@@ -232,9 +270,9 @@ function ChartContent() {
             <AptAutocomplete
               placeholder="단지명 입력 (예: 잠실엘스)"
               onSelect={(apt: ApartmentSearchResult) => {
-                const d = findDistrictByLawdCd(apt.lawdCd) ?? apt.sigungu;
-                setActiveDistrict(d);
-                fetchApiData(d, selectedPeriod);
+                setSelectedArea('all');
+                setActiveDistrict(apt.sigungu);
+                setRequestTarget({ kind: 'id', aptId: apt.id, district: apt.sigungu });
               }}
             />
           </div>
@@ -244,8 +282,10 @@ function ChartContent() {
             <div style={{ display: 'flex', gap: '8px' }}>
               {PERIOD_OPTIONS.map((opt) => (
                 <button
+                  type="button"
                   key={opt.months}
                   onClick={() => setSelectedPeriod(opt.months)}
+                  aria-pressed={selectedPeriod === opt.months}
                   style={{
                     padding: '8px 16px', borderRadius: '10px',
                     fontSize: '13px', fontWeight: 600, cursor: 'pointer', border: 'none',
@@ -268,11 +308,11 @@ function ChartContent() {
               )}
               <span style={{
                 padding: '4px 10px', borderRadius: '6px', fontSize: '11px',
-                backgroundColor: apiData ? 'rgba(111,192,138,0.12)' : 'var(--border-light)',
-                color: apiData ? '#2E7A4C' : 'var(--text-dim)',
-                border: `1px solid ${apiData ? 'rgba(111,192,138,0.25)' : 'var(--border-light)'}`,
+                backgroundColor: apiData !== null ? 'rgba(111,192,138,0.12)' : 'var(--border-light)',
+                color: apiData !== null ? '#2E7A4C' : 'var(--text-dim)',
+                border: `1px solid ${apiData !== null ? 'rgba(111,192,138,0.25)' : 'var(--border-light)'}`,
               }}>
-                {apiData ? `${activeDistrict} 실거래가` : '목업 데이터'}
+                {apiData !== null ? `${activeDistrict} 실거래가` : '데이터 확인 중'}
               </span>
             </div>
           </div>
@@ -282,8 +322,14 @@ function ChartContent() {
             <ErrorState
               message="차트 데이터를 불러오지 못했습니다"
               detail={apiError}
-              onRetry={() => fetchApiData(activeDistrict, selectedPeriod)}
+              onRetry={() => void loadTransactions(requestTarget, selectedPeriod)}
             />
+          )}
+
+          {!apiError && !isLoading && apiData?.length === 0 && (
+            <div role="status" style={{ padding: '48px 20px', textAlign: 'center', border: '1px dashed var(--border)', borderRadius: '16px', color: 'var(--text-dim)' }}>
+              선택한 지역과 기간에 표시할 실거래가 없습니다.
+            </div>
           )}
 
           {/* 단지 헤더 */}
@@ -302,7 +348,7 @@ function ChartContent() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', marginBottom: '24px' }}>
                   {[
                     { label: '최근 거래가', value: fmt(stats.latest),   color: 'var(--text-primary)' },
-                    { label: '전월 대비',   value: `${stats.change >= 0 ? '+' : ''}${stats.change.toFixed(1)}%`, color: stats.change >= 0 ? '#2E7A4C' : '#E23B3B' },
+                    { label: '직전 거래 대비', value: `${stats.change >= 0 ? '+' : ''}${stats.change.toFixed(1)}%`, color: stats.change >= 0 ? '#2E7A4C' : '#E23B3B' },
                     { label: '최고가',      value: fmt(stats.maxPrice), color: '#F0A24B' },
                     { label: '최저가',      value: fmt(stats.minPrice), color: 'var(--text-muted)' },
                     { label: '총 거래',     value: `${stats.count}건`,  color: 'var(--accent)' },

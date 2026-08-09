@@ -57,7 +57,7 @@ function LoadingNotice() {
  * 런타임 의존부 — searchParams(요청별 token)와 캐시 불가한 draft 조회를 모두 수행.
  * Cache Components(PPR) 규칙상 이 동적 작업은 반드시 <Suspense> 경계 안에서 일어나야 한다.
  */
-export async function PreviewContent({ params, searchParams }: PublicPreviewProps) {
+async function PreviewContent({ params, searchParams }: PublicPreviewProps) {
   const { id } = await params;
   const { token } = await searchParams;
 

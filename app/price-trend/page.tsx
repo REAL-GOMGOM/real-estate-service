@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import Header from '@/components/layout/Header';
 import ToggleGroup from '@/components/price-map/ToggleGroup';
@@ -17,13 +17,15 @@ const TrendChart = dynamic(
 const PERIOD_TOGGLE = PERIOD_OPTIONS.map((o) => ({ label: o.label, value: o.value }));
 
 function PriceTrendContent() {
-  const [period, setPeriod] = useState<TrendPeriod>('weekly');
+  const [period, setPeriod] = useState<TrendPeriod>('six_months');
   const [selectedRegions, setSelectedRegions] = useState<Set<string>>(
     () => new Set(['서울', '경기', '인천']),
   );
   const [data, setData] = useState<PriceTrendData | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const activeRequest = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -33,19 +35,41 @@ function PriceTrendContent() {
   }, []);
 
   const fetchData = useCallback(async (p: TrendPeriod, regions: Set<string>) => {
-    if (regions.size === 0) { setData(null); return; }
+    activeRequest.current?.abort();
+    if (regions.size === 0) {
+      setData(null);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    activeRequest.current = controller;
     setLoading(true);
+    setError(null);
+    setData(null);
     try {
       const regionParam = Array.from(regions).join(',');
-      const res = await fetch(`/api/price-trend?period=${p}&region=${encodeURIComponent(regionParam)}`);
+      const res = await fetch(`/api/price-trend?period=${p}&region=${encodeURIComponent(regionParam)}`, {
+        signal: controller.signal,
+      });
       const json = await res.json();
-      if (!json.error) setData(json);
-    } catch {
-      // 기존 데이터 유지
+      if (!res.ok || json.status === 'degraded' || json.error) {
+        throw new Error(json.error || `가격지수 API HTTP ${res.status}`);
+      }
+      if (json.status === 'empty') return;
+      if (!['ok', 'partial'].includes(json.status) || json.frequency !== 'monthly' || !Array.isArray(json.data)) {
+        throw new Error('가격지수 API 응답 형식이 올바르지 않습니다.');
+      }
+      setData(json);
+    } catch (fetchError) {
+      if (fetchError instanceof DOMException && fetchError.name === 'AbortError') return;
+      setError(fetchError instanceof Error ? fetchError.message : '가격지수를 불러오지 못했습니다.');
     } finally {
-      setLoading(false);
+      if (activeRequest.current === controller) setLoading(false);
     }
   }, []);
+
+  useEffect(() => () => activeRequest.current?.abort(), []);
 
   useEffect(() => {
     fetchData(period, selectedRegions);
@@ -74,10 +98,10 @@ function PriceTrendContent() {
         }}>
           <div>
             <h1 style={{ fontSize: 'clamp(20px, 3vw, 26px)', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '4px' }}>
-              상승률 대시보드
+              아파트 매매가격지수 추이
             </h1>
             <p style={{ fontSize: '13px', color: 'var(--text-dim)' }}>
-              시도별 아파트 매매·전세 가격지수 추이를 확인합니다. 출처: 한국부동산원
+              월간 아파트 매매가격지수를 선택 기간의 첫 공개 월 대비 누적 변동률로 비교합니다. 출처: 한국부동산원 R-ONE
             </p>
           </div>
           <ToggleGroup options={PERIOD_TOGGLE} selected={period} onChange={setPeriod} />
@@ -103,12 +127,39 @@ function PriceTrendContent() {
           </div>
         )}
 
+        {!loading && error && (
+          <div role="alert" style={{ textAlign: 'center', padding: '36px 20px', border: '1px solid #F2D7D5', borderRadius: '14px', background: '#FFF8F7', color: '#8A2C25' }}>
+            <p style={{ margin: 0, fontSize: '14px', fontWeight: 700 }}>가격지수를 잠시 불러오지 못했습니다.</p>
+            <p style={{ margin: '7px 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>{error}</p>
+            <button type="button" onClick={() => fetchData(period, selectedRegions)} style={{ marginTop: '14px', padding: '8px 14px', border: 0, borderRadius: '8px', background: 'var(--accent)', color: '#fff', cursor: 'pointer' }}>
+              다시 시도
+            </button>
+          </div>
+        )}
+
+        {!loading && !error && selectedRegions.size > 0 && !data && (
+          <div role="status" style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--text-dim)', fontSize: '14px' }}>
+            선택한 기간에 공개된 가격지수 데이터가 없습니다.
+          </div>
+        )}
+
         {!loading && data && data.data.length > 0 && (
           <div style={{
             display: 'flex', flexDirection: isMobile ? 'column' : 'column', gap: '24px',
           }}>
             {/* 차트 */}
             <TrendChart data={data.data} regions={regionArray} />
+
+            <p style={{ margin: '-12px 0 0', fontSize: '11.5px', color: 'var(--text-dim)', lineHeight: 1.6 }}>
+              기준: {data.data[0]?.date} = 0% · 월별 지수의 기준월 대비 누적 변화이며 월간 상승률 자체가 아닙니다.
+            </p>
+
+            {data.status === 'partial' && (
+              <p role="status" style={{ margin: '-12px 0 0', padding: '10px 12px', borderRadius: '10px', background: '#FFF8E8', color: '#7A5A16', fontSize: '11.5px', lineHeight: 1.6 }}>
+                요청 {data.coverage.requestedMonths}개월 중 {data.coverage.returnedMonths}개월이 공개·응답되어 표시 중입니다
+                ({data.coverage.firstMonth}~{data.coverage.lastMonth}). 누락 월은 선으로 보간하지 않습니다.
+              </p>
+            )}
 
             {/* 랭킹 테이블 */}
             <RegionRankingTable data={data.data} regions={regionArray} />

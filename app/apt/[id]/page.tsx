@@ -7,11 +7,16 @@ import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import PriceComboChart from '@/components/apt/PriceComboChart';
 import { AnalysisPromoBar } from '@/components/shared/AnalysisPromoBar';
-import { getApartmentById, getAptPageData, APT_PAGE_MONTHS, APT_RENT_MONTHS } from '@/lib/apt-detail';
+import {
+  getAptPageData,
+  APT_PAGE_MONTHS,
+  APT_RENT_MONTHS,
+  type AptPageData,
+} from '@/lib/apt-detail';
 import {
   fmtPrice, fmtContractDate, detectNewHigh, peakRecovery,
 } from '@/lib/tx-shared';
-import { fmtRentPrice } from '@/lib/rent-shared';
+import { fmtRentPrice, type RentTransaction } from '@/lib/rent-shared';
 import { SITE_URL } from '@/lib/site';
 import AptShareActions from './AptShareActions';
 import AptDealTabs from './AptDealTabs';
@@ -27,18 +32,32 @@ import AptTxTable from './AptTxTable';
 
 const TABLE_LIMIT = 30;
 
+function hasIndexableAptContent(data: AptPageData): boolean {
+  const hasSales = data.transactionsStatus === 'ok' && data.group.transactions.length > 0;
+  const hasRent = data.rentStatus === 'ok' && data.rentTransactions.length > 0;
+  return hasSales || hasRent;
+}
+
 export async function generateMetadata(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Metadata> {
   // await params 가 첫 동적 접근이어야 PPR 셸 프리렌더가 여기서 안전하게
   // 지연된다 (blog/[slug] 패턴). connection() 을 먼저 호출하면 빌드 에러.
   const { id } = await params;
-  const apt = await getApartmentById(decodeURIComponent(id));
-  if (!apt) return { title: '단지를 찾을 수 없습니다 | 내집 My.ZIP' };
+  const data = await getAptPageData(decodeURIComponent(id));
+  if (!data) {
+    return {
+      title: '단지를 찾을 수 없습니다 | 내집 My.ZIP',
+      robots: { index: false, follow: true },
+    };
+  }
+
+  const apt = data.master;
+  const indexable = hasIndexableAptContent(data);
 
   const title = `${apt.name} 실거래가·시세 | 내집 My.ZIP`;
   const description =
-    `${apt.sigungu}${apt.dong ? ` ${apt.dong}` : ''} ${apt.name} 아파트 실거래가와 최근 3년 시세 차트, ` +
+    `${apt.sigungu}${apt.dong ? ` ${apt.dong}` : ''} ${apt.name} 아파트 실거래가와 최근 ${APT_PAGE_MONTHS}개월 시세 차트, ` +
     `전고점 회복률, 면적별 거래 내역${apt.totalHouseholds ? ` (${apt.totalHouseholds.toLocaleString()}세대)` : ''}. ` +
     `국토교통부 실거래가 기반.`;
   const canonical = `${SITE_URL}/apt/${encodeURIComponent(apt.id)}`;
@@ -48,6 +67,9 @@ export async function generateMetadata(
     description,
     alternates: { canonical },
     openGraph: { title, description, url: canonical, siteName: '내집(My.ZIP)', locale: 'ko_KR', type: 'website' },
+    // 매매·전월세 중 검증된 거래 행이 하나라도 있을 때만 검색 색인을 허용한다.
+    // 정상 빈 결과와 양쪽 원장 장애를 모두 noindex 처리해 저가치/오류 페이지 색인을 막는다.
+    robots: { index: indexable, follow: true },
   };
 }
 
@@ -73,6 +95,93 @@ const tdStyle: React.CSSProperties = {
   padding: '11px 12px', fontSize: '13px', color: 'var(--text-muted)', whiteSpace: 'nowrap',
 };
 
+function DataLoadError({ label }: { label: string }) {
+  return (
+    <div
+      role="alert"
+      style={{
+        padding: '40px 24px', borderRadius: '16px', textAlign: 'center',
+        backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
+      }}
+    >
+      <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>
+        {label} 데이터를 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.
+      </p>
+    </div>
+  );
+}
+
+function RentTransactionsPanel({
+  transactions,
+  status,
+}: {
+  transactions: RentTransaction[];
+  status: AptPageData['rentStatus'];
+}) {
+  if (status === 'error') return <DataLoadError label="전월세 거래" />;
+  if (transactions.length === 0) {
+    return (
+      <div style={{
+        padding: '40px 24px', borderRadius: '16px', textAlign: 'center',
+        backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
+      }}>
+        <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>
+          최근 {APT_RENT_MONTHS}개월 내 전월세 거래가 없습니다.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <section style={{
+      backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
+      borderRadius: '16px', overflow: 'hidden', marginBottom: '10px',
+    }}>
+      <div style={{ padding: '16px 18px 12px', display: 'flex', alignItems: 'baseline', gap: '10px' }}>
+        <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>
+          전월세 거래
+        </h2>
+        <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
+          최근 {APT_RENT_MONTHS}개월 · 계약일순
+        </span>
+      </div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+              {['계약일', '면적', '층', '보증금/월세', '구분'].map((heading) => (
+                <th key={heading} style={thStyle}>{heading}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {transactions.map((tx, index) => (
+              <tr key={index} style={{ borderTop: '1px solid var(--border-light)' }}>
+                <td style={tdStyle}>{fmtContractDate(tx.date)}</td>
+                <td style={tdStyle}>{tx.area}㎡ · {Math.round(tx.area / 3.3058)}평</td>
+                <td style={tdStyle}>{tx.floor}층</td>
+                <td style={{ ...tdStyle, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>
+                  {fmtRentPrice(tx, fmtPrice)}
+                </td>
+                <td style={tdStyle}>
+                  <span style={{
+                    fontSize: '11px', fontWeight: 700, padding: '1px 7px', borderRadius: '5px',
+                    backgroundColor: tx.monthlyRent === 0 ? '#EAF3FF' : 'var(--border-light)',
+                    color: tx.monthlyRent === 0 ? '#1B4DDB' : 'var(--text-dim)',
+                  }}>
+                    {tx.monthlyRent === 0 ? '전세' : '월세'}
+                  </span>
+                  {tx.contractType ? ` ${tx.contractType}` : ''}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 async function AptContent({ params }: { params: Promise<{ id: string }> }) {
   // 요청 시 렌더 선언 — 로더가 new Date(월 목록) 를 쓰므로 PPR 프리렌더에서 제외
   await connection();
@@ -81,7 +190,18 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
   const data = await getAptPageData(decodeURIComponent(id));
   if (!data) notFound();
 
-  const { master, district, group, allTimeHigh, recentJeonse, rentTransactions, aptScore } = data;
+  const {
+    master,
+    district,
+    group,
+    allTimeHigh,
+    recentJeonse,
+    rentTransactions,
+    aptScore,
+    transactionsStatus,
+    rentStatus,
+    allTimeHighStatus,
+  } = data;
 
   // 입지 점수 등급 라벨 (1.0 극상 ~ 5.0)
   const scoreGrade = aptScore
@@ -99,18 +219,23 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
   const newHigh  = detectNewHigh(group);
   const recovery = peakRecovery(group);
 
-  // 회복률 — 역대 전고점(apt_highs) 우선, 없으면 36개월 폴백 (사이클 FF)
+  // 회복률 — 역대 전고점(apt_highs) 우선, 없으면 최근 조회 기간 폴백
   const recoveryPct = allTimeHigh && latest
     ? Math.round((latest.price / allTimeHigh.price) * 1000) / 10
     : recovery?.pct ?? null;
   const recoveryLabel = allTimeHigh ? '역대 전고점 회복률' : '전고점 회복률';
+  const fallbackHighReason = allTimeHighStatus === 'ambiguous'
+    ? '동명 단지 구분이 불가능해 역대 전고점 제외'
+    : allTimeHighStatus === 'error'
+      ? '역대 전고점 조회 실패'
+      : null;
   const recoverySub = allTimeHigh
     ? (recoveryPct !== null && recoveryPct >= 100
         ? `전고점 경신 · 종전 ${fmtPrice(allTimeHigh.price)}`
         : `전고점 ${fmtPrice(allTimeHigh.price)} (${fmtContractDate(allTimeHigh.dealDate)})`)
     : (recovery
-        ? (recovery.pct >= 100 ? '전고점 경신' : `최근 ${APT_PAGE_MONTHS}개월 최고가 기준`)
-        : undefined);
+        ? `${fallbackHighReason ? `${fallbackHighReason} · ` : ''}${recovery.pct >= 100 ? '기간 내 최고가 경신' : `최근 ${APT_PAGE_MONTHS}개월 최고가 기준`}`
+        : fallbackHighReason ?? undefined);
 
   // 전세가율 (사이클 LL) — 대표 면적 최신 전세 보증금 ÷ 최근 매매가
   const latestJeonse = recentJeonse[0] ?? null;
@@ -118,7 +243,13 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
     ? Math.round((latestJeonse.deposit / latest.price) * 1000) / 10
     : null;
 
-  const deepLink = `/transactions?district=${encodeURIComponent(district)}&q=${encodeURIComponent(group.name)}`;
+  const deepLinkParams = new URLSearchParams({
+    district,
+    q: group.name,
+    aptId: master.id,
+  });
+  if (group.dong) deepLinkParams.set('aptDong', group.dong);
+  const deepLink = `/transactions?${deepLinkParams.toString()}`;
 
   // JSON-LD — 단지(ApartmentComplex) + 브레드크럼 (사이클 JJ, XSS 방지 위해 < 이스케이프)
   const pageUrl = `${SITE_URL}/apt/${encodeURIComponent(master.id)}`;
@@ -157,7 +288,7 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
       <nav style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '14px' }} aria-label="breadcrumb">
         <Link href="/transactions" style={{ color: 'var(--text-dim)', textDecoration: 'none' }}>실거래 조회</Link>
         {' · '}
-        <Link href={deepLink.split('&q=')[0]} style={{ color: 'var(--text-dim)', textDecoration: 'none' }}>{district}</Link>
+        <Link href={`/transactions?district=${encodeURIComponent(district)}`} style={{ color: 'var(--text-dim)', textDecoration: 'none' }}>{district}</Link>
         {' · '}
         <span style={{ color: 'var(--text-muted)' }}>{group.name}</span>
       </nav>
@@ -191,17 +322,26 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
       </p>
 
       {sorted.length === 0 ? (
-        <div style={{
-          padding: '48px 24px', borderRadius: '16px', textAlign: 'center',
-          backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
-        }}>
-          <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>
-            최근 {APT_PAGE_MONTHS}개월 내 신고된 매매 거래가 없습니다.
-          </p>
-          <Link href={deepLink} style={{ display: 'inline-block', marginTop: '14px', fontSize: '13px', fontWeight: 700, color: 'var(--accent)' }}>
-            {district} 전체 실거래 보기 →
-          </Link>
-        </div>
+        <>
+          {transactionsStatus === 'error' ? (
+            <DataLoadError label="매매 거래" />
+          ) : (
+            <div style={{
+              padding: '48px 24px', borderRadius: '16px', textAlign: 'center',
+              backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
+            }}>
+              <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>
+                최근 {APT_PAGE_MONTHS}개월 내 신고된 매매 거래가 없습니다.
+              </p>
+              <Link href={deepLink} style={{ display: 'inline-block', marginTop: '14px', fontSize: '13px', fontWeight: 700, color: 'var(--accent)' }}>
+                이 단지 실거래 다시 확인하기 →
+              </Link>
+            </div>
+          )}
+          <div style={{ marginTop: '24px' }}>
+            <RentTransactionsPanel transactions={rentTransactions} status={rentStatus} />
+          </div>
+        </>
       ) : (
         <>
           {/* 공유 액션 — 상단 배치 (2026-07-19): 지도·공유를 스크롤 없이 바로 */}
@@ -278,7 +418,7 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
             </section>
           )}
 
-          <AptDealTabs hasRent={rentTransactions.length > 0}>
+          <AptDealTabs>
           <div>
           {/* 통계 카드 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', marginBottom: '20px' }}>
@@ -338,71 +478,19 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
           </div>
           {/* 전월세 탭 패널 (전월세 v2) */}
           <div>
-            {rentTransactions.length > 0 ? (
-              <section style={{
-                backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
-                borderRadius: '16px', overflow: 'hidden', marginBottom: '10px',
-              }}>
-                <div style={{ padding: '16px 18px 12px', display: 'flex', alignItems: 'baseline', gap: '10px' }}>
-                  <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>
-                    전월세 거래
-                  </h2>
-                  <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
-                    최근 {APT_RENT_MONTHS}개월 · 계약일순
-                  </span>
-                </div>
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ backgroundColor: 'var(--bg-tertiary)' }}>
-                        {['계약일', '면적', '층', '보증금/월세', '구분'].map((h) => (
-                          <th key={h} style={thStyle}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rentTransactions.map((tx, i) => (
-                        <tr key={i} style={{ borderTop: '1px solid var(--border-light)' }}>
-                          <td style={tdStyle}>{fmtContractDate(tx.date)}</td>
-                          <td style={tdStyle}>{tx.area}㎡ · {Math.round(tx.area / 3.3058)}평</td>
-                          <td style={tdStyle}>{tx.floor}층</td>
-                          <td style={{ ...tdStyle, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>
-                            {fmtRentPrice(tx, fmtPrice)}
-                          </td>
-                          <td style={tdStyle}>
-                            <span style={{
-                              fontSize: '11px', fontWeight: 700, padding: '1px 7px', borderRadius: '5px',
-                              backgroundColor: tx.monthlyRent === 0 ? '#EAF3FF' : 'var(--border-light)',
-                              color: tx.monthlyRent === 0 ? '#1B4DDB' : 'var(--text-dim)',
-                            }}>
-                              {tx.monthlyRent === 0 ? '전세' : '월세'}
-                            </span>
-                            {tx.contractType ? ` ${tx.contractType}` : ''}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            ) : (
-              <div style={{
-                padding: '40px 24px', borderRadius: '16px', textAlign: 'center',
-                backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
-              }}>
-                <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>
-                  최근 {APT_RENT_MONTHS}개월 내 전월세 거래가 없습니다.
-                </p>
-              </div>
-            )}
+            <RentTransactionsPanel transactions={rentTransactions} status={rentStatus} />
           </div>
           </AptDealTabs>
 
           <p style={{ fontSize: '11px', color: 'var(--text-dim)', margin: '0 0 24px', lineHeight: 1.8 }}>
-            ※ 출처: 국토교통부 실거래가 공개시스템 (자체 원장, 매일 갱신 · 취소거래 제외) · 신고 지연으로 실제와 차이가 있을 수 있습니다.
+            ※ 출처: 국토교통부 실거래가 공개시스템 (자체 원장 · 매매 취소거래 제외) · 신고 지연 및 원장 반영 시차로 실제와 차이가 있을 수 있습니다.
             {allTimeHigh
               ? ' 역대 전고점은 2019년 이후 신고 최고가 기준입니다.'
-              : ` 전고점 회복률은 최근 ${APT_PAGE_MONTHS}개월 내 대표 면적 최고가 기준입니다.`}
+              : allTimeHighStatus === 'ambiguous'
+                ? ` 동명 단지를 구분할 수 없는 역대 전고점은 제외하고 최근 ${APT_PAGE_MONTHS}개월 값만 사용했습니다.`
+                : allTimeHighStatus === 'error'
+                  ? ` 역대 전고점 조회 실패로 최근 ${APT_PAGE_MONTHS}개월 값만 사용했습니다.`
+                  : ` 전고점 회복률은 최근 ${APT_PAGE_MONTHS}개월 내 대표 면적 최고가 기준입니다.`}
             {jeonseRatio !== null && ' 전세가율은 대표 면적 최신 전세 보증금 ÷ 최근 매매가입니다.'}
           </p>
 

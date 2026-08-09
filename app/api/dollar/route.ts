@@ -1,198 +1,198 @@
 import { NextRequest } from 'next/server';
 import { DISTRICT_CODE } from '@/lib/district-codes';
-import { getExchangeRates } from '@/lib/exchange-rate';
-import { getBtcKrw, getGoldKrwPerGram, TROY_OZ_TO_GRAM } from '@/lib/asset-rates';
+import { getExchangeRateQuotes } from '@/lib/exchange-rate';
 import {
-  type DealRow,
-  monthsForYear,
-  fallbackMonths,
-  filterByArea,
-  availableAreas,
-  averagePrice,
-} from '@/lib/dollar-shared';
-
-const TRADE_API_BASE = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade';
-
-/** 공백 제거 후 비교 — "래미안 대치팰리스" vs "래미안대치팰리스" 허용 */
-function normalize(s: string) {
-  return s.replace(/\s/g, '');
-}
-
-/** XML → 단지 매칭 거래 {price, area} 목록 (2026-07-12: 평형 지원 위해 area 파싱 추가) */
-function parseXmlDeals(xml: string, aptNameQuery: string): DealRow[] {
-  const deals: DealRow[] = [];
-  const items = xml.match(/<item>([\s\S]*?)<\/item>/g) ?? [];
-  const normQuery = normalize(aptNameQuery);
-
-  for (const item of items) {
-    const get = (tag: string) =>
-      item.match(new RegExp(`<${tag}>([^<]*)<\\/${tag}>`))?.[1]?.trim() ?? '';
-
-    const aptNm     = get('aptNm');
-    const normAptNm = normalize(aptNm);
-    if (!normAptNm.includes(normQuery) && !normQuery.includes(normAptNm)) continue;
-
-    const price = parseInt(get('dealAmount').replace(/,/g, ''), 10);
-    const area  = parseFloat(get('excluUseAr'));
-    if (!isNaN(price) && price > 0) {
-      deals.push({ price, area: isNaN(area) ? 0 : area });
-    }
-  }
-  return deals;
-}
-
-async function fetchMonthDeals(
-  lawdCd:   string,
-  yyyymm:   string,
-  aptName:  string,
-  apiKey:   string,
-): Promise<DealRow[]> {
-  const params = new URLSearchParams({
-    LAWD_CD:   lawdCd,
-    DEAL_YMD:  yyyymm,
-    numOfRows: '100',
-    pageNo:    '1',
-  });
-  const url = `${TRADE_API_BASE}?serviceKey=${apiKey}&${params}`;
-
-  const controller = new AbortController();
-  const timeoutId  = setTimeout(() => controller.abort(), 6000);
-  try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      next:   { revalidate: 86400 },
-    });
-    const xml = await res.text();
-    return parseXmlDeals(xml, aptName);
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-async function fetchYearDeals(
-  lawdCd: string, year: number, aptName: string, apiKey: string, now: Date,
-): Promise<DealRow[]> {
-  const primary = await Promise.allSettled(
-    monthsForYear(year, now).map((mm) => fetchMonthDeals(lawdCd, `${year}${mm}`, aptName, apiKey)),
-  );
-  let deals = primary.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
-  if (deals.length === 0) {
-    const fb = await Promise.allSettled(
-      fallbackMonths(year, now).map((mm) => fetchMonthDeals(lawdCd, `${year}${mm}`, aptName, apiKey)),
-    );
-    deals = fb.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
-  }
-  return deals;
-}
-
-/**
- * 현재 연도 라이브 시세 — CoinGecko (BTC·PAXG, /api/crypto 와 동일 소스).
- * BTC의 krw/usd 비율로 실시간 환율까지 도출. 실패 시 null (정적 잠정치 유지).
- */
-async function fetchLiveRates(): Promise<{ btcKrw: number; goldKrwPerGram: number; usdKrw: number } | null> {
-  try {
-    const res = await fetch(
-      'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,pax-gold&vs_currencies=usd,krw',
-      { next: { revalidate: 300 } },
-    );
-    if (!res.ok) return null;
-    const json = await res.json();
-    const btcKrw  = json?.bitcoin?.krw;
-    const btcUsd  = json?.bitcoin?.usd;
-    const paxgKrw = json?.['pax-gold']?.krw;
-    if (!btcKrw || !btcUsd || !paxgKrw) return null;
-    return {
-      btcKrw,
-      goldKrwPerGram: paxgKrw / TROY_OZ_TO_GRAM,
-      usdKrw: btcKrw / btcUsd,
-    };
-  } catch {
-    return null;
-  }
-}
+  fetchDollarLiveRates,
+  fetchDollarYearDeals,
+  parseDollarQuery,
+  selectDollarAssets,
+} from '@/lib/dollar-api';
+import { availableAreas, averagePrice, filterByArea } from '@/lib/dollar-shared';
+import { kstTodayIso } from '@/lib/agg-window';
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = req.nextUrl;
-
-  const district    = searchParams.get('district') ?? '';
-  const aptName     = searchParams.get('aptName')  ?? '';
-  const baseYear    = parseInt(searchParams.get('baseYear')    ?? '2020', 10);
-  const compareYear = parseInt(searchParams.get('compareYear') ?? String(new Date().getFullYear()), 10);
-  const areaParam   = searchParams.get('area');
-  const area        = areaParam ? parseInt(areaParam, 10) : null;
-
-  if (!district || !aptName) {
-    return Response.json({ error: 'district, aptName 파라미터가 필요합니다' }, { status: 400 });
+  const now = new Date();
+  const parsed = parseDollarQuery(req.nextUrl.searchParams, now);
+  if (!parsed.ok) {
+    return Response.json({ status: 'invalid_request', error: parsed.error }, { status: 400 });
   }
 
+  const { district, aptName, baseYear, compareYear, area } = parsed.value;
   const lawdCd = DISTRICT_CODE[district];
   if (!lawdCd) {
-    return Response.json({ error: `지원하지 않는 구: ${district}` }, { status: 400 });
+    return Response.json(
+      { status: 'invalid_request', error: `지원하지 않는 지역입니다: ${district}` },
+      { status: 400 },
+    );
   }
 
   const rawKey = process.env.PUBLIC_DATA_API_KEY;
   if (!rawKey) {
     console.error('[dollar API] PUBLIC_DATA_API_KEY 환경변수 미설정');
-    return Response.json({ error: '데이터를 불러올 수 없습니다' }, { status: 500 });
+    return Response.json(
+      {
+        status: 'degraded',
+        error: '국토교통부 실거래가 연결 설정이 없어 현재 조회할 수 없습니다.',
+      },
+      { status: 503 },
+    );
   }
-  const apiKey = decodeURIComponent(rawKey);
 
-  const now = new Date();
-  const curYear = now.getFullYear();
-
-  const [baseDeals, compareDeals] = await Promise.all([
-    fetchYearDeals(lawdCd, baseYear, aptName, apiKey, now),
-    fetchYearDeals(lawdCd, compareYear, aptName, apiKey, now),
-  ]);
-
-  // 평형 목록: 양 연도 합집합 + 연도별 건수 — 칩에서 "비교 가능 여부"를 보여주기 위함
-  const areaMap = new Map<number, { count: number; baseCount: number }>();
-  for (const { area: a, count } of availableAreas(compareDeals)) areaMap.set(a, { count, baseCount: 0 });
-  for (const { area: a, count } of availableAreas(baseDeals)) {
-    const e = areaMap.get(a);
-    if (e) e.baseCount = count;
-    else areaMap.set(a, { count: 0, baseCount: count });
+  let apiKey: string;
+  try {
+    apiKey = decodeURIComponent(rawKey);
+  } catch {
+    console.error('[dollar API] PUBLIC_DATA_API_KEY 형식 오류');
+    return Response.json(
+      { status: 'degraded', error: '국토교통부 실거래가 연결 설정을 확인해 주세요.' },
+      { status: 503 },
+    );
   }
-  const areas = [...areaMap.entries()]
-    .map(([a, { count, baseCount }]) => ({ area: a, count, baseCount }))
-    .sort((x, y) => x.area - y.area);
 
-  const basePriceKrw    = averagePrice(filterByArea(baseDeals, area));
-  const comparePriceKrw = averagePrice(filterByArea(compareDeals, area));
+  const currentYear = Number(kstTodayIso(now).slice(0, 4));
+  try {
+    const [baseResult, compareResult, exchangeResult, liveResult] = await Promise.all([
+      fetchDollarYearDeals(lawdCd, baseYear, aptName, apiKey, now),
+      fetchDollarYearDeals(lawdCd, compareYear, aptName, apiKey, now),
+      getExchangeRateQuotes([baseYear, compareYear]),
+      baseYear === currentYear || compareYear === currentYear
+        ? fetchDollarLiveRates()
+        : Promise.resolve(null),
+    ]);
 
-  const [rates, live] = await Promise.all([
-    getExchangeRates([baseYear, compareYear]),
-    (baseYear === curYear || compareYear === curYear) ? fetchLiveRates() : Promise.resolve(null),
-  ]);
+    if (!baseResult.hasUsableResponse || !compareResult.hasUsableResponse) {
+      return Response.json(
+        {
+          status: 'degraded',
+          error: '국토교통부 원본 응답을 확인할 수 없어 거래가 0건인지 판별하지 못했습니다.',
+          coverage: {
+            base: baseResult.window,
+            compare: compareResult.window,
+          },
+        },
+        { status: 502 },
+      );
+    }
 
-  // 현재 연도는 라이브 시세 우선 (연중 잠정 static 은 폴백)
-  const btcFor  = (y: number) => (y === curYear && live ? Math.round(live.btcKrw) : getBtcKrw(y));
-  const goldFor = (y: number) => (y === curYear && live ? Math.round(live.goldKrwPerGram) : getGoldKrwPerGram(y));
-  const rateFor = (y: number, fallback: number) =>
-    y === curYear && live ? Math.round(live.usdKrw) : (rates[y] ?? fallback);
+    const areaMap = new Map<number, { count: number; baseCount: number }>();
+    for (const { area: itemArea, count } of availableAreas(compareResult.deals)) {
+      areaMap.set(itemArea, { count, baseCount: 0 });
+    }
+    for (const { area: itemArea, count } of availableAreas(baseResult.deals)) {
+      const existing = areaMap.get(itemArea);
+      if (existing) existing.baseCount = count;
+      else areaMap.set(itemArea, { count: 0, baseCount: count });
+    }
+    const areas = [...areaMap.entries()]
+      .map(([itemArea, counts]) => ({ area: itemArea, ...counts }))
+      .sort((a, b) => a.area - b.area);
 
-  return Response.json({
-    aptName,
-    district,
-    baseYear,
-    compareYear,
-    basePriceKrw,
-    comparePriceKrw,
-    baseExchangeRate:      rateFor(baseYear, 1180),
-    compareExchangeRate:   rateFor(compareYear, 1470),
-    baseBtcKrw:            btcFor(baseYear),
-    compareBtcKrw:         btcFor(compareYear),
-    baseGoldKrwPerGram:    goldFor(baseYear),
-    compareGoldKrwPerGram: goldFor(compareYear),
-    // 2026-07-12 추가 — 평형 선택·연중 라벨용
-    area,
-    availableAreas: areas,
-    baseIsYtd:    baseYear === curYear,
-    compareIsYtd: compareYear === curYear,
-  }, {
-    // CDN 캐시 (Fluid CPU 절감, 2026-07-12): 동일 쿼리 반복 조회를 엣지에서 처리.
-    // s-maxage 는 라이브 시세 주기(300s)와 동기 — "실시간" 표방과 어긋나지 않는 상한.
-    // 성공 응답에만 부여 (400/500 은 캐시하면 장애가 고착됨).
-    headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=3600' },
-  });
+    const basePrices = filterByArea(baseResult.deals, area);
+    const comparePrices = filterByArea(compareResult.deals, area);
+    const baseAssets = selectDollarAssets(
+      baseYear,
+      currentYear,
+      exchangeResult.quotes[baseYear],
+      liveResult,
+    );
+    const compareAssets = selectDollarAssets(
+      compareYear,
+      currentYear,
+      exchangeResult.quotes[compareYear],
+      liveResult,
+    );
+
+    const warnings = new Set<string>();
+    if (baseResult.window.failedMonths.length > 0 || compareResult.window.failedMonths.length > 0) {
+      warnings.add('일부 조회 월의 국토교통부 응답이 실패해 남은 월 표본만 계산했습니다.');
+    }
+    if (baseResult.window.fallbackUsed || compareResult.window.fallbackUsed) {
+      warnings.add('기본 조회 기간에 일치 거래가 없어 해당 연도의 다른 월까지 조회 범위를 넓혔습니다.');
+    }
+    if (exchangeResult.warning) warnings.add(exchangeResult.warning);
+    if (liveResult && !liveResult.ok) {
+      warnings.add(`현재 시세 조회 실패: ${liveResult.error} 정적 참고 추정치로 표시했습니다.`);
+    }
+
+    const allProvenance = [
+      baseAssets.provenance.exchangeRate,
+      compareAssets.provenance.exchangeRate,
+      baseAssets.provenance.bitcoin,
+      compareAssets.provenance.bitcoin,
+      baseAssets.provenance.gold,
+      compareAssets.provenance.gold,
+    ];
+    if (allProvenance.some((item) => item.mode === 'static_estimate')) {
+      warnings.add('정적 참고 추정치는 원자료 기준일과 산출 근거가 검증되지 않아 방향성 참고에만 적합합니다.');
+    }
+    if (allProvenance.some((item) => item.mode === 'unavailable')) {
+      warnings.add('일부 환산 자산의 값을 확인할 수 없어 해당 항목을 표시하지 않았습니다.');
+    }
+    if (
+      allProvenance.some((item) => item.mode === 'live_proxy')
+      && allProvenance.some((item) => item.mode === 'static_estimate')
+    ) {
+      warnings.add('현재 시점 호가와 과거 정적 추정치는 기준 시점·산식이 달라 엄밀한 수익률 비교가 아닙니다.');
+    }
+
+    const warningList = [...warnings];
+    return Response.json({
+      status: warningList.length > 0 ? 'partial' : 'ok',
+      aptName,
+      district,
+      baseYear,
+      compareYear,
+      basePriceKrw: averagePrice(basePrices),
+      comparePriceKrw: averagePrice(comparePrices),
+      baseExchangeRate: baseAssets.exchangeRate,
+      compareExchangeRate: compareAssets.exchangeRate,
+      baseBtcKrw: baseAssets.btcKrw,
+      compareBtcKrw: compareAssets.btcKrw,
+      baseGoldKrwPerGram: baseAssets.goldKrwPerGram,
+      compareGoldKrwPerGram: compareAssets.goldKrwPerGram,
+      area,
+      availableAreas: areas,
+      baseIsYtd: baseYear === currentYear,
+      compareIsYtd: compareYear === currentYear,
+      warnings: warningList,
+      provenance: {
+        transactions: {
+          source: '국토교통부 아파트매매 실거래자료',
+          matchMethod: '공백 제거 후 단지명 부분 일치',
+          cancellationExcluded: true,
+          aggregation: '선택 면적의 유효 거래금액 산술평균',
+          base: {
+            ...baseResult.window,
+            sampleCount: basePrices.length,
+            allAreaSampleCount: baseResult.deals.length,
+          },
+          compare: {
+            ...compareResult.window,
+            sampleCount: comparePrices.length,
+            allAreaSampleCount: compareResult.deals.length,
+          },
+        },
+        exchangeRate: {
+          base: baseAssets.provenance.exchangeRate,
+          compare: compareAssets.provenance.exchangeRate,
+        },
+        bitcoin: {
+          base: baseAssets.provenance.bitcoin,
+          compare: compareAssets.provenance.bitcoin,
+        },
+        gold: {
+          base: baseAssets.provenance.gold,
+          compare: compareAssets.provenance.gold,
+        },
+      },
+    }, {
+      headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=3600' },
+    });
+  } catch (error) {
+    console.error('[dollar API] 조회 실패', error instanceof Error ? error.message : 'unknown error');
+    return Response.json(
+      { status: 'degraded', error: '원본 거래자료 또는 환산 기준을 불러오지 못했습니다.' },
+      { status: 502 },
+    );
+  }
 }

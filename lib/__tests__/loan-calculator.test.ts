@@ -1,12 +1,12 @@
 /**
  * loan-calculator 특성테스트 (Y5) — 정책대출 시뮬레이터 현재 동작 고정.
  *
- * 고정 값은 2026-04-01 공시 금리 테이블(loan-products.ts) 기준.
+ * 고정 값은 2026-04-01 기준으로 저장된 금리 테이블(loan-products.ts) 기준.
  * 금리 테이블 갱신 시 이 테스트의 기대값도 함께 갱신할 것.
  *
  * 특성(현재 동작) 주의 사항:
  * - 지방 소재 우대(0.2%p)는 우대금리 상한(cap) "밖에서" 가산된다 → 상한 0.7 + 0.2 = 0.9 가능.
- * - DSR 40% 초과는 rejectReasons에 들어가지만 feasible은 true 유지 (경고 성격).
+ * - DSR 40% 초과는 보수적으로 feasible=false 처리한다.
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -49,8 +49,24 @@ describe('상환액 계산 함수', () => {
   it('체증식 — 30년(growthRate 0.02)의 1·2년차, 연 2% 증가 관계 고정', () => {
     const y1 = calcGraduatedPayment(20000, 3.75, 360, 1);
     const y2 = calcGraduatedPayment(20000, 3.75, 360, 2);
-    expect(y1).toBeCloseTo(68.49458, 4);
+    expect(y1).toBeCloseTo(72.36647, 4);
     expect(y2).toBeCloseTo(y1 * 1.02, 8);
+  });
+
+  it('체증식 — 정해진 연차별 납입액만으로 별도 만기 일시금 없이 원금을 완납한다', () => {
+    const principal = 20000;
+    const annualRate = 3.75;
+    const months = 360;
+    const monthlyRate = annualRate / 100 / 12;
+    let remaining = principal;
+
+    for (let month = 1; month <= months; month++) {
+      const year = Math.ceil(month / 12);
+      const payment = calcGraduatedPayment(principal, annualRate, months, year);
+      remaining -= payment - remaining * monthlyRate;
+    }
+
+    expect(Math.abs(remaining)).toBeLessThan(0.01);
   });
 });
 
@@ -65,10 +81,13 @@ describe('simulateLoan — 디딤돌 일반 (대표 시나리오 고정)', () =>
     expect(r.monthlyPayment).toBe(92.62);
     expect(r.totalInterest).toBe(13344.32);
     expect(r.totalPayment).toBe(33344.32);
+    expect(r.maturityBalance).toBe(0);
     expect(r.dsr).toBe(22.23);
     expect(r.dti).toBe(22.23);
     expect(r.feasible).toBe(true);
     expect(r.rejectReasons).toEqual([]);
+    expect(r.rateBasis).toBe('term_proxy_assumption');
+    expect(r.rateNote).toContain('20년 금리표 값을 계산 가정');
   });
 
   it('상환 스케줄 — 12개월 고정, 1개월차 원리금 분해 값', () => {
@@ -121,11 +140,11 @@ describe('simulateLoan — 요건 미충족·경고', () => {
     expect(r.rejectReasons).toEqual(['소득요건 초과: 연소득 9000만원 > 한도 6000만원']);
   });
 
-  it('DSR 40% 초과 — 경고는 남지만 feasible은 true 유지 (특성)', () => {
+  it('DSR 40% 초과 — 거절 사유에 포함하고 가능한 대출로 표시하지 않는다', () => {
     const r = simulateLoan({ ...BASE, income: 2500, housePrice: 30000, deposit: 3000 });
     expect(r.dsr).toBe(42.58);
-    expect(r.rejectReasons).toEqual(['DSR 42.58% > 40% 초과 (경고: 대출 심사 시 제한 가능)']);
-    expect(r.feasible).toBe(true);
+    expect(r.rejectReasons).toEqual(['DSR 42.58% > 40%: 시뮬레이터의 일반 한도를 초과했습니다.']);
+    expect(r.feasible).toBe(false);
   });
 
   it('존재하지 않는 상품 → 전체 0 + 사유', () => {
@@ -144,17 +163,28 @@ describe('simulateLoan — 보금자리론·체증식', () => {
     expect(r.appliedRate).toBe(4.25);
     expect(r.loanAmount).toBe(38500); // LTV 70% (housePrice 55000 → 38500), 한도 50000 미만
     expect(r.feasible).toBe(true);
+    expect(r.rateBasis).toBe('range_midpoint_assumption');
+    expect(r.rateNote).toContain('단순 중간값');
   });
 
-  it('체증식 30년 — 연차별(1·10·20·30) 월 상환액 고정, 총이자는 원리금균등과 동일', () => {
+  it('디딤돌 20년은 별도 수록 금리표 사용으로 표시한다', () => {
+    const r = simulateLoan({ ...BASE, loanTerm: 20 });
+    expect(r.rateBasis).toBe('stored_table');
+    expect(r.rateNote).toContain('20년 저장 금리표');
+  });
+
+  it('체증식 30년 — 이자를 반영해 만기 완납하며 실제 총이자를 표시한다', () => {
     const r = simulateLoan({ ...BASE, repaymentType: 'graduated' });
-    expect(r.monthlyPayment).toBe(68.49);
+    expect(r.monthlyPayment).toBe(72.37);
     expect(r.graduatedYears).toEqual([
-      { year: 1, monthlyPayment: 68.49 },
-      { year: 10, monthlyPayment: 81.86 },
-      { year: 20, monthlyPayment: 99.78 },
-      { year: 30, monthlyPayment: 121.64 },
+      { year: 1, monthlyPayment: 72.37 },
+      { year: 10, monthlyPayment: 86.48 },
+      { year: 20, monthlyPayment: 105.42 },
+      { year: 30, monthlyPayment: 128.51 },
     ]);
-    expect(r.totalInterest).toBe(13344.32); // 원리금균등과 동일 (설계 의도)
+    expect(r.totalInterest).toBe(15229.22);
+    expect(r.totalPayment).toBe(35229.22);
+    expect(r.maturityBalance).toBe(0);
+    expect(r.totalInterest).toBeGreaterThan(simulateLoan(BASE).totalInterest);
   });
 });

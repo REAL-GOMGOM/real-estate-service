@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Image from 'next/image';
@@ -19,8 +19,8 @@ const NAV_ITEMS: NavItem[] = [
       { emoji: '\uD83D\uDD25', label: '주요거래', href: '/highlights', desc: '신고가·급등·국평 고가' },
       { emoji: '\uD83D\uDCCA', label: '시세 차트', href: '/chart', desc: '단지별 가격 추이' },
       { emoji: '\uD83D\uDDFA\uFE0F', label: '부동산 지도', href: '/location-map', desc: '지역별 입지 점수' },
-      { emoji: '\uD83D\uDCCD', label: '지역 분석', href: '/region', desc: '126개 지역 비교 허브' },
-      { emoji: '\uD83C\uDFC6', label: '주간 랭킹', href: '/ranking', desc: '최고가·거래량' },
+      { emoji: '\uD83D\uDCCD', label: '지역 분석', href: '/region', desc: '전국 지역 비교 허브' },
+      { emoji: '\uD83C\uDFC6', label: '실거래 랭킹', href: '/ranking', desc: '등록 표본 최고가·거래량' },
     ],
   },
   { label: '청약', href: '/subscription' },
@@ -41,7 +41,6 @@ const NAV_ITEMS: NavItem[] = [
     ],
   },
   { label: '칼럼', href: '/blog' },
-  { label: '뉴스', href: '/news' },
 ];
 
 function isChildActive(children: NavChild[], pathname: string): boolean {
@@ -53,6 +52,7 @@ export default function Header() {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [openAccordion, setOpenAccordion] = useState<string | null>(null);
   const [now, setNow] = useState<Date | null>(null);
+  const dropdownButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const pathname = usePathname();
 
   // hydration mismatch 방지 — mount 후 비동기 주입 (동기 setState 룰 회피)
@@ -79,23 +79,44 @@ export default function Header() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '64px', position: 'relative' }}>
 
           {/* 로고 */}
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', width: 44 }}>
+          <Link href="/" aria-current={pathname === '/' ? 'page' : undefined} style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', width: 44 }}>
             <Image src="/logo.png" alt="내집(My.ZIP)" width={44} height={44} style={{ objectFit: 'contain' }} priority />
           </Link>
 
           {/* 데스크탑 네비게이션 (중앙) */}
-          <nav style={{ alignItems: 'center', gap: '22px', position: 'absolute', left: '50%', transform: 'translateX(-50%)' }} className="hidden lg:flex">
-            {NAV_ITEMS.map((item) => {
+          <nav aria-label="주요 메뉴" style={{ alignItems: 'center', gap: '22px', position: 'absolute', left: '50%', transform: 'translateX(-50%)' }} className="hidden lg:flex">
+            {NAV_ITEMS.map((item, itemIndex) => {
               if (item.children) {
                 const groupActive = isChildActive(item.children, pathname);
+                const panelId = `desktop-nav-group-${itemIndex}`;
                 return (
                   <div
                     key={item.label}
                     style={{ position: 'relative' }}
                     onMouseEnter={() => setOpenDropdown(item.label)}
                     onMouseLeave={() => setOpenDropdown(null)}
+                    onBlur={(event) => {
+                      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                        setOpenDropdown(null);
+                      }
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Escape' && openDropdown === item.label) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        dropdownButtonRefs.current[item.label]?.focus();
+                        setOpenDropdown(null);
+                      }
+                    }}
                   >
                     <button
+                      ref={(element) => { dropdownButtonRefs.current[item.label] = element; }}
+                      type="button"
+                      aria-expanded={openDropdown === item.label}
+                      aria-controls={panelId}
+                      onClick={(event) => setOpenDropdown((current) => (
+                        current === item.label && event.detail === 0 ? null : item.label
+                      ))}
                       style={{
                         display: 'flex', alignItems: 'center', gap: '3px',
                         fontSize: '14px', fontWeight: groupActive ? 700 : 600,
@@ -117,6 +138,7 @@ export default function Header() {
 
                     {openDropdown === item.label && (
                       <div
+                        id={panelId}
                         style={{
                           position: 'absolute', top: '100%', left: '-12px',
                           paddingTop: '8px',
@@ -139,6 +161,7 @@ export default function Header() {
                             <Link
                               key={child.href}
                               href={child.href}
+                              aria-current={childActive ? 'page' : undefined}
                               style={{
                                 display: 'flex', alignItems: 'flex-start', gap: '10px',
                                 padding: '10px 14px', borderRadius: '8px',
@@ -147,6 +170,7 @@ export default function Header() {
                               }}
                               onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-overlay)'; }}
                               onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                              onClick={() => setOpenDropdown(null)}
                             >
                               {child.emoji && <span style={{ fontSize: '18px', lineHeight: '20px', flexShrink: 0 }}>{child.emoji}</span>}
                               <span style={{ flex: 1 }}>
@@ -179,6 +203,7 @@ export default function Header() {
                 <Link
                   key={item.href}
                   href={item.href}
+                  aria-current={active ? 'page' : undefined}
                   style={{
                     fontSize: '14px', fontWeight: active ? 700 : 600,
                     color: active ? 'var(--accent)' : 'var(--text-secondary)',
@@ -235,6 +260,10 @@ export default function Header() {
           <div className="flex items-center gap-2 lg:hidden">
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
+              type="button"
+              aria-label={isMenuOpen ? '메뉴 닫기' : '메뉴 열기'}
+              aria-expanded={isMenuOpen}
+              aria-controls="mobile-site-navigation"
               style={{ padding: '8px', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
             >
               {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
@@ -245,7 +274,7 @@ export default function Header() {
 
       {/* 모바일 드롭다운 메뉴 */}
       {isMenuOpen && (
-        <div style={{ backgroundColor: 'var(--bg-primary)', padding: '8px 24px 16px', borderTop: '1px solid var(--border)' }} className="lg:hidden">
+        <div id="mobile-site-navigation" style={{ backgroundColor: 'var(--bg-primary)', padding: '8px 24px 16px', borderTop: '1px solid var(--border)' }} className="lg:hidden">
           {NAV_ITEMS.map((item) => {
             if (item.children) {
               const isOpen = openAccordion === item.label;
@@ -253,6 +282,8 @@ export default function Header() {
               return (
                 <div key={item.label} style={{ marginBottom: '4px' }}>
                   <button
+                    type="button"
+                    aria-expanded={isOpen}
                     onClick={() => setOpenAccordion(isOpen ? null : item.label)}
                     style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -279,6 +310,7 @@ export default function Header() {
                           <Link
                             key={child.href}
                             href={child.href}
+                            aria-current={childActive ? 'page' : undefined}
                             style={{
                               display: 'flex', alignItems: 'flex-start', gap: '10px',
                               padding: '10px 16px', borderRadius: '10px',
@@ -315,6 +347,7 @@ export default function Header() {
               <Link
                 key={item.href}
                 href={item.href}
+                aria-current={active ? 'page' : undefined}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '6px',
                   padding: '12px 16px', borderRadius: '10px',

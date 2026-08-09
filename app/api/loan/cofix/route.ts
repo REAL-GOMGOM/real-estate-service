@@ -49,12 +49,12 @@ export async function GET() {
     }
 
     return NextResponse.json(
-      { error: 'COFIX 데이터를 찾을 수 없습니다.' },
+      { error: '예금은행 대출평균금리 데이터를 찾을 수 없습니다.' },
       { status: 404 }
     );
   } catch {
     return NextResponse.json(
-      { error: 'COFIX 조회 중 오류가 발생했습니다.' },
+      { error: '예금은행 대출평균금리 조회 중 오류가 발생했습니다.' },
       { status: 500 }
     );
   }

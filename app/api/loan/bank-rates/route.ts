@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { kstTodayIso } from '@/lib/agg-window';
 
 const FSS_API_KEY = process.env.FSS_API_KEY ?? '';
 const FSS_BASE = 'https://finlife.fss.or.kr/finlifeapi/mortgageLoanProductsSearch.json';
@@ -6,6 +7,7 @@ const FSS_BASE = 'https://finlife.fss.or.kr/finlifeapi/mortgageLoanProductsSearc
 /* ── Types ── */
 
 interface FssBaseItem {
+  dcls_month?: string;
   fin_co_no: string;
   fin_prdt_cd: string;
   kor_co_nm: string;
@@ -18,6 +20,7 @@ interface FssBaseItem {
 }
 
 interface FssOptionItem {
+  dcls_month?: string;
   fin_co_no: string;
   fin_prdt_cd: string;
   mrtg_type: string;
@@ -155,8 +158,18 @@ function buildResponse(baseList: FssBaseItem[], optionList: FssOptionItem[]) {
     lowestVariable,
   };
 
+  const disclosureMonth = [...baseList, ...optionList]
+    .map((item) => item.dcls_month ?? '')
+    .filter((value) => /^\d{6}$/.test(value))
+    .sort()
+    .at(-1);
+
   return {
-    updatedAt: new Date().toISOString().slice(0, 10),
+    status: 'ok' as const,
+    disclosureMonth: disclosureMonth
+      ? `${disclosureMonth.slice(0, 4)}-${disclosureMonth.slice(4, 6)}`
+      : null,
+    fetchedOn: kstTodayIso(),
     banks,
     summary,
   };
@@ -167,8 +180,8 @@ function buildResponse(baseList: FssBaseItem[], optionList: FssOptionItem[]) {
 export async function GET() {
   if (!FSS_API_KEY) {
     return NextResponse.json(
-      { error: 'FSS API 키 미설정', banks: [], summary: null },
-      { status: 500 }
+      { status: 'unavailable', error: '금감원 API 연결 설정이 없습니다.', banks: [] },
+      { status: 503 }
     );
   }
 
@@ -184,10 +197,10 @@ export async function GET() {
 
     if (!res.ok) {
       return NextResponse.json(
-        { error: null, banks: [], message: '금감원 API 응답 오류입니다. 잠시 후 다시 확인해주세요.' },
+        { status: 'unavailable', error: '금감원 API 응답 오류입니다. 잠시 후 다시 확인해주세요.', banks: [] },
         {
-          status: 200,
-          headers: { 'Cache-Control': 'public, s-maxage=300' },
+          status: 502,
+          headers: { 'Cache-Control': 'private, no-store' },
         }
       );
     }
@@ -198,10 +211,10 @@ export async function GET() {
     if (!result || result.err_cd !== '000') {
       const msg = '금감원 서버에서 데이터를 가져올 수 없습니다. 잠시 후 다시 시도해주세요.';
       return NextResponse.json(
-        { error: null, banks: [], message: msg },
+        { status: 'unavailable', error: msg, banks: [] },
         {
-          status: 200,
-          headers: { 'Cache-Control': 'public, s-maxage=300' },
+          status: 502,
+          headers: { 'Cache-Control': 'private, no-store' },
         }
       );
     }
@@ -216,10 +229,10 @@ export async function GET() {
     });
   } catch {
     return NextResponse.json(
-      { error: null, banks: [], message: '금감원 API 점검 중입니다. 평일에 다시 확인해주세요.' },
+      { status: 'unavailable', error: '금감원 API 점검 중입니다. 잠시 후 다시 확인해주세요.', banks: [] },
       {
-        status: 200,
-        headers: { 'Cache-Control': 'public, s-maxage=300' },
+        status: 502,
+        headers: { 'Cache-Control': 'private, no-store' },
       }
     );
   }

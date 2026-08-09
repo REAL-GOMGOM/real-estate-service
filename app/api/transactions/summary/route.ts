@@ -80,12 +80,13 @@ export async function GET(req: NextRequest) {
       });
       return NextResponse.json(
         {
+          status: 'ok',
           summary,
           daily: null,
           month: yyyymm,
           window: { type: window.type, from: window.from, to: window.to },
           updatedAt: new Date().toISOString(),
-          note: `자체 분양권 원장 ${window.type === 'rolling30' ? '최근 30일' : '월별'} 실집계 (취소 제외, 매일 갱신)`,
+          note: `자체 분양권 원장 ${window.type === 'rolling30' ? '최근 30일' : '월별'} 실집계 (취소 제외)`,
         },
         { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } }
       );
@@ -125,12 +126,13 @@ export async function GET(req: NextRequest) {
       });
       return NextResponse.json(
         {
+          status: 'ok',
           summary,
           daily: null,
           month: yyyymm,
           window: { type: window.type, from: window.from, to: window.to },
           updatedAt: new Date().toISOString(),
-          note: `자체 전월세 원장 ${window.type === 'rolling30' ? '최근 30일' : '월별'} 실집계 (매일 갱신)`,
+          note: `자체 전월세 원장 ${window.type === 'rolling30' ? '최근 30일' : '월별'} 실집계`,
         },
         { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } }
       );
@@ -190,14 +192,15 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(
       {
+        status: 'ok',
         summary,
         daily,
         month: yyyymm,
         window: { type: window.type, from: window.from, to: window.to },
         updatedAt: new Date().toISOString(),
         note: window.type === 'rolling30'
-          ? '자체 원장 최근 30일 실집계 (취소 제외, 매일 갱신)'
-          : '자체 원장 월별 실집계 (취소 제외, 매일 갱신)',
+          ? '자체 원장 최근 30일 실집계 (취소 제외)'
+          : '자체 원장 월별 실집계 (취소 제외)',
       },
       { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } }
     );
@@ -207,6 +210,7 @@ export async function GET(req: NextRequest) {
     console.error('시도별 집계 실패 — 빈 집계 강등:', error);
     return NextResponse.json(
       {
+        status: 'degraded',
         summary: [],
         daily: null,
         month: yyyymm,
