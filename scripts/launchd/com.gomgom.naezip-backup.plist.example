@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.gomgom.naezip-backup</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/bangjoohan/real-estate-service/scripts/macmini-backup.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/bangjoohan/real-estate-service</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>NAEZIP_BACKUP_DIR</key>
+    <string>/Volumes/CHANGE_ME/naezip-backups</string>
+    <key>NAEZIP_REQUIRED_VOLUME</key>
+    <string>/Volumes/CHANGE_ME</string>
+    <key>NAEZIP_BOT_SQLITE_PATH</key>
+    <string>/Users/bangjoohan/bots/realestate-alert/realestate.db</string>
+    <key>NAEZIP_LOCAL_DB_URL</key>
+    <string>postgresql://bangjoohan@localhost:5432/naezip</string>
+    <key>NAEZIP_PG_BIN_DIR</key>
+    <string>/opt/homebrew/opt/postgresql@17/bin</string>
+  </dict>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>3</integer>
+    <key>Minute</key>
+    <integer>30</integer>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <false/>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>LowPriorityIO</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/Users/bangjoohan/Library/Logs/naezip-backup.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/bangjoohan/Library/Logs/naezip-backup-error.log</string>
+</dict>
+</plist>

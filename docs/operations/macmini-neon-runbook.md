@@ -35,6 +35,23 @@
 3. 최근 성공이 36시간을 넘었거나 디스크 사용량이 85%를 넘으면 알림을 보낸다.
 4. `com.gomgom.naezip-mirror`는 평상시 로드하지 않는다.
 
+## launchd 감사 및 백업 등록 전 점검
+
+2026-08-11 읽기 전용 감사에서 sync·mirror·Obsidian export LaunchAgent는 확인됐지만
+`com.gomgom.naezip-backup`은 등록되어 있지 않았다. 이 저장소에는 안전한 설정 예시만 두며,
+자동 등록은 하지 않는다.
+
+1. `scripts/launchd/com.gomgom.naezip-backup.plist.example`을 별도 작업 파일로 복사한다.
+2. `NAEZIP_BACKUP_DIR`과 `NAEZIP_REQUIRED_VOLUME`의 `/Volumes/CHANGE_ME`를 실제
+   암호화 외장 볼륨으로 모두 바꾼다.
+3. `ProgramArguments`, PostgreSQL URL, SQLite 경로가 현재 설치 위치와 일치하는지 확인한다.
+4. `plutil -lint`를 통과시킨 뒤에만 `~/Library/LaunchAgents`에 설치한다.
+5. 설치 후 `launchctl print gui/$(id -u)/com.gomgom.naezip-backup`과 두 로그 파일을 확인한다.
+
+백업 시각 예시는 03:30 KST다. 05:00 원장 sync 전에 전날 마지막 성공 상태를 보존하기
+위한 순서이다. `NAEZIP_REQUIRED_VOLUME`은 해당 경로 자체가 독립된 마운트 지점인
+경우만 통과시키므로, 외장 볼륨이 빠졌을 때 로컬 경로로 폴백하지 않는다.
+
 ## 백업 최소 기준
 
 - PostgreSQL은 매일 custom-format `pg_dump -Fc`로 백업한다.
@@ -49,8 +66,51 @@
 자동 보존 삭제는 하지 않는다.
 
 ```bash
-bash scripts/macmini-backup.sh
+NAEZIP_REQUIRED_VOLUME=/Volumes/암호화볼륨 \
+NAEZIP_BACKUP_DIR=/Volumes/암호화볼륨/naezip-backups \
+  bash scripts/macmini-backup.sh
 ```
+
+백업은 `.partial-*`에서 완성·검증된 뒤 타임스탬프 디렉터리로 이름을 바꾼다. 성공한
+경우에만 `LATEST_SUCCESS` 포인터를 원자적으로 갱신한다. 다음 실행이 실패해도 기존 성공본과
+포인터는 유지되며, 실패한 partial만 정리한다.
+
+### 복원 점검
+
+체크섬·PostgreSQL archive 목차·SQLite 무결성만 확인하려면 다음을 실행한다.
+
+```bash
+NAEZIP_BACKUP_DIR=/Volumes/암호화볼륨/naezip-backups \
+  bash scripts/macmini-restore-check.sh
+```
+
+주 1회는 이름이 `naezip_restore_check_`로 시작하는 **빈 로컬 임시 DB**를 운영자가 먼저
+만든 뒤 실제 복원을 수행한다. 스크립트는 운영 DB 이름을 거부하고 임시 DB를 삭제하지 않는다.
+
+```bash
+createdb naezip_restore_check_20260811
+NAEZIP_BACKUP_DIR=/Volumes/암호화볼륨/naezip-backups \
+NAEZIP_RESTORE_CHECK_DB_URL=postgresql:///naezip_restore_check_20260811 \
+  bash scripts/macmini-restore-check.sh
+```
+
+성공 로그의 백업 식별자, 테이블 수, 시각을 운영 기록에 남긴 뒤 임시 DB를 수동 정리한다.
+복원 점검 전에는 어떤 운영 DB도 drop·clean 대상으로 지정하지 않는다.
+
+## Obsidian export 안전성
+
+Obsidian export는 Neon과 봇 SQLite를 **모두 먼저 조회**한다. 이후 볼트와 같은
+파일시스템의 숨김 stage에 칼럼·뉴스·홈 완성본을 만들고 파일 수를 검증한 뒤 관리 경로를
+rename으로 교체한다. 조회·생성·교체 중 오류가 발생하면 기존 성공본을 유지하거나 즉시
+롤백한다. 교체 중 SIGKILL·재부팅으로 catch가 실행되지 않아도 다음 시작이 hidden
+backup manifest를 먼저 읽고 이전 성공본을 복구한 뒤 원천을 조회한다.
+
+- 기본값은 posts 또는 news가 0건이면 교체를 거부한다.
+- 정말 빈 아카이브가 의도된 경우에만 일회성으로 `OBSIDIAN_ALLOW_EMPTY_EXPORT=1`을 쓴다.
+- 봇 DB 경로를 바꿀 때는 `OBSIDIAN_BOT_DB`를 설정한다.
+- 환경파일은 launchd `WorkingDirectory`의 `.env.local`을 기본으로 읽는다. 다른 경로는
+  `NAEZIP_ENV_FILE`에 절대 경로로 명시한다.
+- 실패 로그가 난 뒤 기존 `내집 칼럼`, `뉴스 아카이브`, `홈.md`가 남아 있는지 확인한다.
 
 ## Neon 복구 후 순서
 
