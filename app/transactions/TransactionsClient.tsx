@@ -665,11 +665,29 @@ export default function TransactionsClient() {
                 <style>{`@keyframes pulse{0%,100%{opacity:.3}50%{opacity:.6}}`}</style>
               </div>
             ) : summaryError ? (
-              <TxErrorState
-                title="실거래 집계를 불러오지 못했어요"
-                description="현재 집계 데이터 연결을 확인하고 있습니다. 잠시 후 다시 시도해주세요."
-                onRetry={() => setSummaryRetryKey((key) => key + 1)}
-              />
+              <>
+                <TxErrorState
+                  title="실거래 집계를 불러오지 못했어요"
+                  description="현재 집계 데이터 연결을 확인하고 있습니다. 잠시 후 다시 시도해주세요."
+                  onRetry={() => setSummaryRetryKey((key) => key + 1)}
+                />
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '12px' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const group = DISTRICT_GROUPS[groupIdx] ?? DISTRICT_GROUPS[0];
+                      if (group) setPicker({ label: group.label, districts: group.districts });
+                    }}
+                    style={{
+                      padding: '11px 24px', borderRadius: '11px', fontSize: '13.5px', fontWeight: 700,
+                      backgroundColor: 'var(--bg-card)', color: 'var(--accent)',
+                      border: '1px solid var(--accent)', cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                  >
+                    지역 선택
+                  </button>
+                </div>
+              </>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '12px' }}>
                 {[...summaryData]
