@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { sql } from 'drizzle-orm';
 import { getBlogDb } from '@/lib/db/client';
 import { apartments } from '@/lib/db/schema';
+import {
+  APARTMENT_INDEX_ARTIFACT_NAME,
+  APARTMENT_INDEX_MAX_AGE_MS,
+  assertApartmentIndexEnvelope,
+  isServingArtifactFresh,
+  searchApartmentIndex,
+  type ApartmentIndexItem,
+} from '@/lib/public-snapshots/serving-artifacts';
+import {
+  createPublicSnapshotRuntimeFromEnv,
+  type PublicSnapshotRuntime,
+} from '@/lib/public-snapshots/runtime';
 
 const MIN_QUERY_LENGTH = 2;
 const MAX_QUERY_LENGTH = 50;
@@ -11,6 +23,31 @@ const MAX_LIMIT = 20;
 // `%`, `_`, `\\` 는 ILIKE 메타문자 — 사용자 입력은 escape 필요 (인젝션·풀스캔 방지)
 function escapeLike(input: string): string {
   return input.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+async function searchSnapshot(
+  runtime: PublicSnapshotRuntime,
+  query: string,
+  limit: number,
+): Promise<{ rows: ApartmentIndexItem[]; generatedAt: string } | null> {
+  const result = await runtime.getNamedArtifact<ApartmentIndexItem[]>(
+    APARTMENT_INDEX_ARTIFACT_NAME,
+  );
+  if (result.status !== 'success') return null;
+  try {
+    assertApartmentIndexEnvelope(result.data);
+    if (!isServingArtifactFresh(result.data.generatedAt, {
+      maxAgeMs: APARTMENT_INDEX_MAX_AGE_MS,
+    })) return null;
+    return {
+      rows: searchApartmentIndex(result.data.data, query, { limit }),
+      generatedAt: result.data.generatedAt,
+    };
+  } catch {
+    // Generic envelope validation intentionally stays fail-open to the existing DB path.
+    console.warn('[apartments/search] apartment snapshot validation failed; using DB fallback');
+    return null;
+  }
 }
 
 export async function GET(req: NextRequest) {
@@ -36,6 +73,32 @@ export async function GET(req: NextRequest) {
     if (Number.isFinite(parsed)) {
       limit = Math.max(1, Math.min(MAX_LIMIT, parsed));
     }
+  }
+
+  // All request validation/normalization above must complete before snapshot I/O.
+  const snapshotRows = await searchSnapshot(
+    createPublicSnapshotRuntimeFromEnv(),
+    q,
+    limit,
+  );
+  if (snapshotRows !== null) {
+    const results = snapshotRows.rows.map(({ id, name, sido, sigungu, dong, lawdCd }) => ({
+      id,
+      name,
+      sido,
+      sigungu,
+      dong,
+      lawdCd,
+    }));
+    return NextResponse.json(
+      { results, query: q, count: results.length },
+      {
+        headers: {
+          'X-Naezip-Data-Source': 'snapshot',
+          'X-Naezip-Snapshot-Generated-At': snapshotRows.generatedAt,
+        },
+      },
+    );
   }
 
   try {

@@ -8,6 +8,11 @@ import { getBlogDb } from '@/lib/db/client';
 import { rentTransactions } from '@/lib/db/schema';
 import { txSource } from '@/lib/tx-source';
 import { transactionGroupKey } from '@/lib/transaction-identity';
+import {
+  createPublicSnapshotRuntimeFromEnv,
+  isPublicSnapshotConfigured,
+} from '@/lib/public-snapshots/runtime';
+import { buildRentResponseFromSnapshot } from '@/lib/public-snapshots/serving-artifacts';
 
 /**
  * 전월세 실거래 API — 사이클 II (전세·월세 탭) + DB 전환 (2026-07-18)
@@ -205,12 +210,40 @@ export async function GET(req: NextRequest) {
   if (!['all', 'jeonse', 'monthly'].includes(rentType)) {
     return NextResponse.json({ error: '지원하지 않는 전월세 유형입니다' }, { status: 400 });
   }
+  const servingMode = isPublicSnapshotConfigured();
+
+  // Mac mini에서 검증·발행한 직전 스냅샷을 우선 사용한다. 스냅샷이
+  // 없거나 손상됐거나 요청 기간을 커버하지 못할 때만 기존 DB/live 경로로 폴백한다.
+  try {
+    const snapshot = await createPublicSnapshotRuntimeFromEnv().getDistrictSnapshot(lawdCd);
+    if (snapshot.status === 'success') {
+      const served = buildRentResponseFromSnapshot(snapshot.data, {
+        months,
+        limit,
+        aptName,
+        rentType: rentType as 'all' | 'jeonse' | 'monthly',
+      });
+      if (served.hit) {
+        return NextResponse.json(served.body, {
+          headers: {
+            'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
+            'X-Naezip-Data-Source': 'snapshot',
+            'X-Naezip-Snapshot-Generated-At': snapshot.data.generatedAt,
+          },
+        });
+      }
+    }
+  } catch {
+    // 스냅샷 변환 실패는 기존 DB/live 조회를 막지 않는다.
+  }
+
   const rawKey = process.env.PUBLIC_DATA_API_KEY;
   const apiKey = rawKey ? decodeURIComponent(rawKey) : null;
+  const source = servingMode ? 'live' : txSource();
 
   try {
     // 고속 경로 — 검색어 없는 목록 조회는 SQL 집계 푸시다운 (실패 시 아래 행 경로로)
-    if (txSource() === 'db' && !aptName) {
+    if (source === 'db' && !aptName) {
       const fast = await fetchDbRentGroupsFast(lawdCd, district, months, rentType, limit)
         .catch((e) => {
           console.warn('[transactions/rent API] 푸시다운 실패 — 행 경로 폴백:', e instanceof Error ? e.message : e);
@@ -228,7 +261,7 @@ export async function GET(req: NextRequest) {
     let failedMonths: string[] = [];
 
     // DB 우선 (Phase 2) — 미적재·실패 시 live 폴백 (안전망)
-    if (txSource() === 'db') {
+    if (source === 'db') {
       try {
         transactions = await fetchDbRentTx(lawdCd, district, months);
       } catch (e) {
@@ -296,6 +329,9 @@ export async function GET(req: NextRequest) {
     );
   } catch (error) {
     console.error('[transactions/rent API] 조회 실패:', error);
-    return NextResponse.json({ error: '전월세 조회 실패' }, { status: 500 });
+    return NextResponse.json(
+      { error: '전월세 조회 실패' },
+      { status: servingMode ? 503 : 500, headers: servingMode ? { 'Cache-Control': 'no-store' } : undefined },
+    );
   }
 }

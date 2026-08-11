@@ -3,8 +3,18 @@ import { eq } from 'drizzle-orm';
 import { DISTRICT_GROUPS } from '@/lib/district-groups';
 import { getBlogDb } from '@/lib/db/client';
 import { dailyStats } from '@/lib/db/schema';
-import { resolveAggWindow, kstCurrentYyyymm } from '@/lib/agg-window';
+import { resolveAggWindow, kstCurrentYyyymm, kstTodayIso, shiftDays } from '@/lib/agg-window';
 import { fetchDistrictAggs, fetchRentDistrictAggs, fetchSilvDistrictAggs } from '@/lib/agg-queries';
+import {
+  createPublicSnapshotRuntimeFromEnv,
+  isPublicSnapshotConfigured,
+} from '@/lib/public-snapshots/runtime';
+import {
+  assertRolling30SummaryEnvelope,
+  ROLLING30_SUMMARY_ARTIFACT_NAMES,
+  type Rolling30SummaryData,
+  type SummaryDealType,
+} from '@/lib/public-snapshots/serving-artifacts';
 
 /**
  * 시도별 실거래 집계 API — SQL 푸시다운 전환 (2026-08-02).
@@ -28,10 +38,57 @@ function avgOf(sum: number, cnt: number): number | null {
   return Math.round(sum / cnt);
 }
 
-export async function GET(req: NextRequest) {
-  // 프리렌더 제외 (Cache Components 호환) — 빌드 시점 DB 조회 거부 에러 방지
-  await connection();
+const SUCCESS_CACHE_CONTROL = 'public, s-maxage=3600, stale-while-revalidate=86400';
+const SNAPSHOT_MAX_AGE_MS = 48 * 60 * 60 * 1000;
 
+function degradedSummaryResponse(
+  yyyymm: string,
+  window: { type: 'rolling30' | 'month'; from: string; to: string },
+  note = '검증된 집계 스냅샷을 준비 중입니다. 잠시 후 다시 확인해주세요.',
+): NextResponse {
+  return NextResponse.json(
+    {
+      status: 'degraded',
+      summary: [],
+      daily: null,
+      month: yyyymm,
+      window: { type: window.type, from: window.from, to: window.to },
+      updatedAt: new Date().toISOString(),
+      note,
+    },
+    { headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' } },
+  );
+}
+
+function matchesRequestedSummary(
+  data: Rolling30SummaryData,
+  dealType: SummaryDealType,
+  requestedWindowTo: string,
+  nowMs: number,
+): boolean {
+  const generatedAtMs = Date.parse(data.updatedAt);
+  const ageMs = nowMs - generatedAtMs;
+  const generatedKstDate = kstTodayIso(new Date(generatedAtMs));
+  const expectedWindowFrom = shiftDays(generatedKstDate, -29);
+  const expectedWindowTo = shiftDays(generatedKstDate, 1);
+  if (data.window.to > requestedWindowTo
+    || data.window.from !== expectedWindowFrom
+    || data.window.to !== expectedWindowTo
+    || ageMs < 0
+    || ageMs > SNAPSHOT_MAX_AGE_MS) {
+    return false;
+  }
+
+  return data.summary.every((row) => {
+    const hasAvgRent59 = Object.hasOwn(row, 'avgRent59');
+    const hasAvgRent84 = Object.hasOwn(row, 'avgRent84');
+    return dealType === 'monthly'
+      ? hasAvgRent59 && hasAvgRent84
+      : !hasAvgRent59 && !hasAvgRent84;
+  });
+}
+
+export async function GET(req: NextRequest) {
   const window = resolveAggWindow(req.nextUrl.searchParams.get('window'));
   if (!window) {
     return NextResponse.json(
@@ -49,6 +106,41 @@ export async function GET(req: NextRequest) {
     );
   }
   const dealType = (dealTypeParam ?? 'buy') as 'buy' | 'jeonse' | 'monthly' | 'bunyang';
+  const servingMode = isPublicSnapshotConfigured();
+
+  // 프리렌더 제외 (Cache Components 호환) — 빌드 시점 DB 조회 거부 에러 방지
+  await connection();
+
+  // 공개 스냅샷은 rolling30만 우선 제공한다. 비활성·불가·검증 실패 시에는
+  // 기존 DB 경로로 조용히 폴백하며, 월별 요청은 처음부터 DB에서 조회한다.
+  if (window.type === 'rolling30') {
+    try {
+      const snapshot = await createPublicSnapshotRuntimeFromEnv()
+        .getNamedArtifact(ROLLING30_SUMMARY_ARTIFACT_NAMES[dealType]);
+      if (snapshot.status === 'success') {
+        try {
+          assertRolling30SummaryEnvelope(snapshot.data);
+          if (matchesRequestedSummary(snapshot.data.data, dealType, window.to, Date.now())) {
+            return NextResponse.json(snapshot.data.data, {
+              headers: {
+                'Cache-Control': SUCCESS_CACHE_CONTROL,
+                'X-Naezip-Data-Source': 'snapshot',
+                'X-Naezip-Snapshot-Generated-At': snapshot.data.generatedAt,
+              },
+            });
+          }
+        } catch {
+          // 스키마·본문·itemCount 검증 실패 — DB 폴백
+        }
+      }
+    } catch {
+      // 런타임 자체의 예외도 사용자 요청을 막지 않도록 DB 폴백
+    }
+  }
+
+  // Once snapshot serving is configured, an unavailable/stale/mismatched
+  // artifact must not resurrect an older Neon aggregate as authoritative.
+  if (servingMode) return degradedSummaryResponse(yyyymm, window);
 
   try {
     // ── 분양권 집계 (2026-08-02) — 의미론 매매와 동일, daily 만 없음 ──
@@ -88,7 +180,7 @@ export async function GET(req: NextRequest) {
           updatedAt: new Date().toISOString(),
           note: `자체 분양권 원장 ${window.type === 'rolling30' ? '최근 30일' : '월별'} 실집계 (취소 제외)`,
         },
-        { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } }
+        { headers: { 'Cache-Control': SUCCESS_CACHE_CONTROL } }
       );
     }
 
@@ -134,7 +226,7 @@ export async function GET(req: NextRequest) {
           updatedAt: new Date().toISOString(),
           note: `자체 전월세 원장 ${window.type === 'rolling30' ? '최근 30일' : '월별'} 실집계`,
         },
-        { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } }
+        { headers: { 'Cache-Control': SUCCESS_CACHE_CONTROL } }
       );
     }
 
@@ -202,23 +294,16 @@ export async function GET(req: NextRequest) {
           ? '자체 원장 최근 30일 실집계 (취소 제외)'
           : '자체 원장 월별 실집계 (취소 제외)',
       },
-      { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } }
+      { headers: { 'Cache-Control': SUCCESS_CACHE_CONTROL } }
     );
   } catch (error) {
     // DB 불가(전송량 차단 등) 시 500 대신 빈 집계로 우아하게 강등 —
     // 랜딩·크롤러가 에러 페이지를 만나지 않게. 짧은 캐시로 복구 시 빠른 재반영.
     console.error('시도별 집계 실패 — 빈 집계 강등:', error);
-    return NextResponse.json(
-      {
-        status: 'degraded',
-        summary: [],
-        daily: null,
-        month: yyyymm,
-        window: { type: window.type, from: window.from, to: window.to },
-        updatedAt: new Date().toISOString(),
-        note: '집계 데이터 일시 점검 중입니다. 잠시 후 다시 확인해주세요.',
-      },
-      { headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' } }
+    return degradedSummaryResponse(
+      yyyymm,
+      window,
+      '실거래 집계가 일시 점검 중입니다. 잠시 후 다시 확인해주세요.',
     );
   }
 }

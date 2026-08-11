@@ -18,7 +18,16 @@ import { PUBLIC_TRANSACTION_MANIFEST_KEY } from './publisher';
 export interface PublicSnapshotReaderOptions {
   baseUrl: string;
   fetchImpl?: typeof fetch;
+  /** Manifest and each artifact request get an independent bounded timeout. */
+  timeoutMs?: number;
+  /** Test hook; production defaults to AbortSignal.timeout(timeoutMs). */
+  timeoutSignalFactory?: (timeoutMs: number) => AbortSignal;
 }
+
+type PublicSnapshotReadResource = 'manifest' | 'district snapshot' | 'named artifact';
+
+const DEFAULT_REQUEST_TIMEOUT_MS = 4_000;
+const MAX_REQUEST_TIMEOUT_MS = 30_000;
 
 function countsEqual(left: PublicSnapshotCounts, right: PublicSnapshotCounts): boolean {
   return left.total === right.total
@@ -30,6 +39,8 @@ function countsEqual(left: PublicSnapshotCounts, right: PublicSnapshotCounts): b
 export class PublicSnapshotReader {
   private readonly baseUrl: URL;
   private readonly fetchImpl: typeof fetch;
+  private readonly timeoutMs: number;
+  private readonly timeoutSignalFactory: (timeoutMs: number) => AbortSignal;
 
   constructor(options: PublicSnapshotReaderOptions) {
     this.baseUrl = new URL(options.baseUrl.endsWith('/') ? options.baseUrl : `${options.baseUrl}/`);
@@ -37,6 +48,13 @@ export class PublicSnapshotReader {
       throw new Error('Public snapshot baseUrl must use HTTP or HTTPS');
     }
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.timeoutMs = options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    if (!Number.isInteger(this.timeoutMs)
+      || this.timeoutMs < 1
+      || this.timeoutMs > MAX_REQUEST_TIMEOUT_MS) {
+      throw new Error(`Public snapshot timeoutMs must be an integer between 1 and ${MAX_REQUEST_TIMEOUT_MS}`);
+    }
+    this.timeoutSignalFactory = options.timeoutSignalFactory ?? ((timeoutMs) => AbortSignal.timeout(timeoutMs));
   }
 
   private objectUrl(key: string): URL {
@@ -46,20 +64,39 @@ export class PublicSnapshotReader {
     return new URL(key, this.baseUrl);
   }
 
-  async getManifest(): Promise<PublicTransactionManifest> {
-    const response = await this.fetchImpl(this.objectUrl(PUBLIC_TRANSACTION_MANIFEST_KEY), {
-      headers: { accept: 'application/json' },
-      cache: 'no-store',
-    });
-    if (!response.ok) throw new Error(`Public snapshot manifest request failed: HTTP ${response.status}`);
-    let parsed: unknown;
+  private async withRequestTimeout<T>(
+    resource: PublicSnapshotReadResource,
+    operation: (signal: AbortSignal) => Promise<T>,
+  ): Promise<T> {
+    const signal = this.timeoutSignalFactory(this.timeoutMs);
     try {
-      parsed = await response.json();
-    } catch {
-      throw new PublicSnapshotValidationError('manifest', ['response is not valid JSON']);
+      return await operation(signal);
+    } catch (error) {
+      if (signal.aborted) {
+        // Fetch/stream errors can echo credentialed URLs. Never forward them.
+        throw new Error(`Public snapshot ${resource} request timed out`);
+      }
+      throw error;
     }
-    assertPublicTransactionManifest(parsed);
-    return parsed;
+  }
+
+  async getManifest(): Promise<PublicTransactionManifest> {
+    return this.withRequestTimeout('manifest', async (signal) => {
+      const response = await this.fetchImpl(this.objectUrl(PUBLIC_TRANSACTION_MANIFEST_KEY), {
+        headers: { accept: 'application/json' },
+        cache: 'no-store',
+        signal,
+      });
+      if (!response.ok) throw new Error(`Public snapshot manifest request failed: HTTP ${response.status}`);
+      let parsed: unknown;
+      try {
+        parsed = await response.json();
+      } catch {
+        throw new PublicSnapshotValidationError('manifest', ['response is not valid JSON']);
+      }
+      assertPublicTransactionManifest(parsed);
+      return parsed;
+    });
   }
 
   async getDistrictSnapshot(
@@ -70,26 +107,29 @@ export class PublicSnapshotReader {
     assertPublicTransactionManifest(manifest);
     const entry = manifest.districts.find((candidate) => candidate.lawdCd === lawdCd);
     if (!entry) throw new Error(`District snapshot not found: ${lawdCd}`);
-    const response = await this.fetchImpl(this.objectUrl(entry.snapshot.key), {
-      headers: { accept: 'application/json' },
-      cache: 'force-cache',
+    return this.withRequestTimeout('district snapshot', async (signal) => {
+      const response = await this.fetchImpl(this.objectUrl(entry.snapshot.key), {
+        headers: { accept: 'application/json' },
+        cache: 'force-cache',
+        signal,
+      });
+      if (!response.ok) throw new Error(`District snapshot request failed: HTTP ${response.status}`);
+      const snapshot = decodeAndValidatePublicSnapshot(
+        new Uint8Array(await response.arrayBuffer()),
+        entry.snapshot,
+        entry.counts.total,
+      );
+      if (snapshot.partition.lawdCd !== entry.lawdCd
+        || snapshot.partition.district !== entry.district
+        || snapshot.period.from !== entry.period.from
+        || snapshot.period.through !== entry.period.through) {
+        throw new PublicSnapshotValidationError('snapshot', ['partition metadata does not match manifest']);
+      }
+      if (!countsEqual(countPublicTransactions(snapshot.records), entry.counts)) {
+        throw new PublicSnapshotValidationError('snapshot', ['kind counts do not match manifest']);
+      }
+      return snapshot;
     });
-    if (!response.ok) throw new Error(`District snapshot request failed: HTTP ${response.status}`);
-    const snapshot = decodeAndValidatePublicSnapshot(
-      new Uint8Array(await response.arrayBuffer()),
-      entry.snapshot,
-      entry.counts.total,
-    );
-    if (snapshot.partition.lawdCd !== entry.lawdCd
-      || snapshot.partition.district !== entry.district
-      || snapshot.period.from !== entry.period.from
-      || snapshot.period.through !== entry.period.through) {
-      throw new PublicSnapshotValidationError('snapshot', ['partition metadata does not match manifest']);
-    }
-    if (!countsEqual(countPublicTransactions(snapshot.records), entry.counts)) {
-      throw new PublicSnapshotValidationError('snapshot', ['kind counts do not match manifest']);
-    }
-    return snapshot;
   }
 
   async getNamedArtifact<T = unknown>(
@@ -100,14 +140,17 @@ export class PublicSnapshotReader {
     assertPublicTransactionManifest(manifest);
     const entry = manifest.namedArtifacts.find((candidate) => candidate.name === name);
     if (!entry) throw new Error(`Named snapshot artifact not found: ${name}`);
-    const response = await this.fetchImpl(this.objectUrl(entry.artifact.key), {
-      headers: { accept: 'application/json' },
-      cache: 'force-cache',
+    return this.withRequestTimeout('named artifact', async (signal) => {
+      const response = await this.fetchImpl(this.objectUrl(entry.artifact.key), {
+        headers: { accept: 'application/json' },
+        cache: 'force-cache',
+        signal,
+      });
+      if (!response.ok) throw new Error(`Named snapshot artifact request failed: HTTP ${response.status}`);
+      return decodeAndValidatePublicNamedArtifact<T>(
+        new Uint8Array(await response.arrayBuffer()),
+        entry.artifact,
+      );
     });
-    if (!response.ok) throw new Error(`Named snapshot artifact request failed: HTTP ${response.status}`);
-    return decodeAndValidatePublicNamedArtifact<T>(
-      new Uint8Array(await response.arrayBuffer()),
-      entry.artifact,
-    );
   }
 }

@@ -112,6 +112,87 @@ describe('public snapshot publisher and reader', () => {
     expect(result.manifest.releaseId).toBe(manifest.releaseId);
   });
 
+  it('applies a fresh four-second timeout signal to all three reader fetch paths', async () => {
+    const { store } = await publishedFixture();
+    const requestSignals: Array<AbortSignal | null | undefined> = [];
+    const createdSignals: AbortSignal[] = [];
+    const timeoutSignalFactory = vi.fn((_timeoutMs: number) => {
+      const signal = new AbortController().signal;
+      createdSignals.push(signal);
+      return signal;
+    });
+    const fetchImpl = vi.fn(async (
+      input: string | URL | Request,
+      init?: RequestInit,
+    ) => {
+      requestSignals.push(init?.signal);
+      const url = new URL(input instanceof Request ? input.url : input.toString());
+      const object = store.objects.get(url.pathname.slice(1));
+      if (!object) return new Response('missing', { status: 404 });
+      return new Response(responseBytes(object.body), { status: 200 });
+    }) as unknown as typeof fetch;
+    const reader = new PublicSnapshotReader({
+      baseUrl: 'https://data.example.test/',
+      fetchImpl,
+      timeoutSignalFactory,
+    });
+
+    const manifest = await reader.getManifest();
+    await reader.getDistrictSnapshot('11680', manifest);
+    await reader.getNamedArtifact('summary/districts', manifest);
+
+    expect(timeoutSignalFactory.mock.calls.map(([timeoutMs]) => timeoutMs)).toEqual([
+      4_000,
+      4_000,
+      4_000,
+    ]);
+    expect(requestSignals).toEqual(createdSignals);
+    expect(new Set(createdSignals).size).toBe(3);
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+  });
+
+  it('honors a bounded custom timeout and sanitizes aborted request errors', async () => {
+    const secret = 'DO_NOT_EXPOSE_THIS_PATH';
+    const controller = new AbortController();
+    controller.abort(new DOMException('timed out', 'TimeoutError'));
+    const timeoutSignalFactory = vi.fn((_timeoutMs: number) => controller.signal);
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      throw new Error(`failed to fetch ${input.toString()}?token=${secret}`);
+    }) as unknown as typeof fetch;
+    const reader = new PublicSnapshotReader({
+      baseUrl: `https://data.example.test/${secret}/`,
+      fetchImpl,
+      timeoutMs: 3_250,
+      timeoutSignalFactory,
+    });
+
+    let error: unknown;
+    try {
+      await reader.getManifest();
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(timeoutSignalFactory).toHaveBeenCalledWith(3_250);
+    expect(error).toBeInstanceOf(Error);
+    if (!(error instanceof Error)) throw new Error('expected reader timeout');
+    expect(error.message).toBe('Public snapshot manifest request timed out');
+    expect(error.message).not.toContain(secret);
+    expect(error.message).not.toContain('data.example.test');
+    expect(error.message).not.toContain('token');
+  });
+
+  it('rejects disabled or unbounded timeout settings before any request', () => {
+    expect(() => new PublicSnapshotReader({
+      baseUrl: 'https://data.example.test/',
+      timeoutMs: 0,
+    })).toThrow(/timeoutMs/);
+    expect(() => new PublicSnapshotReader({
+      baseUrl: 'https://data.example.test/',
+      timeoutMs: 30_001,
+    })).toThrow(/timeoutMs/);
+  });
+
   it('accepts fetch-transparent gzip decoding but rejects tampered bytes', async () => {
     const { store, result } = await publishedFixture();
     const entry = result.manifest.districts[0];

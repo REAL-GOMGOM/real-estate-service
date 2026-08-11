@@ -14,8 +14,25 @@ import {
   transactionGroupKey,
   type ApartmentIdentity,
 } from '@/lib/transaction-identity';
+import {
+  APARTMENT_INDEX_ARTIFACT_NAME,
+  APARTMENT_INDEX_MAX_AGE_MS,
+  assertApartmentIndexEnvelope,
+  buildBuyResponseFromSnapshot,
+  findApartmentIndexById,
+  isServingArtifactFresh,
+  searchApartmentIndex,
+  type ApartmentIndexItem,
+  type BuySnapshotResponse,
+} from '@/lib/public-snapshots/serving-artifacts';
+import {
+  createPublicSnapshotRuntimeFromEnv,
+  isPublicSnapshotConfigured,
+  type PublicSnapshotRuntime,
+} from '@/lib/public-snapshots/runtime';
 
 const APT_NAME_MAX_LEN = 50;
+const BUY_CACHE_CONTROL = 'public, s-maxage=3600, stale-while-revalidate=86400';
 
 interface TxRow {
   aptName:      string;
@@ -193,6 +210,7 @@ async function buildGroupedResponse(
     selectedApartment: ApartmentIdentity | null;
     months: number;
     limit: number;
+    allowDbEnrichment?: boolean;
   },
 ): Promise<NextResponse> {
   const { district, lawdCd, resolvedAptName, selectedApartment, months, limit } = opts;
@@ -230,8 +248,9 @@ async function buildGroupedResponse(
 
   // 단지 마스터 조인 — aptId 경로는 선택한 1개, 일반 목록만 lawdCd 일괄 조회.
   // 조인 실패는 fail-open: 카드에서 세대수만 생략되고 조회는 정상 동작.
-  try {
-    const db = getBlogDb();
+  if (opts.allowDbEnrichment !== false) {
+    try {
+      const db = getBlogDb();
     const masterRows = await db
       .select({
         id:              apartments.id,
@@ -270,24 +289,25 @@ async function buildGroupedResponse(
       }
     }
 
-    Object.values(grouped).forEach((apt) => {
-      const transactionIdentity = {
-        aptName: apt.name,
-        dong: apt.dong,
-        masterId: apt.masterId,
-      };
-      const identity = selectedApartment && matchesApartmentIdentity(transactionIdentity, selectedApartment)
-        ? selectedApartment
-        : findApartmentIdentity(transactionIdentity, identities);
-      const matched = identity ? masterById.get(identity.id) : null;
-      if (matched) {
-        apt.masterId = matched.id;
-        if (matched.totalHouseholds != null) apt.households = matched.totalHouseholds;
-        apt.score = scoreByMaster.get(matched.id) ?? null;
-      }
-    });
-  } catch (e) {
-    console.error('[transactions API] 마스터 조인 실패 (fail-open):', e);
+      Object.values(grouped).forEach((apt) => {
+        const transactionIdentity = {
+          aptName: apt.name,
+          dong: apt.dong,
+          masterId: apt.masterId,
+        };
+        const identity = selectedApartment && matchesApartmentIdentity(transactionIdentity, selectedApartment)
+          ? selectedApartment
+          : findApartmentIdentity(transactionIdentity, identities);
+        const matched = identity ? masterById.get(identity.id) : null;
+        if (matched) {
+          apt.masterId = matched.id;
+          if (matched.totalHouseholds != null) apt.households = matched.totalHouseholds;
+          apt.score = scoreByMaster.get(matched.id) ?? null;
+        }
+      });
+    } catch (e) {
+      console.error('[transactions API] 마스터 조인 실패 (fail-open):', e);
+    }
   }
 
   const aptName = resolvedAptName;
@@ -312,8 +332,155 @@ async function buildGroupedResponse(
       ...(selectedApartment ? { selectedAptId: selectedApartment.id } : {}),
     },
     // CDN 캐시 — 같은 지역·기간 요청은 엣지에서 즉시 응답
-    { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } },
+    { headers: { 'Cache-Control': BUY_CACHE_CONTROL } },
   );
+}
+
+function snapshotBuyResponse(body: BuySnapshotResponse, generatedAt: string): NextResponse {
+  return NextResponse.json(body, {
+    headers: {
+      'Cache-Control': BUY_CACHE_CONTROL,
+      'X-Naezip-Data-Source': 'snapshot',
+      'X-Naezip-Snapshot-Generated-At': generatedAt,
+    },
+  });
+}
+
+async function loadApartmentIndex(
+  runtime: PublicSnapshotRuntime,
+): Promise<ApartmentIndexItem[] | null> {
+  try {
+    const result = await runtime.getNamedArtifact<ApartmentIndexItem[]>(
+      APARTMENT_INDEX_ARTIFACT_NAME,
+    );
+    if (result.status !== 'success') return null;
+    assertApartmentIndexEnvelope(result.data);
+    if (!isServingArtifactFresh(result.data.generatedAt, {
+      maxAgeMs: APARTMENT_INDEX_MAX_AGE_MS,
+    })) return null;
+    return result.data.data;
+  } catch {
+    console.warn('[transactions API] apartment snapshot validation failed; using existing fallback');
+    return null;
+  }
+}
+
+async function snapshotForDistrict(
+  runtime: PublicSnapshotRuntime,
+  lawdCd: string,
+  query: {
+    months: number;
+    limit: number;
+    aptId?: string;
+    aptName?: string;
+    apartmentIndex?: readonly ApartmentIndexItem[];
+  },
+): Promise<NextResponse | null> {
+  try {
+    const result = await runtime.getDistrictSnapshot(lawdCd);
+    if (result.status !== 'success' || result.data.partition.lawdCd !== lawdCd) return null;
+    const built = buildBuyResponseFromSnapshot(result.data, query);
+    return built.hit ? snapshotBuyResponse(built.body, result.data.generatedAt) : null;
+  } catch {
+    console.warn('[transactions API] district snapshot validation failed; using existing fallback');
+    return null;
+  }
+}
+
+interface SnapshotResolvedRequest {
+  lawdCd: string;
+  district: string;
+  resolvedAptName: string;
+  selectedApartment: ApartmentIdentity | null;
+}
+
+interface SnapshotFirstResult {
+  response: NextResponse | null;
+  resolved: SnapshotResolvedRequest | null;
+}
+
+async function trySnapshotFirst(input: {
+  aptId: string;
+  aptName: string;
+  districtParam: string;
+  directDistrict: string | null;
+  directLawdCd: string | null;
+  months: number;
+  limit: number;
+}): Promise<SnapshotFirstResult> {
+  const runtime = createPublicSnapshotRuntimeFromEnv();
+
+  if (input.aptId) {
+    const index = await loadApartmentIndex(runtime);
+    if (!index) return { response: null, resolved: null };
+    const apartment = findApartmentIndexById(index, input.aptId);
+    // An index miss is not authoritative: the existing DB may be newer than the snapshot.
+    if (!apartment) return { response: null, resolved: null };
+    const response = await snapshotForDistrict(runtime, apartment.lawdCd, {
+      months: input.months,
+      limit: input.limit,
+      aptId: apartment.id,
+      apartmentIndex: index,
+    });
+    return {
+      response,
+      resolved: {
+        lawdCd: apartment.lawdCd,
+        district: findDistrictByLawdCd(apartment.lawdCd) ?? apartment.sigungu,
+        resolvedAptName: apartment.name,
+        selectedApartment: {
+          id: apartment.id,
+          name: apartment.name,
+          aliases: apartment.aliases,
+          dong: apartment.dong,
+        },
+      },
+    };
+  }
+
+  if (input.aptName && !input.districtParam) {
+    const index = await loadApartmentIndex(runtime);
+    if (!index) return { response: null, resolved: null };
+    const apartment = searchApartmentIndex(index, input.aptName, { limit: 1 })[0];
+    if (!apartment) return { response: null, resolved: null };
+    const response = await snapshotForDistrict(runtime, apartment.lawdCd, {
+      months: input.months,
+      limit: input.limit,
+      aptId: apartment.id,
+      apartmentIndex: index,
+    });
+    return {
+      response,
+      resolved: {
+        lawdCd: apartment.lawdCd,
+        district: findDistrictByLawdCd(apartment.lawdCd) ?? apartment.sigungu,
+        resolvedAptName: apartment.name,
+        selectedApartment: {
+          id: apartment.id,
+          name: apartment.name,
+          aliases: apartment.aliases,
+          dong: apartment.dong,
+        },
+      },
+    };
+  }
+
+  // Direct district requests deliberately do not depend on the optional apartment index.
+  if (!input.directDistrict || !input.directLawdCd) return { response: null, resolved: null };
+  const response = await snapshotForDistrict(runtime, input.directLawdCd, {
+    months: input.months,
+    limit: input.limit,
+    ...(input.aptName ? { aptName: input.aptName } : {}),
+  });
+  return {
+    response,
+    resolved: {
+      lawdCd: input.directLawdCd,
+      district: input.directDistrict,
+      resolvedAptName: input.aptName,
+      selectedApartment: null,
+    },
+  };
 }
 
 export async function GET(req: NextRequest) {
@@ -328,6 +495,35 @@ export async function GET(req: NextRequest) {
   // 응답 단지 수 제한 — 메인 피드 등 경량 소비자용 (페이로드 축소)
   const limit        = Math.min(Math.max(parseInt(searchParams.get('limit') ?? '60') || 60, 1), 100);
 
+  // aptId와 단독 aptName은 index로 지역을 찾고, 나머지는 district를 직접 검증한다.
+  // 이 검증은 snapshot/DB/MOLIT 어느 I/O보다도 먼저 수행해야 한다.
+  const isDirectDistrictRequest = !aptIdParam && !(aptNameParam && !districtParam);
+  const directDistrict = isDirectDistrictRequest ? (districtParam || '강남구') : null;
+  const directLawdCd = directDistrict ? (DISTRICT_CODE[directDistrict] ?? null) : null;
+  if (directDistrict && !directLawdCd) {
+    return NextResponse.json({ error: '지원하지 않는 구: ' + directDistrict }, { status: 400 });
+  }
+
+  const servingMode = isPublicSnapshotConfigured();
+  const snapshotAttempt = await trySnapshotFirst({
+    aptId: aptIdParam,
+    aptName: aptNameParam,
+    districtParam,
+    directDistrict,
+    directLawdCd,
+    months,
+    limit,
+  });
+  if (snapshotAttempt.response) return snapshotAttempt.response;
+
+  if (servingMode && (aptIdParam || (aptNameParam && !districtParam))
+    && !snapshotAttempt.resolved) {
+    return NextResponse.json(
+      { error: '단지 기준 데이터를 확인할 수 없습니다' },
+      { status: 503, headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+
   // 우선순위: aptId → aptName(단독) → district
   // district + aptName 동시는 기존 동작(지역 내 단지명 필터) 유지
   let lawdCd: string;
@@ -335,7 +531,9 @@ export async function GET(req: NextRequest) {
   let resolvedAptName: string = aptNameParam;
   let selectedApartment: ApartmentIdentity | null = null;
 
-  if (aptIdParam) {
+  if (snapshotAttempt.resolved) {
+    ({ lawdCd, district, resolvedAptName, selectedApartment } = snapshotAttempt.resolved);
+  } else if (aptIdParam) {
     try {
       const db = getBlogDb();
       const rows = await db
@@ -406,7 +604,7 @@ export async function GET(req: NextRequest) {
 
   const rawKey = process.env.PUBLIC_DATA_API_KEY;
   const apiKey = rawKey ? decodeURIComponent(rawKey) : null;
-  const source = txSource();
+  const source = servingMode ? 'live' : txSource();
 
   try {
     let txRows: TxRow[];
@@ -423,7 +621,10 @@ export async function GET(req: NextRequest) {
       if (txRows.length === 0) {
         if (!apiKey) {
           console.error('[transactions API] DB 미적재 + PUBLIC_DATA_API_KEY 미설정');
-          return NextResponse.json({ error: '거래 데이터를 불러올 수 없습니다' }, { status: 500 });
+          return NextResponse.json(
+            { error: '거래 데이터를 불러올 수 없습니다' },
+            { status: servingMode ? 503 : 500, headers: servingMode ? { 'Cache-Control': 'no-store' } : undefined },
+          );
         }
         console.warn(`[transactions API] DB 미적재/실패(${district}/${lawdCd}) — live 폴백`);
         txRows = await fetchLiveTxRows(apiKey, lawdCd, district, months);
@@ -432,7 +633,10 @@ export async function GET(req: NextRequest) {
       // 'live' | 'shadow' — 국토부 조회가 응답 소스
       if (!apiKey) {
         console.error('[transactions API] PUBLIC_DATA_API_KEY 미설정');
-        return NextResponse.json({ error: '거래 데이터를 불러올 수 없습니다' }, { status: 500 });
+        return NextResponse.json(
+          { error: '거래 데이터를 불러올 수 없습니다' },
+          { status: servingMode ? 503 : 500, headers: servingMode ? { 'Cache-Control': 'no-store' } : undefined },
+        );
       }
       txRows = await fetchLiveTxRows(apiKey, lawdCd, district, months);
 
@@ -460,9 +664,13 @@ export async function GET(req: NextRequest) {
       selectedApartment,
       months,
       limit,
+      allowDbEnrichment: !servingMode,
     });
   } catch (error) {
     console.error('공공API 호출 실패:', error);
-    return NextResponse.json({ error: '데이터 조회 실패' }, { status: 500 });
+    return NextResponse.json(
+      { error: '데이터 조회 실패' },
+      { status: servingMode ? 503 : 500, headers: servingMode ? { 'Cache-Control': 'no-store' } : undefined },
+    );
   }
 }

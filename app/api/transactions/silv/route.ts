@@ -3,6 +3,8 @@ import { DISTRICT_CODE } from '@/lib/district-codes';
 import { matchesQuery } from '@/lib/search-utils';
 import { getMonthList, fetchSilvMonthAllPages, revalidateForMonth } from '@/lib/molit-months';
 import { parseSilvXml, groupSilvTransactions } from '@/lib/silv-shared';
+import { createPublicSnapshotRuntimeFromEnv } from '@/lib/public-snapshots/runtime';
+import { buildPresaleResponseFromSnapshot } from '@/lib/public-snapshots/serving-artifacts';
 
 /**
  * 분양권 실거래 API — 분양권 탭.
@@ -27,6 +29,26 @@ export async function GET(req: NextRequest) {
   const lawdCd = DISTRICT_CODE[district];
   if (!lawdCd) {
     return NextResponse.json({ error: '지원하지 않는 구: ' + district }, { status: 400 });
+  }
+
+  // 공개 스냅샷 hit는 API key 확인보다 먼저 처리한다. 이렇게 해야
+  // 공공 API 장애·한도 중에도 직전 검증본을 계속 제공할 수 있다.
+  try {
+    const snapshot = await createPublicSnapshotRuntimeFromEnv().getDistrictSnapshot(lawdCd);
+    if (snapshot.status === 'success') {
+      const served = buildPresaleResponseFromSnapshot(snapshot.data, { months, limit, aptName });
+      if (served.hit) {
+        return NextResponse.json(served.body, {
+          headers: {
+            'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
+            'X-Naezip-Data-Source': 'snapshot',
+            'X-Naezip-Snapshot-Generated-At': snapshot.data.generatedAt,
+          },
+        });
+      }
+    }
+  } catch {
+    // 스냅샷 변환 실패는 기존 공공 API 조회를 막지 않는다.
   }
 
   const rawKey = process.env.PUBLIC_DATA_API_KEY;

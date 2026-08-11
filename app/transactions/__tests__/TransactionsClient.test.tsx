@@ -142,7 +142,7 @@ describe('TransactionsClient retry behavior', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/transactions?months=6&district=%EA%B0%95%EB%82%A8%EA%B5%AC',
+      '/api/transactions?months=2&district=%EA%B0%95%EB%82%A8%EA%B5%AC',
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(page.textContent).toContain('지역 변경');

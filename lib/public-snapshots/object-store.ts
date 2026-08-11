@@ -157,6 +157,26 @@ export class R2S3SnapshotStore implements PublicSnapshotObjectStore {
     })) {
       if (!value) throw new PublicSnapshotConfigurationError(`Missing R2 setting: ${name}`);
     }
+    if (!/^[A-Za-z0-9-]{1,64}$/.test(config.accountId)) {
+      throw new PublicSnapshotConfigurationError('Invalid R2 accountId');
+    }
+    if (config.endpoint) {
+      let endpoint: URL;
+      try {
+        endpoint = new URL(config.endpoint);
+      } catch {
+        throw new PublicSnapshotConfigurationError('Invalid R2 endpoint');
+      }
+      if (endpoint.protocol !== 'https:'
+        || endpoint.username
+        || endpoint.password
+        || endpoint.search
+        || endpoint.hash) {
+        throw new PublicSnapshotConfigurationError(
+          'R2 endpoint must use HTTPS without credentials, query, or fragment',
+        );
+      }
+    }
     this.config = config;
     this.fetchImpl = config.fetchImpl ?? fetch;
   }
@@ -227,8 +247,10 @@ export class R2S3SnapshotStore implements PublicSnapshotObjectStore {
       body,
     });
     if (!response.ok) {
-      const detail = (await response.text().catch(() => '')).slice(0, 1000);
-      throw new Error(`R2 PutObject failed for ${input.key}: HTTP ${response.status}${detail ? ` ${detail}` : ''}`);
+      // S3-compatible error XML can echo the access-key identifier. Never copy
+      // an untrusted response body into launchd/application logs.
+      await response.body?.cancel().catch(() => undefined);
+      throw new Error(`R2 PutObject failed for ${input.key}: HTTP ${response.status}`);
     }
     return {
       key: input.key,

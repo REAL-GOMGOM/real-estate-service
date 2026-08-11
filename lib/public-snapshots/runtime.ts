@@ -7,6 +7,13 @@ import { PublicSnapshotReader } from './reader';
 
 export const PUBLIC_SNAPSHOT_BASE_URL_ENV = 'NEXT_PUBLIC_TRANSACTION_SNAPSHOT_BASE_URL' as const;
 
+/** True means routes must not silently treat an older Neon rowset as authoritative. */
+export function isPublicSnapshotConfigured(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): boolean {
+  return Boolean(env[PUBLIC_SNAPSHOT_BASE_URL_ENV]?.trim());
+}
+
 export type PublicSnapshotRuntimeOperation = 'configuration' | 'district' | 'named-artifact';
 export type PublicSnapshotUnavailableReason =
   | 'invalid-base-url'

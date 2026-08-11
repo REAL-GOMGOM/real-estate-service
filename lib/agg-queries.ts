@@ -43,30 +43,36 @@ export async function fetchDistrictAggs(from: string, to: string): Promise<Distr
     WITH w AS (
       SELECT sigungu, umd_nm, apt_name, round(area_m2::numeric)::int AS area_r, area_m2, deal_amount, deal_date
         FROM transactions
-       WHERE deal_date >= ${from} AND deal_date < ${to} AND is_canceled = false
+       WHERE deal_date >= ${from} AND deal_date < ${to}
+         AND right(deal_date, 2) <> '00'
+         AND is_canceled = false
     ),
-    ranked AS (
-      -- 신고가 판정용 유효 행만 (countNewHighs 의 !aptName·!price·!area 스킵과 동일)
-      SELECT sigungu, umd_nm, apt_name, area_r, deal_amount,
-             row_number() OVER (
-               PARTITION BY sigungu, umd_nm, apt_name, area_r
-               ORDER BY deal_date DESC, deal_amount DESC
-             ) AS rn
+    latest AS (
+      SELECT DISTINCT ON (sigungu, umd_nm, apt_name, area_r)
+             sigungu, umd_nm, apt_name, area_r, deal_amount, deal_date
         FROM w
        WHERE apt_name <> '' AND deal_amount > 0 AND area_r > 0
+       ORDER BY sigungu, umd_nm, apt_name, area_r, deal_date DESC, deal_amount DESC
     ),
-    apt_stats AS (
-      SELECT sigungu, umd_nm, apt_name, area_r,
-             count(*)                                  AS n,
-             max(deal_amount) FILTER (WHERE rn = 1)    AS latest_amt,
-             max(deal_amount) FILTER (WHERE rn > 1)    AS prior_max
-        FROM ranked
-       GROUP BY sigungu, umd_nm, apt_name, area_r
+    with_prior AS (
+      SELECT l.sigungu, l.umd_nm, l.apt_name, l.area_r,
+             l.deal_amount AS latest_amt,
+             max(t.deal_amount) AS prior_max
+        FROM latest l
+        JOIN transactions t
+          ON t.sigungu = l.sigungu
+         AND t.umd_nm = l.umd_nm
+         AND t.apt_name = l.apt_name
+         AND round(t.area_m2::numeric)::int = l.area_r
+         AND t.is_canceled = false
+         AND t.deal_date < l.deal_date
+         AND right(t.deal_date, 2) <> '00'
+       GROUP BY l.sigungu, l.umd_nm, l.apt_name, l.area_r, l.deal_amount
     ),
     highs AS (
       SELECT sigungu, count(*)::int AS new_highs
-        FROM apt_stats
-       WHERE n >= 2 AND latest_amt > prior_max
+        FROM with_prior
+       WHERE latest_amt > prior_max
        GROUP BY sigungu
     ),
     aggs AS (
@@ -102,29 +108,36 @@ export async function fetchSilvDistrictAggs(from: string, to: string): Promise<D
     WITH w AS (
       SELECT sigungu, umd_nm, apt_name, round(area_m2::numeric)::int AS area_r, area_m2, deal_amount, deal_date
         FROM silv_transactions
-       WHERE deal_date >= ${from} AND deal_date < ${to} AND is_canceled = false
+       WHERE deal_date >= ${from} AND deal_date < ${to}
+         AND right(deal_date, 2) <> '00'
+         AND is_canceled = false
     ),
-    ranked AS (
-      SELECT sigungu, umd_nm, apt_name, area_r, deal_amount,
-             row_number() OVER (
-               PARTITION BY sigungu, umd_nm, apt_name, area_r
-               ORDER BY deal_date DESC, deal_amount DESC
-             ) AS rn
+    latest AS (
+      SELECT DISTINCT ON (sigungu, umd_nm, apt_name, area_r)
+             sigungu, umd_nm, apt_name, area_r, deal_amount, deal_date
         FROM w
        WHERE apt_name <> '' AND deal_amount > 0 AND area_r > 0
+       ORDER BY sigungu, umd_nm, apt_name, area_r, deal_date DESC, deal_amount DESC
     ),
-    apt_stats AS (
-      SELECT sigungu, umd_nm, apt_name, area_r,
-             count(*)                                  AS n,
-             max(deal_amount) FILTER (WHERE rn = 1)    AS latest_amt,
-             max(deal_amount) FILTER (WHERE rn > 1)    AS prior_max
-        FROM ranked
-       GROUP BY sigungu, umd_nm, apt_name, area_r
+    with_prior AS (
+      SELECT l.sigungu, l.umd_nm, l.apt_name, l.area_r,
+             l.deal_amount AS latest_amt,
+             max(t.deal_amount) AS prior_max
+        FROM latest l
+        JOIN silv_transactions t
+          ON t.sigungu = l.sigungu
+         AND t.umd_nm = l.umd_nm
+         AND t.apt_name = l.apt_name
+         AND round(t.area_m2::numeric)::int = l.area_r
+         AND t.is_canceled = false
+         AND t.deal_date < l.deal_date
+         AND right(t.deal_date, 2) <> '00'
+       GROUP BY l.sigungu, l.umd_nm, l.apt_name, l.area_r, l.deal_amount
     ),
     highs AS (
       SELECT sigungu, count(*)::int AS new_highs
-        FROM apt_stats
-       WHERE n >= 2 AND latest_amt > prior_max
+        FROM with_prior
+       WHERE latest_amt > prior_max
        GROUP BY sigungu
     ),
     aggs AS (
@@ -185,7 +198,9 @@ export async function fetchRentDistrictAggs(
            coalesce(sum(monthly_rent) FILTER (WHERE area_m2 BETWEEN 80 AND 88), 0)::float8 AS "sumRent84"
       FROM rent_transactions
      WHERE deal_date >= ${from} AND deal_date < ${to}
-       AND (monthly_rent = 0) = ${kind === 'jeonse'}
+       AND right(deal_date, 2) <> '00'
+       AND ((${kind === 'jeonse'} AND monthly_rent = 0)
+         OR (${kind !== 'jeonse'} AND monthly_rent > 0))
      GROUP BY sigungu
   `) as unknown as RentDistrictAggRow[];
   return rows;
@@ -223,6 +238,7 @@ export async function fetchMarketLiveAggs(
         FROM transactions
        WHERE sigungu = ANY(${regionParams}::text[])
          AND deal_date >= ${previousFrom} AND deal_date < ${to}
+         AND right(deal_date, 2) <> '00'
          AND area_m2 BETWEEN 80 AND 88
          AND is_canceled = false
     )
@@ -280,7 +296,9 @@ export async function fetchHighlightLists(
           SELECT sigungu, umd_nm, apt_name, round(area_m2::numeric)::int AS area_r,
                  floor, deal_amount, deal_date
             FROM transactions
-           WHERE deal_date >= ${from} AND deal_date < ${to} AND is_canceled = false
+           WHERE deal_date >= ${from} AND deal_date < ${to}
+             AND right(deal_date, 2) <> '00'
+             AND is_canceled = false
         ) recent
        ORDER BY sigungu, umd_nm, apt_name, area_r, deal_date DESC, deal_amount DESC
     ),
@@ -295,6 +313,7 @@ export async function fetchHighlightLists(
          AND round(t.area_m2::numeric)::int = l.area_r
          AND t.is_canceled = false
          AND t.deal_date < l.deal_date
+         AND right(t.deal_date, 2) <> '00'
        GROUP BY l.sigungu, l.umd_nm, l.apt_name, l.area_r, l.floor, l.deal_amount, l.deal_date
     )
     SELECT sigungu, umd_nm AS "umdNm", apt_name AS "aptName", area_r AS area, floor,
@@ -310,7 +329,9 @@ export async function fetchHighlightLists(
     WITH w AS (
       SELECT sigungu, umd_nm, apt_name, round(area_m2::numeric)::int AS area_r, floor, deal_amount, deal_date
         FROM transactions
-       WHERE deal_date >= ${from} AND deal_date < ${to} AND is_canceled = false
+       WHERE deal_date >= ${from} AND deal_date < ${to}
+         AND right(deal_date, 2) <> '00'
+         AND is_canceled = false
     ),
     ranked AS (
       SELECT *,
@@ -337,7 +358,9 @@ export async function fetchHighlightLists(
     WITH w AS (
       SELECT sigungu, umd_nm, apt_name, round(area_m2::numeric)::int AS area_r, floor, deal_amount, deal_date
         FROM transactions
-       WHERE deal_date >= ${from} AND deal_date < ${to} AND is_canceled = false
+       WHERE deal_date >= ${from} AND deal_date < ${to}
+         AND right(deal_date, 2) <> '00'
+         AND is_canceled = false
          AND round(area_m2::numeric)::int BETWEEN 80 AND 88
     ),
     dedup AS (

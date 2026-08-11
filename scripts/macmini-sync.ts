@@ -1,8 +1,8 @@
-import { config } from 'dotenv';
-config({ path: '/Users/bangjoohan/real-estate-service/.env.local' });
 import os from 'node:os';
+import path from 'node:path';
 
 import { neon } from '@neondatabase/serverless';
+import { config } from 'dotenv';
 import { drizzle as drizzleNeon } from 'drizzle-orm/neon-http';
 import { Pool } from 'pg';
 import { drizzle as drizzlePg } from 'drizzle-orm/node-postgres';
@@ -14,6 +14,8 @@ import {
 } from '../lib/db/schema';
 import { DISTRICT_CODE } from '../lib/district-codes';
 import { getMonthList, fetchTradeMonthAllPages, fetchRentMonthAllPages, fetchSilvMonthAllPages, revalidateForMonth } from '../lib/molit-months';
+import type { MolitFetchOptions } from '../lib/molit-fetch';
+import { assertMolitParsedItemCount, mapMolitItemsWithRejectionGate } from '../lib/molit-sync-sanity';
 import { parseTradeXml, molitItemToTransaction } from '../lib/molit-trade-parse';
 import { parseRentXmlFull, molitItemToRentRow } from '../lib/molit-rent-parse';
 import { parseSilvXmlFull, molitItemToSilvRow } from '../lib/molit-silv-parse';
@@ -21,7 +23,17 @@ import { upsertTransactions, type TxDb } from '../lib/tx-upsert';
 import { upsertRentTransactions, type RentTxDb } from '../lib/rent-tx-upsert';
 import { upsertSilvTransactions, type SilvTxDb } from '../lib/silv-tx-upsert';
 import { getMacMiniSyncExitCode } from '../lib/macmini-sync-health';
+import { isMacMiniNeonCacheWriteEnabled } from '../lib/macmini-neon-cache-write';
 import { isNeonQuotaError } from '../lib/neon-quota-error';
+import { assertMacLocalDatabaseUrl } from '../lib/local-postgres-url';
+import { PUBLIC_TRANSACTION_SNAPSHOT_MONTHS } from '../lib/public-snapshots/coverage-policy';
+
+// Standalone runs and the wrapper resolve the same project-scoped env file.
+// dotenv keeps already-exported/wrapper-provided values because override=false.
+config({
+  path: path.resolve(process.cwd(), process.env.NAEZIP_ENV_FILE?.trim() || '.env.local'),
+  override: false,
+});
 
 /**
  * 실거래 일일 sync — 맥미니 이전판 (2026-08-02, Neon 의존도 완화 2단계).
@@ -37,13 +49,22 @@ import { isNeonQuotaError } from '../lib/neon-quota-error';
  *   정기 실행:  launchd com.gomgom.naezip-sync (매일 05:00 KST)
  */
 
-const SYNC_MONTHS = 2;
-const CONCURRENCY = 8;
+const SYNC_MONTHS = PUBLIC_TRANSACTION_SNAPSHOT_MONTHS;
+// 일반 작업 8개 × 추가 페이지 배치 4개로 순간 최대 32요청까지 겹치던 값을
+// 절반으로 낮춘다. 맥미니 배치는 시간 제한보다 공공 API 안정성이 우선이다.
+const CONCURRENCY = 4;
+const MAC_MOLIT_FETCH_OPTIONS = {
+  maxAttempts: 4,
+  baseDelayMs: 750,
+  maxDelayMs: 6_000,
+} satisfies MolitFetchOptions;
 const TRADE_RETENTION_MONTHS = 13;
 const RENT_RETENTION_MONTHS = 7;
 const SILV_RETENTION_MONTHS = 13;   // 분양권 — 거래량 미미, 매매와 동일 보존
 // 사용자 명시 필수 — .env.local 의 Neon PGUSER/PGPASSWORD 가 빈 필드를 채우는 것 방지
-const LOCAL_DB_URL = process.env.NAEZIP_LOCAL_DB_URL ?? `postgresql://${os.userInfo().username}@localhost:5432/naezip`;
+const LOCAL_DB_URL = assertMacLocalDatabaseUrl(
+  process.env.NAEZIP_LOCAL_DB_URL ?? `postgresql://${os.userInfo().username}@localhost:5432/naezip`,
+);
 
 function retentionCutoff(months: number): string {
   const cut = new Date();
@@ -67,13 +88,20 @@ async function main() {
 
   const pool = new Pool({ connectionString: LOCAL_DB_URL });
   const localDb = drizzlePg(pool, { schema });
-  const neonDb = drizzleNeon(neon(process.env.DATABASE_URL!), { schema });
+  const neonCacheWriteEnabled = isMacMiniNeonCacheWriteEnabled();
+  const neonDatabaseUrl = neonCacheWriteEnabled ? process.env.DATABASE_URL : undefined;
+  if (neonCacheWriteEnabled && !neonDatabaseUrl) {
+    throw new Error('NAEZIP_ENABLE_NEON_CACHE_WRITE=1 이지만 DATABASE_URL이 없습니다.');
+  }
+  // Do not even construct a Neon client while opt-in is disabled.
+  const neonDb = neonDatabaseUrl ? drizzleNeon(neon(neonDatabaseUrl), { schema }) : null;
 
   const started = Date.now();
   const months = getMonthList(SYNC_MONTHS);
   const districts = Object.entries(DISTRICT_CODE);
   const ts = () => new Date().toISOString().replace('T', ' ').slice(0, 19);
   const neonCircuit = { open: false };
+  console.log(`[macmini-sync] Mac→Neon cache write=${neonCacheWriteEnabled ? 'ENABLED' : 'DISABLED (local-only)'}`);
 
   async function runNeonUpsert(
     label: string,
@@ -81,6 +109,7 @@ async function main() {
     result: PhaseResult,
     upsert: () => Promise<number>,
   ): Promise<void> {
+    if (!neonCacheWriteEnabled) return;
     if (neonCircuit.open) {
       result.neonSkipped += rowCount;
       return;
@@ -144,11 +173,23 @@ async function main() {
 
   // ── 매매 ──
   const trade = await runPhase('trade', async (sigungu, lawdCd, yyyymm, r) => {
-    const xml = await fetchTradeMonthAllPages(apiKey, lawdCd, yyyymm, revalidateForMonth(yyyymm));
-    const rows: NewTransaction[] = [];
-    for (const item of parseTradeXml(xml)) {
-      const row = molitItemToTransaction(item, { lawdCd, sigungu });
-      if (row) rows.push(row);
+    const xml = await fetchTradeMonthAllPages(
+      apiKey,
+      lawdCd,
+      yyyymm,
+      revalidateForMonth(yyyymm),
+      MAC_MOLIT_FETCH_OPTIONS,
+    );
+    const items = parseTradeXml(xml);
+    assertMolitParsedItemCount(xml, items.length, `trade/${lawdCd}/${yyyymm}`);
+    const mapped = mapMolitItemsWithRejectionGate(
+      items,
+      (item) => molitItemToTransaction(item, { lawdCd, sigungu }),
+      `trade/${lawdCd}/${yyyymm}`,
+    );
+    const rows: NewTransaction[] = mapped.rows;
+    if (mapped.rejectedCount > 0) {
+      console.warn(`[macmini-sync] trade ${sigungu} ${yyyymm} 유효성 제외 ${mapped.rejectedCount}건`);
     }
     if (!rows.length) return;
     // `x += await f()` 는 좌변을 await 전에 읽어 동시 워커 가산을 덮어씀 — await 후 가산
@@ -158,18 +199,30 @@ async function main() {
       `trade ${sigungu} ${yyyymm}`,
       rows.length,
       r,
-      () => upsertTransactions(neonDb as unknown as TxDb, rows),
+      () => upsertTransactions(neonDb! as unknown as TxDb, rows),
     );
   });
   console.log(`[${ts()}] trade — local u=${trade.localUp} f=${trade.localFail} · neon u=${trade.neonUp} f=${trade.neonFail} skipped=${trade.neonSkipped} · fetch f=${trade.fetchFail}`);
 
   // ── 전월세 ──
   const rent = await runPhase('rent', async (sigungu, lawdCd, yyyymm, r) => {
-    const xml = await fetchRentMonthAllPages(apiKey, lawdCd, yyyymm, revalidateForMonth(yyyymm));
-    const rows: NewRentTransactionRow[] = [];
-    for (const item of parseRentXmlFull(xml)) {
-      const row = molitItemToRentRow(item, { lawdCd, sigungu });
-      if (row) rows.push(row);
+    const xml = await fetchRentMonthAllPages(
+      apiKey,
+      lawdCd,
+      yyyymm,
+      revalidateForMonth(yyyymm),
+      MAC_MOLIT_FETCH_OPTIONS,
+    );
+    const items = parseRentXmlFull(xml);
+    assertMolitParsedItemCount(xml, items.length, `rent/${lawdCd}/${yyyymm}`);
+    const mapped = mapMolitItemsWithRejectionGate(
+      items,
+      (item) => molitItemToRentRow(item, { lawdCd, sigungu }),
+      `rent/${lawdCd}/${yyyymm}`,
+    );
+    const rows: NewRentTransactionRow[] = mapped.rows;
+    if (mapped.rejectedCount > 0) {
+      console.warn(`[macmini-sync] rent ${sigungu} ${yyyymm} 유효성 제외 ${mapped.rejectedCount}건`);
     }
     if (!rows.length) return;
     try { const n = await upsertRentTransactions(localDb as unknown as RentTxDb, rows); r.localUp += n; }
@@ -178,18 +231,30 @@ async function main() {
       `rent ${sigungu} ${yyyymm}`,
       rows.length,
       r,
-      () => upsertRentTransactions(neonDb as unknown as RentTxDb, rows),
+      () => upsertRentTransactions(neonDb! as unknown as RentTxDb, rows),
     );
   });
   console.log(`[${ts()}] rent — local u=${rent.localUp} f=${rent.localFail} · neon u=${rent.neonUp} f=${rent.neonFail} skipped=${rent.neonSkipped} · fetch f=${rent.fetchFail}`);
 
   // ── 분양권 (2026-08-02 원장 신설 — 유형 탭 시/도 집계용) ──
   const silv = await runPhase('silv', async (sigungu, lawdCd, yyyymm, r) => {
-    const xml = await fetchSilvMonthAllPages(apiKey, lawdCd, yyyymm, revalidateForMonth(yyyymm));
-    const rows: NewSilvTransactionRow[] = [];
-    for (const item of parseSilvXmlFull(xml)) {
-      const row = molitItemToSilvRow(item, { lawdCd, sigungu });
-      if (row) rows.push(row);
+    const xml = await fetchSilvMonthAllPages(
+      apiKey,
+      lawdCd,
+      yyyymm,
+      revalidateForMonth(yyyymm),
+      MAC_MOLIT_FETCH_OPTIONS,
+    );
+    const items = parseSilvXmlFull(xml);
+    assertMolitParsedItemCount(xml, items.length, `silv/${lawdCd}/${yyyymm}`);
+    const mapped = mapMolitItemsWithRejectionGate(
+      items,
+      (item) => molitItemToSilvRow(item, { lawdCd, sigungu }),
+      `silv/${lawdCd}/${yyyymm}`,
+    );
+    const rows: NewSilvTransactionRow[] = mapped.rows;
+    if (mapped.rejectedCount > 0) {
+      console.warn(`[macmini-sync] silv ${sigungu} ${yyyymm} 유효성 제외 ${mapped.rejectedCount}건`);
     }
     if (!rows.length) return;
     try { const n = await upsertSilvTransactions(localDb as unknown as SilvTxDb, rows); r.localUp += n; }
@@ -198,20 +263,22 @@ async function main() {
       `silv ${sigungu} ${yyyymm}`,
       rows.length,
       r,
-      () => upsertSilvTransactions(neonDb as unknown as SilvTxDb, rows),
+      () => upsertSilvTransactions(neonDb! as unknown as SilvTxDb, rows),
     );
   });
   console.log(`[${ts()}] silv — local u=${silv.localUp} f=${silv.localFail} · neon u=${silv.neonUp} f=${silv.neonFail} skipped=${silv.neonSkipped} · fetch f=${silv.fetchFail}`);
 
   // ── Neon 보존 정리 + 용량 (fail-open) — 로컬은 무제한 보존 ──
-  if (neonCircuit.open) {
+  if (!neonCacheWriteEnabled) {
+    console.log(`[${ts()}] neon purge/size — skipped (Mac→Neon cache-write opt-in disabled)`);
+  } else if (neonCircuit.open) {
     console.warn(`[${ts()}] neon purge/size — skipped (quota circuit open)`);
   } else {
     try {
-      const t = await neonDb.delete(transactions).where(lt(transactions.dealDate, retentionCutoff(TRADE_RETENTION_MONTHS)));
-      const rr = await neonDb.delete(rentTransactions).where(lt(rentTransactions.dealDate, retentionCutoff(RENT_RETENTION_MONTHS)));
-      await neonDb.delete(silvTransactions).where(lt(silvTransactions.dealDate, retentionCutoff(SILV_RETENTION_MONTHS)));
-      const size = await neonDb.execute(sql`SELECT round(pg_database_size(current_database()) / 1048576.0)::int AS mb`);
+      const t = await neonDb!.delete(transactions).where(lt(transactions.dealDate, retentionCutoff(TRADE_RETENTION_MONTHS)));
+      const rr = await neonDb!.delete(rentTransactions).where(lt(rentTransactions.dealDate, retentionCutoff(RENT_RETENTION_MONTHS)));
+      await neonDb!.delete(silvTransactions).where(lt(silvTransactions.dealDate, retentionCutoff(SILV_RETENTION_MONTHS)));
+      const size = await neonDb!.execute(sql`SELECT round(pg_database_size(current_database()) / 1048576.0)::int AS mb`);
       const dbMB = (size as unknown as { rows?: Array<{ mb: number }> }).rows?.[0]?.mb ?? null;
       console.log(`[${ts()}] neon purge t=${(t as { rowCount?: number }).rowCount ?? 0} r=${(rr as { rowCount?: number }).rowCount ?? 0} · neon db=${dbMB}MB`);
     } catch (e) {
@@ -240,7 +307,7 @@ async function main() {
   });
   const status = exitCode === 0 ? 'HEALTHY' : exitCode === 2 ? 'DEGRADED' : 'FAILED';
   console.log(
-    `[${ts()}] status=${status} · Neon circuit=${neonCircuit.open ? 'OPEN' : 'CLOSED'} failures=${neonFailTotal} skipped=${neonSkippedTotal} rows · exit=${exitCode}`,
+    `[${ts()}] status=${status} · Neon cache-write=${neonCacheWriteEnabled ? 'ENABLED' : 'DISABLED'} circuit=${neonCircuit.open ? 'OPEN' : 'CLOSED'} failures=${neonFailTotal} skipped=${neonSkippedTotal} rows · exit=${exitCode}`,
   );
   console.log(`[${ts()}] ── 완료 (${Math.round((Date.now() - started) / 1000)}s) ──`);
   // 2는 로컬 원장은 보존됐지만 Neon 서빙 캐시 동기화가 저하된 상태다.

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { DISTRICT_GROUPS } from '@/lib/district-groups';
 import { resolveAggWindow, kstCurrentYyyymm } from '@/lib/agg-window';
 import { fetchDistrictAggs } from '@/lib/agg-queries';
+import { isPublicSnapshotConfigured } from '@/lib/public-snapshots/runtime';
 
 /**
  * 구별 거래 현황 API — SQL 푸시다운 전환 (2026-08-02).
@@ -30,6 +31,21 @@ export async function GET(req: NextRequest) {
     );
   }
   const yyyymm = window.type === 'month' ? window.yyyymm! : kstCurrentYyyymm();
+
+  // District aggregate artifacts are not published yet. In configured serving
+  // mode, do not present an older Neon aggregate as current truth.
+  if (isPublicSnapshotConfigured()) {
+    return NextResponse.json(
+      {
+        group: group.label,
+        month: yyyymm,
+        window: { type: window.type, from: window.from, to: window.to },
+        districts: [],
+        note: '검증된 지역 통계를 준비 중입니다. 지역 선택은 계속 사용할 수 있습니다.',
+      },
+      { headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' } },
+    );
+  }
 
   try {
     const aggRows = await fetchDistrictAggs(window.from, window.to);

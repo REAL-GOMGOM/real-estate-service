@@ -76,6 +76,52 @@ describe('public snapshot object stores', () => {
     expect(headers['x-amz-content-sha256']).toBe(putInput().sha256);
   });
 
+  it('never includes an R2 error body that may echo credential identifiers', async () => {
+    const secretIdentifier = 'ACCESS_KEY_IDENTIFIER_MUST_NOT_LEAK';
+    const store = new R2S3SnapshotStore({
+      accountId: 'account-id',
+      accessKeyId: 'access-key',
+      secretAccessKey: 'secret-key',
+      bucket: 'snapshots',
+      fetchImpl: vi.fn(async () => new Response(
+        `<Error><Code>InvalidAccessKeyId</Code><AccessKeyId>${secretIdentifier}</AccessKeyId></Error>`,
+        { status: 403 },
+      )) as unknown as typeof fetch,
+    });
+
+    let error: unknown;
+    try {
+      await store.putObject(putInput());
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(Error);
+    if (!(error instanceof Error)) throw new Error('expected R2 PutObject to fail');
+    expect(error.message).toBe(
+      'R2 PutObject failed for public-transactions/v1/manifest.json: HTTP 403',
+    );
+    expect(error.message).not.toContain(secretIdentifier);
+    expect(error.message).not.toContain('InvalidAccessKeyId');
+  });
+
+  it.each([
+    'http://localhost:9000',
+    'https://user:password@example.test',
+    'https://example.test?token=secret',
+    'https://example.test#fragment',
+  ])('rejects an unsafe custom R2 endpoint before sending credentials: %s', (endpoint) => {
+    const fetchImpl = vi.fn() as unknown as typeof fetch;
+    expect(() => new R2S3SnapshotStore({
+      accountId: 'account-id',
+      accessKeyId: 'access-key',
+      secretAccessKey: 'secret-key',
+      bucket: 'snapshots',
+      endpoint,
+      fetchImpl,
+    })).toThrow(PublicSnapshotConfigurationError);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it('rejects dump/database object keys at the adapter boundary', async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'naezip-snapshot-'));
     temporaryDirectories.push(directory);

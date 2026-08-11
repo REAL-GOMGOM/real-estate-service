@@ -5,6 +5,7 @@ import { publishPublicSnapshotRelease } from '../publisher';
 import {
   PublicSnapshotRuntime,
   createPublicSnapshotRuntimeFromEnv,
+  isPublicSnapshotConfigured,
   type PublicSnapshotRuntimeLogEvent,
 } from '../runtime';
 import { createPublicTransactionSnapshot, toPublicSaleTransaction } from '../source-mappers';
@@ -58,6 +59,15 @@ async function fixtureStore(): Promise<MemoryStore> {
 }
 
 describe('public snapshot fail-open runtime', () => {
+  it('distinguishes an absent/blank base URL from configured serving mode', () => {
+    expect(isPublicSnapshotConfigured({})).toBe(false);
+    expect(isPublicSnapshotConfigured({ NEXT_PUBLIC_TRANSACTION_SNAPSHOT_BASE_URL: '  ' }))
+      .toBe(false);
+    expect(isPublicSnapshotConfigured({
+      NEXT_PUBLIC_TRANSACTION_SNAPSHOT_BASE_URL: 'https://data.example.test/',
+    })).toBe(true);
+  });
+
   it('is disabled with zero network calls when the base URL env is absent', async () => {
     const fetchImpl = vi.fn(async () => new Response('unexpected')) as unknown as typeof fetch;
     const runtime = createPublicSnapshotRuntimeFromEnv({}, { fetchImpl });

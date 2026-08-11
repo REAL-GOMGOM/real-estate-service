@@ -1,4 +1,4 @@
-import { fetchMolitXml } from '@/lib/molit-fetch';
+import { fetchMolitXml, type MolitFetchOptions } from '@/lib/molit-fetch';
 
 /**
  * MOLIT 월 목록·페이지네이션 공용 — 사이클 DD.
@@ -34,7 +34,7 @@ function buildMonthUrl(
 }
 
 function readTotalCount(xml: string, context: string): number {
-  const match = xml.match(/<totalCount>(\d+)<\/totalCount>/);
+  const match = xml.match(/<totalCount>\s*(\d+)\s*<\/totalCount>/);
   if (!match) throw new Error(`MOLIT ${context} 응답을 확인할 수 없습니다.`);
   return Number(match[1]);
 }
@@ -45,10 +45,12 @@ async function fetchMonthAllPages(
   lawdCd: string,
   yyyymm: string,
   revalidate: number,
+  fetchOptions?: MolitFetchOptions,
 ): Promise<string> {
   const firstPage = await fetchMolitXml(
     buildMonthUrl(baseUrl, apiKey, lawdCd, yyyymm, 1),
     revalidate,
+    fetchOptions,
   );
   const totalCount = readTotalCount(firstPage, `${lawdCd}/${yyyymm}/1페이지`);
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
@@ -68,6 +70,7 @@ async function fetchMonthAllPages(
         const xml = await fetchMolitXml(
           buildMonthUrl(baseUrl, apiKey, lawdCd, yyyymm, pageNo),
           revalidate,
+          fetchOptions,
         );
         readTotalCount(xml, `${lawdCd}/${yyyymm}/${pageNo}페이지`);
         return xml;
@@ -112,8 +115,16 @@ export async function fetchTradeMonthAllPages(
   lawdCd: string,
   yyyymm: string,
   revalidate = 86400,
+  fetchOptions?: MolitFetchOptions,
 ): Promise<string> {
-  return fetchMonthAllPages(TRADE_BASE_URL, apiKey, lawdCd, yyyymm, revalidate);
+  return fetchMonthAllPages(
+    TRADE_BASE_URL,
+    apiKey,
+    lawdCd,
+    yyyymm,
+    revalidate,
+    fetchOptions,
+  );
 }
 
 /**
@@ -125,8 +136,16 @@ export async function fetchSilvMonthAllPages(
   lawdCd: string,
   yyyymm: string,
   revalidate = 86400,
+  fetchOptions?: MolitFetchOptions,
 ): Promise<string> {
-  return fetchMonthAllPages(SILV_BASE_URL, apiKey, lawdCd, yyyymm, revalidate);
+  return fetchMonthAllPages(
+    SILV_BASE_URL,
+    apiKey,
+    lawdCd,
+    yyyymm,
+    revalidate,
+    fetchOptions,
+  );
 }
 
 /**
@@ -138,6 +157,14 @@ export async function fetchRentMonthAllPages(
   lawdCd: string,
   yyyymm: string,
   revalidate = 86400,
+  fetchOptions?: MolitFetchOptions,
 ): Promise<string> {
-  return fetchMonthAllPages(RENT_BASE_URL, apiKey, lawdCd, yyyymm, revalidate);
+  return fetchMonthAllPages(
+    RENT_BASE_URL,
+    apiKey,
+    lawdCd,
+    yyyymm,
+    revalidate,
+    fetchOptions,
+  );
 }

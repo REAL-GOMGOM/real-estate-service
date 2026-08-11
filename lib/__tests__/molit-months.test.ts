@@ -30,6 +30,29 @@ describe('fetchTradeMonthAllPages', () => {
       '2페이지',
     );
   });
+
+  it('totalCount 0인 정상 무거래 월은 추가 페이지 없이 반환한다', async () => {
+    fetchMolitXml.mockResolvedValueOnce(
+      '<response><resultCode>000</resultCode><totalCount> 0 </totalCount></response>',
+    );
+    const fetchOptions = { maxAttempts: 4, baseDelayMs: 750 };
+
+    const xml = await fetchTradeMonthAllPages(
+      'key',
+      '45190',
+      '202608',
+      60,
+      fetchOptions,
+    );
+
+    expect(xml).toContain('<totalCount> 0 </totalCount>');
+    expect(fetchMolitXml).toHaveBeenCalledTimes(1);
+    expect(fetchMolitXml).toHaveBeenCalledWith(
+      expect.stringContaining('LAWD_CD=45190'),
+      60,
+      fetchOptions,
+    );
+  });
 });
 
 describe('한국 기준 월 계산', () => {

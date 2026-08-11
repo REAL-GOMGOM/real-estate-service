@@ -120,7 +120,7 @@ export default function TransactionsClient() {
   const [groupIdx,  setGroupIdx]  = useState(() => Math.max(0, findGroupIndexOfDistrict(districtParam || '강남구')));
   // 딥링크의 months 를 복원해야 공유된 계약 건이 조회 범위에 들어온다
   const [months,    setMonths]    = useState<number>(
-    [3, 6, 12, 24, 36].includes(monthsParam) ? monthsParam : 6,
+    [2, 3, 6, 12, 24, 36].includes(monthsParam) ? monthsParam : 2,
   );
   const [query,     setQuery]     = useState(queryParam ?? '');
   const [groups,    setGroups]    = useState<AptGroup[]>([]);
@@ -937,6 +937,7 @@ export default function TransactionsClient() {
         {/* 기간 필터 + 검색 */}
         <div style={{ display: 'flex', gap: '10px', marginBottom: '28px', flexWrap: 'wrap', alignItems: 'center' }}>
           {([
+            { label: '2개월',  value: 2  },
             { label: '3개월',  value: 3  },
             { label: '6개월',  value: 6  },
             { label: '1년',    value: 12 },
