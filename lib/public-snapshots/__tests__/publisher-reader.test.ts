@@ -3,6 +3,9 @@ import { gunzipSync } from 'node:zlib';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { PublicSnapshotObjectStore, PublicSnapshotPutInput } from '../object-store';
+import { PUBLIC_TRANSACTION_DISTRICT_COUNT, PUBLIC_TRANSACTION_SHARD_COUNT } from '../contract';
+import { encodePublicTransactionShard, sha256Hex } from '../artifact';
+import type { PublicTransactionShard } from '../contract';
 import { PublicSnapshotReader } from '../reader';
 import { publishPublicSnapshotRelease, PUBLIC_TRANSACTION_MANIFEST_KEY } from '../publisher';
 import { createPublicTransactionSnapshot, toPublicSaleTransaction } from '../source-mappers';
@@ -29,7 +32,7 @@ function fixtureSnapshot() {
     lawdCd: '11680',
     district: '강남구',
     period: { from: '2026-08-01', through: '2026-08-31' },
-    generatedAt: '2026-08-11T00:00:00.000Z',
+    generatedAt: '2026-08-11T01:02:03.000Z',
     records: [toPublicSaleTransaction({
       dedupeKey: 'sale-1',
       masterId: 'apt-1',
@@ -46,11 +49,26 @@ function fixtureSnapshot() {
   });
 }
 
+function fixtureSnapshots() {
+  const first = fixtureSnapshot();
+  return Array.from({ length: PUBLIC_TRANSACTION_DISTRICT_COUNT }, (_, index) => {
+    if (index === 0) return first;
+    const lawdCd = String(10_000 + index).padStart(5, '0');
+    return createPublicTransactionSnapshot({
+      lawdCd,
+      district: `테스트구${index}`,
+      period: { from: '2026-08-01', through: '2026-08-31' },
+      generatedAt: '2026-08-11T01:02:03.000Z',
+      records: [],
+    });
+  });
+}
+
 async function publishedFixture() {
   const store = new MemoryStore();
   const result = await publishPublicSnapshotRelease({
     store,
-    snapshots: [fixtureSnapshot()],
+    snapshots: fixtureSnapshots(),
     namedArtifacts: [{
       name: 'summary/districts',
       schema: 'naezip.transaction-summary.v1',
@@ -70,7 +88,37 @@ describe('public snapshot publisher and reader', () => {
     expect(store.objects.get(PUBLIC_TRANSACTION_MANIFEST_KEY)?.immutable).toBe(false);
     expect(store.order.slice(0, -1).every((key) => store.objects.get(key)?.immutable)).toBe(true);
     expect(result.manifest.totals).toEqual({ total: 1, sale: 1, rent: 0, presale: 0 });
+    expect(result.manifest.shards).toHaveLength(PUBLIC_TRANSACTION_SHARD_COUNT);
+    expect(result.manifest.districts).toHaveLength(PUBLIC_TRANSACTION_DISTRICT_COUNT);
+    expect(result.uploads).toHaveLength(PUBLIC_TRANSACTION_SHARD_COUNT + 1 + 2);
     expect(result.manifest.namedArtifacts).toHaveLength(1);
+  });
+
+  it('produces identical shard assignments, release id, and bytes for reversed input', async () => {
+    const forwardStore = new MemoryStore();
+    const reverseStore = new MemoryStore();
+    const publishedAt = '2026-08-11T01:02:03.000Z';
+    const forward = await publishPublicSnapshotRelease({
+      store: forwardStore,
+      snapshots: fixtureSnapshots(),
+      publishedAt,
+    });
+    const reverse = await publishPublicSnapshotRelease({
+      store: reverseStore,
+      snapshots: fixtureSnapshots().reverse(),
+      publishedAt,
+    });
+    expect(reverse.releaseId).toBe(forward.releaseId);
+    expect(reverse.manifest.shards.map(({ shardId, districtCount, recordCount }) => ({
+      shardId, districtCount, recordCount,
+    }))).toEqual(forward.manifest.shards.map(({ shardId, districtCount, recordCount }) => ({
+      shardId, districtCount, recordCount,
+    })));
+    for (const shard of forward.manifest.shards) {
+      const left = forwardStore.objects.get(shard.shard.key)!.body;
+      const right = reverseStore.objects.get(shard.shard.key)!.body;
+      expect(sha256Hex(left)).toBe(sha256Hex(right));
+    }
   });
 
   it('does not publish either manifest if an artifact upload fails', async () => {
@@ -78,7 +126,7 @@ describe('public snapshot publisher and reader', () => {
     store.failAt = 1;
     await expect(publishPublicSnapshotRelease({
       store,
-      snapshots: [fixtureSnapshot()],
+      snapshots: fixtureSnapshots(),
       namedArtifacts: [{
         name: 'summary/districts',
         schema: 'naezip.transaction-summary.v1',
@@ -195,8 +243,9 @@ describe('public snapshot publisher and reader', () => {
 
   it('accepts fetch-transparent gzip decoding but rejects tampered bytes', async () => {
     const { store, result } = await publishedFixture();
-    const entry = result.manifest.districts[0];
-    const compressed = Buffer.from(store.objects.get(entry.snapshot.key)!.body);
+    const entry = result.manifest.districts.find(({ lawdCd }) => lawdCd === '11680')!;
+    const shard = result.manifest.shards.find(({ shardId }) => shardId === entry.shardId)!;
+    const compressed = Buffer.from(store.objects.get(shard.shard.key)!.body);
     const decoded = gunzipSync(compressed);
     const manifestBody = store.objects.get(PUBLIC_TRANSACTION_MANIFEST_KEY)!.body;
     const fetchDecoded = vi.fn(async (input: string | URL | Request) => {
@@ -218,10 +267,36 @@ describe('public snapshot publisher and reader', () => {
     await expect(tamperedReader.getDistrictSnapshot('11680')).rejects.toThrow(/SHA-256/);
   });
 
+  it('validates every district in the fetched shard against the manifest', async () => {
+    const { store, result } = await publishedFixture();
+    const manifest = structuredClone(result.manifest);
+    const requested = manifest.districts.find(({ lawdCd }) => lawdCd === '11680')!;
+    const shardEntry = manifest.shards.find(({ shardId }) => shardId === requested.shardId)!;
+    const originalBody = store.objects.get(shardEntry.shard.key)!.body;
+    const shard = JSON.parse(gunzipSync(originalBody).toString('utf8')) as PublicTransactionShard;
+    const other = shard.snapshots.find((snapshot) => snapshot.partition.lawdCd !== '11680');
+    expect(other).toBeDefined();
+    other!.partition.district = `${other!.partition.district}-변조`;
+    const tampered = encodePublicTransactionShard(shard);
+    shardEntry.shard = {
+      ...shardEntry.shard,
+      sha256: tampered.sha256,
+      payloadSha256: tampered.payloadSha256,
+      byteLength: tampered.byteLength,
+      payloadByteLength: tampered.payloadByteLength,
+    };
+    const fetchImpl = vi.fn(async () => new Response(responseBytes(tampered.body))) as unknown as typeof fetch;
+    const reader = new PublicSnapshotReader({ baseUrl: 'https://data.example.test/', fetchImpl });
+
+    await expect(reader.getDistrictSnapshot('11680', manifest))
+      .rejects.toThrow(/district metadata does not match manifest/);
+  });
+
   it('blocks private fields in generic named artifacts', async () => {
+    const store = new MemoryStore();
     await expect(publishPublicSnapshotRelease({
-      store: new MemoryStore(),
-      snapshots: [fixtureSnapshot()],
+      store,
+      snapshots: fixtureSnapshots(),
       namedArtifacts: [{
         name: 'apartment-index',
         schema: 'naezip.apartment-index.v1',
@@ -230,12 +305,13 @@ describe('public snapshot publisher and reader', () => {
       }],
       publishedAt: '2026-08-11T01:02:03.000Z',
     })).rejects.toThrow(/forbidden/);
+    expect(store.order).toEqual([]);
   });
 
   it('rejects a named array artifact whose declared count is wrong', async () => {
     await expect(publishPublicSnapshotRelease({
       store: new MemoryStore(),
-      snapshots: [fixtureSnapshot()],
+      snapshots: fixtureSnapshots(),
       namedArtifacts: [{
         name: 'summary/districts',
         schema: 'naezip.transaction-summary.v1',

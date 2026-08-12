@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { PublicSnapshotObjectStore, PublicSnapshotPutInput } from '../object-store';
+import { PUBLIC_TRANSACTION_DISTRICT_COUNT } from '../contract';
 import { publishPublicSnapshotRelease } from '../publisher';
 import {
   PublicSnapshotRuntime,
@@ -44,9 +45,21 @@ async function fixtureStore(): Promise<MemoryStore> {
       isCanceled: false,
     })],
   });
+  const snapshots = Array.from({ length: PUBLIC_TRANSACTION_DISTRICT_COUNT }, (_, index) => {
+    if (index === 0) return snapshot;
+    return createPublicTransactionSnapshot({
+      lawdCd: String(10_000 + index),
+      district: `테스트구${index}`,
+      period: { from: '2026-08-01', through: '2026-08-31' },
+      generatedAt: '2026-08-11T01:02:03.000Z',
+      records: [],
+    });
+  });
+  // The fixture release uses one generatedAt across all 248 strict partitions.
+  snapshots[0] = { ...snapshots[0], generatedAt: '2026-08-11T01:02:03.000Z' };
   await publishPublicSnapshotRelease({
     store,
-    snapshots: [snapshot],
+    snapshots,
     namedArtifacts: [{
       name: 'summary/districts',
       schema: 'naezip.transaction-summary.v1',

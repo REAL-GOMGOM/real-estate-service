@@ -27,7 +27,7 @@ Loads .env.local (or NAEZIP_ENV_FILE) once; already-exported variables take prio
 --dry-run            Force only the publisher to use its local object-store sink.
                      MOLIT fetches and local PostgreSQL sync writes still run.
 --allow-stale-local   MANUAL EMERGENCY OVERRIDE passed to the publisher. It must not
-                      be used by launchd or routine automation; R2 mode also requires
+                      be used by launchd or routine automation; production also requires
                       an explicit NAEZIP_SNAPSHOT_SOURCE_AT.
 `;
 

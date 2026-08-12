@@ -1,17 +1,16 @@
 import type {
   PublicNamedArtifactEnvelope,
-  PublicSnapshotCounts,
   PublicTransactionManifest,
   PublicTransactionSnapshot,
 } from './contract';
 import {
   PublicSnapshotValidationError,
   assertPublicTransactionManifest,
-  countPublicTransactions,
+  assertPublicTransactionShardMatchesManifest,
 } from './contract';
 import {
   decodeAndValidatePublicNamedArtifact,
-  decodeAndValidatePublicSnapshot,
+  decodeAndValidatePublicTransactionShard,
 } from './artifact';
 import { PUBLIC_TRANSACTION_MANIFEST_KEY } from './publisher';
 
@@ -28,13 +27,6 @@ type PublicSnapshotReadResource = 'manifest' | 'district snapshot' | 'named arti
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 4_000;
 const MAX_REQUEST_TIMEOUT_MS = 30_000;
-
-function countsEqual(left: PublicSnapshotCounts, right: PublicSnapshotCounts): boolean {
-  return left.total === right.total
-    && left.sale === right.sale
-    && left.rent === right.rent
-    && left.presale === right.presale;
-}
 
 export class PublicSnapshotReader {
   private readonly baseUrl: URL;
@@ -107,28 +99,28 @@ export class PublicSnapshotReader {
     assertPublicTransactionManifest(manifest);
     const entry = manifest.districts.find((candidate) => candidate.lawdCd === lawdCd);
     if (!entry) throw new Error(`District snapshot not found: ${lawdCd}`);
+    const shardEntry = manifest.shards.find((candidate) => candidate.shardId === entry.shardId);
+    if (!shardEntry) throw new PublicSnapshotValidationError('manifest', ['district shard is missing']);
     return this.withRequestTimeout('district snapshot', async (signal) => {
-      const response = await this.fetchImpl(this.objectUrl(entry.snapshot.key), {
+      const response = await this.fetchImpl(this.objectUrl(shardEntry.shard.key), {
         headers: { accept: 'application/json' },
         cache: 'force-cache',
         signal,
       });
       if (!response.ok) throw new Error(`District snapshot request failed: HTTP ${response.status}`);
-      const snapshot = decodeAndValidatePublicSnapshot(
+      const shard = decodeAndValidatePublicTransactionShard(
         new Uint8Array(await response.arrayBuffer()),
-        entry.snapshot,
-        entry.counts.total,
+        shardEntry.shard,
+        shardEntry,
       );
-      if (snapshot.partition.lawdCd !== entry.lawdCd
-        || snapshot.partition.district !== entry.district
-        || snapshot.period.from !== entry.period.from
-        || snapshot.period.through !== entry.period.through) {
-        throw new PublicSnapshotValidationError('snapshot', ['partition metadata does not match manifest']);
+      assertPublicTransactionShardMatchesManifest(shard, manifest);
+      const matches = shard.snapshots.filter((snapshot) => snapshot.partition.lawdCd === lawdCd);
+      if (matches.length !== 1) {
+        throw new PublicSnapshotValidationError('shard', [
+          `requested district must occur exactly once: ${lawdCd}`,
+        ]);
       }
-      if (!countsEqual(countPublicTransactions(snapshot.records), entry.counts)) {
-        throw new PublicSnapshotValidationError('snapshot', ['kind counts do not match manifest']);
-      }
-      return snapshot;
+      return matches[0];
     });
   }
 

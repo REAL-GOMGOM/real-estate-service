@@ -5,9 +5,12 @@
  * records, request logs, and arbitrary JSON are not valid publish inputs.
  */
 
-export const PUBLIC_TRANSACTION_SNAPSHOT_SCHEMA = 'naezip.public-transactions.v1' as const;
-export const PUBLIC_TRANSACTION_MANIFEST_SCHEMA = 'naezip.public-transactions.manifest.v1' as const;
-export const PUBLIC_TRANSACTION_SNAPSHOT_PREFIX = 'public-transactions/v1' as const;
+export const PUBLIC_TRANSACTION_SNAPSHOT_SCHEMA = 'naezip.public-transactions.v2' as const;
+export const PUBLIC_TRANSACTION_SHARD_SCHEMA = 'naezip.public-transactions.shard.v2' as const;
+export const PUBLIC_TRANSACTION_MANIFEST_SCHEMA = 'naezip.public-transactions.manifest.v2' as const;
+export const PUBLIC_TRANSACTION_SNAPSHOT_PREFIX = 'public-transactions/v2' as const;
+export const PUBLIC_TRANSACTION_SHARD_COUNT = 24 as const;
+export const PUBLIC_TRANSACTION_DISTRICT_COUNT = 248 as const;
 
 export type PublicTransactionKind = 'sale' | 'rent' | 'presale';
 
@@ -66,6 +69,16 @@ export interface PublicTransactionSnapshot {
   records: PublicTransactionRecord[];
 }
 
+/** One immutable serving object containing several complete district snapshots. */
+export interface PublicTransactionShard {
+  schema: typeof PUBLIC_TRANSACTION_SHARD_SCHEMA;
+  generatedAt: string;
+  shardId: string;
+  snapshotCount: number;
+  recordCount: number;
+  snapshots: PublicTransactionSnapshot[];
+}
+
 export interface PublicSnapshotCounts {
   total: number;
   sale: number;
@@ -73,17 +86,24 @@ export interface PublicSnapshotCounts {
   presale: number;
 }
 
-export interface PublicSnapshotObjectDescriptor {
+export interface PublicSnapshotShardDescriptor {
   key: string;
-  schema: typeof PUBLIC_TRANSACTION_SNAPSHOT_SCHEMA;
+  schema: typeof PUBLIC_TRANSACTION_SHARD_SCHEMA;
   contentType: 'application/json';
   contentEncoding: 'gzip';
-  /** SHA-256 of the exact compressed object stored in R2. */
+  /** SHA-256 of the exact compressed object stored in the public object store. */
   sha256: string;
   /** SHA-256 after gzip decoding, used when HTTP clients transparently decode. */
   payloadSha256: string;
   byteLength: number;
   payloadByteLength: number;
+}
+
+export interface PublicSnapshotShardEntry {
+  shardId: string;
+  districtCount: number;
+  recordCount: number;
+  shard: PublicSnapshotShardDescriptor;
 }
 
 export interface PublicNamedArtifactDescriptor {
@@ -118,7 +138,7 @@ export interface PublicSnapshotDistrictEntry {
   period: PublicSnapshotPeriod;
   counts: PublicSnapshotCounts;
   latestDealDate: string | null;
-  snapshot: PublicSnapshotObjectDescriptor;
+  shardId: string;
 }
 
 export interface PublicTransactionManifest {
@@ -131,6 +151,8 @@ export interface PublicTransactionManifest {
     containsPersonalData: false;
   };
   totals: PublicSnapshotCounts;
+  /** Exactly 24 immutable objects covering every district exactly once. */
+  shards: PublicSnapshotShardEntry[];
   districts: PublicSnapshotDistrictEntry[];
   /** Optional producer-defined summaries and search indexes; empty when unused. */
   namedArtifacts: PublicNamedArtifactEntry[];
@@ -147,6 +169,7 @@ export class PublicSnapshotValidationError extends Error {
 }
 
 const SNAPSHOT_KEYS = ['generatedAt', 'partition', 'period', 'recordCount', 'records', 'schema'] as const;
+const SHARD_KEYS = ['generatedAt', 'recordCount', 'schema', 'shardId', 'snapshotCount', 'snapshots'] as const;
 const PARTITION_KEYS = ['district', 'lawdCd'] as const;
 const PERIOD_KEYS = ['from', 'through'] as const;
 const SALE_KEYS = [
@@ -158,10 +181,11 @@ const RENT_KEYS = [
   'depositManwon', 'district', 'dong', 'floor', 'id', 'kind', 'monthlyRentManwon',
   'previousDepositManwon', 'previousMonthlyRentManwon',
 ] as const;
-const MANIFEST_KEYS = ['districts', 'namedArtifacts', 'publishedAt', 'releaseId', 'schema', 'source', 'totals'] as const;
+const MANIFEST_KEYS = ['districts', 'namedArtifacts', 'publishedAt', 'releaseId', 'schema', 'shards', 'source', 'totals'] as const;
 const SOURCE_KEYS = ['containsPersonalData', 'format', 'provider'] as const;
 const COUNTS_KEYS = ['presale', 'rent', 'sale', 'total'] as const;
-const DISTRICT_ENTRY_KEYS = ['counts', 'district', 'latestDealDate', 'lawdCd', 'period', 'snapshot'] as const;
+const DISTRICT_ENTRY_KEYS = ['counts', 'district', 'latestDealDate', 'lawdCd', 'period', 'shardId'] as const;
+const SHARD_ENTRY_KEYS = ['districtCount', 'recordCount', 'shard', 'shardId'] as const;
 const DESCRIPTOR_KEYS = [
   'byteLength', 'contentEncoding', 'contentType', 'key', 'payloadByteLength',
   'payloadSha256', 'schema', 'sha256',
@@ -389,26 +413,80 @@ export function assertPublicTransactionSnapshot(value: unknown): asserts value i
   if (issues.length > 0) throw new PublicSnapshotValidationError('snapshot', issues);
 }
 
-function validateDescriptor(
+function isShardId(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^\d{2}$/.test(value)) return false;
+  const parsed = Number(value);
+  return parsed >= 0 && parsed < PUBLIC_TRANSACTION_SHARD_COUNT;
+}
+
+export function publicTransactionShardValidationIssues(value: unknown): string[] {
+  const issues: string[] = [];
+  if (!checkExactKeys(value, SHARD_KEYS, 'shard', issues)) return issues;
+  if (value.schema !== PUBLIC_TRANSACTION_SHARD_SCHEMA) issues.push('shard.schema is unsupported');
+  if (!isIsoTimestamp(value.generatedAt)) issues.push('shard.generatedAt must be an ISO UTC timestamp');
+  if (!isShardId(value.shardId)) issues.push('shard.shardId is unsupported');
+  checkNumber(value.snapshotCount, 'shard.snapshotCount', issues, { min: 1, integer: true });
+  checkNumber(value.recordCount, 'shard.recordCount', issues, { integer: true });
+  if (!Array.isArray(value.snapshots)) {
+    issues.push('shard.snapshots must be an array');
+    return issues;
+  }
+  if (value.snapshotCount !== value.snapshots.length) {
+    issues.push('shard.snapshotCount must equal snapshots.length');
+  }
+  let recordCount = 0;
+  let previousCode: string | null = null;
+  const seenCodes = new Set<string>();
+  value.snapshots.forEach((snapshot, index) => {
+    const path = `shard.snapshots[${index}]`;
+    const childIssues = snapshotValidationIssues(snapshot)
+      .map((issue) => issue.replace(/^snapshot/, path));
+    issues.push(...childIssues);
+    if (!isPlainObject(snapshot)) return;
+    if (snapshot.generatedAt !== value.generatedAt) {
+      issues.push(`${path}.generatedAt must match shard.generatedAt`);
+    }
+    if (!isPlainObject(snapshot.partition) || typeof snapshot.partition.lawdCd !== 'string') return;
+    const lawdCd = snapshot.partition.lawdCd;
+    if (seenCodes.has(lawdCd)) issues.push(`${path}.partition.lawdCd is duplicated`);
+    seenCodes.add(lawdCd);
+    if (previousCode !== null && previousCode >= lawdCd) {
+      issues.push('shard.snapshots must be ordered by lawdCd');
+    }
+    previousCode = lawdCd;
+    if (typeof snapshot.recordCount === 'number' && Number.isSafeInteger(snapshot.recordCount)) {
+      recordCount += snapshot.recordCount;
+    }
+  });
+  if (value.recordCount !== recordCount) {
+    issues.push('shard.recordCount must equal the sum of snapshot recordCount values');
+  }
+  return issues;
+}
+
+export function assertPublicTransactionShard(value: unknown): asserts value is PublicTransactionShard {
+  const issues = publicTransactionShardValidationIssues(value);
+  if (issues.length > 0) throw new PublicSnapshotValidationError('shard', issues);
+}
+
+function validateShardDescriptor(
   value: unknown,
   path: string,
   releaseId: string,
+  shardId: string,
   issues: string[],
-): value is PublicSnapshotObjectDescriptor {
+): value is PublicSnapshotShardDescriptor {
   if (!checkExactKeys(value, DESCRIPTOR_KEYS, path, issues)) return false;
-  if (value.schema !== PUBLIC_TRANSACTION_SNAPSHOT_SCHEMA) issues.push(`${path}.schema is unsupported`);
+  if (value.schema !== PUBLIC_TRANSACTION_SHARD_SCHEMA) issues.push(`${path}.schema is unsupported`);
   if (value.contentType !== 'application/json') issues.push(`${path}.contentType must be application/json`);
   if (value.contentEncoding !== 'gzip') issues.push(`${path}.contentEncoding must be gzip`);
   checkString(value.sha256, `${path}.sha256`, issues, { pattern: /^[a-f0-9]{64}$/ });
   checkString(value.payloadSha256, `${path}.payloadSha256`, issues, { pattern: /^[a-f0-9]{64}$/ });
   checkNumber(value.byteLength, `${path}.byteLength`, issues, { min: 1, integer: true });
   checkNumber(value.payloadByteLength, `${path}.payloadByteLength`, issues, { min: 1, integer: true });
-  const expectedPrefix = `${PUBLIC_TRANSACTION_SNAPSHOT_PREFIX}/releases/${releaseId}/districts/`;
-  if (typeof value.key !== 'string'
-    || !value.key.startsWith(expectedPrefix)
-    || !/\/\d{5}\.json\.gz$/.test(value.key)
-    || value.key.includes('..')) {
-    issues.push(`${path}.key must be an immutable district snapshot key`);
+  const expectedKey = `${PUBLIC_TRANSACTION_SNAPSHOT_PREFIX}/releases/${releaseId}/shards/${shardId}.json.gz`;
+  if (value.key !== expectedKey || value.key.includes('..')) {
+    issues.push(`${path}.key must be the immutable shard key for shardId`);
   }
   return true;
 }
@@ -453,13 +531,52 @@ export function manifestValidationIssues(value: unknown): string[] {
   }
 
   const totalsValid = validateCounts(value.totals, 'manifest.totals', issues);
+  const shardEntries = new Map<string, PublicSnapshotShardEntry>();
+  if (!Array.isArray(value.shards)) {
+    issues.push('manifest.shards must be an array');
+  } else {
+    if (value.shards.length !== PUBLIC_TRANSACTION_SHARD_COUNT) {
+      issues.push(`manifest.shards must contain exactly ${PUBLIC_TRANSACTION_SHARD_COUNT} entries`);
+    }
+    value.shards.forEach((entry, index) => {
+      const path = `manifest.shards[${index}]`;
+      if (!checkExactKeys(entry, SHARD_ENTRY_KEYS, path, issues)) return;
+      const shardIdValid = isShardId(entry.shardId);
+      const shardId = shardIdValid ? entry.shardId as string : null;
+      if (!shardIdValid) issues.push(`${path}.shardId is unsupported`);
+      const expectedShardId = String(index).padStart(2, '0');
+      if (shardId !== expectedShardId) {
+        issues.push(`${path}.shardId must preserve canonical shard order`);
+      }
+      const districtCountValid = checkNumber(entry.districtCount, `${path}.districtCount`, issues, {
+        min: 1,
+        integer: true,
+      });
+      const recordCountValid = checkNumber(entry.recordCount, `${path}.recordCount`, issues, {
+        integer: true,
+      });
+      if (validReleaseId && shardId !== null) {
+        validateShardDescriptor(entry.shard, `${path}.shard`, value.releaseId as string, shardId, issues);
+      }
+      if (shardId !== null && districtCountValid && recordCountValid) {
+        if (shardEntries.has(shardId)) issues.push(`${path}.shardId is duplicated`);
+        shardEntries.set(shardId, entry as unknown as PublicSnapshotShardEntry);
+      }
+    });
+  }
   if (!Array.isArray(value.districts)) {
     issues.push('manifest.districts must be an array');
     return issues;
   }
+  if (value.districts.length !== PUBLIC_TRANSACTION_DISTRICT_COUNT) {
+    issues.push(`manifest.districts must contain exactly ${PUBLIC_TRANSACTION_DISTRICT_COUNT} entries`);
+  }
 
   const seenCodes = new Set<string>();
   const summed: PublicSnapshotCounts = { total: 0, sale: 0, rent: 0, presale: 0 };
+  const districtCountsByShard = new Map<string, number>();
+  const recordCountsByShard = new Map<string, number>();
+  let previousLawdCd: string | null = null;
   value.districts.forEach((entry, index) => {
     const path = `manifest.districts[${index}]`;
     if (!checkExactKeys(entry, DISTRICT_ENTRY_KEYS, path, issues)) return;
@@ -470,14 +587,20 @@ export function manifestValidationIssues(value: unknown): string[] {
     if (entry.latestDealDate !== null && !publicDealDateRange(entry.latestDealDate)) {
       issues.push(`${path}.latestDealDate must be YYYY-MM-DD, YYYY-MM, or null`);
     }
-    if (validReleaseId) validateDescriptor(entry.snapshot, `${path}.snapshot`, value.releaseId as string, issues);
+    const shardIdValid = isShardId(entry.shardId);
+    const shardId = shardIdValid ? entry.shardId as string : null;
+    if (!shardIdValid) {
+      issues.push(`${path}.shardId is unsupported`);
+    } else if (shardId !== null && !shardEntries.has(shardId)) {
+      issues.push(`${path}.shardId does not reference a manifest shard`);
+    }
     if (lawdValid) {
       if (seenCodes.has(entry.lawdCd as string)) issues.push(`${path}.lawdCd is duplicated`);
       seenCodes.add(entry.lawdCd as string);
-      if (isPlainObject(entry.snapshot) && typeof entry.snapshot.key === 'string'
-        && !entry.snapshot.key.endsWith(`/${entry.lawdCd}.json.gz`)) {
-        issues.push(`${path}.snapshot.key must match lawdCd`);
+      if (previousLawdCd !== null && previousLawdCd >= (entry.lawdCd as string)) {
+        issues.push('manifest.districts must preserve canonical lawdCd order');
       }
+      previousLawdCd = entry.lawdCd as string;
     }
     if (countsValid) {
       const counts = entry.counts as unknown as PublicSnapshotCounts;
@@ -485,8 +608,21 @@ export function manifestValidationIssues(value: unknown): string[] {
       summed.sale += counts.sale;
       summed.rent += counts.rent;
       summed.presale += counts.presale;
+      if (shardId !== null) {
+        districtCountsByShard.set(shardId, (districtCountsByShard.get(shardId) ?? 0) + 1);
+        recordCountsByShard.set(shardId, (recordCountsByShard.get(shardId) ?? 0) + counts.total);
+      }
     }
   });
+
+  for (const [shardId, entry] of shardEntries) {
+    if (entry.districtCount !== (districtCountsByShard.get(shardId) ?? 0)) {
+      issues.push(`manifest shard ${shardId} districtCount does not match district mapping`);
+    }
+    if (entry.recordCount !== (recordCountsByShard.get(shardId) ?? 0)) {
+      issues.push(`manifest shard ${shardId} recordCount does not match district mapping`);
+    }
+  }
 
   if (totalsValid) {
     const totals = value.totals as unknown as PublicSnapshotCounts;
@@ -547,4 +683,52 @@ export function latestPublicDealDate(records: readonly PublicTransactionRecord[]
     if (latestThrough === null || candidateThrough > latestThrough) latest = record.dealDate;
   }
   return latest;
+}
+
+function snapshotCountsEqual(left: PublicSnapshotCounts, right: PublicSnapshotCounts): boolean {
+  return left.total === right.total
+    && left.sale === right.sale
+    && left.rent === right.rent
+    && left.presale === right.presale;
+}
+
+/** Validate the complete shard body against its manifest mapping, not only the requested district. */
+export function assertPublicTransactionShardMatchesManifest(
+  shard: PublicTransactionShard,
+  manifest: PublicTransactionManifest,
+): void {
+  assertPublicTransactionShard(shard);
+  assertPublicTransactionManifest(manifest);
+  const shardEntry = manifest.shards.find((candidate) => candidate.shardId === shard.shardId);
+  if (!shardEntry) {
+    throw new PublicSnapshotValidationError('shard', ['shardId is not present in manifest']);
+  }
+  const mappedDistricts = manifest.districts
+    .filter((entry) => entry.shardId === shard.shardId)
+    .sort((left, right) => left.lawdCd.localeCompare(right.lawdCd));
+  if (mappedDistricts.length !== shardEntry.districtCount
+    || mappedDistricts.length !== shard.snapshots.length) {
+    throw new PublicSnapshotValidationError('shard', ['district membership count does not match manifest']);
+  }
+  const bodyCodes = shard.snapshots.map((snapshot) => snapshot.partition.lawdCd);
+  const manifestCodes = mappedDistricts.map((entry) => entry.lawdCd);
+  if (bodyCodes.some((lawdCd, index) => lawdCd !== manifestCodes[index])) {
+    throw new PublicSnapshotValidationError('shard', ['district membership does not match manifest']);
+  }
+  for (let index = 0; index < shard.snapshots.length; index += 1) {
+    const snapshot = shard.snapshots[index];
+    const entry = mappedDistricts[index];
+    const counts = countPublicTransactions(snapshot.records);
+    if (snapshot.generatedAt !== manifest.publishedAt
+      || snapshot.partition.lawdCd !== entry.lawdCd
+      || snapshot.partition.district !== entry.district
+      || snapshot.period.from !== entry.period.from
+      || snapshot.period.through !== entry.period.through
+      || !snapshotCountsEqual(counts, entry.counts)
+      || latestPublicDealDate(snapshot.records) !== entry.latestDealDate) {
+      throw new PublicSnapshotValidationError('shard', [
+        `district metadata does not match manifest: ${snapshot.partition.lawdCd}`,
+      ]);
+    }
+  }
 }

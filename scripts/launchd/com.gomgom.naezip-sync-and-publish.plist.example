@@ -12,7 +12,7 @@
     <string>--import</string>
     <string>tsx</string>
     <string>scripts/run-local-sync-and-publish.ts</string>
-    <!-- R2-only dry run: MOLIT/local PG sync is real. Require backup+restore check first. -->
+    <!-- Object-store-only dry run: MOLIT/local PG sync is real. Require backup+restore check first. -->
     <string>--dry-run</string>
   </array>
 

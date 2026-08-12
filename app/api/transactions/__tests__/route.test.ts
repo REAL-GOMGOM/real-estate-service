@@ -70,7 +70,7 @@ function saleSnapshot(options: {
 } = {}) {
   const period = options.period ?? currentMonthPeriod();
   return {
-    schema: 'naezip.public-transactions.v1' as const,
+    schema: 'naezip.public-transactions.v2' as const,
     generatedAt: new Date().toISOString(),
     partition: { lawdCd: '11680', district: '강남구' },
     period: { from: period.from, through: period.through },

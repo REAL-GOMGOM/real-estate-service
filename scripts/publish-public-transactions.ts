@@ -51,13 +51,16 @@ export const SNAPSHOT_SOURCE_AT_ENV = 'NAEZIP_SNAPSHOT_SOURCE_AT';
 const HELP = `
 Usage: npx tsx scripts/publish-public-transactions.ts [--dry-run] [--allow-stale-local]
 
-Publishes a serving-only snapshot from NAEZIP_LOCAL_DB_URL. Production R2 publish
-requires a recent healthy Mac mini sync marker (exit 0 or Neon-only degraded exit 2).
+Publishes a serving-only snapshot from NAEZIP_LOCAL_DB_URL. Production requires
+NAEZIP_SNAPSHOT_STORE=blob plus NAEZIP_SNAPSHOT_BLOB_READ_WRITE_TOKEN (or
+explicitly selected legacy R2) and a recent healthy Mac mini sync marker
+(exit 0 or Neon-only degraded exit 2).
 
---dry-run            Ignore R2 credentials and write under NAEZIP_SNAPSHOT_DRY_RUN_DIR.
-                     Without this flag, all four R2 credentials are mandatory.
+--dry-run            Ignore Blob/R2 credentials and write under NAEZIP_SNAPSHOT_DRY_RUN_DIR.
+                     Without this flag, NAEZIP_SNAPSHOT_STORE=blob and its token
+                     are mandatory unless mode=r2 selects the legacy fallback.
 --allow-stale-local   MANUAL EMERGENCY OVERRIDE: bypass the sync health marker.
-                      R2 mode also requires an explicit NAEZIP_SNAPSHOT_SOURCE_AT.
+                      Production also requires an explicit NAEZIP_SNAPSHOT_SOURCE_AT.
                       Never configure this flag in launchd or routine automation.
 `;
 
@@ -824,6 +827,8 @@ export async function publishPublicTransactionsFromClient(
 
 function dryRunEnvironment(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const result = { ...env };
+  delete result.NAEZIP_SNAPSHOT_BLOB_READ_WRITE_TOKEN;
+  delete result.NAEZIP_SNAPSHOT_STORE;
   delete result.NAEZIP_SNAPSHOT_R2_ACCOUNT_ID;
   delete result.NAEZIP_SNAPSHOT_R2_ACCESS_KEY_ID;
   delete result.NAEZIP_SNAPSHOT_R2_SECRET_ACCESS_KEY;
@@ -839,9 +844,12 @@ export function selectPublisherStore(
   const selection = createPublicSnapshotStoreFromEnv(
     options.forceDryRun ? dryRunEnvironment(env) : env,
   );
-  if (!options.forceDryRun && selection.mode !== 'r2') {
+  const explicitR2 = env.NAEZIP_SNAPSHOT_STORE?.trim().toLowerCase() === 'r2';
+  if (!options.forceDryRun
+    && selection.mode !== 'blob'
+    && !(selection.mode === 'r2' && explicitR2)) {
     throw new Error(
-      'R2 snapshot credentials are required for publisher automation; use --dry-run explicitly for a local sink',
+      'Production publisher requires NAEZIP_SNAPSHOT_STORE=blob with NAEZIP_SNAPSHOT_BLOB_READ_WRITE_TOKEN; use --dry-run or explicitly set NAEZIP_SNAPSHOT_STORE=r2',
     );
   }
   return selection;
@@ -899,7 +907,7 @@ async function main(): Promise<number> {
     const selection = selectPublisherStore(process.env, { forceDryRun });
     let marker: MacMiniSyncHealthMarker | undefined;
 
-    if (selection.mode === 'r2') {
+    if (selection.mode !== 'local-dry-run') {
       if (allowStaleLocal) {
         console.warn('[public-snapshot] 비상 우회 활성화: sync health marker를 건너뜁니다. 정기 자동화에 사용하지 마세요.');
       } else {
@@ -917,7 +925,7 @@ async function main(): Promise<number> {
     const sourceAt = resolveSnapshotSourceAt({
       env: process.env,
       marker,
-      requireExplicit: selection.mode === 'r2' && allowStaleLocal,
+      requireExplicit: selection.mode !== 'local-dry-run' && allowStaleLocal,
     });
 
     const localDatabaseUrl = assertMacLocalDatabaseUrl(process.env.NAEZIP_LOCAL_DB_URL);
@@ -943,6 +951,11 @@ async function main(): Promise<number> {
         console.log(
           `[public-snapshot] 완료: release=${result.releaseId}, districts=${result.manifest.districts.length}, records=${result.manifest.totals.total}, artifacts=${result.manifest.namedArtifacts.length}`,
         );
+        const manifestUrl = result.uploads.at(-1)?.url;
+        if (manifestUrl) {
+          console.log(`[public-snapshot] public manifest: ${manifestUrl}`);
+          console.log(`[public-snapshot] public base URL: ${new URL(manifestUrl).origin}/`);
+        }
       } finally {
         pgClient.release();
       }

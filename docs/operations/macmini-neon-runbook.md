@@ -119,7 +119,7 @@ backup manifest를 먼저 읽고 이전 성공본을 복구한 뒤 원천을 조
 
 1. 외부 백업 최신본과 임시 DB restore check를 먼저 확인한다.
 2. Neon 대시보드에서 전송량 한도와 다음 초기화 시각을 확인한다.
-3. 기본 wrapper `--dry-run`을 실행한다. 이 플래그는 R2 발행만 local sink로 바꾸며 MOLIT
+3. 기본 wrapper `--dry-run`을 실행한다. 이 플래그는 객체 저장소 발행만 local sink로 바꾸며 MOLIT
    수집과 로컬 PostgreSQL write는 실제 수행되므로 전체 모의 실행으로 간주하지 않는다.
 4. 전송량 예산을 확인한 뒤에만 일회성 환경에서 `NAEZIP_ENABLE_NEON_CACHE_WRITE=1`을 켜고
    수동 sync 한 번을 실행해 `status=HEALTHY`, 행 수, 주요 API 결과를 검증한다.

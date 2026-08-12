@@ -1,13 +1,14 @@
 # 공개 실거래 serving snapshot 운영 계약
 
-이 모듈은 Mac mini의 로컬 원장을 공개 조회용의 작은 district snapshot으로 변환한 뒤,
+이 모듈은 Mac mini의 로컬 원장을 공개 조회용 district snapshot으로 변환하고 24개 shard에 담은 뒤,
 검증된 JSON 산출물만 객체 저장소에 발행하기 위한 코어다. DB 조회/export 자체와 기존 API
 route 전환은 별도 단계다.
 
 ## 공개 범위
 
 - 거래 유형: 매매(`sale`), 전월세(`rent`), 분양권(`presale`)
-- 파티션: `lawdCd` 5자리 기준 district별 1개 compact raw snapshot
+- 논리 파티션: `lawdCd` 5자리 기준 district별 compact raw snapshot 248개
+- 물리 객체: payload byte size를 기준으로 안정적으로 균형 배치한 gzip shard 24개
 - 검증된 기간: Mac sync marker가 실제 갱신을 증명하는 이번 달+직전 달, 총 2개 calendar month
 - 허용 필드: 단지명·동·면적·층·가격·계약일·건축년도와 비개인 식별자만
 - 취소 거래는 발행을 거부한다. 국토부 원문에서 계약일이 `00`인 행은 날짜를 만들지 않고
@@ -25,23 +26,29 @@ mapper가 `YYYY-MM`으로 바꾸며 contract validator를 두 번째 방어선�
 고정 discovery manifest:
 
 ```text
-public-transactions/v1/manifest.json
+public-transactions/v2/manifest.json
 ```
 
 변경 불가능한 release 객체:
 
 ```text
-public-transactions/v1/releases/{YYYYMMDDTHHMMSSZ-hash12}/districts/{lawdCd}.json.gz
-public-transactions/v1/releases/{YYYYMMDDTHHMMSSZ-hash12}/artifacts/{name}.json.gz
-public-transactions/v1/releases/{YYYYMMDDTHHMMSSZ-hash12}/manifest.json
+public-transactions/v2/releases/{YYYYMMDDTHHMMSSZ-hash12}/shards/{00..23}.json.gz
+public-transactions/v2/releases/{YYYYMMDDTHHMMSSZ-hash12}/artifacts/{name}.json.gz
+public-transactions/v2/releases/{YYYYMMDDTHHMMSSZ-hash12}/manifest.json
 ```
 
-publisher 순서는 district snapshot → named artifact → immutable release manifest → 고정
-discovery manifest다. 앞 단계 하나라도 실패하면 discovery manifest를 쓰지 않으므로 독자는
+publisher는 248개 snapshot, 24개 shard body, descriptor, manifest의 one-to-one mapping을 첫
+PUT 전에 모두 검증한다. 실제 PUT 순서는 shard 24개 → named artifact 5개 → immutable release
+manifest → 고정 discovery manifest다. 앞 단계 하나라도 실패하면 discovery manifest를 쓰지 않으므로 독자는
 완성되지 않은 release를 발견하지 않는다. 버전 객체는 `max-age=31536000, immutable`, 고정
-manifest는 짧은 재검증 캐시를 사용한다.
+manifest는 짧은 재검증 캐시를 사용한다. Vercel Blob adapter는 모든 pathname에
+`addRandomSuffix: false`를 명시한다. release 객체는 `allowOverwrite: false`이며 충돌 시 저장된
+bytes의 SHA-256이 정확히 같을 때만 idempotent 재시도로 인정한다. discovery manifest는 최초
+발행이면 first-writer-wins(`allowOverwrite: false`), 기존본이 있으면 origin read의 ETag와
+`publishedAt`을 검증한 뒤에만 `allowOverwrite: true + ifMatch`로 교체한다.
 
-manifest의 `districts`는 district/기간/유형별 건수와 최신 계약일을 담는 작은 검색 인덱스다.
+manifest의 `shards`는 정확히 24개 descriptor와 각 shard의 district/record count를 담고,
+`districts`는 정확히 248개 district의 shard ID·기간·유형별 건수·최신 계약일을 담는다.
 현재 publisher는 `summary/rolling30/buy`, `summary/rolling30/jeonse`,
 `summary/rolling30/monthly`, `summary/rolling30/bunyang`, `apartment-index` 다섯 named
 artifact를 함께 발행한다. 모든 named artifact는 아래 envelope로 감싸며 스키마와 건수를
@@ -60,8 +67,9 @@ type PublicNamedArtifactEnvelope<T> = {
 
 각 descriptor는 압축 바이트 SHA-256과 압축 해제 payload SHA-256, 양쪽 byte length를 모두
 가진다. `fetch()`가 `Content-Encoding: gzip`을 자동 해제한 경우에도 payload 체크섬을
-검증한다. reader는 체크섬 뒤 JSON schema, 총 건수, 거래 유형별 건수, district/기간 일치를
-모두 확인한 후에만 값을 반환한다.
+검증한다. reader는 요청 district가 가리키는 shard 하나를 받아 전체 shard의 checksum/schema,
+snapshot count/record count, 248-entry manifest mapping을 검증한다. 요청 `lawdCd`가 body 안에
+정확히 한 번 존재하고 district/기간/유형별 건수·최신일이 일치할 때만 그 snapshot을 반환한다.
 
 ```ts
 import { PublicSnapshotReader } from '@/lib/public-snapshots';
@@ -81,13 +89,40 @@ const summary = await reader.getNamedArtifact('summary/rolling30/buy', manifest)
 - `getDistrictSnapshot(lawdCd, manifest?): Promise<PublicTransactionSnapshot>`
 - `getNamedArtifact<T>(name, manifest?): Promise<PublicNamedArtifactEnvelope<T>>`
 
-## 안전한 dry-run
+### v1 → v2 무중단 전환
 
-generic `createPublicSnapshotStoreFromEnv()`는 R2 필수값 4개가 **모두 없으면** 외부
-네트워크를 사용하지 않고 `NAEZIP_SNAPSHOT_DRY_RUN_DIR`에만 기록한다. 그러나 운영 CLI
-`publish-public-transactions.ts`는 자격정보 유실을 정상 완료로 오인하지 않도록 더 엄격하다.
-CLI에서는 `--dry-run`을 명시한 경우에만 local sink를 허용하며, 이 플래그 없이 R2 값이
-모두 없거나 일부만 있으면 즉시 실패한다.
+v2는 v1 객체를 덮어쓰지 않고 별도 `public-transactions/v2/` prefix만 사용하므로 dual-read를
+넣지 않는다. 현재 Production의 이전 빌드는 계속 `v1/manifest.json`을 읽고, retention 정리 도구와
+별도 운영 승인을 준비한 뒤 새 RC publisher로 v2 객체를 수동 seed한다. 그 다음 새 reader 빌드를 Preview에 배포해 v2 district·named
+artifact·route를 검증하고, 통과한 동일 빌드만 Production으로 승격한다. 코드 rollback 시 이전
+빌드는 보존된 v1 manifest를 다시 읽을 수 있다. v2 Production 안정화와 rollback 기간이 끝나기
+전에는 v1 discovery/release 객체를 삭제하지 않는다. base URL 환경변수는 Blob store의 origin만
+담으므로 v1/v2 선택은 배포된 reader의 versioned prefix가 결정한다.
+
+## Vercel Blob public store와 안전한 dry-run
+
+운영 기본 저장소는 Vercel Blob public store다. 기존 블로그 이미지 업로드가 사용하는
+`BLOB_READ_WRITE_TOKEN`은 스냅샷 publisher가 절대 읽거나 변경하지 않는다. Mac mini 전용
+`NAEZIP_SNAPSHOT_BLOB_READ_WRITE_TOKEN`과 `NAEZIP_SNAPSHOT_STORE=blob`을 함께 지정해야 하며,
+전용 토큰 또는 아래 public origin이 없으면 첫 PUT 전에 fail-closed한다.
+
+```text
+NAEZIP_SNAPSHOT_STORE=blob
+NAEZIP_SNAPSHOT_BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...
+NEXT_PUBLIC_TRANSACTION_SNAPSHOT_BASE_URL=https://{store-id}.public.blob.vercel-storage.com/
+```
+
+base URL은 public Blob store의 정확한 HTTPS origin이어야 하고 경로·query·fragment를 허용하지
+않는다. token에 인코딩된 store ID와 이 origin을 첫 네트워크 요청 전에 대조하고, 모든 SDK 반환
+URL의 origin과 pathname도 검증한다. CLI 성공 로그에는 최종 manifest URL과 reader에 넣을 base
+origin을 출력한다. read-write token은 Mac mini의 `0600` secure env에만 두고
+Preview/Production Vercel env나 `NEXT_PUBLIC_` 변수에 복사하지 않는다. SDK 오류 message/body는
+token-derived 식별자나 URL을 포함할 수 있으므로 adapter가 고정 오류문으로 치환한다.
+
+generic factory는 명시한 저장소가 없으면 local dry-run store를 선택하지만, 운영 CLI는 자격정보
+유실을 정상 완료로 오인하지 않도록 더 엄격하다. CLI에서는 `--dry-run`을 명시한 경우에만 Blob과
+R2 자격정보/모드 선택을 제거하고 `NAEZIP_SNAPSHOT_DRY_RUN_DIR`에 기록한다. 이 플래그 없는 기본
+production은 `NAEZIP_SNAPSHOT_STORE=blob`과 전용 snapshot Blob token을 요구한다.
 
 ```ts
 import {
@@ -104,9 +139,10 @@ const result = await publishPublicSnapshotRelease({
 console.log(selection.mode, result.releaseId);
 ```
 
-필수 R2 환경변수:
+R2/S3는 legacy fallback으로만 유지한다. 아래처럼 명시적으로 선택할 때 네 값이 모두 필요하다.
 
 ```text
+NAEZIP_SNAPSHOT_STORE=r2
 NAEZIP_SNAPSHOT_R2_ACCOUNT_ID
 NAEZIP_SNAPSHOT_R2_ACCESS_KEY_ID
 NAEZIP_SNAPSHOT_R2_SECRET_ACCESS_KEY
@@ -167,7 +203,7 @@ NAEZIP_SYNC_HEALTH_MARKER=.local/macmini-sync-health.json
 NAEZIP_SYNC_HEALTH_MAX_AGE_HOURS=36
 ```
 
-production R2 모드의 단독 publisher는 marker가 없거나, 기본 36시간보다 오래됐거나, 최신
+production Blob/R2 모드의 단독 publisher는 marker가 없거나, 기본 36시간보다 오래됐거나, 최신
 종료코드가 1이면 객체 업로드 전에 실패한다. `--allow-stale-local`은 장애 조사 중 운영자가
 로컬 원장의 완전성을 별도로 확인한 경우에만 쓰는 **수동 비상 우회**다. launchd나 정기
 자동화에는 절대 넣지 않는다. 발행 시각이 다음 날이나 다음 달로 넘어가도 snapshot의
@@ -183,7 +219,7 @@ NAEZIP_SNAPSHOT_SOURCE_AT=2026-08-11T05:00:00.000Z \
 ```
 
 자격정보 없이 로컬 산출물만 검증할 때도 sync 선행 계약을 확인하려면 wrapper에 dry-run을
-준다. 이 모드는 **R2 발행만** local sink로 바꾼다. 선행 `macmini-sync`의 MOLIT 요청과 로컬
+준다. 이 모드는 **객체 저장소 발행만** local sink로 바꾼다. 선행 `macmini-sync`의 MOLIT 요청과 로컬
 PostgreSQL upsert/retention은 실제 수행되므로 전체 작업의 모의 실행이 아니다. 검증된 외부
 백업과 restore check를 먼저 완료한 뒤 actual sync + local publication dry-run으로 실행한다.
 
@@ -223,11 +259,11 @@ LaunchAgent를 수정하거나 등록하지 않는다.
 2. plist 예시를 별도 staging 파일로 복사하고 다섯 placeholder를 실제 **절대경로**로 치환한다.
    Node도 `command -v node` 결과를 사용하며 `/bin/zsh -lc`나 PATH 탐색을 사용하지 않는다.
 3. secure env는 `0600`, state/log 디렉터리는 해당 사용자만 쓸 수 있는지 확인한다.
-4. 최신 외부 백업과 restore check를 먼저 완료한다. 예시의 `--dry-run`은 R2만 local sink로
+4. 최신 외부 백업과 restore check를 먼저 완료한다. 예시의 `--dry-run`은 객체 저장소만 local sink로
    바꾸며 MOLIT/local PG sync는 실제로 실행된다는 점을 승인자에게 명시한다.
 5. 예시의 `--dry-run`을 유지한 채 `plutil -lint` 후 old agent를 bootout하고 새 agent를 bootstrap한다.
-6. actual sync + local publication kickstart의 exit/log/marker를 확인한다. 그 뒤에만 plist의 `--dry-run` 한 줄을 제거하고
-   bootout→bootstrap으로 production 설정을 다시 로드한다.
+6. actual sync + local publication kickstart의 exit/log/marker를 확인하되, 이 단계에서는 plist의
+   `--dry-run`을 제거하지 않는다.
 
 ```bash
 launchctl print gui/$(id -u)/com.gomgom.naezip-sync
@@ -254,10 +290,12 @@ launchctl kickstart -k gui/$(id -u)/com.gomgom.naezip-sync-and-publish
 launchctl print gui/$(id -u)/com.gomgom.naezip-sync-and-publish
 ```
 
-production 전환 때는 설치된 plist를 즉석 수정하지 말고 staging 사본에서 `--dry-run` 항목을
-제거하고 다시 `plutil -lint`한 뒤 교체한다. `print-disabled`에서 old sync/mirror 두 label이
-disabled이고 기존 plist가 보관 경로로 이동된 것을 확인한 뒤에만 새 label을 bootstrap한다.
-old label과 new label을 동시에 bootstrap하지 않는다.
+실제 Blob 최초 seed와 Preview 검증은 retention 정리 도구가 구현되고 별도 운영 승인을 받은 뒤
+수동 1회 명령으로만 수행한다. 현재 runbook은 production 정기 발행을 허가하지 않으며 설치된
+plist의 `--dry-run`을 제거하지 않는다. 추후 정기 발행 승인을 받을 때도 설치된 plist를 즉석
+수정하지 않고 staging 사본에서 변경·`plutil -lint`·재검증해야 한다. `print-disabled`에서 old
+sync/mirror 두 label이 disabled이고 기존 plist가 보관 경로로 이동된 것을 확인하며, old label과
+new label을 동시에 bootstrap하지 않는다.
 
 publisher는 모든 allowlist `SELECT`를 하나의 read-only repeatable-read transaction에서
 완료한 뒤에만 generic publication core를 호출한다. district 하나, summary 하나,
@@ -268,8 +306,8 @@ apartment index 하나라도 조회나 검증에 실패하면 discovery manifest
 `apartment-index` 25,000건이다(현재 Mac 원장 약 29,334건 기준의 보수 floor). 개별 0건
 지역은 정상이지만 전국 all-zero, 빈/급감 단지
 인덱스, 누락·오표기 파티션, 유형별 급감은 발행을 차단한다. 이 floor는 환경변수로 낮출 수
-없다. 객체 저장소 read API가 없는 현재 단계에서는 이전 manifest 대비 감소율 비교는 하지
-않는다. 축소/빈 release와 작은 threshold 허용 옵션은 단위 테스트 fixture 전용이며 CLI에서
+없다. 이전 manifest 대비 감소율 비교 gate는 아직 구현하지 않았다. 축소/빈 release와 작은
+threshold 허용 옵션은 단위 테스트 fixture 전용이며 CLI에서
 노출하지 않는다.
 
 네 rolling summary와 `apartment-index`는 정확히 다섯 개여야 하며 각각 strict schema와
@@ -281,9 +319,9 @@ apartment index 하나라도 조회나 검증에 실패하면 discovery manifest
 인정하지 않는다.
 
 Mac sync는 각 구·월 XML의 첫 `totalCount`와 전체 페이지 parser item 수가 정확히 같은지
-upsert 전에 확인한다. 알려진 결측 행 일부는 로그 후 제외하되, 전부 변환 실패하거나 최소
-10건이면서 20%를 초과해 거부되면 schema drift로 간주해 sync exit 1과 marker 차단으로
-이어진다. 로컬 PostgreSQL URL은 sync와 publisher가 같은 validator를 사용하며 authority는
+upsert 전에 확인한다. 알려진 결측 행 일부는 로그 후 제외하되, 한 응답에서 최소 10건이면서
+20%를 초과해 거부되면 schema drift로 간주해 sync exit 1과 marker 차단으로 이어진다. 로컬
+PostgreSQL URL은 sync와 publisher가 같은 validator를 사용하며 authority는
 `localhost`/`127.0.0.1`/`::1`만 허용한다. query의 `host`, `hostaddr`, `service` routing
 override도 대소문자와 관계없이 거부한다.
 
@@ -332,7 +370,26 @@ psql "$NAEZIP_LOCAL_DB_URL" -v ON_ERROR_STOP=1 -Atqc \
 5. 자격정보 없이 wrapper `--dry-run`을 수행한다. 이 단계는 actual MOLIT/local PG sync + local
    publication이며, 248개 파티션·totals·index 건수를 확인한다.
 6. 단위 테스트와 TypeScript/ESLint를 통과시킨다.
-7. R2 custom domain, CORS, JSON Cache Everything 규칙을 준비한다.
-8. 최소 권한의 단일 bucket 쓰기 토큰을 Mac mini에만 설정한다.
-9. 첫 실제 업로드 후 reader로 district와 named artifact를 다시 다운로드해 검증한다.
+7. 별도 public Blob store와 정확한 origin을 준비하고 Vercel Usage에서 plan/Advanced Operations
+   예산을 확인한다. 현재 release는 24 shards + 5 artifacts + 2 manifests = **31 PUT**이다.
+   향후 하루 1회 발행 기준 30일에 약 930 Advanced Operations로 Hobby 포함 2,000 안에 머문다.
+   수동 재발행·dashboard 탐색·블로그 업로드도 같은 quota를 쓰므로 여유를 모니터링한다.
+8. snapshot 전용 Blob read-write token을 Mac mini에만 설정한다.
+9. retention 정리 도구 구현과 별도 승인을 마친 뒤 수동 최초 seed를 실행하고, reader로 district와
+   named artifact를 다시 다운로드해 검증한다. launchd production 발행은 아직 켜지 않는다.
 10. Preview route를 snapshot 우선, 기존 DB를 제한적 fallback으로 전환한 뒤 운영 반영한다.
+
+### Blob 비용·보존·지연 계약
+
+정기 발행이 별도로 승인된 뒤에는 48시간 freshness를 지키기 위해 하루 1회만 수행한다. 실패한
+작업을 무한 재시도하지 않고 다음 healthy sync 또는 운영자 확인 뒤 재실행한다. 실제 로컬 백업 표본에서 2개월 거래
+shard 총량은 약 4.0MB(24개 평균 약 167KB)였고, apartment index를 포함한 release는 약 4.5MB다.
+요청 district는 shard 하나만 내려받으므로 district 단독 객체보다 transfer가 늘지만, 이 크기는
+4초 reader timeout과 Blob CDN 캐시 범위 안이다. Preview에서 가장 큰 shard의 fetch/decode 지연과
+route 총 지연을 측정한 후 Production으로 올린다.
+
+immutable release를 영구 보존하면 하루 약 4.5MB 기준 약 7개월 후 1GB에 접근한다. retention
+cleanup은 아직 자동화되지 않았으므로 Vercel Usage를 모니터링하고, 누적 저장량이 한도에
+접근하기 전에 30일 초과 release 정리 도구를 추가해야 한다. 정리 도구는 현재 discovery release와
+직전 rollback release를 항상 보존하고, 삭제 전 해당 key가 두 manifest에서 참조되지 않음을
+검증해야 한다. Mac mini 원장/백업이 source of truth라는 원칙도 유지한다.

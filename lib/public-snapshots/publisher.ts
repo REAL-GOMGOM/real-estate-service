@@ -3,25 +3,31 @@ import type {
   PublicNamedArtifactEnvelope,
   PublicSnapshotCounts,
   PublicSnapshotDistrictEntry,
-  PublicSnapshotObjectDescriptor,
+  PublicSnapshotShardDescriptor,
+  PublicSnapshotShardEntry,
+  PublicTransactionShard,
   PublicTransactionManifest,
   PublicTransactionSnapshot,
 } from './contract';
 import {
+  PUBLIC_TRANSACTION_DISTRICT_COUNT,
   PUBLIC_TRANSACTION_MANIFEST_SCHEMA,
+  PUBLIC_TRANSACTION_SHARD_COUNT,
+  PUBLIC_TRANSACTION_SHARD_SCHEMA,
   PUBLIC_TRANSACTION_SNAPSHOT_PREFIX,
-  PUBLIC_TRANSACTION_SNAPSHOT_SCHEMA,
   PublicSnapshotValidationError,
   assertPublicTransactionManifest,
+  assertPublicTransactionShard,
+  assertPublicTransactionShardMatchesManifest,
   assertPublicTransactionSnapshot,
   countPublicTransactions,
   latestPublicDealDate,
 } from './contract';
 import {
   decodeAndValidatePublicNamedArtifact,
-  decodeAndValidatePublicSnapshot,
+  decodeAndValidatePublicTransactionShard,
   encodePublicJsonArtifact,
-  encodePublicTransactionSnapshot,
+  encodePublicTransactionShard,
   sha256Hex,
   stableJson,
 } from './artifact';
@@ -97,8 +103,8 @@ function addCounts(target: PublicSnapshotCounts, counts: PublicSnapshotCounts): 
   target.presale += counts.presale;
 }
 
-function snapshotObjectKey(releaseId: string, lawdCd: string): string {
-  return `${PUBLIC_TRANSACTION_SNAPSHOT_PREFIX}/releases/${releaseId}/districts/${lawdCd}.json.gz`;
+function shardObjectKey(releaseId: string, shardId: string): string {
+  return `${PUBLIC_TRANSACTION_SNAPSHOT_PREFIX}/releases/${releaseId}/shards/${shardId}.json.gz`;
 }
 
 function namedArtifactObjectKey(releaseId: string, name: string): string {
@@ -109,26 +115,86 @@ export function publicTransactionReleaseManifestKey(releaseId: string): string {
   return `${PUBLIC_TRANSACTION_SNAPSHOT_PREFIX}/releases/${releaseId}/manifest.json`;
 }
 
+interface ShardBin {
+  shardId: string;
+  estimatedPayloadBytes: number;
+  snapshots: PublicTransactionSnapshot[];
+}
+
+/**
+ * Stable largest-first greedy packing. Raw canonical JSON bytes are used as the
+ * weight so assignment cannot vary with compression-library implementation.
+ */
+export function buildPublicTransactionShards(
+  snapshots: readonly PublicTransactionSnapshot[],
+  publishedAt: string,
+): PublicTransactionShard[] {
+  if (snapshots.length !== PUBLIC_TRANSACTION_DISTRICT_COUNT) {
+    throw new PublicSnapshotValidationError('release', [
+      `exactly ${PUBLIC_TRANSACTION_DISTRICT_COUNT} district snapshots are required`,
+    ]);
+  }
+  const seenLawdCodes = new Set<string>();
+  const weighted = snapshots.map((snapshot) => {
+    assertPublicTransactionSnapshot(snapshot);
+    if (snapshot.generatedAt !== publishedAt) {
+      throw new PublicSnapshotValidationError('release', [
+        `snapshot generatedAt must match publishedAt: ${snapshot.partition.lawdCd}`,
+      ]);
+    }
+    if (seenLawdCodes.has(snapshot.partition.lawdCd)) {
+      throw new PublicSnapshotValidationError('release', [`duplicate district: ${snapshot.partition.lawdCd}`]);
+    }
+    seenLawdCodes.add(snapshot.partition.lawdCd);
+    return {
+      snapshot,
+      estimatedPayloadBytes: Buffer.byteLength(stableJson(snapshot), 'utf8'),
+    };
+  }).sort((left, right) =>
+    right.estimatedPayloadBytes - left.estimatedPayloadBytes
+      || left.snapshot.partition.lawdCd.localeCompare(right.snapshot.partition.lawdCd));
+
+  const bins: ShardBin[] = Array.from({ length: PUBLIC_TRANSACTION_SHARD_COUNT }, (_, index) => ({
+    shardId: String(index).padStart(2, '0'),
+    estimatedPayloadBytes: 0,
+    snapshots: [],
+  }));
+  for (const candidate of weighted) {
+    let target = bins[0];
+    for (const bin of bins.slice(1)) {
+      if (bin.estimatedPayloadBytes < target.estimatedPayloadBytes
+        || (bin.estimatedPayloadBytes === target.estimatedPayloadBytes
+          && bin.shardId < target.shardId)) {
+        target = bin;
+      }
+    }
+    target.snapshots.push(candidate.snapshot);
+    target.estimatedPayloadBytes += candidate.estimatedPayloadBytes;
+  }
+
+  return bins.map((bin) => {
+    const sortedSnapshots = [...bin.snapshots]
+      .sort((left, right) => left.partition.lawdCd.localeCompare(right.partition.lawdCd));
+    const shard: PublicTransactionShard = {
+      schema: PUBLIC_TRANSACTION_SHARD_SCHEMA,
+      generatedAt: publishedAt,
+      shardId: bin.shardId,
+      snapshotCount: sortedSnapshots.length,
+      recordCount: sortedSnapshots.reduce((total, snapshot) => total + snapshot.recordCount, 0),
+      snapshots: sortedSnapshots,
+    };
+    assertPublicTransactionShard(shard);
+    return shard;
+  });
+}
+
 export async function publishPublicSnapshotRelease(
   input: PublishPublicSnapshotReleaseInput,
 ): Promise<PublishPublicSnapshotReleaseResult> {
-  if (input.snapshots.length === 0) {
-    throw new PublicSnapshotValidationError('release', ['at least one district snapshot is required']);
-  }
   const publishedAt = input.publishedAt ?? new Date().toISOString();
   const timestamp = releaseTimestamp(publishedAt);
-
-  const seenLawdCodes = new Set<string>();
-  const encodedSnapshots = [...input.snapshots]
-    .sort((left, right) => left.partition.lawdCd.localeCompare(right.partition.lawdCd))
-    .map((snapshot) => {
-      assertPublicTransactionSnapshot(snapshot);
-      if (seenLawdCodes.has(snapshot.partition.lawdCd)) {
-        throw new PublicSnapshotValidationError('release', [`duplicate district: ${snapshot.partition.lawdCd}`]);
-      }
-      seenLawdCodes.add(snapshot.partition.lawdCd);
-      return encodePublicTransactionSnapshot(snapshot);
-    });
+  const encodedShards = buildPublicTransactionShards(input.snapshots, publishedAt)
+    .map(encodePublicTransactionShard);
 
   const namedInputs = [...(input.namedArtifacts ?? [])]
     .sort((left, right) => left.name.localeCompare(right.name));
@@ -162,8 +228,8 @@ export async function publishPublicSnapshotRelease(
 
   const releaseDigest = sha256Hex(stableJson({
     publishedAt,
-    snapshots: encodedSnapshots.map((artifact) => ({
-      lawdCd: artifact.snapshot.partition.lawdCd,
+    shards: encodedShards.map((artifact) => ({
+      shardId: artifact.shard.shardId,
       sha256: artifact.sha256,
     })),
     namedArtifacts: encodedNamed.map(({ input: artifact, encoded }) => ({
@@ -175,13 +241,11 @@ export async function publishPublicSnapshotRelease(
   const uploads: PublicSnapshotPutResult[] = [];
   const districts: PublicSnapshotDistrictEntry[] = [];
   const totals: PublicSnapshotCounts = { total: 0, sale: 0, rent: 0, presale: 0 };
-
-  // Upload every immutable district object before creating either manifest.
-  for (const artifact of encodedSnapshots) {
-    const key = snapshotObjectKey(releaseId, artifact.snapshot.partition.lawdCd);
-    const descriptor: PublicSnapshotObjectDescriptor = {
+  const shards: PublicSnapshotShardEntry[] = encodedShards.map((artifact) => {
+    const key = shardObjectKey(releaseId, artifact.shard.shardId);
+    const descriptor: PublicSnapshotShardDescriptor = {
       key,
-      schema: PUBLIC_TRANSACTION_SNAPSHOT_SCHEMA,
+      schema: PUBLIC_TRANSACTION_SHARD_SCHEMA,
       contentType: 'application/json',
       contentEncoding: 'gzip',
       sha256: artifact.sha256,
@@ -189,30 +253,30 @@ export async function publishPublicSnapshotRelease(
       byteLength: artifact.byteLength,
       payloadByteLength: artifact.payloadByteLength,
     };
-    decodeAndValidatePublicSnapshot(artifact.body, descriptor, artifact.snapshot.recordCount);
-    uploads.push(await input.store.putObject({
-      key,
-      body: artifact.body,
-      contentType: 'application/json',
-      contentEncoding: 'gzip',
-      cacheControl: 'public, max-age=31536000, immutable',
-      sha256: artifact.sha256,
-      immutable: true,
-    }));
-    const counts = countPublicTransactions(artifact.snapshot.records);
-    addCounts(totals, counts);
-    districts.push({
-      lawdCd: artifact.snapshot.partition.lawdCd,
-      district: artifact.snapshot.partition.district,
-      period: { ...artifact.snapshot.period },
-      counts,
-      latestDealDate: latestPublicDealDate(artifact.snapshot.records),
-      snapshot: descriptor,
-    });
-  }
+    const entry: PublicSnapshotShardEntry = {
+      shardId: artifact.shard.shardId,
+      districtCount: artifact.shard.snapshotCount,
+      recordCount: artifact.shard.recordCount,
+      shard: descriptor,
+    };
+    decodeAndValidatePublicTransactionShard(artifact.body, descriptor, entry);
+    for (const snapshot of artifact.shard.snapshots) {
+      const counts = countPublicTransactions(snapshot.records);
+      addCounts(totals, counts);
+      districts.push({
+        lawdCd: snapshot.partition.lawdCd,
+        district: snapshot.partition.district,
+        period: { ...snapshot.period },
+        counts,
+        latestDealDate: latestPublicDealDate(snapshot.records),
+        shardId: artifact.shard.shardId,
+      });
+    }
+    return entry;
+  });
+  districts.sort((left, right) => left.lawdCd.localeCompare(right.lawdCd));
 
-  const namedArtifacts: PublicNamedArtifactEntry[] = [];
-  for (const { input: artifact, encoded } of encodedNamed) {
+  const namedObjects = encodedNamed.map(({ input: artifact, encoded }) => {
     const key = namedArtifactObjectKey(releaseId, artifact.name);
     const descriptor = {
       key,
@@ -226,17 +290,10 @@ export async function publishPublicSnapshotRelease(
       payloadByteLength: encoded.payloadByteLength,
     };
     decodeAndValidatePublicNamedArtifact(encoded.body, descriptor);
-    uploads.push(await input.store.putObject({
-      key,
-      body: encoded.body,
-      contentType: 'application/json',
-      contentEncoding: 'gzip',
-      cacheControl: 'public, max-age=31536000, immutable',
-      sha256: encoded.sha256,
-      immutable: true,
-    }));
-    namedArtifacts.push({ name: artifact.name, artifact: descriptor });
-  }
+    const entry: PublicNamedArtifactEntry = { name: artifact.name, artifact: descriptor };
+    return { body: encoded.body, descriptor, entry };
+  });
+  const namedArtifacts = namedObjects.map(({ entry }) => entry);
 
   const manifest: PublicTransactionManifest = {
     schema: PUBLIC_TRANSACTION_MANIFEST_SCHEMA,
@@ -248,12 +305,42 @@ export async function publishPublicSnapshotRelease(
       containsPersonalData: false,
     },
     totals,
+    shards,
     districts,
     namedArtifacts,
   };
   assertPublicTransactionManifest(manifest);
+  for (const artifact of encodedShards) {
+    assertPublicTransactionShardMatchesManifest(artifact.shard, manifest);
+  }
   const manifestBody = Buffer.from(stableJson(manifest), 'utf8');
   const manifestSha256 = sha256Hex(manifestBody);
+
+  // Every body/descriptor/mapping was validated above, before the first PUT.
+  for (let index = 0; index < encodedShards.length; index += 1) {
+    const artifact = encodedShards[index];
+    const descriptor = shards[index].shard;
+    uploads.push(await input.store.putObject({
+      key: descriptor.key,
+      body: artifact.body,
+      contentType: 'application/json',
+      contentEncoding: 'gzip',
+      cacheControl: 'public, max-age=31536000, immutable',
+      sha256: artifact.sha256,
+      immutable: true,
+    }));
+  }
+  for (const { body, descriptor } of namedObjects) {
+    uploads.push(await input.store.putObject({
+      key: descriptor.key,
+      body,
+      contentType: 'application/json',
+      contentEncoding: 'gzip',
+      cacheControl: 'public, max-age=31536000, immutable',
+      sha256: descriptor.sha256,
+      immutable: true,
+    }));
+  }
 
   // First preserve an immutable release manifest for rollback/audit.
   const releaseManifestKey = publicTransactionReleaseManifestKey(releaseId);

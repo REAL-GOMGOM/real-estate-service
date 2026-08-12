@@ -46,7 +46,7 @@ function snapshot(records: unknown[] = [{
   previousMonthlyRentManwon: null,
 }]) {
   return {
-    schema: 'naezip.public-transactions.v1',
+    schema: 'naezip.public-transactions.v2',
     generatedAt: '2026-08-11T02:00:00.000Z',
     partition: { lawdCd: '11680', district: '강남구' },
     period: { from: '2026-07-01', through: '2026-08-11' },

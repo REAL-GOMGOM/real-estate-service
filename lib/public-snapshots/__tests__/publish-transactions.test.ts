@@ -469,14 +469,34 @@ describe('local PostgreSQL public transaction publisher', () => {
     }, { allowIncompleteForTest: true })).not.toThrow();
   });
 
-  it('requires an explicit --dry-run equivalent when R2 credentials are absent', () => {
+  it('defaults production to explicit Blob mode and keeps Blob-configured dry-run local', () => {
     const env = {
       NODE_ENV: 'test',
+      NAEZIP_SNAPSHOT_STORE: 'blob',
+      BLOB_READ_WRITE_TOKEN: 'vercel_blob_rw_blog-store_blog-secret',
+      NAEZIP_SNAPSHOT_BLOB_READ_WRITE_TOKEN: 'vercel_blob_rw_store-id_test-secret',
+      NEXT_PUBLIC_TRANSACTION_SNAPSHOT_BASE_URL:
+        'https://store-id.public.blob.vercel-storage.com/',
       NAEZIP_SNAPSHOT_DRY_RUN_DIR: path.join(os.tmpdir(), 'naezip-explicit-dry-run'),
     } as NodeJS.ProcessEnv;
-    expect(() => selectPublisherStore(env, { forceDryRun: false }))
-      .toThrow('use --dry-run explicitly');
+    expect(selectPublisherStore(env, { forceDryRun: false }).mode).toBe('blob');
     expect(selectPublisherStore(env, { forceDryRun: true }).mode).toBe('local-dry-run');
+
+    expect(() => selectPublisherStore({ NODE_ENV: 'test' }, { forceDryRun: false }))
+      .toThrow('NAEZIP_SNAPSHOT_BLOB_READ_WRITE_TOKEN');
+    expect(() => selectPublisherStore({
+      NODE_ENV: 'test',
+      BLOB_READ_WRITE_TOKEN: 'generic-blog-token',
+    }, { forceDryRun: false })).toThrow('NAEZIP_SNAPSHOT_BLOB_READ_WRITE_TOKEN');
+
+    expect(selectPublisherStore({
+      NODE_ENV: 'test',
+      NAEZIP_SNAPSHOT_STORE: 'r2',
+      NAEZIP_SNAPSHOT_R2_ACCOUNT_ID: 'account',
+      NAEZIP_SNAPSHOT_R2_ACCESS_KEY_ID: 'access',
+      NAEZIP_SNAPSHOT_R2_SECRET_ACCESS_KEY: 'secret',
+      NAEZIP_SNAPSHOT_R2_BUCKET: 'bucket',
+    }, { forceDryRun: false }).mode).toBe('r2');
   });
 
   it('publishes an authoritative zero-row district and all five named artifacts', async () => {
@@ -484,16 +504,23 @@ describe('local PostgreSQL public transaction publisher', () => {
     const store = new MemoryStore();
     const result = await publishPublicTransactionsFromClient(client, store, {
       now: new Date('2026-08-11T03:00:00.000Z'),
-      districts: [['강남구', '11680']],
+      districts: Object.entries(DISTRICT_CODE),
       completeness: { allowIncompleteForTest: true },
     });
-    expect(result.manifest.districts).toHaveLength(1);
-    expect(result.manifest.districts[0]).toMatchObject({
+    expect(result.manifest.districts).toHaveLength(248);
+    expect(result.manifest.districts.find(({ lawdCd }) => lawdCd === '11680')).toMatchObject({
       lawdCd: '11680',
       counts: { total: 0, sale: 0, rent: 0, presale: 0 },
       latestDealDate: null,
     });
+    expect(result.manifest.shards).toHaveLength(24);
     expect(result.manifest.namedArtifacts).toHaveLength(5);
+    expect(result.uploads).toHaveLength(31);
+    expect(new Set(result.manifest.districts.map(({ lawdCd }) => lawdCd)).size).toBe(248);
+    expect(new Set(result.manifest.districts.map(({ shardId }) => shardId)).size).toBe(24);
+    expect(store.writes.slice(0, 24).every(({ key }) => key.includes('/shards/'))).toBe(true);
+    expect(store.writes.slice(24, 29).every(({ key }) => key.includes('/artifacts/'))).toBe(true);
+    expect(store.writes.slice(29).every(({ key }) => key.endsWith('/manifest.json'))).toBe(true);
     expect(client.calls).toContain('COMMIT');
     expect(store.writes.at(-1)?.immutable).toBe(false);
   });

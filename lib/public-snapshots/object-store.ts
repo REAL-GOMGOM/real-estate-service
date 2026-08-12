@@ -2,6 +2,19 @@ import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { link, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import {
+  get as getVercelBlob,
+  put as putVercelBlob,
+  type GetBlobResult,
+  type PutBlobResult,
+} from '@vercel/blob';
+
+import {
+  PUBLIC_TRANSACTION_SNAPSHOT_PREFIX,
+  PUBLIC_TRANSACTION_MANIFEST_SCHEMA,
+  assertPublicTransactionManifest,
+} from './contract';
+
 export interface PublicSnapshotPutInput {
   key: string;
   body: Uint8Array;
@@ -44,8 +57,288 @@ function assertSafeObjectKey(key: string): void {
   }
 }
 
+const PUBLIC_TRANSACTION_DISCOVERY_MANIFEST_KEY = `${PUBLIC_TRANSACTION_SNAPSHOT_PREFIX}/manifest.json`;
+const MAX_DISCOVERY_MANIFEST_BYTES = 10 * 1024 * 1024;
+
+type VercelBlobPut = typeof putVercelBlob;
+type VercelBlobGet = typeof getVercelBlob;
+
+function cacheControlMaxAge(cacheControl: string): number {
+  const match = cacheControl.match(/(?:^|,)\s*max-age=(\d+)\s*(?:,|$)/i);
+  const seconds = match ? Number(match[1]) : Number.NaN;
+  if (!Number.isSafeInteger(seconds) || seconds < 60) {
+    throw new PublicSnapshotConfigurationError(
+      'Vercel Blob cacheControl must contain max-age of at least 60 seconds',
+    );
+  }
+  return seconds;
+}
+
+function assertPublicBlobBaseUrl(raw: string): URL {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new PublicSnapshotConfigurationError(
+      'NEXT_PUBLIC_TRANSACTION_SNAPSHOT_BASE_URL must be a valid Vercel Blob public origin',
+    );
+  }
+  if (url.protocol !== 'https:'
+    || url.username
+    || url.password
+    || url.search
+    || url.hash
+    || url.pathname !== '/'
+    || !url.hostname.endsWith('.public.blob.vercel-storage.com')) {
+    throw new PublicSnapshotConfigurationError(
+      'NEXT_PUBLIC_TRANSACTION_SNAPSHOT_BASE_URL must be the HTTPS origin of a public Vercel Blob store',
+    );
+  }
+  return url;
+}
+
+function assertLegacyBlobTokenMatchesOrigin(token: string, publicBaseUrl: URL): void {
+  // @vercel/blob read-write tokens encode their store id as
+  // `vercel_blob_rw_{storeId}_{secret}`. Validate that routing metadata before
+  // the first PUT so a copied token cannot orphan public objects in another
+  // store. Never include any token segment in the error message.
+  const [vendor, product, permission, storeId, secret, ...rest] = token.split('_');
+  if (vendor !== 'vercel'
+    || product !== 'blob'
+    || permission !== 'rw'
+    || !storeId
+    || !secret
+    || rest.some((part) => !part)) {
+    throw new PublicSnapshotConfigurationError(
+      'NAEZIP_SNAPSHOT_BLOB_READ_WRITE_TOKEN must be a valid Vercel Blob read-write token',
+    );
+  }
+  const expectedHostname = `${storeId}.public.blob.vercel-storage.com`.toLowerCase();
+  if (publicBaseUrl.hostname.toLowerCase() !== expectedHostname) {
+    throw new PublicSnapshotConfigurationError(
+      'NAEZIP_SNAPSHOT_BLOB_READ_WRITE_TOKEN store does not match NEXT_PUBLIC_TRANSACTION_SNAPSHOT_BASE_URL',
+    );
+  }
+}
+
+function assertVercelBlobResult(
+  result: Pick<PutBlobResult, 'url' | 'pathname'>,
+  key: string,
+  expectedBaseUrl: URL,
+): URL {
+  if (result.pathname !== key) {
+    throw new PublicSnapshotConfigurationError(`Vercel Blob returned an unexpected pathname for ${key}`);
+  }
+  let url: URL;
+  try {
+    url = new URL(result.url);
+  } catch {
+    throw new PublicSnapshotConfigurationError(`Vercel Blob returned an invalid public URL for ${key}`);
+  }
+  if (url.protocol !== 'https:'
+    || url.username
+    || url.password
+    || url.search
+    || url.hash
+    || !url.hostname.endsWith('.public.blob.vercel-storage.com')
+    || url.origin !== expectedBaseUrl.origin
+    || url.pathname !== `/${key}`) {
+    throw new PublicSnapshotConfigurationError(
+      `Vercel Blob public URL does not match NEXT_PUBLIC_TRANSACTION_SNAPSHOT_BASE_URL for ${key}`,
+    );
+  }
+  return url;
+}
+
+function parseDiscoveryManifest(body: Uint8Array): {
+  publishedAt: string;
+  releaseId: string;
+} {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(body).toString('utf8'));
+  } catch {
+    throw new PublicSnapshotConfigurationError('Public transaction discovery manifest is invalid JSON');
+  }
+  assertPublicTransactionManifest(parsed);
+  if (parsed.schema !== PUBLIC_TRANSACTION_MANIFEST_SCHEMA) {
+    throw new PublicSnapshotConfigurationError('Public transaction discovery manifest schema is unsupported');
+  }
+  return { publishedAt: parsed.publishedAt, releaseId: parsed.releaseId };
+}
+
+export interface VercelBlobSnapshotStoreConfig {
+  token: string;
+  publicBaseUrl: string;
+  putImpl?: VercelBlobPut;
+  getImpl?: VercelBlobGet;
+}
+
 /**
- * Local-only sink used when all R2 credentials are absent.
+ * Public Vercel Blob adapter.
+ *
+ * Release objects use deterministic keys and can never be overwritten. The
+ * single mutable discovery manifest is uploaded last by the generic publisher;
+ * its current ETag and publishedAt prevent concurrent or older producers from
+ * moving discovery backwards.
+ */
+export class VercelBlobSnapshotStore implements PublicSnapshotObjectStore {
+  private readonly token: string;
+  private readonly publicBaseOrigin: URL;
+  private readonly putImpl: VercelBlobPut;
+  private readonly getImpl: VercelBlobGet;
+
+  constructor(config: VercelBlobSnapshotStoreConfig) {
+    const token = config.token.trim();
+    if (!token) {
+      throw new PublicSnapshotConfigurationError('NAEZIP_SNAPSHOT_BLOB_READ_WRITE_TOKEN is required');
+    }
+    this.publicBaseOrigin = assertPublicBlobBaseUrl(config.publicBaseUrl);
+    assertLegacyBlobTokenMatchesOrigin(token, this.publicBaseOrigin);
+    this.token = token;
+    this.putImpl = config.putImpl ?? putVercelBlob;
+    this.getImpl = config.getImpl ?? getVercelBlob;
+  }
+
+  get publicBaseUrl(): string {
+    return this.publicBaseOrigin.toString();
+  }
+
+  private pinAndValidateResult(
+    result: Pick<PutBlobResult, 'url' | 'pathname'>,
+    key: string,
+  ): URL {
+    return assertVercelBlobResult(result, key, this.publicBaseOrigin);
+  }
+
+  private async readExistingBlob(
+    key: string,
+    maxBytes: number,
+    operation: 'manifest preflight' | 'immutable recovery',
+  ): Promise<{ result: GetBlobResult & { statusCode: 200 }; body: Buffer } | null> {
+    let result: GetBlobResult | null;
+    try {
+      result = await this.getImpl(key, {
+        access: 'public',
+        token: this.token,
+        useCache: false,
+        abortSignal: AbortSignal.timeout(30_000),
+      });
+    } catch {
+      throw new Error(`Vercel Blob ${operation} failed for ${key}`);
+    }
+    if (!result) return null;
+    if (result.statusCode !== 200 || result.blob.size > maxBytes) {
+      throw new Error(`Vercel Blob ${operation} returned invalid metadata for ${key}`);
+    }
+    this.pinAndValidateResult(result.blob, key);
+    let body: Buffer;
+    try {
+      body = Buffer.from(await new Response(result.stream).arrayBuffer());
+    } catch {
+      throw new Error(`Vercel Blob ${operation} body failed for ${key}`);
+    }
+    if (body.byteLength !== result.blob.size) {
+      throw new Error(`Vercel Blob ${operation} body length mismatch for ${key}`);
+    }
+    return { result: result as GetBlobResult & { statusCode: 200 }, body };
+  }
+
+  private currentDiscoveryManifest(
+    input: PublicSnapshotPutInput,
+  ): Promise<{ result: GetBlobResult & { statusCode: 200 }; body: Buffer } | null> {
+    return this.readExistingBlob(input.key, MAX_DISCOVERY_MANIFEST_BYTES, 'manifest preflight');
+  }
+
+  async putObject(input: PublicSnapshotPutInput): Promise<PublicSnapshotPutResult> {
+    assertSafeObjectKey(input.key);
+    const body = Buffer.from(input.body);
+    if (sha256(body) !== input.sha256) {
+      throw new PublicSnapshotConfigurationError(`Body checksum mismatch for ${input.key}`);
+    }
+    if (!input.immutable && input.key !== PUBLIC_TRANSACTION_DISCOVERY_MANIFEST_KEY) {
+      throw new PublicSnapshotConfigurationError(
+        `Only the public transaction discovery manifest may be mutable: ${input.key}`,
+      );
+    }
+
+    let current: Awaited<ReturnType<VercelBlobSnapshotStore['currentDiscoveryManifest']>> = null;
+    if (!input.immutable) {
+      const candidate = parseDiscoveryManifest(body);
+      current = await this.currentDiscoveryManifest(input);
+      if (current) {
+        const existing = parseDiscoveryManifest(current.body);
+        const existingTime = Date.parse(existing.publishedAt);
+        const candidateTime = Date.parse(candidate.publishedAt);
+        if (existingTime > candidateTime) {
+          throw new Error(`Vercel Blob refused discovery manifest regression for ${input.key}`);
+        }
+        if (existingTime === candidateTime) {
+          if (existing.releaseId !== candidate.releaseId || sha256(current.body) !== input.sha256) {
+            throw new Error(`Vercel Blob refused conflicting discovery manifest for ${input.key}`);
+          }
+          return {
+            key: input.key,
+            url: current.result.blob.url,
+            etag: current.result.blob.etag,
+            byteLength: body.byteLength,
+          };
+        }
+      }
+    }
+
+    let result: PutBlobResult;
+    try {
+      result = await this.putImpl(input.key, body, {
+        access: 'public',
+        token: this.token,
+        contentType: input.contentType,
+        cacheControlMaxAge: cacheControlMaxAge(input.cacheControl),
+        addRandomSuffix: false,
+        // Immutable release keys fail on any collision. Only the fixed discovery
+        // manifest opts into overwrite and uses the current ETag when it exists.
+        allowOverwrite: !input.immutable && current !== null,
+        ...(current ? { ifMatch: current.result.blob.etag } : {}),
+        abortSignal: AbortSignal.timeout(60_000),
+      });
+    } catch {
+      // A retry after a partially completed release must be idempotent. Vercel
+      // Blob rejects deterministic immutable pathname collisions by default;
+      // accept only byte-for-byte identical content already stored there.
+      if (input.immutable) {
+        const existing = await this.readExistingBlob(
+          input.key,
+          body.byteLength,
+          'immutable recovery',
+        );
+        if (existing
+          && existing.body.byteLength === body.byteLength
+          && sha256(existing.body) === input.sha256) {
+          return {
+            key: input.key,
+            url: existing.result.blob.url,
+            etag: existing.result.blob.etag,
+            byteLength: body.byteLength,
+          };
+        }
+      }
+      // SDK errors may contain request URLs or token-derived identifiers. Never
+      // include the original message/body in application or launchd logs.
+      throw new Error(`Vercel Blob PutObject failed for ${input.key}`);
+    }
+    const publicUrl = this.pinAndValidateResult(result, input.key);
+    return {
+      key: input.key,
+      url: publicUrl.toString(),
+      etag: result.etag || null,
+      byteLength: body.byteLength,
+    };
+  }
+}
+
+/**
+ * Local-only sink used by explicit CLI dry-runs and factory callers without a
+ * selected production store.
  * Immutable objects are never overwritten with different bytes.
  */
 export class LocalDryRunSnapshotStore implements PublicSnapshotObjectStore {
@@ -262,15 +555,43 @@ export class R2S3SnapshotStore implements PublicSnapshotObjectStore {
 }
 
 export interface SnapshotStoreSelection {
-  mode: 'r2' | 'local-dry-run';
+  mode: 'blob' | 'r2' | 'local-dry-run';
   store: PublicSnapshotObjectStore;
   dryRunDirectory: string | null;
 }
 
 export function createPublicSnapshotStoreFromEnv(
   env: Readonly<Record<string, string | undefined>> = process.env,
-  options: { fetchImpl?: typeof fetch; now?: () => Date } = {},
+  options: {
+    fetchImpl?: typeof fetch;
+    now?: () => Date;
+    blobPutImpl?: VercelBlobPut;
+    blobGetImpl?: VercelBlobGet;
+  } = {},
 ): SnapshotStoreSelection {
+  const requestedMode = env.NAEZIP_SNAPSHOT_STORE?.trim().toLowerCase();
+  if (requestedMode && requestedMode !== 'blob' && requestedMode !== 'r2') {
+    throw new PublicSnapshotConfigurationError('NAEZIP_SNAPSHOT_STORE must be blob or r2');
+  }
+  const blobToken = env.NAEZIP_SNAPSHOT_BLOB_READ_WRITE_TOKEN?.trim();
+  if (requestedMode === 'blob') {
+    if (!blobToken) {
+      throw new PublicSnapshotConfigurationError(
+        'NAEZIP_SNAPSHOT_BLOB_READ_WRITE_TOKEN is required for the production Vercel Blob snapshot store',
+      );
+    }
+    return {
+      mode: 'blob',
+      store: new VercelBlobSnapshotStore({
+        token: blobToken,
+        publicBaseUrl: env.NEXT_PUBLIC_TRANSACTION_SNAPSHOT_BASE_URL ?? '',
+        putImpl: options.blobPutImpl,
+        getImpl: options.blobGetImpl,
+      }),
+      dryRunDirectory: null,
+    };
+  }
+
   const values = {
     accountId: env.NAEZIP_SNAPSHOT_R2_ACCOUNT_ID,
     accessKeyId: env.NAEZIP_SNAPSHOT_R2_ACCESS_KEY_ID,
@@ -279,6 +600,11 @@ export function createPublicSnapshotStoreFromEnv(
   };
   const present = Object.values(values).filter((value) => Boolean(value)).length;
   if (present === 0) {
+    if (requestedMode === 'r2') {
+      throw new PublicSnapshotConfigurationError(
+        'All R2 settings are required when NAEZIP_SNAPSHOT_STORE=r2',
+      );
+    }
     const dryRunDirectory = path.resolve(
       env.NAEZIP_SNAPSHOT_DRY_RUN_DIR ?? path.join(process.cwd(), '.local', 'public-snapshot-dry-run'),
     );
