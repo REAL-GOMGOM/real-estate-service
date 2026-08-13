@@ -292,21 +292,50 @@ export class VercelBlobSnapshotStore implements PublicSnapshotObjectStore, Publi
         access: 'public',
         token: this.token,
         useCache: false,
+        headers: { 'accept-encoding': 'identity' },
         abortSignal: AbortSignal.timeout(30_000),
       });
     } catch {
       throw new Error(`Vercel Blob ${operation} failed for ${key}`);
     }
     if (!result) return null;
-    if (result.statusCode !== 200 || result.blob.size > maxBytes) {
+    if (result.statusCode !== 200
+      || !Number.isSafeInteger(result.blob.size)
+      || result.blob.size < 0
+      || result.blob.size > maxBytes) {
       throw new Error(`Vercel Blob ${operation} returned invalid metadata for ${key}`);
     }
     this.pinAndValidateResult(result.blob, key);
+    if (result.headers.get('content-encoding') !== null) {
+      await result.stream.cancel().catch(() => undefined);
+      throw new Error(`Vercel Blob ${operation} returned invalid metadata for ${key}`);
+    }
+
     let body: Buffer;
+    let exceededMaxBytes = false;
+    const reader = result.stream.getReader();
     try {
-      body = Buffer.from(await new Response(result.stream).arrayBuffer());
+      const chunks: Buffer[] = [];
+      let byteLength = 0;
+      while (true) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        if (chunk.value.byteLength > maxBytes - byteLength) {
+          exceededMaxBytes = true;
+          await reader.cancel().catch(() => undefined);
+          break;
+        }
+        chunks.push(Buffer.from(chunk.value));
+        byteLength += chunk.value.byteLength;
+      }
+      body = Buffer.concat(chunks, byteLength);
     } catch {
       throw new Error(`Vercel Blob ${operation} body failed for ${key}`);
+    } finally {
+      reader.releaseLock();
+    }
+    if (exceededMaxBytes) {
+      throw new Error(`Vercel Blob ${operation} returned invalid metadata for ${key}`);
     }
     if (body.byteLength !== result.blob.size) {
       throw new Error(`Vercel Blob ${operation} body length mismatch for ${key}`);
@@ -487,7 +516,9 @@ export class VercelBlobSnapshotStore implements PublicSnapshotObjectStore, Publi
       pathname: existing.result.blob.pathname,
       body: existing.body,
       etag: existing.result.blob.etag,
-      size: existing.result.blob.size,
+      // Keep the management comparison tied to the bounded, identity-encoded
+      // body that was actually validated above.
+      size: existing.body.byteLength,
       uploadedAt: existing.result.blob.uploadedAt.toISOString(),
     };
   }

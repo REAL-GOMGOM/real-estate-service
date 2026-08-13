@@ -382,6 +382,7 @@ describe('public snapshot object stores', () => {
       access: 'public',
       token: BLOB_TOKEN,
       useCache: false,
+      headers: { 'accept-encoding': 'identity' },
       abortSignal: expect.any(AbortSignal),
     }));
 
@@ -401,6 +402,91 @@ describe('public snapshot object stores', () => {
     await expect(store.readRetentionObject(RELEASE_MANIFEST_KEY, 0))
       .rejects.toThrow('byte limit is invalid');
     expect(getImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps identity-encoded discovery GET size aligned with management HEAD', async () => {
+    const discoveryKey = `${PUBLIC_TRANSACTION_SNAPSHOT_PREFIX}/manifest.json`;
+    const body = manifestBody('2026-08-11T01:02:03.000Z', RELEASE_ID);
+    const getImpl = vi.fn(async () => blobGetResult(discoveryKey, body, 'identity-etag'));
+    const store = new VercelBlobSnapshotStore({
+      token: BLOB_TOKEN,
+      publicBaseUrl: 'https://store-id.public.blob.vercel-storage.com/',
+      getImpl: getImpl as never,
+      headImpl: vi.fn(async () => listedBlob(discoveryKey, {
+        etag: 'identity-etag',
+        size: body.byteLength,
+      })) as never,
+    });
+
+    const head = await store.headRetentionDiscovery();
+    const read = await store.readRetentionObject(discoveryKey, body.byteLength);
+    expect(read).toMatchObject({ body, etag: head?.etag, size: head?.size });
+    expect(getImpl).toHaveBeenCalledWith(discoveryKey, expect.objectContaining({
+      headers: { 'accept-encoding': 'identity' },
+    }));
+  });
+
+  it('rejects compressed and unknown content encodings despite requesting identity', async () => {
+    const body = Buffer.from('{"complete":true}');
+    const compressed = blobGetResult(RELEASE_MANIFEST_KEY, body);
+    compressed.headers.set('content-encoding', 'gzip');
+    const unknown = blobGetResult(RELEASE_MANIFEST_KEY, body);
+    unknown.headers.set('content-encoding', 'rot13');
+    const getImpl = vi.fn()
+      .mockResolvedValueOnce(compressed)
+      .mockResolvedValueOnce(unknown);
+    const store = new VercelBlobSnapshotStore({
+      token: BLOB_TOKEN,
+      publicBaseUrl: 'https://store-id.public.blob.vercel-storage.com/',
+      getImpl: getImpl as never,
+    });
+
+    await expect(store.readRetentionObject(RELEASE_MANIFEST_KEY, body.byteLength))
+      .rejects.toThrow(`retention read returned invalid metadata for ${RELEASE_MANIFEST_KEY}`);
+    await expect(store.readRetentionObject(RELEASE_MANIFEST_KEY, body.byteLength))
+      .rejects.toThrow(`retention read returned invalid metadata for ${RELEASE_MANIFEST_KEY}`);
+  });
+
+  it('fails closed on an unencoded truncated retention body', async () => {
+    const body = Buffer.from('{"complete":true}');
+    const truncated = blobGetResult(RELEASE_MANIFEST_KEY, body);
+    truncated.blob.size = body.byteLength + 1;
+    const store = new VercelBlobSnapshotStore({
+      token: BLOB_TOKEN,
+      publicBaseUrl: 'https://store-id.public.blob.vercel-storage.com/',
+      getImpl: vi.fn(async () => truncated) as never,
+    });
+
+    await expect(store.readRetentionObject(RELEASE_MANIFEST_KEY, body.byteLength + 1))
+      .rejects.toThrow(`retention read body length mismatch for ${RELEASE_MANIFEST_KEY}`);
+  });
+
+  it('cancels a multi-chunk retention body as soon as it exceeds the byte limit', async () => {
+    const maxBytes = 8;
+    const cancel = vi.fn();
+    const chunks = [Buffer.from('1234'), Buffer.from('5678'), Buffer.from('9')];
+    let index = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        const chunk = chunks[index];
+        index += 1;
+        if (chunk) controller.enqueue(chunk);
+      },
+      cancel,
+    });
+    const oversized = {
+      ...blobGetResult(RELEASE_MANIFEST_KEY, Buffer.alloc(maxBytes)),
+      stream,
+    };
+    const store = new VercelBlobSnapshotStore({
+      token: BLOB_TOKEN,
+      publicBaseUrl: 'https://store-id.public.blob.vercel-storage.com/',
+      getImpl: vi.fn(async () => oversized) as never,
+    });
+
+    await expect(store.readRetentionObject(RELEASE_MANIFEST_KEY, maxBytes))
+      .rejects.toThrow(`retention read returned invalid metadata for ${RELEASE_MANIFEST_KEY}`);
+    expect(cancel).toHaveBeenCalledTimes(1);
   });
 
   it('rejects a retention read whose Blob metadata escapes the pinned origin or pathname', async () => {
