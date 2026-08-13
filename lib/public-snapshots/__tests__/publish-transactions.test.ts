@@ -1,4 +1,5 @@
-import { chmod, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { EventEmitter } from 'node:events';
+import { access, chmod, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -34,10 +35,12 @@ import {
   type PublicSnapshotQueryClient,
 } from '../../../scripts/publish-public-transactions';
 import {
+  createSignalAwareChildRunner,
   loadWrapperEnvironment,
   normalizedSyncExitCode,
   runSyncAndPublish,
 } from '../../../scripts/run-local-sync-and-publish';
+import { withPublicSnapshotPublicationLock } from '../publication-lock';
 import {
   buildApartmentIndexArtifact,
   buildRolling30SummaryArtifacts,
@@ -233,6 +236,62 @@ describe('Mac mini sync health publication gate', () => {
 });
 
 describe('sync-and-publish wrapper', () => {
+  it.each(['SIGINT', 'SIGTERM'] as const)(
+    'forwards %s to the active child and remembers cancellation',
+    async (terminationSignal) => {
+      const signalSource = new EventEmitter();
+      const child = new EventEmitter() as EventEmitter & {
+        kill(signal: NodeJS.Signals): boolean;
+      };
+      const killedWith: NodeJS.Signals[] = [];
+      child.kill = (signal) => {
+        killedWith.push(signal);
+        return true;
+      };
+      const runner = createSignalAwareChildRunner({
+        signalSource: signalSource as never,
+        spawnImpl: (() => child) as never,
+      });
+
+      const result = runner.run('/test/tsx', ['scripts/macmini-sync.ts'], { NODE_ENV: 'test' });
+      signalSource.emit(terminationSignal);
+      expect(killedWith).toEqual([terminationSignal]);
+      child.emit('exit', 0, null);
+      await expect(result).resolves.toEqual({ code: null, signal: terminationSignal });
+      await expect(runner.run('/test/tsx', ['never-spawn.ts'], { NODE_ENV: 'test' }))
+        .resolves.toEqual({ code: null, signal: terminationSignal });
+
+      runner.dispose();
+      expect(signalSource.listenerCount('SIGINT')).toBe(0);
+      expect(signalSource.listenerCount('SIGTERM')).toBe(0);
+    },
+  );
+
+  it('records exit 1 and releases the publication lock after cancellation', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'naezip-wrapper-signal-'));
+    const markerPath = path.join(directory, 'health.json');
+    const lockPath = path.join(directory, 'publication.lock');
+    let receivedSignal: NodeJS.Signals | null = null;
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const code = await withPublicSnapshotPublicationLock(
+      { env: { NAEZIP_SNAPSHOT_LOCK_PATH: lockPath } },
+      async () => runSyncAndPublish({
+        markerPath,
+        tsxPath: '/test/tsx',
+        terminationSignal: () => receivedSignal,
+        runImpl: async () => {
+          receivedSignal = 'SIGINT';
+          return { code: null, signal: 'SIGINT' };
+        },
+      }),
+    );
+
+    expect(code).toBe(1);
+    expect(JSON.parse(await readFile(markerPath, 'utf8'))).toMatchObject({ exitCode: 1 });
+    await expect(access(lockPath)).rejects.toThrow();
+  });
+
   it('loads .env.local or NAEZIP_ENV_FILE once while existing variables win', async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'naezip-env-'));
     await writeFile(

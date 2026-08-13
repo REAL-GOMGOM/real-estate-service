@@ -42,6 +42,17 @@ type RunChild = (
   childEnv: NodeJS.ProcessEnv,
 ) => Promise<SpawnResult>;
 
+interface TerminationSignalSource {
+  on(signal: 'SIGINT' | 'SIGTERM', listener: () => void): unknown;
+  off(signal: 'SIGINT' | 'SIGTERM', listener: () => void): unknown;
+}
+
+export interface SignalAwareChildRunner {
+  run: RunChild;
+  terminationSignal(): NodeJS.Signals | null;
+  dispose(): void;
+}
+
 const MAX_ENV_FILE_BYTES = 1024 * 1024;
 export const SNAPSHOT_SOURCE_AT_ENV = 'NAEZIP_SNAPSHOT_SOURCE_AT';
 
@@ -114,6 +125,66 @@ function run(command: string, args: readonly string[], childEnv: NodeJS.ProcessE
   });
 }
 
+/**
+ * Keep the wrapper alive long enough to fail closed and release its publication
+ * lock when an operator presses Ctrl+C (or launchd sends SIGTERM). The first
+ * termination signal is forwarded to the active child; subsequent work is not
+ * spawned after cancellation.
+ */
+export function createSignalAwareChildRunner(
+  options: {
+    spawnImpl?: typeof spawn;
+    signalSource?: TerminationSignalSource;
+  } = {},
+): SignalAwareChildRunner {
+  const spawnImpl = options.spawnImpl ?? spawn;
+  const signalSource = options.signalSource ?? process;
+  let activeChild: ReturnType<typeof spawn> | null = null;
+  let receivedSignal: NodeJS.Signals | null = null;
+
+  const forward = (signal: 'SIGINT' | 'SIGTERM') => {
+    if (receivedSignal !== null) return;
+    receivedSignal = signal;
+    activeChild?.kill(signal);
+  };
+  const onSigint = () => forward('SIGINT');
+  const onSigterm = () => forward('SIGTERM');
+  signalSource.on('SIGINT', onSigint);
+  signalSource.on('SIGTERM', onSigterm);
+
+  return {
+    run: async (command, args, childEnv) => {
+      if (receivedSignal !== null) return { code: null, signal: receivedSignal };
+      return new Promise((resolve, reject) => {
+        const child = spawnImpl(command, [...args], {
+          cwd: process.cwd(),
+          env: childEnv,
+          shell: false,
+          stdio: 'inherit',
+        });
+        activeChild = child;
+        child.once('error', (error) => {
+          if (activeChild === child) activeChild = null;
+          if (receivedSignal !== null) resolve({ code: null, signal: receivedSignal });
+          else reject(error);
+        });
+        child.once('exit', (code, signal) => {
+          if (activeChild === child) activeChild = null;
+          resolve({
+            code: receivedSignal === null ? code : null,
+            signal: receivedSignal ?? signal,
+          });
+        });
+      });
+    },
+    terminationSignal: () => receivedSignal,
+    dispose: () => {
+      signalSource.off('SIGINT', onSigint);
+      signalSource.off('SIGTERM', onSigterm);
+    },
+  };
+}
+
 export function normalizedSyncExitCode(result: SpawnResult): 0 | 1 | 2 {
   return result.signal === null && (result.code === 0 || result.code === 2)
     ? result.code
@@ -128,6 +199,7 @@ export async function runSyncAndPublish(
     markerPath?: string;
     tsxPath?: string;
     childEnv?: NodeJS.ProcessEnv;
+    terminationSignal?: () => NodeJS.Signals | null;
   } = {},
 ): Promise<number> {
   const runImpl = options.runImpl ?? run;
@@ -135,6 +207,7 @@ export async function runSyncAndPublish(
   const now = options.now ?? (() => new Date());
   const tsxPath = options.tsxPath ?? path.resolve(process.cwd(), 'node_modules', '.bin', 'tsx');
   const markerPath = options.markerPath ?? defaultMacMiniSyncHealthMarkerPath(childEnv);
+  const terminationSignal = options.terminationSignal ?? (() => null);
   const syncStartedAt = now();
 
   // Fail closed before sync mutates any local table. If this wrapper is killed or
@@ -155,6 +228,7 @@ export async function runSyncAndPublish(
   }
   const syncCompletedAt = now();
   let syncExitCode = normalizedSyncExitCode(syncResult);
+  if (terminationSignal() !== null) syncExitCode = 1;
   if (kstCalendarDate(syncStartedAt) !== kstCalendarDate(syncCompletedAt)) {
     syncExitCode = 1;
     console.error(
@@ -179,7 +253,16 @@ export async function runSyncAndPublish(
     'scripts/publish-public-transactions.ts',
     ...(options.publisherArgs ?? []),
   ], publisherEnv);
-  if (publisherResult.signal !== null || publisherResult.code !== 0) {
+  if (publisherResult.signal !== null || terminationSignal() !== null) {
+    await writeMacMiniSyncHealthMarker(markerPath, {
+      schema: MACMINI_SYNC_HEALTH_SCHEMA,
+      completedAt: now().toISOString(),
+      exitCode: 1,
+    });
+    console.error('[sync-and-publish] 종료 신호를 받아 publish를 중단했습니다.');
+    return 1;
+  }
+  if (publisherResult.code !== 0) {
     console.error('[sync-and-publish] public snapshot publisher가 실패했습니다.');
     return 1;
   }
@@ -207,13 +290,23 @@ async function main(): Promise<number> {
   // stale/operator-supplied token from an env file when acquiring the owner lock.
   const wrapperEnv = { ...childEnv } as NodeJS.ProcessEnv;
   delete wrapperEnv[PUBLIC_SNAPSHOT_LOCK_TOKEN_ENV];
-  return withPublicSnapshotPublicationLock({ env: wrapperEnv }, async (lock) => {
-    const lockedChildEnv = {
-      ...wrapperEnv,
-      [PUBLIC_SNAPSHOT_LOCK_TOKEN_ENV]: lock.token,
-    } as NodeJS.ProcessEnv;
-    return runSyncAndPublish({ publisherArgs: args, childEnv: lockedChildEnv });
-  });
+  const childRunner = createSignalAwareChildRunner();
+  try {
+    return await withPublicSnapshotPublicationLock({ env: wrapperEnv }, async (lock) => {
+      const lockedChildEnv = {
+        ...wrapperEnv,
+        [PUBLIC_SNAPSHOT_LOCK_TOKEN_ENV]: lock.token,
+      } as NodeJS.ProcessEnv;
+      return runSyncAndPublish({
+        publisherArgs: args,
+        childEnv: lockedChildEnv,
+        runImpl: childRunner.run,
+        terminationSignal: childRunner.terminationSignal,
+      });
+    });
+  } finally {
+    childRunner.dispose();
+  }
 }
 
 const invokedPath = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : null;
