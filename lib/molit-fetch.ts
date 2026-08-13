@@ -27,11 +27,53 @@ export interface MolitFetchOptions {
   fetchImpl?: MolitFetchImplementation;
   sleep?: (delayMs: number) => Promise<void>;
   random?: () => number;
+  /** Mac 배치처럼 여러 작업이 같은 API 한도를 공유할 때 사용하는 전역 게이트. */
+  requestGate?: MolitRequestGate;
+  /** 월별 추가 페이지 동시 조회 수. 웹 기본값은 molit-months의 기존 값(4). */
+  pageConcurrency?: number;
 }
 
 interface ResponseFailure {
   message: string;
   retryable: boolean;
+  kind?: 'rate-limit' | 'service-disabled' | 'daily-quota';
+  circuitCode?: '21' | '22' | '23' | 'HTTP_429';
+}
+
+export type MolitCircuitReason = 'service-disabled' | 'daily-quota' | 'throttle';
+
+export class MolitCircuitOpenError extends Error {
+  constructor(
+    public readonly reason: MolitCircuitReason,
+    public readonly resultCode: '21' | '22' | '23' | 'HTTP_429',
+  ) {
+    super(
+      reason === 'daily-quota'
+        ? 'MOLIT 일일 요청한도 초과(resultCode=22)'
+        : reason === 'service-disabled'
+          ? 'MOLIT 서비스 일시중지(resultCode=21)'
+          : `MOLIT 요청 제한 cooldown 회로 열림(code=${resultCode})`,
+    );
+    this.name = 'MolitCircuitOpenError';
+  }
+}
+
+export function isMolitCircuitOpenError(error: unknown): error is MolitCircuitOpenError {
+  return error instanceof MolitCircuitOpenError;
+}
+
+export interface MolitRequestGate {
+  run<T>(request: () => Promise<T>): Promise<T>;
+  noteCooldown(delayMs: number): void;
+  trip(error: MolitCircuitOpenError): void;
+}
+
+export interface MolitRequestGateOptions {
+  maxInFlight: number;
+  minStartIntervalMs: number;
+  /** 단위 테스트용 시계·sleep 주입. */
+  now?: () => number;
+  sleep?: (delayMs: number) => Promise<void>;
 }
 
 // Web routes fail over to snapshot/DB paths, so keep their worst-case latency low.
@@ -42,9 +84,10 @@ const DEFAULT_MAX_DELAY_MS = 5_000;
 const MAX_ATTEMPTS_LIMIT = 6;
 const MAX_DELAY_LIMIT_MS = 30_000;
 
-// 공공데이터포털 공통 오류표: 21은 서비스키 일시중지, 22는 요청한도 초과.
+// 공공데이터포털 공통 오류표: 21(서비스키 중지)·22(일일 한도)는 회로를 열어
+// 배치를 즉시 중단한다. 23(초당 한도)은 공유 cooldown 후 제한 재시도한다.
 // 30~33(미등록·만료·IP·서명)은 재시도로 회복되지 않으므로 포함하지 않는다.
-const TRANSIENT_RESULT_CODES = new Set(['1', '2', '4', '5', '21', '22', '99']);
+const TRANSIENT_RESULT_CODES = new Set(['1', '2', '4', '5', '23', '99']);
 const TRANSIENT_MESSAGE =
   /(RATE|LIMIT|TOO MANY|TIMEOUT|TIMED OUT|TEMPORAR|UNAVAILABLE|BUSY|THROTTL|일시|제한|초과|지연)/i;
 
@@ -91,6 +134,7 @@ function inspectMolitResponse(status: number, ok: boolean, xml: string): Respons
   const resultMessage = extractTag(xml, 'resultMsg', 'resultMessage');
 
   if (!ok) {
+    const normalized = normalizedResultCode(resultCode ?? '');
     const retryableHttp = status === 408 || status === 425 || status === 429 || status >= 500;
     const retryableResult = resultCode
       ? isTransientResult(resultCode, resultMessage)
@@ -99,13 +143,48 @@ function inspectMolitResponse(status: number, ok: boolean, xml: string): Respons
     return {
       message: `MOLIT HTTP 오류(status=${status}${resultSuffix})`,
       retryable: retryableHttp || retryableResult,
+      kind: normalized === '21'
+        ? 'service-disabled'
+        : normalized === '22'
+          ? 'daily-quota'
+          : status === 429 || normalized === '23'
+            ? 'rate-limit'
+            : undefined,
+      circuitCode: normalized === '21'
+        ? '21'
+        : normalized === '22'
+          ? '22'
+          : normalized === '23'
+            ? '23'
+            : status === 429
+              ? 'HTTP_429'
+              : undefined,
     };
   }
 
   if (resultCode !== undefined && normalizedResultCode(resultCode) !== '0') {
+    const normalized = normalizedResultCode(resultCode);
+    if (normalized === '21') {
+      return {
+        message: 'MOLIT 서비스 일시중지(resultCode=21)',
+        retryable: false,
+        kind: 'service-disabled',
+        circuitCode: '21',
+      };
+    }
+    if (normalized === '22') {
+      return {
+        message: 'MOLIT 일일 요청한도 초과(resultCode=22)',
+        retryable: false,
+        kind: 'daily-quota',
+        circuitCode: '22',
+      };
+    }
     return {
       message: `MOLIT API 오류(resultCode=${safeResultCode(resultCode)})`,
       retryable: isTransientResult(resultCode, resultMessage),
+      kind: normalized === '23' ? 'rate-limit' : undefined,
+      circuitCode: normalized === '23' ? '23' : undefined,
     };
   }
 
@@ -132,6 +211,88 @@ function retryDelayMs(
 
 const defaultSleep = (delayMs: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+
+export function createMolitRequestGate({
+  maxInFlight,
+  minStartIntervalMs,
+  now = Date.now,
+  sleep = defaultSleep,
+}: MolitRequestGateOptions): MolitRequestGate {
+  const concurrency = boundedInteger(maxInFlight, 1, 1, 16);
+  const intervalMs = boundedInteger(minStartIntervalMs, 0, 0, 60_000);
+  let active = 0;
+  let lastStartAt = Number.NEGATIVE_INFINITY;
+  let cooldownUntil = 0;
+  let circuitError: MolitCircuitOpenError | null = null;
+  let draining = false;
+  const queue: Array<{
+    resolve: (release: () => void) => void;
+    reject: (error: MolitCircuitOpenError) => void;
+  }> = [];
+
+  const drain = async () => {
+    if (draining) return;
+    draining = true;
+    try {
+      while (!circuitError && active < concurrency && queue.length > 0) {
+        const waitUntil = Math.max(cooldownUntil, lastStartAt + intervalMs);
+        const delayMs = Math.max(0, waitUntil - now());
+        if (delayMs > 0) {
+          await sleep(delayMs);
+          continue;
+        }
+        const waiter = queue.shift()!;
+        active++;
+        lastStartAt = now();
+        let released = false;
+        waiter.resolve(() => {
+          if (released) return;
+          released = true;
+          active--;
+          void drain();
+        });
+      }
+    } finally {
+      draining = false;
+      if (!circuitError && active < concurrency && queue.length > 0) void drain();
+    }
+  };
+
+  return {
+    async run<T>(request: () => Promise<T>): Promise<T> {
+      if (circuitError) throw circuitError;
+      const release = await new Promise<() => void>((resolve, reject) => {
+        queue.push({ resolve, reject });
+        void drain();
+      });
+      try {
+        return await request();
+      } finally {
+        release();
+      }
+    },
+    noteCooldown(delayMs: number) {
+      const safeDelayMs = boundedInteger(delayMs, 10_000, 0, 60_000);
+      cooldownUntil = Math.max(cooldownUntil, now() + safeDelayMs);
+    },
+    trip(error: MolitCircuitOpenError) {
+      if (circuitError) return;
+      circuitError = error;
+      for (const waiter of queue.splice(0)) waiter.reject(error);
+    },
+  };
+}
+
+function retryAfterMs(response: Response): number {
+  const raw = response.headers.get('retry-after')?.trim();
+  if (!raw) return 10_000;
+  if (/^\d+(?:\.\d+)?$/.test(raw)) {
+    return Math.min(60_000, Math.max(0, Math.ceil(Number(raw) * 1_000)));
+  }
+  const date = Date.parse(raw);
+  if (!Number.isFinite(date)) return 10_000;
+  return Math.min(60_000, Math.max(0, date - Date.now()));
+}
 
 export async function fetchMolitXml(
   url: string,
@@ -162,6 +323,7 @@ export async function fetchMolitXml(
   const fetchImpl = options.fetchImpl ?? (fetch as MolitFetchImplementation);
   const sleep = options.sleep ?? defaultSleep;
   const random = options.random ?? Math.random;
+  const requestGate = options.requestGate;
 
   let lastFailure: ResponseFailure = {
     message: 'MOLIT 네트워크 오류',
@@ -172,23 +334,46 @@ export async function fetchMolitXml(
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     attemptsUsed = attempt + 1;
     try {
-      const response = await fetchImpl(
-        url,
-        attempt === 0
-          ? { next: { revalidate } }
-          : { cache: 'no-store' },
-      );
-      const xml = await response.text();
-      const failure = inspectMolitResponse(response.status, response.ok, xml);
+      const executeAttempt = async () => {
+        const response = await fetchImpl(
+          url,
+          attempt === 0
+            ? { next: { revalidate } }
+            : { cache: 'no-store' },
+        );
+        const xml = await response.text();
+        const failure = inspectMolitResponse(response.status, response.ok, xml);
+        if (failure?.kind === 'rate-limit') {
+          requestGate?.noteCooldown(retryAfterMs(response));
+        } else if (failure?.kind === 'service-disabled' || failure?.kind === 'daily-quota') {
+          const error = new MolitCircuitOpenError(failure.kind, failure.circuitCode!);
+          requestGate?.trip(error);
+          throw error;
+        }
+        return { xml, failure };
+      };
+      const { xml, failure } = requestGate
+        ? await requestGate.run(executeAttempt)
+        : await executeAttempt();
       if (!failure) return xml;
       lastFailure = failure;
-    } catch {
+    } catch (error) {
+      if (isMolitCircuitOpenError(error)) throw error;
       // fetch/본문 읽기 오류 메시지는 URL(serviceKey)을 포함할 수 있어 버린다.
       lastFailure = { message: 'MOLIT 네트워크 오류', retryable: true };
     }
 
     if (!lastFailure.retryable || attempt === maxAttempts - 1) break;
     await sleep(retryDelayMs(attempt, baseDelayMs, maxDelayMs, random));
+  }
+
+  if (lastFailure.kind === 'rate-limit' && requestGate) {
+    const error = new MolitCircuitOpenError(
+      'throttle',
+      lastFailure.circuitCode === '23' ? '23' : 'HTTP_429',
+    );
+    requestGate.trip(error);
+    throw error;
   }
 
   throw new Error(`${lastFailure.message} (${attemptsUsed}회 시도 후 실패)`);

@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  createMolitRequestGate,
   fetchMolitXml,
+  MolitCircuitOpenError,
   type MolitFetchImplementation,
 } from '@/lib/molit-fetch';
 
@@ -83,18 +85,192 @@ describe('fetchMolitXml', () => {
     expect(sleep).toHaveBeenCalledTimes(1);
   });
 
-  it.each(['21', '22'])('공공데이터포털 일시중지·요청한도 코드 %s는 재시도한다', async (code) => {
+  it.each([
+    ['21', 'service-disabled'],
+    ['22', 'daily-quota'],
+  ] as const)('공공데이터포털 회로 코드 %s는 typed 오류로 즉시 중단한다', async (code, reason) => {
+    const fetchImpl = fetchMock(new Response(
+      `<response><resultCode>${code}</resultCode><resultMsg>gateway error</resultMsg></response>`,
+    ));
+    const gate = createMolitRequestGate({ maxInFlight: 1, minStartIntervalMs: 0 });
+
+    const error = await fetchMolitXml('https://example.test/', 10, {
+      maxAttempts: 4,
+      fetchImpl,
+      requestGate: gate,
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(MolitCircuitOpenError);
+    expect(error).toMatchObject({ reason, resultCode: code });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    await expect(fetchMolitXml('https://example.test/', 10, {
+      fetchImpl,
+      requestGate: gate,
+    })).rejects.toMatchObject({ reason, resultCode: code });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('HTTP 429 Retry-After를 공유 cooldown에 우선 적용한다', async () => {
+    let now = 0;
+    const gateSleep = vi.fn(async (delayMs: number) => { now += delayMs; });
+    const retrySleep = vi.fn(async (delayMs: number) => { now += delayMs; });
+    const gate = createMolitRequestGate({
+      maxInFlight: 1,
+      minStartIntervalMs: 0,
+      now: () => now,
+      sleep: gateSleep,
+    });
     const fetchImpl = fetchMock(
-      new Response(`<response><resultCode>${code}</resultCode><resultMsg>gateway error</resultMsg></response>`),
+      new Response('<html>limited</html>', {
+        status: 429,
+        headers: { 'Retry-After': '2' },
+      }),
       new Response(validXml(0)),
     );
 
     await expect(fetchMolitXml('https://example.test/', 10, {
-      fetchImpl,
-      sleep: async () => undefined,
+      maxAttempts: 2,
+      baseDelayMs: 100,
       random: () => 0,
+      fetchImpl,
+      sleep: retrySleep,
+      requestGate: gate,
     })).resolves.toContain('<totalCount>0</totalCount>');
+
+    expect(retrySleep).toHaveBeenCalledWith(100);
+    expect(gateSleep).toHaveBeenCalledWith(1_900);
+  });
+
+  it('HTTP-date Retry-After도 공유 cooldown으로 해석한다', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-13T00:00:00.000Z'));
+    let now = Date.now();
+    const gateSleep = vi.fn(async (delayMs: number) => { now += delayMs; });
+    const retrySleep = vi.fn(async (delayMs: number) => { now += delayMs; });
+    const gate = createMolitRequestGate({
+      maxInFlight: 1,
+      minStartIntervalMs: 0,
+      now: () => now,
+      sleep: gateSleep,
+    });
+    const fetchImpl = fetchMock(
+      new Response('<html>limited</html>', {
+        status: 429,
+        headers: { 'Retry-After': 'Thu, 13 Aug 2026 00:00:03 GMT' },
+      }),
+      new Response(validXml(0)),
+    );
+
+    await expect(fetchMolitXml('https://example.test/', 10, {
+      maxAttempts: 2,
+      baseDelayMs: 100,
+      random: () => 0,
+      fetchImpl,
+      sleep: retrySleep,
+      requestGate: gate,
+    })).resolves.toContain('<totalCount>0</totalCount>');
+    expect(gateSleep).toHaveBeenCalledWith(2_900);
+    vi.useRealTimers();
+  });
+
+  it('429 재시도 소진 시 throttle 회로를 열어 후속 작업을 막는다', async () => {
+    let now = 0;
+    const advance = async (delayMs: number) => { now += delayMs; };
+    const gate = createMolitRequestGate({
+      maxInFlight: 1,
+      minStartIntervalMs: 0,
+      now: () => now,
+      sleep: advance,
+    });
+    const fetchImpl = fetchMock(
+      new Response('', { status: 429 }),
+      new Response('', { status: 429 }),
+    );
+
+    await expect(fetchMolitXml('https://example.test/', 10, {
+      maxAttempts: 2,
+      baseDelayMs: 0,
+      fetchImpl,
+      sleep: advance,
+      requestGate: gate,
+    })).rejects.toMatchObject({ reason: 'throttle', resultCode: 'HTTP_429' });
     expect(fetchImpl).toHaveBeenCalledTimes(2);
+
+    await expect(gate.run(async () => undefined)).rejects.toMatchObject({
+      reason: 'throttle',
+    });
+  });
+
+  it('code 23은 기본 10초 cooldown 후 재시도한다', async () => {
+    let now = 0;
+    const gateSleep = vi.fn(async (delayMs: number) => { now += delayMs; });
+    const retrySleep = vi.fn(async (delayMs: number) => { now += delayMs; });
+    const gate = createMolitRequestGate({
+      maxInFlight: 1,
+      minStartIntervalMs: 0,
+      now: () => now,
+      sleep: gateSleep,
+    });
+    const fetchImpl = fetchMock(
+      new Response('<response><resultCode>23</resultCode><resultMsg>LIMITED</resultMsg></response>'),
+      new Response(validXml(0)),
+    );
+
+    await expect(fetchMolitXml('https://example.test/', 10, {
+      maxAttempts: 2,
+      baseDelayMs: 100,
+      random: () => 0,
+      fetchImpl,
+      sleep: retrySleep,
+      requestGate: gate,
+    })).resolves.toContain('<totalCount>0</totalCount>');
+    expect(gateSleep).toHaveBeenCalledWith(9_900);
+  });
+
+  it.each([
+    ['21', 'service-disabled'],
+    ['22', 'daily-quota'],
+  ] as const)('HTTP 오류 본문의 회로 코드 %s도 보존한다', async (code, reason) => {
+    const fetchImpl = fetchMock(new Response(
+      `<response><resultCode>${code}</resultCode><resultMsg>blocked</resultMsg></response>`,
+      { status: 503 },
+    ));
+    const gate = createMolitRequestGate({ maxInFlight: 1, minStartIntervalMs: 0 });
+
+    await expect(fetchMolitXml('https://example.test/', 10, {
+      maxAttempts: 4,
+      fetchImpl,
+      requestGate: gate,
+    })).rejects.toMatchObject({ reason, resultCode: code });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('공유 게이트는 동시 요청을 직렬화하고 시작 간격을 보장한다', async () => {
+    let now = 0;
+    const gateSleep = vi.fn(async (delayMs: number) => { now += delayMs; });
+    const gate = createMolitRequestGate({
+      maxInFlight: 1,
+      minStartIntervalMs: 500,
+      now: () => now,
+      sleep: gateSleep,
+    });
+    let releaseFirst!: () => void;
+    const firstDone = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    const starts: number[] = [];
+
+    const first = gate.run(async () => {
+      starts.push(now);
+      await firstDone;
+    });
+    const second = gate.run(async () => { starts.push(now); });
+    await Promise.resolve();
+    expect(starts).toEqual([0]);
+    releaseFirst();
+    await Promise.all([first, second]);
+
+    expect(starts).toEqual([0, 500]);
+    expect(gateSleep).toHaveBeenCalledWith(500);
   });
 
   it('인증 오류는 재시도하지 않고 URL·응답 본문을 오류에 노출하지 않는다', async () => {

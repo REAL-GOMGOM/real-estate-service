@@ -60,9 +60,13 @@ async function fetchMonthAllPages(
   }
 
   const documents = [firstPage];
-  for (let first = 2; first <= totalPages; first += PAGE_BATCH_SIZE) {
+  const configuredPageConcurrency = fetchOptions?.pageConcurrency;
+  const pageConcurrency = Number.isFinite(configuredPageConcurrency)
+    ? Math.min(PAGE_BATCH_SIZE, Math.max(1, Math.trunc(configuredPageConcurrency!)))
+    : PAGE_BATCH_SIZE;
+  for (let first = 2; first <= totalPages; first += pageConcurrency) {
     const pageNumbers = Array.from(
-      { length: Math.min(PAGE_BATCH_SIZE, totalPages - first + 1) },
+      { length: Math.min(pageConcurrency, totalPages - first + 1) },
       (_, index) => first + index,
     );
     const batch = await Promise.all(

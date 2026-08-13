@@ -14,7 +14,12 @@ import {
 } from '../lib/db/schema';
 import { DISTRICT_CODE } from '../lib/district-codes';
 import { getMonthList, fetchTradeMonthAllPages, fetchRentMonthAllPages, fetchSilvMonthAllPages, revalidateForMonth } from '../lib/molit-months';
-import type { MolitFetchOptions } from '../lib/molit-fetch';
+import {
+  createMolitRequestGate,
+  isMolitCircuitOpenError,
+  type MolitFetchOptions,
+  type MolitCircuitOpenError,
+} from '../lib/molit-fetch';
 import { assertMolitParsedItemCount, mapMolitItemsWithRejectionGate } from '../lib/molit-sync-sanity';
 import { parseTradeXml, molitItemToTransaction } from '../lib/molit-trade-parse';
 import { parseRentXmlFull, molitItemToRentRow } from '../lib/molit-rent-parse';
@@ -50,13 +55,19 @@ config({
  */
 
 const SYNC_MONTHS = PUBLIC_TRANSACTION_SNAPSHOT_MONTHS;
-// 일반 작업 8개 × 추가 페이지 배치 4개로 순간 최대 32요청까지 겹치던 값을
-// 절반으로 낮춘다. 맥미니 배치는 시간 제한보다 공공 API 안정성이 우선이다.
-const CONCURRENCY = 4;
+// 바깥 워커와 추가 페이지 동시성이 중첩돼 발생하던 burst를 막는다. 워커는
+// 파싱/DB 작업을 일부 겹치되 실제 MOLIT fetch는 전역 단일 게이트를 통과한다.
+const CONCURRENCY = 2;
+const MAC_MOLIT_REQUEST_GATE = createMolitRequestGate({
+  maxInFlight: 1,
+  minStartIntervalMs: 500,
+});
 const MAC_MOLIT_FETCH_OPTIONS = {
   maxAttempts: 4,
   baseDelayMs: 750,
   maxDelayMs: 6_000,
+  requestGate: MAC_MOLIT_REQUEST_GATE,
+  pageConcurrency: 1,
 } satisfies MolitFetchOptions;
 const TRADE_RETENTION_MONTHS = 13;
 const RENT_RETENTION_MONTHS = 7;
@@ -154,18 +165,24 @@ async function main() {
       neonSkipped: 0,
     };
     let cursor = 0;
+    let circuitFailure: MolitCircuitOpenError | null = null;
     async function worker() {
-      while (cursor < jobs.length) {
+      while (!circuitFailure && cursor < jobs.length) {
         const job = jobs[cursor++];
         try {
           await processJob(job.sigungu, job.lawdCd, job.yyyymm, r);
         } catch (e) {
+          if (isMolitCircuitOpenError(e)) {
+            circuitFailure ??= e;
+            continue;
+          }
           r.fetchFail++;
           console.warn(`[macmini-sync] ${label} 수집 실패 ${job.sigungu} ${job.yyyymm}:`, e instanceof Error ? e.message : e);
         }
       }
     }
     await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+    if (circuitFailure) throw circuitFailure;
     return r;
   }
 
