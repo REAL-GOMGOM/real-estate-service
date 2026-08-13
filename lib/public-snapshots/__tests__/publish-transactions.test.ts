@@ -346,7 +346,11 @@ describe('sync-and-publish wrapper', () => {
     const markerPath = path.join(directory, 'health.json');
     const commands: readonly string[][] = [];
     const called: string[][] = commands as string[][];
-    const results = [{ code: 2, signal: null }, { code: 0, signal: null }];
+    const results = [
+      { code: 0, signal: null },
+      { code: 2, signal: null },
+      { code: 0, signal: null },
+    ];
     const sharedChildEnv = { NODE_ENV: 'test', FROM_FILE: 'same-for-both' } as NodeJS.ProcessEnv;
     const seenChildEnvs: NodeJS.ProcessEnv[] = [];
     const code = await runSyncAndPublish({
@@ -367,11 +371,13 @@ describe('sync-and-publish wrapper', () => {
     });
     expect(code).toBe(0);
     expect(called).toEqual([
+      ['scripts/bootstrap-local-apt-scores.ts', '--check'],
       ['scripts/macmini-sync.ts'],
       ['scripts/publish-public-transactions.ts', '--dry-run'],
     ]);
     expect(seenChildEnvs[0]).toBe(sharedChildEnv);
-    expect(seenChildEnvs[1]).toMatchObject({
+    expect(seenChildEnvs[1]).toBe(sharedChildEnv);
+    expect(seenChildEnvs[2]).toMatchObject({
       ...sharedChildEnv,
       NAEZIP_SNAPSHOT_SOURCE_AT: '2026-08-11T05:00:00.000Z',
     });
@@ -383,11 +389,16 @@ describe('sync-and-publish wrapper', () => {
       tsxPath: '/test/tsx',
       runImpl: async (_command, args) => {
         called.push([...args]);
-        return { code: 1, signal: null };
+        return args[0] === 'scripts/bootstrap-local-apt-scores.ts'
+          ? { code: 0, signal: null }
+          : { code: 1, signal: null };
       },
     });
     expect(failed).toBe(1);
-    expect(called).toEqual([['scripts/macmini-sync.ts']]);
+    expect(called).toEqual([
+      ['scripts/bootstrap-local-apt-scores.ts', '--check'],
+      ['scripts/macmini-sync.ts'],
+    ]);
     expect(JSON.parse(await readFile(markerPath, 'utf8'))).toMatchObject({ exitCode: 1 });
   });
 
@@ -413,7 +424,10 @@ describe('sync-and-publish wrapper', () => {
     });
 
     expect(code).toBe(1);
-    expect(commands).toEqual([['scripts/macmini-sync.ts']]);
+    expect(commands).toEqual([
+      ['scripts/bootstrap-local-apt-scores.ts', '--check'],
+      ['scripts/macmini-sync.ts'],
+    ]);
     expect(JSON.parse(await readFile(markerPath, 'utf8'))).toMatchObject({
       completedAt: '2026-08-31T15:01:00.000Z',
       exitCode: 1,
@@ -423,6 +437,29 @@ describe('sync-and-publish wrapper', () => {
   it('normalizes signals and unexpected exit codes to a local/source failure', () => {
     expect(normalizedSyncExitCode({ code: 0, signal: 'SIGTERM' })).toBe(1);
     expect(normalizedSyncExitCode({ code: 9, signal: null })).toBe(1);
+  });
+
+  it('blocks sync before MOLIT fetch when the read-only local schema preflight fails', async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), 'naezip-wrapper-preflight-'));
+    const markerPath = path.join(directory, 'health.json');
+    const commands: string[][] = [];
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const code = await runSyncAndPublish({
+      markerPath,
+      tsxPath: '/test/tsx',
+      childEnv: { NODE_ENV: 'test' },
+      runImpl: async (_command, args) => {
+        commands.push([...args]);
+        return { code: 1, signal: null };
+      },
+    });
+
+    expect(code).toBe(1);
+    expect(commands).toEqual([
+      ['scripts/bootstrap-local-apt-scores.ts', '--check'],
+    ]);
+    expect(JSON.parse(await readFile(markerPath, 'utf8'))).toMatchObject({ exitCode: 1 });
   });
 });
 
@@ -598,6 +635,72 @@ describe('local PostgreSQL public transaction publisher', () => {
     expect(store.writes).toHaveLength(0);
   });
 
+  it('publishes presale rows that have no master_id column as unmatched', async () => {
+    const client: PublicSnapshotQueryClient = {
+      query: async <Row>(text: string) => {
+        if (text !== DISTRICT_PRESALE_SELECT) return { rows: [] as Row[] };
+        return { rows: [{
+          dedupeKey: 'presale-without-master-id',
+          aptName: '분양권 테스트 단지',
+          sigungu: '강남구',
+          umdNm: '역삼동',
+          areaM2: 84.9,
+          floor: 10,
+          dealAmount: 150_000,
+          dealDate: '2026-08-10',
+          buildYear: null,
+          isCanceled: false,
+        }] as Row[] };
+      },
+    };
+
+    const collected = await collectPublicTransactionRelease(client, {
+      now: new Date('2026-08-11T03:00:00.000Z'),
+      districts: [['강남구', '11680']],
+    });
+
+    expect(collected.snapshots[0]?.records).toEqual([
+      expect.objectContaining({
+        kind: 'presale',
+        apartmentId: null,
+        aptName: '분양권 테스트 단지',
+      }),
+    ]);
+  });
+
+  it('still rejects sale rows whose selected master_id is missing', async () => {
+    const calls: string[] = [];
+    const client: PublicSnapshotQueryClient = {
+      query: async <Row>(text: string) => {
+        calls.push(text);
+        if (text !== DISTRICT_SALE_SELECT) return { rows: [] as Row[] };
+        return { rows: [{
+          dedupeKey: 'sale-without-selected-master-id',
+          aptName: '매매 테스트 단지',
+          sigungu: '강남구',
+          umdNm: '역삼동',
+          areaM2: 84.9,
+          floor: 10,
+          dealAmount: 150_000,
+          dealDate: '2026-08-10',
+          buildYear: 2020,
+          isCanceled: false,
+        }] as Row[] };
+      },
+    };
+    const store = new MemoryStore();
+
+    await expect(publishPublicTransactionsFromClient(client, store, {
+      now: new Date('2026-08-11T03:00:00.000Z'),
+      districts: [['강남구', '11680']],
+      completeness: { allowIncompleteForTest: true },
+    })).rejects.toThrow('sale.masterId is invalid');
+
+    expect(calls).toContain('ROLLBACK');
+    expect(calls).not.toContain('COMMIT');
+    expect(store.writes).toHaveLength(0);
+  });
+
   it('does not publish healthy raw/index data when all four summary SELECTs are empty', async () => {
     const districtByCode = new Map(Object.entries(DISTRICT_CODE).map(([district, code]) => [code, district]));
     const client: PublicSnapshotQueryClient = {
@@ -718,6 +821,7 @@ describe('local PostgreSQL public transaction publisher', () => {
     expect(RENT_SUMMARY_SELECT).toContain("right(deal_date, 2) <> '00'");
     expect(RENT_SUMMARY_SELECT).toContain('monthly_rent > 0');
     expect(APARTMENT_INDEX_SELECT).not.toContain('SELECT *');
+    expect(APARTMENT_INDEX_SELECT).toContain('FROM public.apt_scores');
   });
 
   it('preserves unknown MOLIT days as YYYY-MM and refuses remote databases', () => {

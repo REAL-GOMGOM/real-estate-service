@@ -416,6 +416,20 @@ psql "$NAEZIP_LOCAL_DB_URL" -v ON_ERROR_STOP=1 -Atqc \
 다섯 값 중 하나라도 비어 있으면 migration/seed 상태를 복구한 뒤 다시 실행한다. `apt_scores`
 행 수가 0이거나 일부 단지만 점수가 있어도 발행 자체는 가능하다.
 
+로컬 원장에 `apt_scores`만 빠진 경우 전체 Drizzle migration이나
+`scripts/import-apt-scores.ts --execute`를 실행하지 않는다. 두 경로는 `.env.local`의 Neon URL을
+사용할 수 있다. 아래 로컬 전용 bootstrap은 localhost URL만 허용하며, `--execute`를 명시했을
+때에만 `public.apt_scores` 테이블과 인덱스를 트랜잭션으로 생성한다. 기존 행과 다른 테이블은
+수정하지 않는다.
+
+```bash
+NAEZIP_LOCAL_DB_URL='postgresql://bangjoohan@localhost:5432/naezip' \
+node --import tsx scripts/bootstrap-local-apt-scores.ts --execute
+```
+
+새 wrapper는 MOLIT 동기화를 시작하기 전에 같은 스크립트의 읽기 전용 `--check`를 실행한다.
+스키마가 없거나 호환되지 않으면 health marker를 실패로 유지하고 동기화·발행을 모두 차단한다.
+
 ## 운영 전 점검
 
 1. 로컬 원장 export가 district별이며 취소 거래를 제외하고 일자 미상은 `YYYY-MM`으로

@@ -20,8 +20,9 @@ Usage: npx tsx scripts/run-local-sync-and-publish.ts [--dry-run] [--allow-stale-
 
 Runs macmini-sync first, atomically records its exit status, and invokes the public
 snapshot publisher only when sync exits 0 (healthy) or 2 (Neon-only degraded).
-Before sync starts, an exit 1 marker invalidates any prior healthy marker. Exit 1,
-a signal, a reboot, or a launch failure therefore blocks publish fail-closed.
+Before sync starts, a read-only local publisher-schema preflight runs and an exit 1
+marker invalidates any prior healthy marker. Exit 1, a signal, a reboot, or a launch
+failure therefore blocks publish fail-closed.
 Loads .env.local (or NAEZIP_ENV_FILE) once; already-exported variables take priority.
 
 --dry-run            Force only the publisher to use its local object-store sink.
@@ -218,6 +219,29 @@ export async function runSyncAndPublish(
     completedAt: syncStartedAt.toISOString(),
     exitCode: 1,
   });
+
+  let preflightResult: SpawnResult;
+  try {
+    preflightResult = await runImpl(tsxPath, [
+      'scripts/bootstrap-local-apt-scores.ts',
+      '--check',
+    ], childEnv);
+  } catch (error) {
+    console.error(
+      '[sync-and-publish] local snapshot schema preflight를 시작하지 못했습니다:',
+      error instanceof Error ? error.message : error,
+    );
+    return 1;
+  }
+  if (preflightResult.code !== 0
+    || preflightResult.signal !== null
+    || terminationSignal() !== null) {
+    console.error(
+      '[sync-and-publish] local snapshot schema preflight 실패 — '
+      + 'scripts/bootstrap-local-apt-scores.ts --execute를 먼저 실행하세요.',
+    );
+    return 1;
+  }
 
   let syncResult: SpawnResult;
   try {

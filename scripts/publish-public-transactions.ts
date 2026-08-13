@@ -210,7 +210,7 @@ export const APARTMENT_INDEX_SELECT = `
     FROM apartments a
     LEFT JOIN LATERAL (
       SELECT s.score
-        FROM apt_scores s
+        FROM public.apt_scores s
        WHERE s.master_id = a.id
        ORDER BY s.updated_at DESC, s.id ASC
        LIMIT 1
@@ -239,6 +239,8 @@ interface SaleSourceDbRow {
   buildYear: unknown;
   isCanceled: unknown;
 }
+
+type PresaleSourceDbRow = Omit<SaleSourceDbRow, 'masterId'>;
 
 interface RentSourceDbRow {
   dedupeKey: unknown;
@@ -361,8 +363,10 @@ function saleSourceRow(row: SaleSourceDbRow, district: string): PublicSaleSource
   };
 }
 
-function presaleSourceRow(row: SaleSourceDbRow, district: string): PublicPresaleSourceRow {
-  const source = saleSourceRow(row, district);
+function presaleSourceRow(row: PresaleSourceDbRow, district: string): PublicPresaleSourceRow {
+  // silv_transactions intentionally has no master_id column. Keep the public
+  // apartment identity unmatched until a dedicated presale matcher exists.
+  const source = saleSourceRow({ ...row, masterId: null }, district);
   return { ...source };
 }
 
@@ -753,7 +757,7 @@ export async function collectPublicTransactionRelease(
       for (const row of result.rows) records.push(toPublicRentTransaction(rentSourceRow(row, district)));
     }
     {
-      const result = await client.query<SaleSourceDbRow>(DISTRICT_PRESALE_SELECT, [
+      const result = await client.query<PresaleSourceDbRow>(DISTRICT_PRESALE_SELECT, [
         lawdCd, windows.fromMonth, windows.throughMonth,
       ]);
       for (const row of result.rows) records.push(toPublicPresaleTransaction(presaleSourceRow(row, district)));
