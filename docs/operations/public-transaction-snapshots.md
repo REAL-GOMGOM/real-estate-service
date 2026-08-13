@@ -247,6 +247,62 @@ fail-closed다. 운영자가 `ps -p <PID>`와 실행 중인 sync/publisher가 �
 디렉터리를 삭제하지 말고 별도 복구 이름으로 이동해 증거를 보존한 다음 재실행한다. 내부
 owner token은 로그나 환경파일에 복사하지 않는다.
 
+## Blob retention 수동 runbook
+
+`scripts/retain-public-transactions.ts`는 publisher와 같은 exclusive lock 안에서만 동작한다.
+현재는 wrapper·LaunchAgent에 연결하지 않은 **수동 도구**이며, 아래 구현만으로 최초 seed나
+Production 정기 발행이 승인된 것은 아니다. 독립 코드 검토와 격리된 저장소 검증이 끝날 때까지
+설치된 plist의 `--dry-run`을 유지한다.
+
+기본 실행은 원격 Blob을 list/HEAD/GET해 새 계획을 만드는 read-only plan이다. 삭제 API는 호출하지
+않지만 Blob Advanced Operations는 소비한다. snapshot 전용 token과 정확한 public origin을 가진
+`NAEZIP_SNAPSHOT_STORE=blob`만 허용하며 local dry-run과 legacy R2는 계획·삭제 모두 거부한다.
+출력은 release ID와 객체/릴리스 개수만 포함하고 token, origin, management ETag는 기록하지 않는다.
+명령은 sync/publish wrapper와 같은 방식으로 `.env.local`(또는 셸에서 지정한 `NAEZIP_ENV_FILE`)을
+읽고 실제 대상 파일이 regular file·최대 1MiB·권한 `0600`인지 먼저 검증한다. 이미 export한 환경값이
+파일보다 우선한다. `--help`와 잘못된 옵션은 환경파일, lock, Blob에 접근하지 않는다.
+
+```bash
+npm run snapshot:retention
+```
+
+계획은 현재 discovery release, 최신 complete rollback release, 최신 complete 30개, 최근 30일
+complete release를 합집합으로 보호한다. 삭제 후보는 strict manifest와 정확한 24 shards + 5
+serving artifacts가 검증되고 `publishedAt`과 모든 객체 `uploadedAt`이 보존 경계보다 오래된 complete
+release뿐이다. root manifest가 없는 알려진 payload는 72시간 grace 뒤에만 orphan 후보가 된다.
+알 수 없는 pathname, 비정상 manifest, 중복/역순 pagination, inventory 상한 초과는 전체 계획을
+0 delete로 중단한다.
+
+실제 삭제는 plan 출력을 별도 검토한 뒤에만 실행한다. plan에 출력된 **현재 release ID 문자열을
+셸 변수로 치환하지 말고** 아래 두 위치에 동일한 literal로 직접 복사한다. `--apply` 하나만으로는
+실행되지 않으며, 두 확인값 중 하나라도 새 계획의 현재 release와 다르면 0 delete로 실패한다.
+
+```bash
+# 예시 ID를 사용하지 말고 직전 plan의 currentRelease를 두 위치에 그대로 직접 입력한다.
+NAEZIP_SNAPSHOT_RETENTION_APPROVAL=20260813T010203Z-aaaaaaaaaaaa \
+  npm run snapshot:retention -- \
+  --apply --confirm-release=20260813T010203Z-aaaaaaaaaaaa
+```
+
+apply도 저장된 계획을 재사용하지 않고 잠금 안에서 inventory와 discovery를 다시 읽는다. executor는
+각 release 삭제 직전에 discovery HEAD가 계획의 상태와 같은지 다시 검사한다. complete release는
+immutable root manifest를 조건부 tombstone한 뒤 payload를 최대 10개씩, batch 사이 최소 1초 간격으로
+삭제한다. 부분 실패 시 다음 release로 진행하지 않으며 완료된 release ID/객체 개수만 보고한다.
+
+### 최초 seed 사전 점검
+
+아직 객체가 하나도 없는 전용 store에서는 기본 plan이 `seedEligible=true` 한 줄만 출력해야 한다.
+discovery 없이 release inventory가 하나라도 있으면 seed 가능으로 보지 않고 실패한다. 빈 store에서
+`--apply`는 삭제할 현재 release가 없으므로 항상 거부된다.
+
+1. 최신 Mac mini 외부 백업과 restore check, local publication dry-run 결과를 다시 확인한다.
+2. old sync/mirror agent가 disabled이고 publisher/retention 프로세스가 없음을 확인한다.
+3. 전용 Blob token과 public origin을 대조한 뒤 기본 plan을 실행한다.
+4. `seedEligible=true`만 확인하고 멈춘다. retention apply는 seed 명령이 아니다.
+5. 독립 코드 검토와 격리 store 검증 승인을 받은 뒤에만 별도 publisher 수동 최초 seed 절차로 간다.
+6. seed 뒤 district shard와 5개 named artifact를 다시 다운로드·검증하기 전에는 Preview/Production
+   route나 LaunchAgent의 `--dry-run`을 변경하지 않는다.
+
 ## LaunchAgent 교체 runbook
 
 현재 로드된 과거 `com.gomgom.naezip-sync`는 `macmini-sync.ts`를 직접 실행해 marker·lock·publisher
@@ -290,7 +346,7 @@ launchctl kickstart -k gui/$(id -u)/com.gomgom.naezip-sync-and-publish
 launchctl print gui/$(id -u)/com.gomgom.naezip-sync-and-publish
 ```
 
-실제 Blob 최초 seed와 Preview 검증은 retention 정리 도구가 구현되고 별도 운영 승인을 받은 뒤
+실제 Blob 최초 seed와 Preview 검증은 retention 도구의 독립 검토·격리 검증과 별도 운영 승인을 받은 뒤
 수동 1회 명령으로만 수행한다. 현재 runbook은 production 정기 발행을 허가하지 않으며 설치된
 plist의 `--dry-run`을 제거하지 않는다. 추후 정기 발행 승인을 받을 때도 설치된 plist를 즉석
 수정하지 않고 staging 사본에서 변경·`plutil -lint`·재검증해야 한다. `print-disabled`에서 old
@@ -375,7 +431,7 @@ psql "$NAEZIP_LOCAL_DB_URL" -v ON_ERROR_STOP=1 -Atqc \
    향후 하루 1회 발행 기준 30일에 약 930 Advanced Operations로 Hobby 포함 2,000 안에 머문다.
    수동 재발행·dashboard 탐색·블로그 업로드도 같은 quota를 쓰므로 여유를 모니터링한다.
 8. snapshot 전용 Blob read-write token을 Mac mini에만 설정한다.
-9. retention 정리 도구 구현과 별도 승인을 마친 뒤 수동 최초 seed를 실행하고, reader로 district와
+9. retention 도구의 독립 검토·격리 저장소 검증과 별도 승인을 마친 뒤 수동 최초 seed를 실행하고, reader로 district와
    named artifact를 다시 다운로드해 검증한다. launchd production 발행은 아직 켜지 않는다.
 10. Preview route를 snapshot 우선, 기존 DB를 제한적 fallback으로 전환한 뒤 운영 반영한다.
 
@@ -388,8 +444,8 @@ shard 총량은 약 4.0MB(24개 평균 약 167KB)였고, apartment index를 포�
 4초 reader timeout과 Blob CDN 캐시 범위 안이다. Preview에서 가장 큰 shard의 fetch/decode 지연과
 route 총 지연을 측정한 후 Production으로 올린다.
 
-immutable release를 영구 보존하면 하루 약 4.5MB 기준 약 7개월 후 1GB에 접근한다. retention
-cleanup은 아직 자동화되지 않았으므로 Vercel Usage를 모니터링하고, 누적 저장량이 한도에
-접근하기 전에 30일 초과 release 정리 도구를 추가해야 한다. 정리 도구는 현재 discovery release와
-직전 rollback release를 항상 보존하고, 삭제 전 해당 key가 두 manifest에서 참조되지 않음을
-검증해야 한다. Mac mini 원장/백업이 source of truth라는 원칙도 유지한다.
+immutable release를 영구 보존하면 하루 약 4.5MB 기준 약 7개월 후 1GB에 접근한다. retention은
+위 수동 plan/apply 도구로만 구현되어 있고 정기 자동화·운영 apply는 아직 승인되지 않았다. 따라서
+Vercel Usage를 계속 모니터링하고 독립 검증 전에는 수동 삭제도 실행하지 않는다. 현재 discovery와
+직전 rollback, 최신 30개와 최근 30일 release 보호 계약을 유지하며, Mac mini 원장/백업이 source of
+truth라는 원칙도 유지한다.

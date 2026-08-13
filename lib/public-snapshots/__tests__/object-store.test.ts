@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { BlobNotFoundError } from '@vercel/blob';
 
 import { sha256Hex } from '../artifact';
 import {
@@ -12,9 +13,12 @@ import {
 } from '../contract';
 import {
   LocalDryRunSnapshotStore,
+  PUBLIC_SNAPSHOT_RETENTION_LIST_LIMIT,
+  PUBLIC_SNAPSHOT_RETENTION_MAX_DELETE_BATCH,
   PublicSnapshotConfigurationError,
   R2S3SnapshotStore,
   VercelBlobSnapshotStore,
+  createPublicSnapshotRetentionStoreFromEnv,
   createPublicSnapshotStoreFromEnv,
 } from '../object-store';
 import { publishPublicSnapshotRelease } from '../publisher';
@@ -22,6 +26,10 @@ import { createPublicTransactionSnapshot } from '../source-mappers';
 
 const temporaryDirectories: string[] = [];
 const BLOB_TOKEN = 'vercel_blob_rw_store-id_test-secret';
+const RELEASE_ID = '20260811T010203Z-aaaaaaaaaaaa';
+const RELEASES_PREFIX = `${PUBLIC_TRANSACTION_SNAPSHOT_PREFIX}/releases/`;
+const RELEASE_PREFIX = `${RELEASES_PREFIX}${RELEASE_ID}/`;
+const RELEASE_MANIFEST_KEY = `${RELEASE_PREFIX}manifest.json`;
 
 afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
@@ -108,6 +116,21 @@ function blobGetResult(key: string, body: Buffer, etag = 'etag-1') {
   };
 }
 
+function listedBlob(
+  pathname: string,
+  overrides: Partial<ReturnType<typeof blobResult> & {
+    size: number;
+    uploadedAt: Date;
+  }> = {},
+) {
+  return {
+    ...blobResult(pathname),
+    size: 123,
+    uploadedAt: new Date('2026-08-11T01:00:00.000Z'),
+    ...overrides,
+  };
+}
+
 describe('public snapshot object stores', () => {
   it('selects local dry-run only when no production store is explicitly selected', async () => {
     const directory = await mkdtemp(path.join(tmpdir(), 'naezip-snapshot-'));
@@ -136,6 +159,44 @@ describe('public snapshot object stores', () => {
       NEXT_PUBLIC_TRANSACTION_SNAPSHOT_BASE_URL:
         'https://store-id.public.blob.vercel-storage.com/',
     }).mode).toBe('local-dry-run');
+  });
+
+  it('creates a retention store only from an explicitly selected dedicated Blob configuration', async () => {
+    const discoveryKey = `${PUBLIC_TRANSACTION_SNAPSHOT_PREFIX}/manifest.json`;
+    const headImpl = vi.fn(async () => listedBlob(discoveryKey, {
+      etag: 'retention-factory-etag',
+      size: 1,
+    }));
+    const validEnv = {
+      NAEZIP_SNAPSHOT_STORE: 'blob',
+      NAEZIP_SNAPSHOT_BLOB_READ_WRITE_TOKEN: BLOB_TOKEN,
+      NEXT_PUBLIC_TRANSACTION_SNAPSHOT_BASE_URL:
+        'https://store-id.public.blob.vercel-storage.com/',
+    };
+
+    const store = createPublicSnapshotRetentionStoreFromEnv(validEnv, {
+      headImpl: headImpl as never,
+    });
+    await expect(store.headRetentionDiscovery()).resolves.toMatchObject({
+      pathname: discoveryKey,
+      etag: 'retention-factory-etag',
+    });
+
+    expect(() => createPublicSnapshotRetentionStoreFromEnv({
+      ...validEnv,
+      NAEZIP_SNAPSHOT_STORE: 'r2',
+    })).toThrow('explicit NAEZIP_SNAPSHOT_STORE=blob');
+    expect(() => createPublicSnapshotRetentionStoreFromEnv({
+      NAEZIP_SNAPSHOT_STORE: 'blob',
+      BLOB_READ_WRITE_TOKEN: 'generic-blog-token-must-not-be-used',
+      NEXT_PUBLIC_TRANSACTION_SNAPSHOT_BASE_URL:
+        'https://store-id.public.blob.vercel-storage.com/',
+    })).toThrow('NAEZIP_SNAPSHOT_BLOB_READ_WRITE_TOKEN');
+    expect(() => createPublicSnapshotRetentionStoreFromEnv({
+      ...validEnv,
+      NAEZIP_SNAPSHOT_STORE: undefined,
+    })).toThrow('explicit NAEZIP_SNAPSHOT_STORE=blob');
+    expect(headImpl).toHaveBeenCalledTimes(1);
   });
 
   it('uses deterministic public Blob paths and overwrites only the discovery manifest', async () => {
@@ -219,6 +280,352 @@ describe('public snapshot object stores', () => {
     expect((error as Error).message).toBe(`Vercel Blob PutObject failed for ${key}`);
     expect((error as Error).message).not.toContain('token');
     expect((error as Error).message).not.toContain('secret');
+  });
+
+  it('lists only the dedicated v2 releases prefix with bounded pagination and credentials', async () => {
+    const pathname = `${RELEASE_PREFIX}shards/00.json.gz`;
+    const listImpl = vi.fn(async () => ({
+      blobs: [listedBlob(pathname, { etag: 'listed-etag' })],
+      hasMore: true,
+      cursor: 'next-page-cursor',
+    }));
+    const store = new VercelBlobSnapshotStore({
+      token: BLOB_TOKEN,
+      publicBaseUrl: 'https://store-id.public.blob.vercel-storage.com/',
+      listImpl: listImpl as never,
+    });
+
+    await expect(store.listRetentionObjects({
+      prefix: RELEASES_PREFIX,
+      cursor: 'current-page-cursor',
+      limit: PUBLIC_SNAPSHOT_RETENTION_LIST_LIMIT,
+    })).resolves.toEqual({
+      objects: [{
+        pathname,
+        size: 123,
+        uploadedAt: '2026-08-11T01:00:00.000Z',
+        etag: 'listed-etag',
+      }],
+      hasMore: true,
+      cursor: 'next-page-cursor',
+    });
+    expect(listImpl).toHaveBeenCalledWith(expect.objectContaining({
+      token: BLOB_TOKEN,
+      prefix: RELEASES_PREFIX,
+      cursor: 'current-page-cursor',
+      limit: 1_000,
+      mode: 'expanded',
+      abortSignal: expect.any(AbortSignal),
+    }));
+
+    await expect(store.listRetentionObjects({ prefix: 'public-transactions/v1/releases/', limit: 1 }))
+      .rejects.toThrow('only the public-transactions/v2 releases prefix');
+    await expect(store.listRetentionObjects({ prefix: RELEASES_PREFIX, limit: 0 }))
+      .rejects.toThrow('list limit is invalid');
+    await expect(store.listRetentionObjects({ prefix: RELEASES_PREFIX, limit: 1_001 }))
+      .rejects.toThrow('list limit is invalid');
+    await expect(store.listRetentionObjects({ prefix: RELEASES_PREFIX, limit: 1, cursor: '  ' }))
+      .rejects.toThrow('list cursor is invalid');
+    expect(listImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed on invalid pagination and listed objects outside the pinned Blob origin/path', async () => {
+    const listImpl = vi.fn()
+      .mockResolvedValueOnce({ blobs: [], hasMore: true })
+      .mockResolvedValueOnce({
+        blobs: [listedBlob(`${RELEASE_PREFIX}shards/00.json.gz`, {
+          url: `https://other-store.public.blob.vercel-storage.com/${RELEASE_PREFIX}shards/00.json.gz`,
+        })],
+        hasMore: false,
+      })
+      .mockResolvedValueOnce({
+        blobs: [listedBlob(`${RELEASE_PREFIX}shards/00.json.gz`, {
+          url: `https://store-id.public.blob.vercel-storage.com/${RELEASE_PREFIX}shards/01.json.gz`,
+        })],
+        hasMore: false,
+      })
+      .mockResolvedValueOnce({
+        blobs: [listedBlob(`public-transactions/v1/releases/${RELEASE_ID}/manifest.json`)],
+        hasMore: false,
+      });
+    const store = new VercelBlobSnapshotStore({
+      token: BLOB_TOKEN,
+      publicBaseUrl: 'https://store-id.public.blob.vercel-storage.com/',
+      listImpl: listImpl as never,
+    });
+    const input = { prefix: RELEASES_PREFIX, limit: 1 };
+
+    await expect(store.listRetentionObjects(input)).rejects.toThrow('invalid pagination metadata');
+    await expect(store.listRetentionObjects(input)).rejects.toThrow('public URL does not match');
+    await expect(store.listRetentionObjects(input)).rejects.toThrow('public URL does not match');
+    await expect(store.listRetentionObjects(input)).rejects.toThrow('escaped the v2 releases prefix');
+  });
+
+  it('reads only discovery or exact release-root manifests with a dedicated token and timeout', async () => {
+    const body = manifestBody('2026-08-11T01:02:03.000Z', RELEASE_ID);
+    const getImpl = vi.fn(async (pathname: string) => blobGetResult(pathname, body, 'manifest-etag'));
+    const store = new VercelBlobSnapshotStore({
+      token: BLOB_TOKEN,
+      publicBaseUrl: 'https://store-id.public.blob.vercel-storage.com/',
+      getImpl: getImpl as never,
+    });
+
+    await expect(store.readRetentionObject(RELEASE_MANIFEST_KEY, body.byteLength))
+      .resolves.toMatchObject({
+        pathname: RELEASE_MANIFEST_KEY,
+        body,
+        etag: 'manifest-etag',
+        size: body.byteLength,
+        uploadedAt: '2026-08-11T01:00:00.000Z',
+      });
+    expect(getImpl).toHaveBeenCalledWith(RELEASE_MANIFEST_KEY, expect.objectContaining({
+      access: 'public',
+      token: BLOB_TOKEN,
+      useCache: false,
+      abortSignal: expect.any(AbortSignal),
+    }));
+
+    const discoveryKey = `${PUBLIC_TRANSACTION_SNAPSHOT_PREFIX}/manifest.json`;
+    await expect(store.readRetentionObject(discoveryKey, body.byteLength)).resolves.toMatchObject({
+      pathname: discoveryKey,
+    });
+    for (const pathname of [
+      `${RELEASE_PREFIX}shards/00.json.gz`,
+      `${RELEASE_PREFIX}artifacts/example/manifest.json`,
+      `${RELEASES_PREFIX}not-a-release/manifest.json`,
+      `public-transactions/v1/releases/${RELEASE_ID}/manifest.json`,
+    ]) {
+      await expect(store.readRetentionObject(pathname, body.byteLength))
+        .rejects.toThrow('only discovery or release manifests');
+    }
+    await expect(store.readRetentionObject(RELEASE_MANIFEST_KEY, 0))
+      .rejects.toThrow('byte limit is invalid');
+    expect(getImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects a retention read whose Blob metadata escapes the pinned origin or pathname', async () => {
+    const body = Buffer.from('{}');
+    const getImpl = vi.fn()
+      .mockResolvedValueOnce({
+        ...blobGetResult(RELEASE_MANIFEST_KEY, body),
+        blob: {
+          ...blobGetResult(RELEASE_MANIFEST_KEY, body).blob,
+          url: `https://other-store.public.blob.vercel-storage.com/${RELEASE_MANIFEST_KEY}`,
+        },
+      })
+      .mockResolvedValueOnce({
+        ...blobGetResult(RELEASE_MANIFEST_KEY, body),
+        blob: {
+          ...blobGetResult(RELEASE_MANIFEST_KEY, body).blob,
+          pathname: `${RELEASE_PREFIX}shards/00.json.gz`,
+        },
+      });
+    const store = new VercelBlobSnapshotStore({
+      token: BLOB_TOKEN,
+      publicBaseUrl: 'https://store-id.public.blob.vercel-storage.com/',
+      getImpl: getImpl as never,
+    });
+
+    await expect(store.readRetentionObject(RELEASE_MANIFEST_KEY, body.byteLength))
+      .rejects.toThrow('public URL does not match');
+    await expect(store.readRetentionObject(RELEASE_MANIFEST_KEY, body.byteLength))
+      .rejects.toThrow('unexpected pathname');
+  });
+
+  it('heads the exact discovery pathname through the management API with token and timeout', async () => {
+    const discoveryKey = `${PUBLIC_TRANSACTION_SNAPSHOT_PREFIX}/manifest.json`;
+    const headImpl = vi.fn(async () => listedBlob(discoveryKey, {
+      etag: 'fresh-discovery-etag',
+      size: 4_096,
+      uploadedAt: new Date('2026-08-12T03:04:05.000Z'),
+    }));
+    const store = new VercelBlobSnapshotStore({
+      token: BLOB_TOKEN,
+      publicBaseUrl: 'https://store-id.public.blob.vercel-storage.com/',
+      headImpl: headImpl as never,
+    });
+
+    await expect(store.headRetentionDiscovery()).resolves.toEqual({
+      pathname: discoveryKey,
+      etag: 'fresh-discovery-etag',
+      size: 4_096,
+      uploadedAt: '2026-08-12T03:04:05.000Z',
+    });
+    expect(headImpl).toHaveBeenCalledWith(discoveryKey, {
+      token: BLOB_TOKEN,
+      abortSignal: expect.any(AbortSignal),
+    });
+    expect(headImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed when discovery HEAD metadata escapes the pinned origin or pathname', async () => {
+    const discoveryKey = `${PUBLIC_TRANSACTION_SNAPSHOT_PREFIX}/manifest.json`;
+    const headImpl = vi.fn()
+      .mockResolvedValueOnce(listedBlob(discoveryKey, {
+        url: `https://other-store.public.blob.vercel-storage.com/${discoveryKey}`,
+      }))
+      .mockResolvedValueOnce(listedBlob(`${RELEASE_PREFIX}shards/00.json.gz`))
+      .mockResolvedValueOnce(listedBlob(discoveryKey, { size: 0 }));
+    const store = new VercelBlobSnapshotStore({
+      token: BLOB_TOKEN,
+      publicBaseUrl: 'https://store-id.public.blob.vercel-storage.com/',
+      headImpl: headImpl as never,
+    });
+
+    await expect(store.headRetentionDiscovery()).rejects.toThrow('public URL does not match');
+    await expect(store.headRetentionDiscovery()).rejects.toThrow('unexpected pathname');
+    await expect(store.headRetentionDiscovery()).rejects.toThrow('invalid metadata');
+  });
+
+  it('sanitizes discovery management HEAD SDK failures', async () => {
+    const sdkSecret = 'HEAD_SDK_TOKEN_AND_URL_MUST_NOT_LEAK';
+    const store = new VercelBlobSnapshotStore({
+      token: BLOB_TOKEN,
+      publicBaseUrl: 'https://store-id.public.blob.vercel-storage.com/',
+      headImpl: vi.fn(async () => { throw new Error(sdkSecret); }) as never,
+    });
+
+    let error: unknown;
+    try {
+      await store.headRetentionDiscovery();
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe('Vercel Blob retention discovery head failed');
+    expect((error as Error).message).not.toContain(sdkSecret);
+    expect((error as Error).message).not.toContain(BLOB_TOKEN);
+  });
+
+  it('returns null only for an actual BlobNotFoundError from discovery management HEAD', async () => {
+    const sdkSecret = 'GENERIC_HEAD_FAILURE_MUST_NOT_BE_EMPTY_STORE';
+    const headImpl = vi.fn()
+      .mockRejectedValueOnce(new BlobNotFoundError())
+      .mockRejectedValueOnce(new Error(sdkSecret));
+    const store = new VercelBlobSnapshotStore({
+      token: BLOB_TOKEN,
+      publicBaseUrl: 'https://store-id.public.blob.vercel-storage.com/',
+      headImpl: headImpl as never,
+    });
+
+    await expect(store.headRetentionDiscovery()).resolves.toBeNull();
+    await expect(store.headRetentionDiscovery())
+      .rejects.toThrow('Vercel Blob retention discovery head failed');
+  });
+
+  it('batch-deletes only bounded unique non-manifest objects under v2 releases', async () => {
+    const deleteImpl = vi.fn(async (_pathname: string | string[], _options?: unknown) => undefined);
+    const store = new VercelBlobSnapshotStore({
+      token: BLOB_TOKEN,
+      publicBaseUrl: 'https://store-id.public.blob.vercel-storage.com/',
+      deleteImpl: deleteImpl as never,
+    });
+    const pathnames = [
+      `${RELEASE_PREFIX}shards/00.json.gz`,
+      `${RELEASE_PREFIX}artifacts/apartment-index.json.gz`,
+    ];
+
+    await store.deleteRetentionObjects(pathnames);
+    expect(deleteImpl).toHaveBeenCalledWith(pathnames, expect.objectContaining({
+      token: BLOB_TOKEN,
+      abortSignal: expect.any(AbortSignal),
+    }));
+
+    const tooMany = Array.from(
+      { length: PUBLIC_SNAPSHOT_RETENTION_MAX_DELETE_BATCH + 1 },
+      (_, index) => `${RELEASE_PREFIX}shards/${String(index).padStart(2, '0')}.json.gz`,
+    );
+    await expect(store.deleteRetentionObjects([])).rejects.toThrow('batch size is invalid');
+    await expect(store.deleteRetentionObjects(tooMany)).rejects.toThrow('batch size is invalid');
+    await expect(store.deleteRetentionObjects([pathnames[0], pathnames[0]]))
+      .rejects.toThrow('duplicate pathnames');
+    await expect(store.deleteRetentionObjects([`public-transactions/v1/releases/${RELEASE_ID}/shard.json.gz`]))
+      .rejects.toThrow('escaped the v2 releases prefix');
+    await expect(store.deleteRetentionObjects([`${PUBLIC_TRANSACTION_SNAPSHOT_PREFIX}/manifest.json`]))
+      .rejects.toThrow('escaped the v2 releases prefix');
+    await expect(store.deleteRetentionObjects([RELEASE_MANIFEST_KEY]))
+      .rejects.toThrow('require a conditional retention tombstone');
+    await expect(store.deleteRetentionObjects([`${RELEASES_PREFIX}not-a-release/manifest.json`]))
+      .rejects.toThrow('require a conditional retention tombstone');
+    for (const pathname of [
+      `${RELEASE_PREFIX}shards/24.json.gz`,
+      `${RELEASE_PREFIX}artifacts/future-index.json.gz`,
+      `${RELEASE_PREFIX}unknown.json.gz`,
+      `${RELEASES_PREFIX}not-a-release/shards/00.json.gz`,
+    ]) {
+      await expect(store.deleteRetentionObjects([pathname]))
+        .rejects.toThrow('not a known v2 release payload');
+    }
+    await expect(store.deleteRetentionObjects([
+      `${RELEASE_PREFIX}shards/00.json.gz`,
+      `${RELEASES_PREFIX}20260810T010203Z-bbbbbbbbbbbb/shards/01.json.gz`,
+    ])).rejects.toThrow('must contain exactly one release');
+    expect(deleteImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('conditionally tombstones only an exact release-root manifest with one pathname and ifMatch', async () => {
+    const deleteImpl = vi.fn(async (_pathname: string | string[], _options?: unknown) => undefined);
+    const store = new VercelBlobSnapshotStore({
+      token: BLOB_TOKEN,
+      publicBaseUrl: 'https://store-id.public.blob.vercel-storage.com/',
+      deleteImpl: deleteImpl as never,
+    });
+
+    await store.deleteRetentionManifest(RELEASE_MANIFEST_KEY, 'release-manifest-etag');
+    expect(deleteImpl).toHaveBeenCalledWith(RELEASE_MANIFEST_KEY, expect.objectContaining({
+      token: BLOB_TOKEN,
+      ifMatch: 'release-manifest-etag',
+      abortSignal: expect.any(AbortSignal),
+    }));
+    expect(Array.isArray(deleteImpl.mock.calls[0][0])).toBe(false);
+
+    for (const pathname of [
+      `${PUBLIC_TRANSACTION_SNAPSHOT_PREFIX}/manifest.json`,
+      `${RELEASE_PREFIX}artifacts/example/manifest.json`,
+      `${RELEASES_PREFIX}not-a-release/manifest.json`,
+      `public-transactions/v1/releases/${RELEASE_ID}/manifest.json`,
+    ]) {
+      await expect(store.deleteRetentionManifest(pathname, 'etag'))
+        .rejects.toThrow('manifest tombstone input is invalid');
+    }
+    await expect(store.deleteRetentionManifest(RELEASE_MANIFEST_KEY, '  '))
+      .rejects.toThrow('manifest tombstone input is invalid');
+    expect(deleteImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('sanitizes list, read, batch-delete, and manifest-tombstone SDK failures', async () => {
+    const sdkSecret = 'SDK_TOKEN_AND_URL_MUST_NOT_LEAK';
+    const failing = vi.fn(async () => { throw new Error(sdkSecret); });
+    const store = new VercelBlobSnapshotStore({
+      token: BLOB_TOKEN,
+      publicBaseUrl: 'https://store-id.public.blob.vercel-storage.com/',
+      listImpl: failing as never,
+      getImpl: failing as never,
+      deleteImpl: failing as never,
+    });
+
+    const cases = [
+      store.listRetentionObjects({ prefix: RELEASES_PREFIX, limit: 1 }),
+      store.readRetentionObject(RELEASE_MANIFEST_KEY, 1),
+      store.deleteRetentionObjects([`${RELEASE_PREFIX}shards/00.json.gz`]),
+      store.deleteRetentionManifest(RELEASE_MANIFEST_KEY, 'etag'),
+    ];
+    const messages: string[] = [];
+    for (const operation of cases) {
+      try {
+        await operation;
+      } catch (error) {
+        messages.push(error instanceof Error ? error.message : String(error));
+      }
+    }
+    expect(messages).toEqual([
+      'Vercel Blob retention list failed',
+      `Vercel Blob retention read failed for ${RELEASE_MANIFEST_KEY}`,
+      'Vercel Blob retention delete batch failed',
+      'Vercel Blob retention manifest tombstone failed',
+    ]);
+    expect(messages.join('\n')).not.toContain(sdkSecret);
+    expect(messages.join('\n')).not.toContain(BLOB_TOKEN);
   });
 
   it('publisher keeps manifest-last ordering through the Blob adapter', async () => {

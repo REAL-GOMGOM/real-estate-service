@@ -3,9 +3,15 @@ import { link, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promis
 import path from 'node:path';
 
 import {
+  BlobNotFoundError,
+  del as deleteVercelBlob,
   get as getVercelBlob,
+  head as headVercelBlob,
+  list as listVercelBlobs,
   put as putVercelBlob,
   type GetBlobResult,
+  type HeadBlobResult,
+  type ListBlobResult,
   type PutBlobResult,
 } from '@vercel/blob';
 
@@ -36,6 +42,47 @@ export interface PublicSnapshotObjectStore {
   putObject(input: PublicSnapshotPutInput): Promise<PublicSnapshotPutResult>;
 }
 
+export interface PublicSnapshotRetentionListedObject {
+  pathname: string;
+  size: number;
+  uploadedAt: string;
+  etag: string;
+}
+
+export interface PublicSnapshotRetentionListPage {
+  objects: PublicSnapshotRetentionListedObject[];
+  hasMore: boolean;
+  cursor: string | null;
+}
+
+export interface PublicSnapshotRetentionReadResult {
+  pathname: string;
+  body: Uint8Array;
+  etag: string;
+  size: number;
+  uploadedAt: string;
+}
+
+export interface PublicSnapshotRetentionDiscoveryHead {
+  pathname: string;
+  etag: string;
+  size: number;
+  uploadedAt: string;
+}
+
+/** Narrow management surface used only by the offline retention command. */
+export interface PublicSnapshotRetentionObjectStore {
+  listRetentionObjects(input: {
+    prefix: string;
+    cursor?: string;
+    limit: number;
+  }): Promise<PublicSnapshotRetentionListPage>;
+  readRetentionObject(pathname: string, maxBytes: number): Promise<PublicSnapshotRetentionReadResult | null>;
+  headRetentionDiscovery(): Promise<PublicSnapshotRetentionDiscoveryHead | null>;
+  deleteRetentionManifest(pathname: string, etag: string): Promise<void>;
+  deleteRetentionObjects(pathnames: readonly string[]): Promise<void>;
+}
+
 export class PublicSnapshotConfigurationError extends Error {
   constructor(message: string) {
     super(message);
@@ -58,10 +105,24 @@ function assertSafeObjectKey(key: string): void {
 }
 
 const PUBLIC_TRANSACTION_DISCOVERY_MANIFEST_KEY = `${PUBLIC_TRANSACTION_SNAPSHOT_PREFIX}/manifest.json`;
+const PUBLIC_TRANSACTION_RELEASES_PREFIX = `${PUBLIC_TRANSACTION_SNAPSHOT_PREFIX}/releases/`;
+const PUBLIC_TRANSACTION_RELEASE_MANIFEST_PATTERN = new RegExp(
+  `^${PUBLIC_TRANSACTION_RELEASES_PREFIX}(\\d{8}T\\d{6}Z-[a-f0-9]{12})/manifest\\.json$`,
+);
+const PUBLIC_TRANSACTION_RELEASE_PAYLOAD_PATTERN = new RegExp(
+  `^${PUBLIC_TRANSACTION_RELEASES_PREFIX}(\\d{8}T\\d{6}Z-[a-f0-9]{12})/(?:`
+    + 'shards/(?:0\\d|1\\d|2[0-3])\\.json\\.gz'
+    + '|artifacts/(?:apartment-index|summary/rolling30/(?:buy|jeonse|monthly|bunyang))\\.json\\.gz)$',
+);
 const MAX_DISCOVERY_MANIFEST_BYTES = 10 * 1024 * 1024;
+export const PUBLIC_SNAPSHOT_RETENTION_LIST_LIMIT = 1_000;
+export const PUBLIC_SNAPSHOT_RETENTION_MAX_DELETE_BATCH = 15;
 
 type VercelBlobPut = typeof putVercelBlob;
 type VercelBlobGet = typeof getVercelBlob;
+type VercelBlobHead = typeof headVercelBlob;
+type VercelBlobList = typeof listVercelBlobs;
+type VercelBlobDelete = typeof deleteVercelBlob;
 
 function cacheControlMaxAge(cacheControl: string): number {
   const match = cacheControl.match(/(?:^|,)\s*max-age=(\d+)\s*(?:,|$)/i);
@@ -172,6 +233,9 @@ export interface VercelBlobSnapshotStoreConfig {
   publicBaseUrl: string;
   putImpl?: VercelBlobPut;
   getImpl?: VercelBlobGet;
+  headImpl?: VercelBlobHead;
+  listImpl?: VercelBlobList;
+  deleteImpl?: VercelBlobDelete;
 }
 
 /**
@@ -182,11 +246,14 @@ export interface VercelBlobSnapshotStoreConfig {
  * its current ETag and publishedAt prevent concurrent or older producers from
  * moving discovery backwards.
  */
-export class VercelBlobSnapshotStore implements PublicSnapshotObjectStore {
+export class VercelBlobSnapshotStore implements PublicSnapshotObjectStore, PublicSnapshotRetentionObjectStore {
   private readonly token: string;
   private readonly publicBaseOrigin: URL;
   private readonly putImpl: VercelBlobPut;
   private readonly getImpl: VercelBlobGet;
+  private readonly headImpl: VercelBlobHead;
+  private readonly listImpl: VercelBlobList;
+  private readonly deleteImpl: VercelBlobDelete;
 
   constructor(config: VercelBlobSnapshotStoreConfig) {
     const token = config.token.trim();
@@ -198,6 +265,9 @@ export class VercelBlobSnapshotStore implements PublicSnapshotObjectStore {
     this.token = token;
     this.putImpl = config.putImpl ?? putVercelBlob;
     this.getImpl = config.getImpl ?? getVercelBlob;
+    this.headImpl = config.headImpl ?? headVercelBlob;
+    this.listImpl = config.listImpl ?? listVercelBlobs;
+    this.deleteImpl = config.deleteImpl ?? deleteVercelBlob;
   }
 
   get publicBaseUrl(): string {
@@ -214,7 +284,7 @@ export class VercelBlobSnapshotStore implements PublicSnapshotObjectStore {
   private async readExistingBlob(
     key: string,
     maxBytes: number,
-    operation: 'manifest preflight' | 'immutable recovery',
+    operation: 'manifest preflight' | 'immutable recovery' | 'retention read',
   ): Promise<{ result: GetBlobResult & { statusCode: 200 }; body: Buffer } | null> {
     let result: GetBlobResult | null;
     try {
@@ -333,6 +403,177 @@ export class VercelBlobSnapshotStore implements PublicSnapshotObjectStore {
       etag: result.etag || null,
       byteLength: body.byteLength,
     };
+  }
+
+  async listRetentionObjects(input: {
+    prefix: string;
+    cursor?: string;
+    limit: number;
+  }): Promise<PublicSnapshotRetentionListPage> {
+    if (input.prefix !== PUBLIC_TRANSACTION_RELEASES_PREFIX) {
+      throw new PublicSnapshotConfigurationError('Retention may list only the public-transactions/v2 releases prefix');
+    }
+    if (!Number.isSafeInteger(input.limit)
+      || input.limit < 1
+      || input.limit > PUBLIC_SNAPSHOT_RETENTION_LIST_LIMIT) {
+      throw new PublicSnapshotConfigurationError('Retention list limit is invalid');
+    }
+    if (input.cursor !== undefined && !input.cursor.trim()) {
+      throw new PublicSnapshotConfigurationError('Retention list cursor is invalid');
+    }
+
+    let result: ListBlobResult;
+    try {
+      result = await this.listImpl({
+        token: this.token,
+        prefix: input.prefix,
+        limit: input.limit,
+        mode: 'expanded',
+        ...(input.cursor ? { cursor: input.cursor } : {}),
+        abortSignal: AbortSignal.timeout(30_000),
+      });
+    } catch {
+      throw new Error('Vercel Blob retention list failed');
+    }
+    if (!result || !Array.isArray(result.blobs) || typeof result.hasMore !== 'boolean') {
+      throw new Error('Vercel Blob retention list returned invalid metadata');
+    }
+    if (result.hasMore && (typeof result.cursor !== 'string' || !result.cursor.trim())) {
+      throw new Error('Vercel Blob retention list returned invalid pagination metadata');
+    }
+
+    const objects = result.blobs.map((blob) => {
+      assertSafeObjectKey(blob.pathname);
+      if (!blob.pathname.startsWith(PUBLIC_TRANSACTION_RELEASES_PREFIX)) {
+        throw new Error('Vercel Blob retention list escaped the v2 releases prefix');
+      }
+      this.pinAndValidateResult(blob, blob.pathname);
+      if (!Number.isSafeInteger(blob.size) || blob.size < 0
+        || !(blob.uploadedAt instanceof Date)
+        || !Number.isFinite(blob.uploadedAt.getTime())
+        || typeof blob.etag !== 'string'
+        || !blob.etag.trim()) {
+        throw new Error('Vercel Blob retention list returned invalid object metadata');
+      }
+      return {
+        pathname: blob.pathname,
+        size: blob.size,
+        uploadedAt: blob.uploadedAt.toISOString(),
+        etag: blob.etag,
+      };
+    });
+    return {
+      objects,
+      hasMore: result.hasMore,
+      cursor: result.hasMore ? result.cursor! : null,
+    };
+  }
+
+  async readRetentionObject(
+    pathname: string,
+    maxBytes: number,
+  ): Promise<PublicSnapshotRetentionReadResult | null> {
+    assertSafeObjectKey(pathname);
+    if (pathname !== PUBLIC_TRANSACTION_DISCOVERY_MANIFEST_KEY
+      && !PUBLIC_TRANSACTION_RELEASE_MANIFEST_PATTERN.test(pathname)) {
+      throw new PublicSnapshotConfigurationError('Retention may read only discovery or release manifests');
+    }
+    if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > MAX_DISCOVERY_MANIFEST_BYTES) {
+      throw new PublicSnapshotConfigurationError('Retention read byte limit is invalid');
+    }
+    const existing = await this.readExistingBlob(pathname, maxBytes, 'retention read');
+    if (!existing) return null;
+    return {
+      pathname: existing.result.blob.pathname,
+      body: existing.body,
+      etag: existing.result.blob.etag,
+      size: existing.result.blob.size,
+      uploadedAt: existing.result.blob.uploadedAt.toISOString(),
+    };
+  }
+
+  async headRetentionDiscovery(): Promise<PublicSnapshotRetentionDiscoveryHead | null> {
+    let result: HeadBlobResult;
+    try {
+      result = await this.headImpl(PUBLIC_TRANSACTION_DISCOVERY_MANIFEST_KEY, {
+        token: this.token,
+        abortSignal: AbortSignal.timeout(30_000),
+      });
+    } catch (error) {
+      if (error instanceof BlobNotFoundError) return null;
+      // Management HEAD is the freshness guard for the mutable discovery
+      // object. Do not surface SDK details that can contain store identifiers.
+      throw new Error('Vercel Blob retention discovery head failed');
+    }
+    this.pinAndValidateResult(result, PUBLIC_TRANSACTION_DISCOVERY_MANIFEST_KEY);
+    if (!Number.isSafeInteger(result.size) || result.size < 1
+      || result.size > MAX_DISCOVERY_MANIFEST_BYTES
+      || !(result.uploadedAt instanceof Date)
+      || !Number.isFinite(result.uploadedAt.getTime())
+      || typeof result.etag !== 'string'
+      || !result.etag.trim()) {
+      throw new Error('Vercel Blob retention discovery head returned invalid metadata');
+    }
+    return {
+      pathname: result.pathname,
+      etag: result.etag,
+      size: result.size,
+      uploadedAt: result.uploadedAt.toISOString(),
+    };
+  }
+
+  async deleteRetentionObjects(pathnames: readonly string[]): Promise<void> {
+    if (pathnames.length < 1 || pathnames.length > PUBLIC_SNAPSHOT_RETENTION_MAX_DELETE_BATCH) {
+      throw new PublicSnapshotConfigurationError('Retention delete batch size is invalid');
+    }
+    if (new Set(pathnames).size !== pathnames.length) {
+      throw new PublicSnapshotConfigurationError('Retention delete batch contains duplicate pathnames');
+    }
+    let batchReleaseId: string | null = null;
+    for (const pathname of pathnames) {
+      assertSafeObjectKey(pathname);
+      if (!pathname.startsWith(PUBLIC_TRANSACTION_RELEASES_PREFIX)) {
+        throw new PublicSnapshotConfigurationError('Retention delete escaped the v2 releases prefix');
+      }
+      if (pathname.endsWith('/manifest.json')) {
+        throw new PublicSnapshotConfigurationError('Release manifests require a conditional retention tombstone');
+      }
+      const payloadMatch = pathname.match(PUBLIC_TRANSACTION_RELEASE_PAYLOAD_PATTERN);
+      if (!payloadMatch) {
+        throw new PublicSnapshotConfigurationError('Retention delete pathname is not a known v2 release payload');
+      }
+      if (batchReleaseId !== null && payloadMatch[1] !== batchReleaseId) {
+        throw new PublicSnapshotConfigurationError('Retention delete batch must contain exactly one release');
+      }
+      batchReleaseId = payloadMatch[1];
+    }
+    try {
+      await this.deleteImpl([...pathnames], {
+        token: this.token,
+        abortSignal: AbortSignal.timeout(30_000),
+      });
+    } catch {
+      // SDK failures can include URLs or token-derived identifiers. Keep the
+      // message deliberately free of the original error and object pathnames.
+      throw new Error('Vercel Blob retention delete batch failed');
+    }
+  }
+
+  async deleteRetentionManifest(pathname: string, etag: string): Promise<void> {
+    assertSafeObjectKey(pathname);
+    if (!PUBLIC_TRANSACTION_RELEASE_MANIFEST_PATTERN.test(pathname)
+      || !etag.trim()) {
+      throw new PublicSnapshotConfigurationError('Retention manifest tombstone input is invalid');
+    }
+    try {
+      await this.deleteImpl(pathname, {
+        token: this.token,
+        ifMatch: etag,
+        abortSignal: AbortSignal.timeout(30_000),
+      });
+    } catch {
+      throw new Error('Vercel Blob retention manifest tombstone failed');
+    }
   }
 }
 
@@ -558,6 +799,35 @@ export interface SnapshotStoreSelection {
   mode: 'blob' | 'r2' | 'local-dry-run';
   store: PublicSnapshotObjectStore;
   dryRunDirectory: string | null;
+}
+
+/**
+ * Creates the management-only store used by the offline retention command.
+ *
+ * Retention is destructive, so unlike the publisher factory this function has
+ * no local or legacy-R2 fallback. It also never reads the generic
+ * BLOB_READ_WRITE_TOKEN used by the blog image uploader.
+ */
+export function createPublicSnapshotRetentionStoreFromEnv(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+  options: Omit<Partial<VercelBlobSnapshotStoreConfig>, 'token' | 'publicBaseUrl'> = {},
+): PublicSnapshotRetentionObjectStore {
+  if (env.NAEZIP_SNAPSHOT_STORE?.trim().toLowerCase() !== 'blob') {
+    throw new PublicSnapshotConfigurationError(
+      'Retention requires explicit NAEZIP_SNAPSHOT_STORE=blob',
+    );
+  }
+  const token = env.NAEZIP_SNAPSHOT_BLOB_READ_WRITE_TOKEN?.trim();
+  if (!token) {
+    throw new PublicSnapshotConfigurationError(
+      'NAEZIP_SNAPSHOT_BLOB_READ_WRITE_TOKEN is required for retention',
+    );
+  }
+  return new VercelBlobSnapshotStore({
+    ...options,
+    token,
+    publicBaseUrl: env.NEXT_PUBLIC_TRANSACTION_SNAPSHOT_BASE_URL ?? '',
+  });
 }
 
 export function createPublicSnapshotStoreFromEnv(

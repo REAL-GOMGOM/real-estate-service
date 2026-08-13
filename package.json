@@ -7,6 +7,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
+    "snapshot:retention": "node --import tsx scripts/retain-public-transactions.ts",
     "generate:insights": "tsx scripts/generate-location-insights.ts",
     "extract:csv": "tsx scripts/extract-csv-from-xlsx.ts",
     "db:generate": "drizzle-kit generate",

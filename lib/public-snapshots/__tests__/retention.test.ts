@@ -1,0 +1,654 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import {
+  PUBLIC_TRANSACTION_DISTRICT_COUNT,
+  PUBLIC_TRANSACTION_SHARD_COUNT,
+  PUBLIC_TRANSACTION_SNAPSHOT_PREFIX,
+} from '../contract';
+import type {
+  PublicSnapshotRetentionDiscoveryHead,
+  PublicSnapshotRetentionListedObject,
+  PublicSnapshotRetentionObjectStore,
+  PublicSnapshotRetentionReadResult,
+} from '../object-store';
+import {
+  PUBLIC_SNAPSHOT_RETENTION_DEFAULT_KEEP_COUNT,
+  PUBLIC_SNAPSHOT_RETENTION_DEFAULT_MAX_OBJECTS,
+  PUBLIC_SNAPSHOT_RETENTION_DEFAULT_MAX_PAGES,
+  PUBLIC_SNAPSHOT_RETENTION_PLAN_SCHEMA,
+  PublicSnapshotRetentionExecutionError,
+  collectAndPlanPublicSnapshotRetention,
+  executePublicSnapshotRetention,
+  type PublicSnapshotRetentionPlan,
+} from '../retention';
+
+const RELEASES_PREFIX = `${PUBLIC_TRANSACTION_SNAPSHOT_PREFIX}/releases/`;
+const DISCOVERY_PATHNAME = `${PUBLIC_TRANSACTION_SNAPSHOT_PREFIX}/manifest.json`;
+const NOW = new Date('2026-08-13T00:00:00.000Z');
+const OLD_UPLOAD = '2026-01-01T00:00:00.000Z';
+const ARTIFACT_NAMES = [
+  'apartment-index',
+  'summary/rolling30/buy',
+  'summary/rolling30/bunyang',
+  'summary/rolling30/jeonse',
+  'summary/rolling30/monthly',
+] as const;
+
+interface ReleaseFixture {
+  releaseId: string;
+  publishedAt: string;
+  body: Buffer;
+  objects: PublicSnapshotRetentionListedObject[];
+  read: PublicSnapshotRetentionReadResult;
+}
+
+function makeRelease(
+  releaseId: string,
+  publishedAt: string,
+  uploadedAt = OLD_UPLOAD,
+): ReleaseFixture {
+  const districts = Array.from({ length: PUBLIC_TRANSACTION_DISTRICT_COUNT }, (_, index) => ({
+    lawdCd: String(10_000 + index),
+    district: `테스트구${index}`,
+    period: { from: '2026-01-01', through: '2026-01-31' },
+    counts: { total: 0, sale: 0, rent: 0, presale: 0 },
+    latestDealDate: null,
+    shardId: String(index % PUBLIC_TRANSACTION_SHARD_COUNT).padStart(2, '0'),
+  }));
+  const shards = Array.from({ length: PUBLIC_TRANSACTION_SHARD_COUNT }, (_, index) => {
+    const shardId = String(index).padStart(2, '0');
+    return {
+      shardId,
+      districtCount: districts.filter((district) => district.shardId === shardId).length,
+      recordCount: 0,
+      shard: {
+        key: `${RELEASES_PREFIX}${releaseId}/shards/${shardId}.json.gz`,
+        schema: 'naezip.public-transactions.shard.v2',
+        contentType: 'application/json',
+        contentEncoding: 'gzip',
+        sha256: 'a'.repeat(64),
+        payloadSha256: 'b'.repeat(64),
+        byteLength: 100 + index,
+        payloadByteLength: 200 + index,
+      },
+    };
+  });
+  const namedArtifacts = ARTIFACT_NAMES.map((name, index) => ({
+    name,
+    artifact: {
+      key: `${RELEASES_PREFIX}${releaseId}/artifacts/${name}.json.gz`,
+      schema: 'naezip.test-artifact.v1',
+      itemCount: 0,
+      contentType: 'application/json',
+      contentEncoding: 'gzip',
+      sha256: 'c'.repeat(64),
+      payloadSha256: 'd'.repeat(64),
+      byteLength: 300 + index,
+      payloadByteLength: 400 + index,
+    },
+  }));
+  const body = Buffer.from(JSON.stringify({
+    schema: 'naezip.public-transactions.manifest.v2',
+    releaseId,
+    publishedAt,
+    source: {
+      provider: 'molit-open-data',
+      format: 'normalized-public-records',
+      containsPersonalData: false,
+    },
+    totals: { total: 0, sale: 0, rent: 0, presale: 0 },
+    shards,
+    districts,
+    namedArtifacts,
+  }));
+  const manifestPathname = `${RELEASES_PREFIX}${releaseId}/manifest.json`;
+  const objects: PublicSnapshotRetentionListedObject[] = [
+    ...shards.map(({ shard }, index) => ({
+      pathname: shard.key,
+      size: shard.byteLength,
+      uploadedAt,
+      etag: `shard-${releaseId}-${index}`,
+    })),
+    ...namedArtifacts.map(({ artifact }, index) => ({
+      pathname: artifact.key,
+      size: artifact.byteLength,
+      uploadedAt,
+      etag: `artifact-${releaseId}-${index}`,
+    })),
+    {
+      pathname: manifestPathname,
+      size: body.byteLength,
+      uploadedAt,
+      etag: `manifest-${releaseId}`,
+    },
+  ].sort((left, right) => left.pathname.localeCompare(right.pathname));
+  return {
+    releaseId,
+    publishedAt,
+    body,
+    objects,
+    read: {
+      pathname: manifestPathname,
+      body,
+      etag: `manifest-${releaseId}`,
+      size: body.byteLength,
+      uploadedAt,
+    },
+  };
+}
+
+function makeOrphan(
+  releaseId: string,
+  uploadedAt = OLD_UPLOAD,
+  count = 3,
+): PublicSnapshotRetentionListedObject[] {
+  return Array.from({ length: count }, (_, index) => ({
+    pathname: `${RELEASES_PREFIX}${releaseId}/shards/${String(index).padStart(2, '0')}.json.gz`,
+    size: 50 + index,
+    uploadedAt,
+    etag: `orphan-${releaseId}-${index}`,
+  }));
+}
+
+function createStore(input: {
+  releases?: ReleaseFixture[];
+  current?: ReleaseFixture | null;
+  extraObjects?: PublicSnapshotRetentionListedObject[];
+}) {
+  const releases = input.releases ?? [];
+  const objects = [
+    ...releases.flatMap(({ objects: releaseObjects }) => releaseObjects),
+    ...(input.extraObjects ?? []),
+  ].sort((left, right) => left.pathname.localeCompare(right.pathname));
+  const reads = new Map(releases.map((release) => [release.read.pathname, release.read]));
+  const current = input.current ?? null;
+  const discoveryEtag = current ? `discovery-${current.releaseId}` : null;
+  const discoveryHead: PublicSnapshotRetentionDiscoveryHead | null = current ? {
+    pathname: DISCOVERY_PATHNAME,
+    etag: discoveryEtag!,
+    size: current.body.byteLength,
+    uploadedAt: current.read.uploadedAt,
+  } : null;
+  if (current) {
+    reads.set(DISCOVERY_PATHNAME, {
+      pathname: DISCOVERY_PATHNAME,
+      body: current.body,
+      etag: discoveryEtag!,
+      size: current.body.byteLength,
+      uploadedAt: current.read.uploadedAt,
+    });
+  }
+  const listRetentionObjects = vi.fn(async ({ cursor, limit }: {
+    prefix: string;
+    cursor?: string;
+    limit: number;
+  }) => {
+    const offset = cursor ? Number(cursor) : 0;
+    const pageObjects = objects.slice(offset, offset + limit);
+    const nextOffset = offset + pageObjects.length;
+    return {
+      objects: pageObjects,
+      hasMore: nextOffset < objects.length,
+      cursor: nextOffset < objects.length ? String(nextOffset) : null,
+    };
+  });
+  const readRetentionObject = vi.fn(async (pathname: string) => reads.get(pathname) ?? null);
+  const headRetentionDiscovery = vi.fn(async () => discoveryHead);
+  const deleteRetentionManifest = vi.fn(async (_pathname: string, _etag: string) => undefined);
+  const deleteRetentionObjects = vi.fn(async (_pathnames: readonly string[]) => undefined);
+  const store: PublicSnapshotRetentionObjectStore = {
+    listRetentionObjects,
+    readRetentionObject,
+    headRetentionDiscovery,
+    deleteRetentionManifest,
+    deleteRetentionObjects,
+  };
+  return {
+    store,
+    objects,
+    discoveryHead,
+    listRetentionObjects,
+    readRetentionObject,
+    headRetentionDiscovery,
+    deleteRetentionManifest,
+    deleteRetentionObjects,
+  };
+}
+
+function releaseId(timestamp: string, digestCharacter: string): string {
+  return `${timestamp}-${digestCharacter.repeat(12)}`;
+}
+
+describe('public snapshot retention planner', () => {
+  it('uses the intended production safety defaults', () => {
+    expect(PUBLIC_SNAPSHOT_RETENTION_DEFAULT_KEEP_COUNT).toBe(30);
+    expect(PUBLIC_SNAPSHOT_RETENTION_DEFAULT_MAX_PAGES).toBe(20);
+    expect(PUBLIC_SNAPSHOT_RETENTION_DEFAULT_MAX_OBJECTS).toBe(10_000);
+  });
+
+  it('permits a first seed only when both discovery and release inventory are empty', async () => {
+    const fixture = createStore({ current: null });
+    const plan = await collectAndPlanPublicSnapshotRetention(fixture.store, { now: NOW });
+
+    expect(plan).toMatchObject({
+      schema: PUBLIC_SNAPSHOT_RETENTION_PLAN_SCHEMA,
+      currentReleaseId: null,
+      currentDiscoveryEtag: null,
+      inventoryObjectCount: 0,
+      deleteCandidates: [],
+    });
+    expect(fixture.readRetentionObject).not.toHaveBeenCalled();
+    expect(fixture.deleteRetentionObjects).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when discovery is missing but inventory is not empty', async () => {
+    const orphan = makeOrphan(releaseId('20260101T000000Z', 'a'));
+    const fixture = createStore({ current: null, extraObjects: orphan });
+
+    await expect(collectAndPlanPublicSnapshotRetention(fixture.store, { now: NOW }))
+      .rejects.toThrow('Discovery is absent');
+    expect(fixture.deleteRetentionObjects).not.toHaveBeenCalled();
+  });
+
+  it('protects current, rollback, count-window, and age-window releases and selects only fully old releases', async () => {
+    const current = makeRelease(
+      releaseId('20260812T000000Z', 'f'),
+      '2026-08-12T00:00:00.000Z',
+      '2026-08-12T00:01:00.000Z',
+    );
+    const rollback = makeRelease(
+      releaseId('20260501T000000Z', 'e'),
+      '2026-05-01T00:00:00.000Z',
+    );
+    const old = makeRelease(
+      releaseId('20260101T000000Z', 'd'),
+      '2026-01-01T00:00:00.000Z',
+    );
+    const fixture = createStore({ releases: [old, current, rollback], current });
+    const plan = await collectAndPlanPublicSnapshotRetention(fixture.store, {
+      now: NOW,
+      keepCompleteReleaseCount: 2,
+    });
+
+    expect(plan.currentReleaseId).toBe(current.releaseId);
+    expect(plan.protectedReleaseIds).toEqual(expect.arrayContaining([current.releaseId, rollback.releaseId]));
+    expect(plan.deleteCandidates).toHaveLength(1);
+    expect(plan.deleteCandidates[0]).toMatchObject({
+      releaseId: old.releaseId,
+      kind: 'complete-release',
+      objectCount: 30,
+    });
+    expect(plan.deleteCandidates[0].payloadPathnames).toHaveLength(29);
+  });
+
+  it('does not delete an old release when even one listed object was uploaded inside the retention window', async () => {
+    const current = makeRelease(
+      releaseId('20260812T000000Z', 'f'),
+      '2026-08-12T00:00:00.000Z',
+      '2026-08-12T00:01:00.000Z',
+    );
+    const rollback = makeRelease(
+      releaseId('20260401T000000Z', 'e'),
+      '2026-04-01T00:00:00.000Z',
+    );
+    const old = makeRelease(
+      releaseId('20260101T000000Z', 'd'),
+      '2026-01-01T00:00:00.000Z',
+    );
+    old.objects[0].uploadedAt = '2026-08-10T00:00:00.000Z';
+    const fixture = createStore({ releases: [old, current, rollback], current });
+
+    const plan = await collectAndPlanPublicSnapshotRetention(fixture.store, {
+      now: NOW,
+      keepCompleteReleaseCount: 2,
+    });
+    expect(plan.deleteCandidates).toEqual([]);
+  });
+
+  it('chooses rollback from releases strictly older than current when discovery was rolled back', async () => {
+    const newer = makeRelease(
+      releaseId('20260812T000000Z', 'f'),
+      '2026-08-12T00:00:00.000Z',
+      '2026-08-12T00:01:00.000Z',
+    );
+    const current = makeRelease(
+      releaseId('20260601T000000Z', 'e'),
+      '2026-06-01T00:00:00.000Z',
+    );
+    const previous = makeRelease(
+      releaseId('20260401T000000Z', 'd'),
+      '2026-04-01T00:00:00.000Z',
+    );
+    const oldest = makeRelease(
+      releaseId('20260101T000000Z', 'c'),
+      '2026-01-01T00:00:00.000Z',
+    );
+    const fixture = createStore({ releases: [oldest, current, newer, previous], current });
+
+    const plan = await collectAndPlanPublicSnapshotRetention(fixture.store, {
+      now: NOW,
+      keepCompleteReleaseCount: 1,
+    });
+    expect(plan.protectedReleaseIds).toEqual(expect.arrayContaining([
+      newer.releaseId,
+      current.releaseId,
+      previous.releaseId,
+    ]));
+    expect(plan.deleteCandidates.map(({ releaseId: id }) => id)).toEqual([oldest.releaseId]);
+  });
+
+  it('selects only missing-manifest payload orphans older than 72 hours', async () => {
+    const current = makeRelease(
+      releaseId('20260812T000000Z', 'f'),
+      '2026-08-12T00:00:00.000Z',
+      '2026-08-12T00:01:00.000Z',
+    );
+    const oldId = releaseId('20260101T000000Z', 'a');
+    const recentId = releaseId('20260812T000000Z', 'b');
+    const fixture = createStore({
+      releases: [current],
+      current,
+      extraObjects: [
+        ...makeOrphan(oldId),
+        ...makeOrphan(recentId, '2026-08-12T23:00:00.000Z'),
+      ],
+    });
+
+    const plan = await collectAndPlanPublicSnapshotRetention(fixture.store, { now: NOW });
+    expect(plan.deleteCandidates).toEqual([
+      expect.objectContaining({ releaseId: oldId, kind: 'orphan-payloads', objectCount: 3 }),
+    ]);
+  });
+
+  it('rejects unknown paths, incomplete releases, and manifest size mismatches without deleting', async () => {
+    const current = makeRelease(
+      releaseId('20260812T000000Z', 'f'),
+      '2026-08-12T00:00:00.000Z',
+      '2026-08-12T00:01:00.000Z',
+    );
+    const unknown = createStore({
+      releases: [current],
+      current,
+      extraObjects: [{
+        pathname: `${RELEASES_PREFIX}${releaseId('20260101T000000Z', 'a')}/private.dump`,
+        size: 1,
+        uploadedAt: OLD_UPLOAD,
+        etag: 'bad',
+      }],
+    });
+    await expect(collectAndPlanPublicSnapshotRetention(unknown.store, { now: NOW }))
+      .rejects.toThrow('unknown or malformed');
+
+    const incompleteRelease = makeRelease(
+      releaseId('20260101T000000Z', 'd'),
+      '2026-01-01T00:00:00.000Z',
+    );
+    incompleteRelease.objects = incompleteRelease.objects.slice(1);
+    const incomplete = createStore({ releases: [current, incompleteRelease], current });
+    await expect(collectAndPlanPublicSnapshotRetention(incomplete.store, { now: NOW }))
+      .rejects.toThrow('incomplete');
+
+    const mismatchRelease = makeRelease(
+      releaseId('20260101T000000Z', 'c'),
+      '2026-01-01T00:00:00.000Z',
+    );
+    mismatchRelease.objects.find(({ pathname }) => pathname.endsWith('/shards/00.json.gz'))!.size += 1;
+    const mismatch = createStore({ releases: [current, mismatchRelease], current });
+    await expect(collectAndPlanPublicSnapshotRetention(mismatch.store, { now: NOW }))
+      .rejects.toThrow('payload size');
+
+    expect(unknown.deleteRetentionObjects).not.toHaveBeenCalled();
+    expect(incomplete.deleteRetentionObjects).not.toHaveBeenCalled();
+    expect(mismatch.deleteRetentionObjects).not.toHaveBeenCalled();
+  });
+
+  it('requires discovery HEAD and GET metadata plus immutable body identity to agree', async () => {
+    const current = makeRelease(
+      releaseId('20260812T000000Z', 'f'),
+      '2026-08-12T00:00:00.000Z',
+      '2026-08-12T00:01:00.000Z',
+    );
+    const metadataMismatch = createStore({ releases: [current], current });
+    metadataMismatch.readRetentionObject.mockImplementation(async (pathname: string) => {
+      if (pathname === DISCOVERY_PATHNAME) {
+        return { ...current.read, pathname, etag: 'stale-discovery' };
+      }
+      return current.read;
+    });
+    await expect(collectAndPlanPublicSnapshotRetention(metadataMismatch.store, { now: NOW }))
+      .rejects.toThrow('does not match the management inventory');
+
+    const bodyMismatch = createStore({ releases: [current], current });
+    bodyMismatch.readRetentionObject.mockImplementation(async (pathname: string) => {
+      if (pathname === DISCOVERY_PATHNAME) {
+        return {
+          pathname,
+          body: Buffer.from(current.body.toString().replace('테스트구0', '테스트동0')),
+          etag: bodyMismatch.discoveryHead!.etag,
+          size: current.body.byteLength,
+          uploadedAt: current.read.uploadedAt,
+        };
+      }
+      return current.read;
+    });
+    await expect(collectAndPlanPublicSnapshotRetention(bodyMismatch.store, { now: NOW }))
+      .rejects.toThrow('byte-identical');
+  });
+
+  it('fails bounded pagination on missing/repeated cursors, non-strict paths, and caps', async () => {
+    const current = makeRelease(
+      releaseId('20260812T000000Z', 'f'),
+      '2026-08-12T00:00:00.000Z',
+      '2026-08-12T00:01:00.000Z',
+    );
+    const missingCursor = createStore({ releases: [current], current });
+    missingCursor.listRetentionObjects.mockResolvedValue({
+      objects: [], hasMore: true, cursor: null,
+    });
+    await expect(collectAndPlanPublicSnapshotRetention(missingCursor.store, { now: NOW }))
+      .rejects.toThrow('missing or repeated cursor');
+
+    const repeatedCursor = createStore({ releases: [current], current });
+    repeatedCursor.listRetentionObjects.mockResolvedValue({
+      objects: [], hasMore: true, cursor: 'same',
+    });
+    await expect(collectAndPlanPublicSnapshotRetention(repeatedCursor.store, { now: NOW }))
+      .rejects.toThrow('missing or repeated cursor');
+
+    const nonStrict = createStore({ releases: [current], current });
+    nonStrict.listRetentionObjects.mockResolvedValue({
+      objects: [current.objects[0], current.objects[0]], hasMore: false, cursor: null,
+    });
+    await expect(collectAndPlanPublicSnapshotRetention(nonStrict.store, { now: NOW }))
+      .rejects.toThrow('strictly lexicographically ordered');
+
+    const cap = createStore({ releases: [current], current });
+    await expect(collectAndPlanPublicSnapshotRetention(cap.store, {
+      now: NOW,
+      listLimit: 1,
+      maxPages: 1,
+    })).rejects.toThrow('maximum page count');
+
+    const oversizedPage = createStore({ releases: [current], current });
+    oversizedPage.listRetentionObjects.mockResolvedValue({
+      objects: current.objects.slice(0, 2), hasMore: false, cursor: null,
+    });
+    await expect(collectAndPlanPublicSnapshotRetention(oversizedPage.store, {
+      now: NOW,
+      listLimit: 1,
+    })).rejects.toThrow('more objects than requested');
+
+    for (const fixture of [missingCursor, repeatedCursor, nonStrict, cap, oversizedPage]) {
+      expect(fixture.deleteRetentionObjects).not.toHaveBeenCalled();
+    }
+  });
+});
+
+describe('public snapshot retention executor', () => {
+  async function deletablePlan() {
+    const current = makeRelease(
+      releaseId('20260812T000000Z', 'f'),
+      '2026-08-12T00:00:00.000Z',
+      '2026-08-12T00:01:00.000Z',
+    );
+    const rollback = makeRelease(
+      releaseId('20260401T000000Z', 'e'),
+      '2026-04-01T00:00:00.000Z',
+    );
+    const old = makeRelease(
+      releaseId('20260101T000000Z', 'd'),
+      '2026-01-01T00:00:00.000Z',
+    );
+    const fixture = createStore({ releases: [old, rollback, current], current });
+    const plan = await collectAndPlanPublicSnapshotRetention(fixture.store, {
+      now: NOW,
+      keepCompleteReleaseCount: 2,
+    });
+    return { fixture, plan, old };
+  }
+
+  it('re-HEADs, conditionally tombstones, then rate-spaces payload batches', async () => {
+    const { fixture, plan, old } = await deletablePlan();
+    const sleep = vi.fn(async (_milliseconds: number) => undefined);
+    const result = await executePublicSnapshotRetention(fixture.store, plan, { sleep });
+
+    expect(fixture.headRetentionDiscovery).toHaveBeenCalledTimes(2); // plan + execution
+    expect(fixture.deleteRetentionManifest).toHaveBeenCalledWith(
+      `${RELEASES_PREFIX}${old.releaseId}/manifest.json`,
+      `manifest-${old.releaseId}`,
+    );
+    expect(fixture.deleteRetentionObjects.mock.calls.map(([batch]) => batch.length)).toEqual([10, 10, 9]);
+    expect(sleep).toHaveBeenCalledTimes(2);
+    expect(sleep).toHaveBeenNthCalledWith(1, 1_000);
+    expect(result).toMatchObject({
+      completedReleaseIds: [old.releaseId],
+      manifestTombstones: [`${RELEASES_PREFIX}${old.releaseId}/manifest.json`],
+    });
+    expect(result.payloadObjectsDeleted).toHaveLength(29);
+  });
+
+  it('aborts before mutation when discovery changed after planning', async () => {
+    const { fixture, plan } = await deletablePlan();
+    fixture.headRetentionDiscovery.mockResolvedValue({
+      ...fixture.discoveryHead!,
+      etag: 'changed',
+    });
+
+    await expect(executePublicSnapshotRetention(fixture.store, plan, {
+      sleep: async () => undefined,
+    })).rejects.toMatchObject({
+      name: 'PublicSnapshotRetentionExecutionError',
+      result: { completedReleaseIds: [], manifestTombstones: [] },
+    });
+    expect(fixture.deleteRetentionManifest).not.toHaveBeenCalled();
+    expect(fixture.deleteRetentionObjects).not.toHaveBeenCalled();
+  });
+
+  it('retries payload batches boundedly, reports a tombstoned partial release, and stops', async () => {
+    const { fixture, plan, old } = await deletablePlan();
+    fixture.deleteRetentionObjects.mockRejectedValue(new Error('sensitive SDK error'));
+    const sleep = vi.fn(async (_milliseconds: number) => undefined);
+
+    let failure: unknown;
+    try {
+      await executePublicSnapshotRetention(fixture.store, plan, { sleep });
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(PublicSnapshotRetentionExecutionError);
+    expect(failure).toMatchObject({
+      message: `Retention execution stopped while processing release ${old.releaseId}`,
+      result: {
+        manifestTombstones: [`${RELEASES_PREFIX}${old.releaseId}/manifest.json`],
+        payloadObjectsDeleted: [],
+        completedReleaseIds: [],
+      },
+    });
+    expect(fixture.deleteRetentionObjects).toHaveBeenCalledTimes(3);
+    expect(sleep.mock.calls.map(([milliseconds]) => milliseconds)).toEqual([1_000, 2_000]);
+  });
+
+  it('waits between releases before re-HEAD and the next tombstone', async () => {
+    const current = makeRelease(
+      releaseId('20260812T000000Z', 'f'),
+      '2026-08-12T00:00:00.000Z',
+      '2026-08-12T00:01:00.000Z',
+    );
+    const rollback = makeRelease(
+      releaseId('20260401T000000Z', 'e'),
+      '2026-04-01T00:00:00.000Z',
+    );
+    const oldOne = makeRelease(
+      releaseId('20260101T000000Z', 'c'),
+      '2026-01-01T00:00:00.000Z',
+    );
+    const oldTwo = makeRelease(
+      releaseId('20260201T000000Z', 'd'),
+      '2026-02-01T00:00:00.000Z',
+    );
+    const fixture = createStore({ releases: [current, rollback, oldOne, oldTwo], current });
+    const plan = await collectAndPlanPublicSnapshotRetention(fixture.store, {
+      now: NOW,
+      keepCompleteReleaseCount: 2,
+    });
+    const events: string[] = [];
+    fixture.headRetentionDiscovery.mockImplementation(async () => {
+      events.push('head');
+      return fixture.discoveryHead;
+    });
+    fixture.deleteRetentionManifest.mockImplementation(async (pathname: string) => {
+      events.push(`manifest:${pathname}`);
+    });
+    const sleep = vi.fn(async () => {
+      events.push('sleep');
+    });
+
+    await executePublicSnapshotRetention(fixture.store, plan, { sleep });
+    const secondManifestIndex = events.findIndex((event) => event.includes(oldTwo.releaseId));
+    expect(secondManifestIndex).toBeGreaterThan(0);
+    expect(events.slice(0, secondManifestIndex).at(-2)).toBe('sleep');
+    expect(events.slice(0, secondManifestIndex).at(-1)).toBe('head');
+    expect(sleep).toHaveBeenCalledTimes(5); // two intra-release waits each, plus one inter-release wait
+  });
+
+  it('rejects a runtime-tampered plan before any delete', async () => {
+    const { fixture, plan } = await deletablePlan();
+    const tampered: PublicSnapshotRetentionPlan = {
+      ...plan,
+      deleteCandidates: [{
+        ...plan.deleteCandidates[0],
+        payloadPathnames: ['/outside/private.dump'],
+      }],
+    };
+
+    await expect(executePublicSnapshotRetention(fixture.store, tampered, {
+      sleep: async () => undefined,
+    })).rejects.toThrow('unknown or malformed');
+    expect(fixture.deleteRetentionManifest).not.toHaveBeenCalled();
+    expect(fixture.deleteRetentionObjects).not.toHaveBeenCalled();
+  });
+
+  it('binds CLI-facing current fields and candidate counts to the discovery guard', async () => {
+    const { fixture, plan } = await deletablePlan();
+    const mismatchedCurrent: PublicSnapshotRetentionPlan = {
+      ...plan,
+      currentReleaseId: releaseId('20260101T000000Z', 'a'),
+    };
+    await expect(executePublicSnapshotRetention(fixture.store, mismatchedCurrent, {
+      sleep: async () => undefined,
+    })).rejects.toThrow('discovery guard');
+
+    const mismatchedCount: PublicSnapshotRetentionPlan = {
+      ...plan,
+      deleteCandidates: [{
+        ...plan.deleteCandidates[0],
+        objectCount: 1,
+      }],
+    };
+    await expect(executePublicSnapshotRetention(fixture.store, mismatchedCount, {
+      sleep: async () => undefined,
+    })).rejects.toThrow('manifest tombstone');
+    expect(fixture.deleteRetentionManifest).not.toHaveBeenCalled();
+    expect(fixture.deleteRetentionObjects).not.toHaveBeenCalled();
+  });
+});
