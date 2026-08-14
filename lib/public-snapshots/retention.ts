@@ -32,17 +32,53 @@ const RELEASE_SHARD_PATTERN = new RegExp(
 );
 const RELEASE_ARTIFACT_PATTERN = new RegExp(
   `^${RELEASES_PREFIX}${RELEASE_ID_SOURCE}/artifacts/(`
-    + 'apartment-index|summary/rolling30/(?:buy|jeonse|monthly|bunyang)'
+    + 'apartment-index|highlights/rolling30|market-live/rolling30'
+    + '|summary/rolling30/(?:buy|jeonse|monthly|bunyang)'
     + ')\\.json\\.gz$',
 );
 const RELEASE_ID_PATTERN = /^\d{8}T\d{6}Z-[a-f0-9]{12}$/;
-const EXPECTED_ARTIFACT_NAMES = new Set<string>([
+const LEGACY_ARTIFACT_NAMES = [
   'apartment-index',
   'summary/rolling30/buy',
   'summary/rolling30/bunyang',
   'summary/rolling30/jeonse',
   'summary/rolling30/monthly',
-]);
+] as const;
+const CURRENT_ARTIFACT_NAMES = [
+  'apartment-index',
+  'highlights/rolling30',
+  'market-live/rolling30',
+  'summary/rolling30/buy',
+  'summary/rolling30/bunyang',
+  'summary/rolling30/jeonse',
+  'summary/rolling30/monthly',
+] as const;
+const SUPPORTED_ARTIFACT_NAME_SETS: readonly (readonly string[])[] = [
+  LEGACY_ARTIFACT_NAMES,
+  CURRENT_ARTIFACT_NAMES,
+];
+
+function isExactSupportedArtifactSet(names: readonly string[]): boolean {
+  const actual = new Set(names);
+  return actual.size === names.length && SUPPORTED_ARTIFACT_NAME_SETS.some(
+    (expected) => actual.size === expected.length && expected.every((name) => actual.has(name)),
+  );
+}
+
+function hasExactCompletePayloadSet(releaseId: string, pathnames: readonly string[]): boolean {
+  const actual = new Set(pathnames);
+  if (actual.size !== pathnames.length) return false;
+  return SUPPORTED_ARTIFACT_NAME_SETS.some((artifactNames) => {
+    if (actual.size !== PUBLIC_TRANSACTION_SHARD_COUNT + artifactNames.length) return false;
+    for (let index = 0; index < PUBLIC_TRANSACTION_SHARD_COUNT; index += 1) {
+      const shardId = String(index).padStart(2, '0');
+      if (!actual.has(`${RELEASES_PREFIX}${releaseId}/shards/${shardId}.json.gz`)) return false;
+    }
+    return artifactNames.every(
+      (name) => actual.has(`${RELEASES_PREFIX}${releaseId}/artifacts/${name}.json.gz`),
+    );
+  });
+}
 
 export class PublicSnapshotRetentionError extends Error {
   constructor(message: string) {
@@ -260,9 +296,8 @@ function parseManifestBody(body: Uint8Array, label: string): PublicTransactionMa
   } catch {
     throw new PublicSnapshotRetentionError(`${label} is not a valid public transaction manifest`);
   }
-  const artifactNames = new Set(value.namedArtifacts.map(({ name }) => name));
-  if (artifactNames.size !== EXPECTED_ARTIFACT_NAMES.size
-    || [...artifactNames].some((name) => !EXPECTED_ARTIFACT_NAMES.has(name))) {
+  const artifactNames = value.namedArtifacts.map(({ name }) => name);
+  if (!isExactSupportedArtifactSet(artifactNames)) {
     throw new PublicSnapshotRetentionError(`${label} does not contain the exact serving artifact set`);
   }
   return value;
@@ -311,8 +346,9 @@ async function readCompleteRelease(
   for (const entry of manifest.namedArtifacts) {
     expectedPayloadSizes.set(entry.artifact.key, entry.artifact.byteLength);
   }
+  const expectedPayloadCount = PUBLIC_TRANSACTION_SHARD_COUNT + manifest.namedArtifacts.length;
   if (manifest.shards.length !== PUBLIC_TRANSACTION_SHARD_COUNT
-    || expectedPayloadSizes.size !== PUBLIC_TRANSACTION_SHARD_COUNT + EXPECTED_ARTIFACT_NAMES.size
+    || expectedPayloadSizes.size !== expectedPayloadCount
     || release.payloadObjects.length !== expectedPayloadSizes.size
     || release.objects.length !== expectedPayloadSizes.size + 1) {
     throw new PublicSnapshotRetentionError('Release inventory is incomplete or contains unreferenced payloads');
@@ -571,7 +607,7 @@ function assertExecutablePlan(plan: PublicSnapshotRetentionPlan): void {
         || !candidate.manifestEtag?.trim()
         || candidate.publishedAt === null
         || !Number.isFinite(Date.parse(candidate.publishedAt))
-        || candidate.payloadPathnames.length !== PUBLIC_TRANSACTION_SHARD_COUNT + EXPECTED_ARTIFACT_NAMES.size
+        || !hasExactCompletePayloadSet(candidate.releaseId, candidate.payloadPathnames)
         || candidate.objectCount !== candidate.payloadPathnames.length + 1) {
         throw new PublicSnapshotRetentionError('Retention execution manifest tombstone is invalid');
       }

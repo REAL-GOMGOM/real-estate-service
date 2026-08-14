@@ -3,9 +3,11 @@ import { pathToFileURL } from 'node:url';
 
 import { Pool } from 'pg';
 
+import type { MarketLiveAggRow } from '../lib/agg-queries';
 import { DISTRICT_CODE } from '../lib/district-codes';
 import { DISTRICT_GROUPS } from '../lib/district-groups';
 import { assertMacLocalDatabaseUrl } from '../lib/local-postgres-url';
+import { MARKET_LIVE_REGIONS, marketLiveWindows } from '../lib/market-live';
 import type { PublicTransactionRecord, PublicTransactionSnapshot } from '../lib/public-snapshots/contract';
 import { PUBLIC_TRANSACTION_SNAPSHOT_MONTHS } from '../lib/public-snapshots/coverage-policy';
 import { createPublicSnapshotStoreFromEnv } from '../lib/public-snapshots/object-store';
@@ -31,18 +33,33 @@ import {
 import {
   APARTMENT_INDEX_ARTIFACT_NAME,
   APARTMENT_INDEX_SCHEMA,
+  HIGHLIGHTS_ROLLING30_ARTIFACT_NAME,
+  MARKET_LIVE_ROLLING30_ARTIFACT_NAME,
   ROLLING30_SUMMARY_ARTIFACT_NAMES,
+  TRANSACTION_HIGHLIGHTS_SCHEMA,
+  TRANSACTION_MARKET_LIVE_SCHEMA,
   TRANSACTION_SUMMARY_SCHEMA,
   assertApartmentIndexData,
+  assertRolling30HighlightsData,
+  assertRolling30MarketLiveData,
   assertRolling30SummaryData,
   buildApartmentIndexArtifact,
+  buildRolling30HighlightsArtifact,
+  buildRolling30MarketLiveArtifact,
   buildRolling30SummaryArtifacts,
   type ApartmentIndexSourceRow,
+  type HighlightDeal,
+  type NewHighHighlightDeal,
   type RentDistrictAggregate,
   type Rolling30SummaryData,
   type SaleDistrictAggregate,
   type SummaryDealType,
+  type SurgeHighlightDeal,
 } from '../lib/public-snapshots/serving-artifacts';
+import {
+  findApartmentIdentity,
+  type ApartmentIdentity,
+} from '../lib/transaction-identity';
 
 export { assertMacLocalDatabaseUrl } from '../lib/local-postgres-url';
 
@@ -218,6 +235,123 @@ export const APARTMENT_INDEX_SELECT = `
    ORDER BY a.id ASC
 `;
 
+export const HIGHLIGHTS_PER_CATEGORY = 8;
+
+export const HIGHLIGHTS_NEW_HIGHS_SELECT = `
+  WITH latest AS (
+    SELECT DISTINCT ON (sigungu, umd_nm, apt_name, area_r)
+           sigungu, umd_nm, apt_name, area_r, floor, deal_amount, deal_date
+      FROM (
+        SELECT sigungu, umd_nm, apt_name, round(area_m2::numeric)::int AS area_r,
+               floor, deal_amount, deal_date
+          FROM transactions
+         WHERE deal_date >= $1 AND deal_date < $2
+           AND right(deal_date, 2) <> '00'
+           AND is_canceled = false
+      ) recent
+     ORDER BY sigungu, umd_nm, apt_name, area_r,
+              deal_date DESC, deal_amount DESC, floor DESC NULLS LAST
+  ), with_prior AS (
+    SELECT l.sigungu, l.umd_nm, l.apt_name, l.area_r, l.floor, l.deal_amount, l.deal_date,
+           max(t.deal_amount) AS prev_high
+      FROM latest l
+      JOIN transactions t
+        ON t.sigungu = l.sigungu
+       AND t.umd_nm = l.umd_nm
+       AND t.apt_name = l.apt_name
+       AND round(t.area_m2::numeric)::int = l.area_r
+       AND t.is_canceled = false
+       AND t.deal_date < l.deal_date
+       AND right(t.deal_date, 2) <> '00'
+     GROUP BY l.sigungu, l.umd_nm, l.apt_name, l.area_r, l.floor, l.deal_amount, l.deal_date
+  )
+  SELECT sigungu, umd_nm AS "umdNm", apt_name AS "aptName", area_r AS area, floor,
+         deal_amount AS price, deal_date AS "dealDate", prev_high AS "prevHigh"
+    FROM with_prior
+   WHERE deal_amount > prev_high
+   ORDER BY deal_amount DESC, sigungu, umd_nm, apt_name,
+            area_r, floor DESC NULLS LAST, deal_date DESC
+   LIMIT $3
+`;
+
+export const HIGHLIGHTS_SURGES_SELECT = `
+  WITH w AS (
+    SELECT sigungu, umd_nm, apt_name, round(area_m2::numeric)::int AS area_r,
+           floor, deal_amount, deal_date
+      FROM transactions
+     WHERE deal_date >= $1 AND deal_date < $2
+       AND right(deal_date, 2) <> '00'
+       AND is_canceled = false
+  ), ranked AS (
+    SELECT *, row_number() OVER (
+      PARTITION BY sigungu, umd_nm, apt_name, area_r
+      ORDER BY deal_date DESC, deal_amount DESC, floor DESC NULLS LAST
+    ) AS rn
+      FROM w
+  )
+  SELECT r1.sigungu, r1.umd_nm AS "umdNm", r1.apt_name AS "aptName", r1.area_r AS area,
+         r1.floor, r1.deal_amount AS price, r1.deal_date AS "dealDate",
+         r2.deal_amount AS "prevPrice"
+    FROM ranked r1
+    JOIN ranked r2
+      ON r2.sigungu = r1.sigungu
+     AND r2.umd_nm = r1.umd_nm
+     AND r2.apt_name = r1.apt_name
+     AND r2.area_r = r1.area_r
+   WHERE r1.rn = 1 AND r2.rn = 2
+     AND r2.deal_amount > 0 AND r1.deal_amount > r2.deal_amount
+   ORDER BY (r1.deal_amount - r2.deal_amount)::float8 / r2.deal_amount DESC,
+            r1.sigungu, r1.umd_nm, r1.apt_name, r1.area_r,
+            r1.floor DESC NULLS LAST, r1.deal_date DESC
+   LIMIT $3
+`;
+
+export const HIGHLIGHTS_PYEONG84_SELECT = `
+  WITH w AS (
+    SELECT sigungu, umd_nm, apt_name, round(area_m2::numeric)::int AS area_r,
+           floor, deal_amount, deal_date
+      FROM transactions
+     WHERE deal_date >= $1 AND deal_date < $2
+       AND right(deal_date, 2) <> '00'
+       AND is_canceled = false
+       AND round(area_m2::numeric)::int BETWEEN 80 AND 88
+  ), dedup AS (
+    SELECT DISTINCT ON (sigungu, umd_nm, apt_name)
+           sigungu, umd_nm, apt_name, area_r, floor, deal_amount, deal_date
+      FROM w
+     ORDER BY sigungu, umd_nm, apt_name,
+              deal_amount DESC, deal_date DESC, floor DESC NULLS LAST, area_r
+  )
+  SELECT sigungu, umd_nm AS "umdNm", apt_name AS "aptName", area_r AS area, floor,
+         deal_amount AS price, deal_date AS "dealDate"
+    FROM dedup
+   ORDER BY deal_amount DESC, sigungu, umd_nm, apt_name,
+            area_r, floor DESC NULLS LAST, deal_date DESC
+   LIMIT $3
+`;
+
+export const MARKET_LIVE_SELECT = `
+  WITH requested AS (
+    SELECT unnest($1::text[]) AS sigungu
+  ), w AS (
+    SELECT sigungu, deal_amount, deal_date
+      FROM transactions
+     WHERE sigungu = ANY($1::text[])
+       AND deal_date >= $2 AND deal_date < $4
+       AND right(deal_date, 2) <> '00'
+       AND area_m2 BETWEEN 80 AND 88
+       AND is_canceled = false
+  )
+  SELECT r.sigungu,
+         coalesce(sum(w.deal_amount) FILTER (WHERE w.deal_date >= $3), 0)::float8 AS "recentSum",
+         count(w.deal_amount) FILTER (WHERE w.deal_date >= $3)::int AS "recentCount",
+         coalesce(sum(w.deal_amount) FILTER (WHERE w.deal_date < $3), 0)::float8 AS "previousSum",
+         count(w.deal_amount) FILTER (WHERE w.deal_date < $3)::int AS "previousCount"
+    FROM requested r
+    LEFT JOIN w USING (sigungu)
+   GROUP BY r.sigungu
+`;
+
 interface QueryResult<Row> {
   rows: Row[];
 }
@@ -282,6 +416,26 @@ interface ApartmentDbRow extends Record<string, unknown> {
   lawdCd: unknown;
   totalHouseholds: unknown;
   score: unknown;
+}
+
+interface HighlightDbRow extends Record<string, unknown> {
+  sigungu: unknown;
+  umdNm: unknown;
+  aptName: unknown;
+  area: unknown;
+  floor: unknown;
+  price: unknown;
+  dealDate: unknown;
+  prevHigh?: unknown;
+  prevPrice?: unknown;
+}
+
+interface MarketLiveDbRow extends Record<string, unknown> {
+  sigungu: unknown;
+  recentSum: unknown;
+  recentCount: unknown;
+  previousSum: unknown;
+  previousCount: unknown;
 }
 
 function requiredString(value: unknown, field: string): string {
@@ -465,6 +619,83 @@ function apartmentIndexSource(row: ApartmentDbRow): ApartmentIndexSourceRow {
   };
 }
 
+function apartmentIdentitiesByLawdCd(
+  rows: readonly ApartmentIndexSourceRow[],
+): Map<string, ApartmentIdentity[]> {
+  const result = new Map<string, ApartmentIdentity[]>();
+  for (const row of rows) {
+    const identities = result.get(row.lawdCd) ?? [];
+    identities.push({ id: row.id, name: row.name, aliases: row.aliases, dong: row.dong });
+    result.set(row.lawdCd, identities);
+  }
+  return result;
+}
+
+function exactHighlightDate(value: unknown, field: string): string {
+  const date = normalizePublicSourceDealDate(value);
+  if (date.length !== 10) throw new Error(`${field} is not an exact calendar date`);
+  return date;
+}
+
+function highlightDeal(
+  row: HighlightDbRow,
+  label: string,
+  identitiesByLawdCd: ReadonlyMap<string, ApartmentIdentity[]>,
+): HighlightDeal {
+  const district = requiredString(row.sigungu, `${label}.sigungu`);
+  const dong = requiredString(row.umdNm, `${label}.umdNm`);
+  const apt = requiredString(row.aptName, `${label}.aptName`);
+  const area = integerValue(row.area, `${label}.area`);
+  if (area <= 0) throw new Error(`${label}.area is invalid`);
+  const identities = identitiesByLawdCd.get(DISTRICT_CODE[district]);
+  const masterId = identities
+    ? findApartmentIdentity({ aptName: apt, dong }, identities)?.id ?? null
+    : null;
+  return {
+    district,
+    dong,
+    apt,
+    area,
+    floor: nullableInteger(row.floor, `${label}.floor`) || 1,
+    price: integerValue(row.price, `${label}.price`),
+    date: exactHighlightDate(row.dealDate, `${label}.dealDate`),
+    masterId,
+  };
+}
+
+function newHighHighlightDeal(
+  row: HighlightDbRow,
+  identitiesByLawdCd: ReadonlyMap<string, ApartmentIdentity[]>,
+): NewHighHighlightDeal {
+  return {
+    ...highlightDeal(row, 'highlights.newHighs', identitiesByLawdCd),
+    prevHigh: integerValue(row.prevHigh, 'highlights.newHighs.prevHigh'),
+  };
+}
+
+function surgeHighlightDeal(
+  row: HighlightDbRow,
+  identitiesByLawdCd: ReadonlyMap<string, ApartmentIdentity[]>,
+): SurgeHighlightDeal {
+  const price = integerValue(row.price, 'highlights.surges.price');
+  const prevPrice = integerValue(row.prevPrice, 'highlights.surges.prevPrice');
+  return {
+    ...highlightDeal({ ...row, price }, 'highlights.surges', identitiesByLawdCd),
+    prevPrice,
+    ratePct: prevPrice > 0 ? Math.round(((price - prevPrice) / prevPrice) * 1000) / 10 : 0,
+  };
+}
+
+function marketLiveAggregate(row: MarketLiveDbRow): MarketLiveAggRow {
+  return {
+    sigungu: requiredString(row.sigungu, 'marketLive.sigungu'),
+    recentSum: numberValue(row.recentSum, 'marketLive.recentSum'),
+    recentCount: integerValue(row.recentCount, 'marketLive.recentCount'),
+    previousSum: numberValue(row.previousSum, 'marketLive.previousSum'),
+    previousCount: integerValue(row.previousCount, 'marketLive.previousCount'),
+  };
+}
+
 export interface CollectedPublicTransactionRelease {
   snapshots: PublicTransactionSnapshot[];
   namedArtifacts: PublicNamedArtifactInput[];
@@ -519,6 +750,8 @@ export class PublicTransactionCompletenessError extends Error {
 
 const EXPECTED_NAMED_ARTIFACTS = Object.freeze([
   ...Object.values(ROLLING30_SUMMARY_ARTIFACT_NAMES),
+  HIGHLIGHTS_ROLLING30_ARTIFACT_NAME,
+  MARKET_LIVE_ROLLING30_ARTIFACT_NAME,
   APARTMENT_INDEX_ARTIFACT_NAME,
 ].sort());
 
@@ -562,7 +795,7 @@ export function assertPublicTransactionReleaseCompleteness(
   if (actualArtifactNames.length !== EXPECTED_NAMED_ARTIFACTS.length
     || actualArtifactNames.some((name, index) => name !== EXPECTED_NAMED_ARTIFACTS[index])) {
     throw new PublicTransactionCompletenessError(
-      `release completeness failed: expected exactly five named artifacts (${EXPECTED_NAMED_ARTIFACTS.join(', ')})`,
+      `release completeness failed: expected exactly seven named artifacts (${EXPECTED_NAMED_ARTIFACTS.join(', ')})`,
     );
   }
 
@@ -581,6 +814,44 @@ export function assertPublicTransactionReleaseCompleteness(
   if (apartmentIndex.itemCount !== apartmentIndex.data.length || apartmentIndex.data.length === 0) {
     throw new PublicTransactionCompletenessError(
       'release completeness failed: apartment-index is missing, mismatched, or zero rows',
+    );
+  }
+
+  const highlights = artifactsByName.get(HIGHLIGHTS_ROLLING30_ARTIFACT_NAME)!;
+  if (highlights.schema !== TRANSACTION_HIGHLIGHTS_SCHEMA) {
+    throw new PublicTransactionCompletenessError(
+      `release completeness failed: invalid schema for ${HIGHLIGHTS_ROLLING30_ARTIFACT_NAME}`,
+    );
+  }
+  try {
+    assertRolling30HighlightsData(highlights.data);
+  } catch (error) {
+    throw artifactValidationFailure(HIGHLIGHTS_ROLLING30_ARTIFACT_NAME, error);
+  }
+  const highlightCount = highlights.data.newHighs.length
+    + highlights.data.surges.length
+    + highlights.data.pyeong84.length;
+  if (highlights.itemCount !== highlightCount) {
+    throw new PublicTransactionCompletenessError(
+      `release completeness failed: itemCount mismatch for ${HIGHLIGHTS_ROLLING30_ARTIFACT_NAME}`,
+    );
+  }
+
+  const marketLive = artifactsByName.get(MARKET_LIVE_ROLLING30_ARTIFACT_NAME)!;
+  if (marketLive.schema !== TRANSACTION_MARKET_LIVE_SCHEMA) {
+    throw new PublicTransactionCompletenessError(
+      `release completeness failed: invalid schema for ${MARKET_LIVE_ROLLING30_ARTIFACT_NAME}`,
+    );
+  }
+  try {
+    assertRolling30MarketLiveData(marketLive.data);
+  } catch (error) {
+    throw artifactValidationFailure(MARKET_LIVE_ROLLING30_ARTIFACT_NAME, error);
+  }
+  if (marketLive.itemCount !== marketLive.data.rows.length
+    || marketLive.data.rows.length !== MARKET_LIVE_REGIONS.length) {
+    throw new PublicTransactionCompletenessError(
+      `release completeness failed: ${MARKET_LIVE_ROLLING30_ARTIFACT_NAME} is incomplete or mismatched`,
     );
   }
 
@@ -779,6 +1050,32 @@ export async function collectPublicTransactionRelease(
   const monthlyRows = await client.query<SummaryDbRow>(RENT_SUMMARY_SELECT, [...summaryParams, false]);
   const bunyangRows = await client.query<SummaryDbRow>(PRESALE_SUMMARY_SELECT, summaryParams);
   const apartmentRows = await client.query<ApartmentDbRow>(APARTMENT_INDEX_SELECT);
+  const apartmentSources = apartmentRows.rows.map(apartmentIndexSource);
+  const identitiesByLawdCd = apartmentIdentitiesByLawdCd(apartmentSources);
+  const highlightParams = [
+    windows.rolling30.from,
+    windows.rolling30.to,
+    HIGHLIGHTS_PER_CATEGORY,
+  ] as const;
+  const newHighRows = await client.query<HighlightDbRow>(
+    HIGHLIGHTS_NEW_HIGHS_SELECT,
+    highlightParams,
+  );
+  const surgeRows = await client.query<HighlightDbRow>(
+    HIGHLIGHTS_SURGES_SELECT,
+    highlightParams,
+  );
+  const pyeong84Rows = await client.query<HighlightDbRow>(
+    HIGHLIGHTS_PYEONG84_SELECT,
+    highlightParams,
+  );
+  const marketWindows = marketLiveWindows(now);
+  const marketRows = await client.query<MarketLiveDbRow>(MARKET_LIVE_SELECT, [
+    [...MARKET_LIVE_REGIONS],
+    marketWindows.previous.from,
+    marketWindows.recent.from,
+    marketWindows.recent.toExclusive,
+  ]);
 
   const namedArtifacts: PublicNamedArtifactInput[] = [
     ...buildRolling30SummaryArtifacts({
@@ -790,7 +1087,18 @@ export async function collectPublicTransactionRelease(
       monthly: monthlyRows.rows.map((row) => rentAggregate(row, 'monthly')),
       bunyang: bunyangRows.rows.map((row) => saleAggregate(row, 'bunyang')),
     }),
-    buildApartmentIndexArtifact(apartmentRows.rows.map(apartmentIndexSource)),
+    buildRolling30HighlightsArtifact({
+      generatedAt: publishedAt,
+      newHighs: newHighRows.rows.map((row) => newHighHighlightDeal(row, identitiesByLawdCd)),
+      surges: surgeRows.rows.map((row) => surgeHighlightDeal(row, identitiesByLawdCd)),
+      pyeong84: pyeong84Rows.rows.map((row) =>
+        highlightDeal(row, 'highlights.pyeong84', identitiesByLawdCd)),
+    }),
+    buildRolling30MarketLiveArtifact({
+      generatedAt: publishedAt,
+      aggregates: marketRows.rows.map(marketLiveAggregate),
+    }),
+    buildApartmentIndexArtifact(apartmentSources),
   ];
   return { snapshots, namedArtifacts, publishedAt };
 }

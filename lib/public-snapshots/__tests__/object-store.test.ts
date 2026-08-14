@@ -609,6 +609,8 @@ describe('public snapshot object stores', () => {
     const pathnames = [
       `${RELEASE_PREFIX}shards/00.json.gz`,
       `${RELEASE_PREFIX}artifacts/apartment-index.json.gz`,
+      `${RELEASE_PREFIX}artifacts/highlights/rolling30.json.gz`,
+      `${RELEASE_PREFIX}artifacts/market-live/rolling30.json.gz`,
     ];
 
     await store.deleteRetentionObjects(pathnames);
@@ -636,6 +638,8 @@ describe('public snapshot object stores', () => {
     for (const pathname of [
       `${RELEASE_PREFIX}shards/24.json.gz`,
       `${RELEASE_PREFIX}artifacts/future-index.json.gz`,
+      `${RELEASE_PREFIX}artifacts/highlights/rolling30/extra.json.gz`,
+      `${RELEASE_PREFIX}artifacts/market-live/rolling31.json.gz`,
       `${RELEASE_PREFIX}unknown.json.gz`,
       `${RELEASES_PREFIX}not-a-release/shards/00.json.gz`,
     ]) {

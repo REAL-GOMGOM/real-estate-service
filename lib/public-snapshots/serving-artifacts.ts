@@ -1,4 +1,11 @@
 import { DISTRICT_GROUPS } from '../district-groups';
+import type { MarketLiveAggRow } from '../agg-queries';
+import {
+  MARKET_LIVE_REGIONS,
+  buildMarketLiveRows,
+  marketLiveWindows,
+  type MarketLiveRow,
+} from '../market-live';
 import { normalizeMLTMName } from '../normalize-mltm-name';
 import { matchesQuery } from '../search-utils';
 import { transactionGroupKey } from '../transaction-identity';
@@ -12,6 +19,8 @@ import type { PublicNamedArtifactInput } from './publisher';
 
 export const TRANSACTION_SUMMARY_SCHEMA = 'naezip.transaction-summary.v1' as const;
 export const APARTMENT_INDEX_SCHEMA = 'naezip.apartment-index.v1' as const;
+export const TRANSACTION_HIGHLIGHTS_SCHEMA = 'naezip.transaction-highlights.v1' as const;
+export const TRANSACTION_MARKET_LIVE_SCHEMA = 'naezip.market-live.v1' as const;
 
 export const ROLLING30_SUMMARY_ARTIFACT_NAMES = {
   buy: 'summary/rolling30/buy',
@@ -21,6 +30,8 @@ export const ROLLING30_SUMMARY_ARTIFACT_NAMES = {
 } as const;
 
 export const APARTMENT_INDEX_ARTIFACT_NAME = 'apartment-index' as const;
+export const HIGHLIGHTS_ROLLING30_ARTIFACT_NAME = 'highlights/rolling30' as const;
+export const MARKET_LIVE_ROLLING30_ARTIFACT_NAME = 'market-live/rolling30' as const;
 export const TRANSACTION_SNAPSHOT_MAX_AGE_MS = 48 * 60 * 60 * 1000;
 export const APARTMENT_INDEX_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const SNAPSHOT_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
@@ -71,6 +82,57 @@ export interface Rolling30SummaryData {
   updatedAt: string;
   note: string;
 }
+
+export interface HighlightDeal {
+  district: string;
+  dong: string;
+  apt: string;
+  area: number;
+  floor: number;
+  price: number;
+  date: string;
+  masterId: string | null;
+}
+
+export interface NewHighHighlightDeal extends HighlightDeal {
+  prevHigh: number;
+}
+
+export interface SurgeHighlightDeal extends HighlightDeal {
+  prevPrice: number;
+  ratePct: number;
+}
+
+export interface Rolling30HighlightsData {
+  status: 'ok';
+  month: string;
+  window: { type: 'rolling30'; from: string; to: string };
+  coverage: string;
+  newHighs: NewHighHighlightDeal[];
+  surges: SurgeHighlightDeal[];
+  pyeong84: HighlightDeal[];
+  updatedAt: string;
+}
+
+export interface Rolling30MarketLiveData {
+  status: 'ok';
+  rows: MarketLiveRow[];
+  windows: ReturnType<typeof marketLiveWindows>;
+  aggregation: typeof MARKET_LIVE_AGGREGATION;
+  updatedAt: string;
+}
+
+export const MARKET_LIVE_AGGREGATION = {
+  metric: 'arithmetic_mean_per_transaction',
+  label: '거래 1건당 동일 가중치의 단순 산술평균',
+  priceUnit: '만원',
+  dealType: '아파트 매매',
+  areaM2: { min: 80, max: 88 },
+  canceledExcluded: true,
+} as const;
+
+const ROLLING30_HIGHLIGHTS_COVERAGE = '등록 시군구 전체 · 최근 30일 신고분 (자체 원장, 취소 제외)';
+const HIGHLIGHT_CATEGORY_LIMIT = 8;
 
 export interface ApartmentIndexSourceRow {
   id: string;
@@ -159,6 +221,333 @@ function isIsoTimestamp(value: unknown): value is string {
   return typeof value === 'string'
     && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value)
     && Number.isFinite(Date.parse(value));
+}
+
+function shiftCalendarDate(value: string, days: number): string {
+  const date = new Date(`${value}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function expectedRolling30Window(generatedAt: string): { type: 'rolling30'; from: string; to: string } {
+  const generatedDate = kstCalendarDate(generatedAt);
+  return {
+    type: 'rolling30',
+    from: shiftCalendarDate(generatedDate, -29),
+    to: shiftCalendarDate(generatedDate, 1),
+  };
+}
+
+const HIGHLIGHTS_DATA_KEYS = [
+  'coverage', 'month', 'newHighs', 'pyeong84', 'status', 'surges', 'updatedAt', 'window',
+] as const;
+const HIGHLIGHT_DEAL_KEYS = [
+  'apt', 'area', 'date', 'district', 'dong', 'floor', 'masterId', 'price',
+] as const;
+const NEW_HIGH_DEAL_KEYS = [...HIGHLIGHT_DEAL_KEYS, 'prevHigh'] as const;
+const SURGE_DEAL_KEYS = [...HIGHLIGHT_DEAL_KEYS, 'prevPrice', 'ratePct'] as const;
+
+function assertRolling30Window(
+  value: unknown,
+  updatedAt: string,
+  path: string,
+): asserts value is { type: 'rolling30'; from: string; to: string } {
+  if (!isPlainObject(value)) throw new ServingArtifactValidationError(`${path} must be an object`);
+  assertExactKeys(value, ['from', 'to', 'type'], path);
+  const expected = expectedRolling30Window(updatedAt);
+  if (value.type !== expected.type || value.from !== expected.from || value.to !== expected.to) {
+    throw new ServingArtifactValidationError(`${path} does not match generatedAt`);
+  }
+}
+
+function assertHighlightDealBase(
+  value: Record<string, unknown>,
+  path: string,
+  window: { from: string; to: string },
+): void {
+  assertNonEmptyString(value.district, `${path}.district`, 80);
+  assertNonEmptyString(value.dong, `${path}.dong`, 100);
+  assertNonEmptyString(value.apt, `${path}.apt`, 200);
+  assertFiniteNumber(value.area, `${path}.area`, { min: 1 });
+  assertFiniteNumber(value.floor, `${path}.floor`, { integer: true });
+  assertFiniteNumber(value.price, `${path}.price`, { integer: true, min: 1 });
+  if (!isCalendarDate(value.date) || value.date < window.from || value.date >= window.to) {
+    throw new ServingArtifactValidationError(`${path}.date is outside the rolling30 window`);
+  }
+  if (value.masterId !== null) assertNonEmptyString(value.masterId, `${path}.masterId`, 200);
+}
+
+function assertHighlightList(
+  value: unknown,
+  kind: 'newHighs' | 'surges' | 'pyeong84',
+  window: { from: string; to: string },
+): void {
+  if (!Array.isArray(value) || value.length > HIGHLIGHT_CATEGORY_LIMIT) {
+    throw new ServingArtifactValidationError(`${kind} must contain at most ${HIGHLIGHT_CATEGORY_LIMIT} rows`);
+  }
+  const identities = new Set<string>();
+  let previousRank = Number.POSITIVE_INFINITY;
+  value.forEach((row, index) => {
+    const path = `${kind}[${index}]`;
+    if (!isPlainObject(row)) throw new ServingArtifactValidationError(`${path} must be an object`);
+    assertExactKeys(
+      row,
+      kind === 'newHighs' ? NEW_HIGH_DEAL_KEYS
+        : kind === 'surges' ? SURGE_DEAL_KEYS : HIGHLIGHT_DEAL_KEYS,
+      path,
+    );
+    assertHighlightDealBase(row, path, window);
+
+    const identity = kind === 'pyeong84'
+      ? `${row.district}\u0000${row.dong}\u0000${row.apt}`
+      : `${row.district}\u0000${row.dong}\u0000${row.apt}\u0000${row.area}`;
+    if (identities.has(identity)) {
+      throw new ServingArtifactValidationError(`${kind} contains a duplicate apartment identity`);
+    }
+    identities.add(identity);
+
+    const price = row.price as number;
+    let rank = price;
+    if (kind === 'newHighs') {
+      assertFiniteNumber(row.prevHigh, `${path}.prevHigh`, { integer: true, min: 1 });
+      if (price <= row.prevHigh) {
+        throw new ServingArtifactValidationError(`${path} is not a strict new high`);
+      }
+    } else if (kind === 'surges') {
+      assertFiniteNumber(row.prevPrice, `${path}.prevPrice`, { integer: true, min: 1 });
+      assertFiniteNumber(row.ratePct, `${path}.ratePct`, { min: 0 });
+      if (price <= row.prevPrice) {
+        throw new ServingArtifactValidationError(`${path} is not a price increase`);
+      }
+      const expectedRate = Math.round(((price - row.prevPrice) / row.prevPrice) * 1000) / 10;
+      if (row.ratePct !== expectedRate) {
+        throw new ServingArtifactValidationError(`${path}.ratePct does not match its prices`);
+      }
+      rank = row.ratePct;
+    } else if (Math.round(row.area as number) < 80 || Math.round(row.area as number) > 88) {
+      throw new ServingArtifactValidationError(`${path}.area is outside 80-88m2`);
+    }
+
+    if (rank > previousRank) {
+      throw new ServingArtifactValidationError(`${kind} rows are not in ranking order`);
+    }
+    previousRank = rank;
+  });
+}
+
+export function assertRolling30HighlightsData(value: unknown): asserts value is Rolling30HighlightsData {
+  if (!isPlainObject(value)) throw new ServingArtifactValidationError('highlights data must be an object');
+  assertExactKeys(value, HIGHLIGHTS_DATA_KEYS, 'highlights data');
+  if (value.status !== 'ok') throw new ServingArtifactValidationError('highlights status is invalid');
+  if (!isIsoTimestamp(value.updatedAt)) {
+    throw new ServingArtifactValidationError('highlights updatedAt is invalid');
+  }
+  if (value.month !== kstMonth(value.updatedAt)) {
+    throw new ServingArtifactValidationError('highlights month does not match updatedAt');
+  }
+  if (value.coverage !== ROLLING30_HIGHLIGHTS_COVERAGE) {
+    throw new ServingArtifactValidationError('highlights coverage is invalid');
+  }
+  assertRolling30Window(value.window, value.updatedAt, 'highlights window');
+  assertHighlightList(value.newHighs, 'newHighs', value.window);
+  assertHighlightList(value.surges, 'surges', value.window);
+  assertHighlightList(value.pyeong84, 'pyeong84', value.window);
+}
+
+export function assertRolling30HighlightsEnvelope(
+  value: unknown,
+): asserts value is PublicNamedArtifactEnvelope<Rolling30HighlightsData> {
+  if (!isPlainObject(value)) throw new ServingArtifactValidationError('highlights envelope must be an object');
+  assertExactKeys(value, ['data', 'generatedAt', 'itemCount', 'schema'], 'highlights envelope');
+  if (value.schema !== TRANSACTION_HIGHLIGHTS_SCHEMA || !isIsoTimestamp(value.generatedAt)) {
+    throw new ServingArtifactValidationError('highlights envelope metadata is invalid');
+  }
+  assertFiniteNumber(value.itemCount, 'highlights envelope itemCount', { integer: true, min: 0 });
+  assertRolling30HighlightsData(value.data);
+  const itemCount = value.data.newHighs.length + value.data.surges.length + value.data.pyeong84.length;
+  if (value.generatedAt !== value.data.updatedAt || value.itemCount !== itemCount) {
+    throw new ServingArtifactValidationError('highlights envelope does not match its data');
+  }
+}
+
+export function buildRolling30HighlightsArtifact(input: {
+  generatedAt: string;
+  newHighs: readonly NewHighHighlightDeal[];
+  surges: readonly SurgeHighlightDeal[];
+  pyeong84: readonly HighlightDeal[];
+}): PublicNamedArtifactInput<Rolling30HighlightsData> {
+  if (!isIsoTimestamp(input.generatedAt)) {
+    throw new ServingArtifactValidationError('highlights generatedAt is invalid');
+  }
+  const data: Rolling30HighlightsData = {
+    status: 'ok',
+    month: kstMonth(input.generatedAt),
+    window: expectedRolling30Window(input.generatedAt),
+    coverage: ROLLING30_HIGHLIGHTS_COVERAGE,
+    newHighs: input.newHighs.map((row) => ({ ...row })),
+    surges: input.surges.map((row) => ({ ...row })),
+    pyeong84: input.pyeong84.map((row) => ({ ...row })),
+    updatedAt: input.generatedAt,
+  };
+  assertRolling30HighlightsData(data);
+  return {
+    name: HIGHLIGHTS_ROLLING30_ARTIFACT_NAME,
+    schema: TRANSACTION_HIGHLIGHTS_SCHEMA,
+    itemCount: data.newHighs.length + data.surges.length + data.pyeong84.length,
+    data,
+  };
+}
+
+const MARKET_LIVE_DATA_KEYS = ['aggregation', 'rows', 'status', 'updatedAt', 'windows'] as const;
+const MARKET_LIVE_ROW_KEYS = [
+  'changePct', 'previousAverage', 'previousCount', 'recentAverage', 'recentCount', 'region',
+] as const;
+const MARKET_LIVE_AGGREGATE_KEYS = [
+  'previousCount', 'previousSum', 'recentCount', 'recentSum', 'sigungu',
+] as const;
+
+function assertMarketLiveAggregation(value: unknown): void {
+  if (!isPlainObject(value)) throw new ServingArtifactValidationError('market-live aggregation must be an object');
+  assertExactKeys(value, ['areaM2', 'canceledExcluded', 'dealType', 'label', 'metric', 'priceUnit'], 'market-live aggregation');
+  if (value.metric !== MARKET_LIVE_AGGREGATION.metric
+    || value.label !== MARKET_LIVE_AGGREGATION.label
+    || value.priceUnit !== MARKET_LIVE_AGGREGATION.priceUnit
+    || value.dealType !== MARKET_LIVE_AGGREGATION.dealType
+    || value.canceledExcluded !== MARKET_LIVE_AGGREGATION.canceledExcluded
+    || !isPlainObject(value.areaM2)) {
+    throw new ServingArtifactValidationError('market-live aggregation is invalid');
+  }
+  assertExactKeys(value.areaM2, ['max', 'min'], 'market-live aggregation.areaM2');
+  if (value.areaM2.min !== MARKET_LIVE_AGGREGATION.areaM2.min
+    || value.areaM2.max !== MARKET_LIVE_AGGREGATION.areaM2.max) {
+    throw new ServingArtifactValidationError('market-live aggregation.areaM2 is invalid');
+  }
+}
+
+function assertMarketLiveWindows(value: unknown, updatedAt: string): void {
+  if (!isPlainObject(value)) throw new ServingArtifactValidationError('market-live windows must be an object');
+  assertExactKeys(value, ['previous', 'recent'], 'market-live windows');
+  const expected = marketLiveWindows(new Date(updatedAt));
+  for (const key of ['recent', 'previous'] as const) {
+    const child = value[key];
+    if (!isPlainObject(child)) throw new ServingArtifactValidationError(`market-live windows.${key} must be an object`);
+    assertExactKeys(child, ['days', 'from', 'toExclusive'], `market-live windows.${key}`);
+    if (child.from !== expected[key].from
+      || child.toExclusive !== expected[key].toExclusive
+      || child.days !== expected[key].days) {
+      throw new ServingArtifactValidationError(`market-live windows.${key} does not match updatedAt`);
+    }
+  }
+}
+
+function assertMarketAverage(value: unknown, count: number, path: string): number | null {
+  if (count === 0) {
+    if (value !== null) throw new ServingArtifactValidationError(`${path} must be null when count is zero`);
+    return null;
+  }
+  assertFiniteNumber(value, path, { integer: true, min: 0 });
+  return value;
+}
+
+function assertMarketLiveRows(value: unknown): void {
+  if (!Array.isArray(value) || value.length !== MARKET_LIVE_REGIONS.length) {
+    throw new ServingArtifactValidationError('market-live rows must contain every configured region');
+  }
+  value.forEach((row, index) => {
+    const path = `market-live rows[${index}]`;
+    if (!isPlainObject(row)) throw new ServingArtifactValidationError(`${path} must be an object`);
+    assertExactKeys(row, MARKET_LIVE_ROW_KEYS, path);
+    if (row.region !== MARKET_LIVE_REGIONS[index]) {
+      throw new ServingArtifactValidationError(`${path}.region is out of order`);
+    }
+    assertFiniteNumber(row.recentCount, `${path}.recentCount`, { integer: true, min: 0 });
+    assertFiniteNumber(row.previousCount, `${path}.previousCount`, { integer: true, min: 0 });
+    const recentAverage = assertMarketAverage(row.recentAverage, row.recentCount, `${path}.recentAverage`);
+    const previousAverage = assertMarketAverage(row.previousAverage, row.previousCount, `${path}.previousAverage`);
+    const expectedChange = recentAverage !== null && previousAverage !== null && previousAverage > 0
+      ? Math.round(((recentAverage - previousAverage) / previousAverage) * 1000) / 10
+      : null;
+    if (row.changePct !== expectedChange) {
+      throw new ServingArtifactValidationError(`${path}.changePct does not match its averages`);
+    }
+  });
+}
+
+function assertMarketLiveAggregates(value: unknown): void {
+  if (!Array.isArray(value) || value.length !== MARKET_LIVE_REGIONS.length) {
+    throw new ServingArtifactValidationError('market-live aggregates must contain every configured region');
+  }
+  const seen = new Set<string>();
+  value.forEach((row, index) => {
+    const path = `market-live aggregates[${index}]`;
+    if (!isPlainObject(row)) throw new ServingArtifactValidationError(`${path} must be an object`);
+    assertExactKeys(row, MARKET_LIVE_AGGREGATE_KEYS, path);
+    if (typeof row.sigungu !== 'string' || !MARKET_LIVE_REGIONS.includes(row.sigungu as typeof MARKET_LIVE_REGIONS[number])) {
+      throw new ServingArtifactValidationError(`${path}.sigungu is invalid`);
+    }
+    if (seen.has(row.sigungu)) throw new ServingArtifactValidationError('market-live aggregates contain duplicate regions');
+    seen.add(row.sigungu);
+    for (const prefix of ['recent', 'previous'] as const) {
+      const count = row[`${prefix}Count`];
+      const sum = row[`${prefix}Sum`];
+      assertFiniteNumber(count, `${path}.${prefix}Count`, { integer: true, min: 0 });
+      assertFiniteNumber(sum, `${path}.${prefix}Sum`, { min: 0 });
+      if (count === 0 && sum !== 0) {
+        throw new ServingArtifactValidationError(`${path}.${prefix} sum/count are inconsistent`);
+      }
+    }
+  });
+}
+
+export function assertRolling30MarketLiveData(value: unknown): asserts value is Rolling30MarketLiveData {
+  if (!isPlainObject(value)) throw new ServingArtifactValidationError('market-live data must be an object');
+  assertExactKeys(value, MARKET_LIVE_DATA_KEYS, 'market-live data');
+  if (value.status !== 'ok') throw new ServingArtifactValidationError('market-live status is invalid');
+  if (!isIsoTimestamp(value.updatedAt)) {
+    throw new ServingArtifactValidationError('market-live updatedAt is invalid');
+  }
+  assertMarketLiveWindows(value.windows, value.updatedAt);
+  assertMarketLiveAggregation(value.aggregation);
+  assertMarketLiveRows(value.rows);
+}
+
+export function assertRolling30MarketLiveEnvelope(
+  value: unknown,
+): asserts value is PublicNamedArtifactEnvelope<Rolling30MarketLiveData> {
+  if (!isPlainObject(value)) throw new ServingArtifactValidationError('market-live envelope must be an object');
+  assertExactKeys(value, ['data', 'generatedAt', 'itemCount', 'schema'], 'market-live envelope');
+  if (value.schema !== TRANSACTION_MARKET_LIVE_SCHEMA || !isIsoTimestamp(value.generatedAt)) {
+    throw new ServingArtifactValidationError('market-live envelope metadata is invalid');
+  }
+  assertFiniteNumber(value.itemCount, 'market-live envelope itemCount', { integer: true, min: 0 });
+  assertRolling30MarketLiveData(value.data);
+  if (value.generatedAt !== value.data.updatedAt || value.itemCount !== value.data.rows.length) {
+    throw new ServingArtifactValidationError('market-live envelope does not match its data');
+  }
+}
+
+export function buildRolling30MarketLiveArtifact(input: {
+  generatedAt: string;
+  aggregates: readonly MarketLiveAggRow[];
+}): PublicNamedArtifactInput<Rolling30MarketLiveData> {
+  if (!isIsoTimestamp(input.generatedAt)) {
+    throw new ServingArtifactValidationError('market-live generatedAt is invalid');
+  }
+  assertMarketLiveAggregates(input.aggregates);
+  const data: Rolling30MarketLiveData = {
+    status: 'ok',
+    rows: buildMarketLiveRows([...input.aggregates]),
+    windows: marketLiveWindows(new Date(input.generatedAt)),
+    aggregation: MARKET_LIVE_AGGREGATION,
+    updatedAt: input.generatedAt,
+  };
+  assertRolling30MarketLiveData(data);
+  return {
+    name: MARKET_LIVE_ROLLING30_ARTIFACT_NAME,
+    schema: TRANSACTION_MARKET_LIVE_SCHEMA,
+    itemCount: data.rows.length,
+    data,
+  };
 }
 
 function avgOf(sum: number, count: number): number | null {

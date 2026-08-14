@@ -112,7 +112,8 @@ const PUBLIC_TRANSACTION_RELEASE_MANIFEST_PATTERN = new RegExp(
 const PUBLIC_TRANSACTION_RELEASE_PAYLOAD_PATTERN = new RegExp(
   `^${PUBLIC_TRANSACTION_RELEASES_PREFIX}(\\d{8}T\\d{6}Z-[a-f0-9]{12})/(?:`
     + 'shards/(?:0\\d|1\\d|2[0-3])\\.json\\.gz'
-    + '|artifacts/(?:apartment-index|summary/rolling30/(?:buy|jeonse|monthly|bunyang))\\.json\\.gz)$',
+    + '|artifacts/(?:apartment-index|highlights/rolling30|market-live/rolling30'
+    + '|summary/rolling30/(?:buy|jeonse|monthly|bunyang))\\.json\\.gz)$',
 );
 const MAX_DISCOVERY_MANIFEST_BYTES = 10 * 1024 * 1024;
 export const PUBLIC_SNAPSHOT_RETENTION_LIST_LIMIT = 1_000;

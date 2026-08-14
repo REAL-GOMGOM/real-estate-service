@@ -26,8 +26,17 @@ const RELEASES_PREFIX = `${PUBLIC_TRANSACTION_SNAPSHOT_PREFIX}/releases/`;
 const DISCOVERY_PATHNAME = `${PUBLIC_TRANSACTION_SNAPSHOT_PREFIX}/manifest.json`;
 const NOW = new Date('2026-08-13T00:00:00.000Z');
 const OLD_UPLOAD = '2026-01-01T00:00:00.000Z';
-const ARTIFACT_NAMES = [
+const LEGACY_ARTIFACT_NAMES = [
   'apartment-index',
+  'summary/rolling30/buy',
+  'summary/rolling30/bunyang',
+  'summary/rolling30/jeonse',
+  'summary/rolling30/monthly',
+] as const;
+const CURRENT_ARTIFACT_NAMES = [
+  'apartment-index',
+  'highlights/rolling30',
+  'market-live/rolling30',
   'summary/rolling30/buy',
   'summary/rolling30/bunyang',
   'summary/rolling30/jeonse',
@@ -46,6 +55,7 @@ function makeRelease(
   releaseId: string,
   publishedAt: string,
   uploadedAt = OLD_UPLOAD,
+  artifactNames: readonly string[] = LEGACY_ARTIFACT_NAMES,
 ): ReleaseFixture {
   const districts = Array.from({ length: PUBLIC_TRANSACTION_DISTRICT_COUNT }, (_, index) => ({
     lawdCd: String(10_000 + index),
@@ -73,7 +83,7 @@ function makeRelease(
       },
     };
   });
-  const namedArtifacts = ARTIFACT_NAMES.map((name, index) => ({
+  const namedArtifacts = artifactNames.map((name, index) => ({
     name,
     artifact: {
       key: `${RELEASES_PREFIX}${releaseId}/artifacts/${name}.json.gz`,
@@ -224,6 +234,91 @@ describe('public snapshot retention planner', () => {
     expect(PUBLIC_SNAPSHOT_RETENTION_DEFAULT_KEEP_COUNT).toBe(30);
     expect(PUBLIC_SNAPSHOT_RETENTION_DEFAULT_MAX_PAGES).toBe(20);
     expect(PUBLIC_SNAPSHOT_RETENTION_DEFAULT_MAX_OBJECTS).toBe(10_000);
+  });
+
+  it('accepts complete legacy five-artifact and current seven-artifact releases', async () => {
+    const variants = [
+      { label: 'legacy', artifactNames: LEGACY_ARTIFACT_NAMES },
+      { label: 'current', artifactNames: CURRENT_ARTIFACT_NAMES },
+    ] as const;
+
+    for (const { label, artifactNames } of variants) {
+      const current = makeRelease(
+        releaseId('20260812T000000Z', 'f'),
+        '2026-08-12T00:00:00.000Z',
+        '2026-08-12T00:01:00.000Z',
+        artifactNames,
+      );
+      const rollback = makeRelease(
+        releaseId('20260401T000000Z', 'e'),
+        '2026-04-01T00:00:00.000Z',
+        OLD_UPLOAD,
+        artifactNames,
+      );
+      const old = makeRelease(
+        releaseId('20260101T000000Z', 'd'),
+        '2026-01-01T00:00:00.000Z',
+        OLD_UPLOAD,
+        artifactNames,
+      );
+      const fixture = createStore({ releases: [old, rollback, current], current });
+
+      const plan = await collectAndPlanPublicSnapshotRetention(fixture.store, {
+        now: NOW,
+        keepCompleteReleaseCount: 2,
+      });
+      const candidate = plan.deleteCandidates[0];
+      const expectedPayloadCount = PUBLIC_TRANSACTION_SHARD_COUNT + artifactNames.length;
+      expect(candidate, label).toMatchObject({
+        releaseId: old.releaseId,
+        kind: 'complete-release',
+        objectCount: expectedPayloadCount + 1,
+      });
+      expect(candidate.payloadPathnames, label).toHaveLength(expectedPayloadCount);
+      for (const artifactName of artifactNames) {
+        expect(candidate.payloadPathnames, label).toContain(
+          `${RELEASES_PREFIX}${old.releaseId}/artifacts/${artifactName}.json.gz`,
+        );
+      }
+      expect(fixture.deleteRetentionObjects).not.toHaveBeenCalled();
+    }
+  });
+
+  it('rejects six-artifact and unknown-artifact release mixes without deleting', async () => {
+    const current = makeRelease(
+      releaseId('20260812T000000Z', 'f'),
+      '2026-08-12T00:00:00.000Z',
+      '2026-08-12T00:01:00.000Z',
+      CURRENT_ARTIFACT_NAMES,
+    );
+    const sixArtifactRelease = makeRelease(
+      releaseId('20260101T000000Z', 'd'),
+      '2026-01-01T00:00:00.000Z',
+      OLD_UPLOAD,
+      [...LEGACY_ARTIFACT_NAMES, 'highlights/rolling30'],
+    );
+    const sixArtifactFixture = createStore({
+      releases: [sixArtifactRelease, current],
+      current,
+    });
+    await expect(collectAndPlanPublicSnapshotRetention(sixArtifactFixture.store, { now: NOW }))
+      .rejects.toThrow('exact serving artifact set');
+
+    const unknownArtifactRelease = makeRelease(
+      releaseId('20260101T000000Z', 'c'),
+      '2026-01-01T00:00:00.000Z',
+      OLD_UPLOAD,
+      [...CURRENT_ARTIFACT_NAMES.slice(0, -1), 'future/rolling30'],
+    );
+    const unknownArtifactFixture = createStore({
+      releases: [unknownArtifactRelease, current],
+      current,
+    });
+    await expect(collectAndPlanPublicSnapshotRetention(unknownArtifactFixture.store, { now: NOW }))
+      .rejects.toThrow('unknown or malformed');
+
+    expect(sixArtifactFixture.deleteRetentionObjects).not.toHaveBeenCalled();
+    expect(unknownArtifactFixture.deleteRetentionObjects).not.toHaveBeenCalled();
   });
 
   it('permits a first seed only when both discovery and release inventory are empty', async () => {
@@ -485,19 +580,26 @@ describe('public snapshot retention planner', () => {
 });
 
 describe('public snapshot retention executor', () => {
-  async function deletablePlan() {
+  async function deletablePlan(
+    artifactNames: readonly string[] = LEGACY_ARTIFACT_NAMES,
+  ) {
     const current = makeRelease(
       releaseId('20260812T000000Z', 'f'),
       '2026-08-12T00:00:00.000Z',
       '2026-08-12T00:01:00.000Z',
+      artifactNames,
     );
     const rollback = makeRelease(
       releaseId('20260401T000000Z', 'e'),
       '2026-04-01T00:00:00.000Z',
+      OLD_UPLOAD,
+      artifactNames,
     );
     const old = makeRelease(
       releaseId('20260101T000000Z', 'd'),
       '2026-01-01T00:00:00.000Z',
+      OLD_UPLOAD,
+      artifactNames,
     );
     const fixture = createStore({ releases: [old, rollback, current], current });
     const plan = await collectAndPlanPublicSnapshotRetention(fixture.store, {
@@ -525,6 +627,21 @@ describe('public snapshot retention executor', () => {
       manifestTombstones: [`${RELEASES_PREFIX}${old.releaseId}/manifest.json`],
     });
     expect(result.payloadObjectsDeleted).toHaveLength(29);
+  });
+
+  it('executes a current seven-artifact release plan including both new exact paths', async () => {
+    const { fixture, plan, old } = await deletablePlan(CURRENT_ARTIFACT_NAMES);
+    const result = await executePublicSnapshotRetention(fixture.store, plan, {
+      sleep: async () => undefined,
+    });
+
+    expect(fixture.deleteRetentionObjects.mock.calls.map(([batch]) => batch.length))
+      .toEqual([10, 10, 10, 1]);
+    expect(result.payloadObjectsDeleted).toHaveLength(31);
+    expect(result.payloadObjectsDeleted).toEqual(expect.arrayContaining([
+      `${RELEASES_PREFIX}${old.releaseId}/artifacts/highlights/rolling30.json.gz`,
+      `${RELEASES_PREFIX}${old.releaseId}/artifacts/market-live/rolling30.json.gz`,
+    ]));
   });
 
   it('aborts before mutation when discovery changed after planning', async () => {
@@ -624,6 +741,28 @@ describe('public snapshot retention executor', () => {
     await expect(executePublicSnapshotRetention(fixture.store, tampered, {
       sleep: async () => undefined,
     })).rejects.toThrow('unknown or malformed');
+    expect(fixture.deleteRetentionManifest).not.toHaveBeenCalled();
+    expect(fixture.deleteRetentionObjects).not.toHaveBeenCalled();
+  });
+
+  it('rejects a runtime-tampered six-artifact complete release before any delete', async () => {
+    const { fixture, plan } = await deletablePlan(CURRENT_ARTIFACT_NAMES);
+    const candidate = plan.deleteCandidates[0];
+    const payloadPathnames = candidate.payloadPathnames.filter(
+      (pathname) => !pathname.endsWith('/artifacts/market-live/rolling30.json.gz'),
+    );
+    const tampered: PublicSnapshotRetentionPlan = {
+      ...plan,
+      deleteCandidates: [{
+        ...candidate,
+        payloadPathnames,
+        objectCount: payloadPathnames.length + 1,
+      }],
+    };
+
+    await expect(executePublicSnapshotRetention(fixture.store, tampered, {
+      sleep: async () => undefined,
+    })).rejects.toThrow('manifest tombstone');
     expect(fixture.deleteRetentionManifest).not.toHaveBeenCalled();
     expect(fixture.deleteRetentionObjects).not.toHaveBeenCalled();
   });

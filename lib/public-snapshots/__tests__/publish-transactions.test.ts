@@ -20,6 +20,11 @@ import {
   DISTRICT_PRESALE_SELECT,
   DISTRICT_RENT_SELECT,
   DISTRICT_SALE_SELECT,
+  HIGHLIGHTS_NEW_HIGHS_SELECT,
+  HIGHLIGHTS_PER_CATEGORY,
+  HIGHLIGHTS_PYEONG84_SELECT,
+  HIGHLIGHTS_SURGES_SELECT,
+  MARKET_LIVE_SELECT,
   PRESALE_SUMMARY_SELECT,
   PRODUCTION_COMPLETENESS_THRESHOLDS,
   PRODUCTION_RECENCY_THRESHOLDS,
@@ -43,8 +48,11 @@ import {
 import { withPublicSnapshotPublicationLock } from '../publication-lock';
 import {
   buildApartmentIndexArtifact,
+  buildRolling30HighlightsArtifact,
+  buildRolling30MarketLiveArtifact,
   buildRolling30SummaryArtifacts,
 } from '../serving-artifacts';
+import { MARKET_LIVE_REGIONS } from '../../market-live';
 import {
   createPublicTransactionSnapshot,
   toPublicPresaleTransaction,
@@ -69,12 +77,25 @@ class MemoryStore implements PublicSnapshotObjectStore {
 class EmptyLedgerClient implements PublicSnapshotQueryClient {
   readonly calls: string[] = [];
   failOnRent = false;
+  failOnSelect: string | null = null;
 
   async query<Row>(text: string): Promise<{ rows: Row[] }> {
     this.calls.push(text);
     if (this.failOnRent && text === DISTRICT_RENT_SELECT) throw new Error('planned rent query failure');
+    if (text === this.failOnSelect) throw new Error('planned serving artifact query failure');
+    if (text === MARKET_LIVE_SELECT) return { rows: emptyMarketLiveAggregates() as Row[] };
     return { rows: [] };
   }
+}
+
+function emptyMarketLiveAggregates() {
+  return MARKET_LIVE_REGIONS.map((sigungu) => ({
+    sigungu,
+    recentSum: 0,
+    recentCount: 0,
+    previousSum: 0,
+    previousCount: 0,
+  }));
 }
 
 function completeDistrictSnapshots(includeOneRecord: boolean) {
@@ -174,6 +195,46 @@ function positiveNamedArtifacts() {
       jeonse: [rentAggregate],
       monthly: [rentAggregate],
       bunyang: [saleAggregate],
+    }),
+    buildRolling30HighlightsArtifact({
+      generatedAt,
+      newHighs: [{
+        district: '강남구',
+        dong: '역삼동',
+        apt: '완전성 아파트',
+        area: 84,
+        floor: 10,
+        price: 150_000,
+        date: '2026-08-10',
+        masterId: 'apt-1',
+        prevHigh: 140_000,
+      }],
+      surges: [{
+        district: '강남구',
+        dong: '역삼동',
+        apt: '완전성 아파트',
+        area: 84,
+        floor: 10,
+        price: 150_000,
+        date: '2026-08-10',
+        masterId: 'apt-1',
+        prevPrice: 100_000,
+        ratePct: 50,
+      }],
+      pyeong84: [{
+        district: '강남구',
+        dong: '역삼동',
+        apt: '완전성 아파트',
+        area: 84,
+        floor: 10,
+        price: 150_000,
+        date: '2026-08-10',
+        masterId: 'apt-1',
+      }],
+    }),
+    buildRolling30MarketLiveArtifact({
+      generatedAt,
+      aggregates: emptyMarketLiveAggregates(),
     }),
     buildApartmentIndexArtifact([{
       id: 'apt-1',
@@ -558,7 +619,7 @@ describe('local PostgreSQL public transaction publisher', () => {
     expect(() => assertPublicTransactionReleaseCompleteness({
       snapshots: nonzeroSnapshots,
       namedArtifacts: namedArtifacts.filter((artifact) => artifact.name !== 'summary/rolling30/buy'),
-    })).toThrow('expected exactly five named artifacts');
+    })).toThrow('expected exactly seven named artifacts');
     expect(() => assertPublicTransactionReleaseCompleteness({
       snapshots: [],
       namedArtifacts: [],
@@ -595,7 +656,7 @@ describe('local PostgreSQL public transaction publisher', () => {
     }, { forceDryRun: false }).mode).toBe('r2');
   });
 
-  it('publishes an authoritative zero-row district and all five named artifacts', async () => {
+  it('publishes an authoritative zero-row district and all seven named artifacts', async () => {
     const client = new EmptyLedgerClient();
     const store = new MemoryStore();
     const result = await publishPublicTransactionsFromClient(client, store, {
@@ -610,13 +671,22 @@ describe('local PostgreSQL public transaction publisher', () => {
       latestDealDate: null,
     });
     expect(result.manifest.shards).toHaveLength(24);
-    expect(result.manifest.namedArtifacts).toHaveLength(5);
-    expect(result.uploads).toHaveLength(31);
+    expect(result.manifest.namedArtifacts).toHaveLength(7);
+    expect(result.manifest.namedArtifacts.map(({ name }) => name).sort()).toEqual([
+      'apartment-index',
+      'highlights/rolling30',
+      'market-live/rolling30',
+      'summary/rolling30/bunyang',
+      'summary/rolling30/buy',
+      'summary/rolling30/jeonse',
+      'summary/rolling30/monthly',
+    ]);
+    expect(result.uploads).toHaveLength(33);
     expect(new Set(result.manifest.districts.map(({ lawdCd }) => lawdCd)).size).toBe(248);
     expect(new Set(result.manifest.districts.map(({ shardId }) => shardId)).size).toBe(24);
     expect(store.writes.slice(0, 24).every(({ key }) => key.includes('/shards/'))).toBe(true);
-    expect(store.writes.slice(24, 29).every(({ key }) => key.includes('/artifacts/'))).toBe(true);
-    expect(store.writes.slice(29).every(({ key }) => key.endsWith('/manifest.json'))).toBe(true);
+    expect(store.writes.slice(24, 31).every(({ key }) => key.includes('/artifacts/'))).toBe(true);
+    expect(store.writes.slice(31).every(({ key }) => key.endsWith('/manifest.json'))).toBe(true);
     expect(client.calls).toContain('COMMIT');
     expect(store.writes.at(-1)?.immutable).toBe(false);
   });
@@ -635,9 +705,167 @@ describe('local PostgreSQL public transaction publisher', () => {
     expect(store.writes).toHaveLength(0);
   });
 
+  it.each([
+    HIGHLIGHTS_NEW_HIGHS_SELECT,
+    HIGHLIGHTS_SURGES_SELECT,
+    HIGHLIGHTS_PYEONG84_SELECT,
+    MARKET_LIVE_SELECT,
+  ])('rolls back and stores zero objects when a new serving SELECT fails', async (failedSelect) => {
+    const client = new EmptyLedgerClient();
+    client.failOnSelect = failedSelect;
+    const store = new MemoryStore();
+
+    await expect(publishPublicTransactionsFromClient(client, store, {
+      now: new Date('2026-08-11T03:00:00.000Z'),
+      districts: [['강남구', '11680']],
+      completeness: { allowIncompleteForTest: true },
+    })).rejects.toThrow('planned serving artifact query failure');
+
+    expect(client.calls).toContain('ROLLBACK');
+    expect(client.calls).not.toContain('COMMIT');
+    expect(store.writes).toHaveLength(0);
+  });
+
+  it('builds highlights and exact 60-day market-live data from the shared apartment index read', async () => {
+    const calls: Array<{ text: string; values?: readonly unknown[] }> = [];
+    const client: PublicSnapshotQueryClient = {
+      query: async <Row>(text: string, values?: readonly unknown[]) => {
+        calls.push({ text, values });
+        if (text === APARTMENT_INDEX_SELECT) {
+          return { rows: [
+            {
+              id: 'apt-exact',
+              name: '정식 단지명',
+              aliases: ['원장 단지명'],
+              sido: '서울특별시',
+              sigungu: '강남구',
+              dong: '역삼동',
+              lawdCd: '11680',
+              totalHouseholds: 1000,
+              score: 91.5,
+            },
+            {
+              id: 'apt-ambiguous-a',
+              name: '모호한 정식명 A',
+              aliases: ['모호 단지명'],
+              sido: '서울특별시',
+              sigungu: '강남구',
+              dong: '삼성동',
+              lawdCd: '11680',
+              totalHouseholds: 500,
+              score: null,
+            },
+            {
+              id: 'apt-ambiguous-b',
+              name: '모호한 정식명 B',
+              aliases: ['모호 단지명'],
+              sido: '서울특별시',
+              sigungu: '강남구',
+              dong: '삼성동',
+              lawdCd: '11680',
+              totalHouseholds: 600,
+              score: null,
+            },
+          ] as Row[] };
+        }
+        if (text === HIGHLIGHTS_NEW_HIGHS_SELECT) {
+          return { rows: [{
+            sigungu: '강남구', umdNm: '역삼동', aptName: '원장 단지명', area: 85,
+            floor: 0, price: 150_000, dealDate: '2026-08-10', prevHigh: 140_000,
+          }] as Row[] };
+        }
+        if (text === HIGHLIGHTS_SURGES_SELECT) {
+          return { rows: [{
+            sigungu: '강남구', umdNm: '역삼동', aptName: '원장 단지명', area: 85,
+            floor: 12, price: 130_000, dealDate: '2026-08-09', prevPrice: 100_000,
+          }] as Row[] };
+        }
+        if (text === HIGHLIGHTS_PYEONG84_SELECT) {
+          return { rows: [
+            {
+              sigungu: '강남구', umdNm: '역삼동', aptName: '원장 단지명', area: 85,
+              floor: null, price: 160_000, dealDate: '2026-08-08',
+            },
+            {
+              sigungu: '강남구', umdNm: '삼성동', aptName: '모호 단지명', area: 85,
+              floor: 9, price: 120_000, dealDate: '2026-08-07',
+            },
+          ] as Row[] };
+        }
+        if (text === MARKET_LIVE_SELECT) {
+          return { rows: emptyMarketLiveAggregates().map((row) => row.sigungu === '강남구'
+            ? {
+                ...row,
+                recentSum: 300_000,
+                recentCount: 2,
+                previousSum: 100_000,
+                previousCount: 1,
+              }
+            : row) as Row[] };
+        }
+        return { rows: [] as Row[] };
+      },
+    };
+
+    const collected = await collectPublicTransactionRelease(client, {
+      now: new Date('2026-08-11T03:00:00.000Z'),
+      districts: [['강남구', '11680']],
+    });
+    const highlights = collected.namedArtifacts.find(
+      ({ name }) => name === 'highlights/rolling30',
+    )?.data as {
+      newHighs: unknown[];
+      surges: unknown[];
+      pyeong84: unknown[];
+    };
+    const marketLive = collected.namedArtifacts.find(
+      ({ name }) => name === 'market-live/rolling30',
+    )?.data as {
+      rows: Array<Record<string, unknown>>;
+      windows: Record<string, unknown>;
+    };
+
+    expect(highlights.newHighs).toEqual([expect.objectContaining({
+      apt: '원장 단지명', area: 85, masterId: 'apt-exact', floor: 1, prevHigh: 140_000,
+    })]);
+    expect(highlights.surges).toEqual([expect.objectContaining({
+      area: 85, masterId: 'apt-exact', prevPrice: 100_000, ratePct: 30,
+    })]);
+    expect(highlights.pyeong84).toEqual([
+      expect.objectContaining({ masterId: 'apt-exact', floor: 1, area: 85 }),
+      expect.objectContaining({ apt: '모호 단지명', masterId: null, area: 85 }),
+    ]);
+    expect(marketLive.rows[0]).toEqual({
+      region: '강남구',
+      recentAverage: 150_000,
+      recentCount: 2,
+      previousAverage: 100_000,
+      previousCount: 1,
+      changePct: 50,
+    });
+    expect(marketLive.windows).toEqual({
+      recent: { from: '2026-07-13', toExclusive: '2026-08-12', days: 30 },
+      previous: { from: '2026-06-13', toExclusive: '2026-07-13', days: 30 },
+    });
+    expect(calls.filter(({ text }) => text === APARTMENT_INDEX_SELECT)).toHaveLength(1);
+    for (const query of [
+      HIGHLIGHTS_NEW_HIGHS_SELECT,
+      HIGHLIGHTS_SURGES_SELECT,
+      HIGHLIGHTS_PYEONG84_SELECT,
+    ]) {
+      expect(calls.find(({ text }) => text === query)?.values)
+        .toEqual(['2026-07-13', '2026-08-12', HIGHLIGHTS_PER_CATEGORY]);
+    }
+    expect(calls.find(({ text }) => text === MARKET_LIVE_SELECT)?.values)
+      .toEqual([MARKET_LIVE_REGIONS, '2026-06-13', '2026-07-13', '2026-08-12']);
+  });
+
   it('publishes presale rows that have no master_id column as unmatched', async () => {
     const client: PublicSnapshotQueryClient = {
       query: async <Row>(text: string) => {
+        if (text === MARKET_LIVE_SELECT) {
+          return { rows: emptyMarketLiveAggregates() as Row[] };
+        }
         if (text !== DISTRICT_PRESALE_SELECT) return { rows: [] as Row[] };
         return { rows: [{
           dedupeKey: 'presale-without-master-id',
@@ -752,6 +980,9 @@ describe('local PostgreSQL public transaction publisher', () => {
             score: null,
           }] as Row[] };
         }
+        if (text === MARKET_LIVE_SELECT) {
+          return { rows: emptyMarketLiveAggregates() as Row[] };
+        }
         return { rows: [] as Row[] };
       },
     };
@@ -785,7 +1016,7 @@ describe('local PostgreSQL public transaction publisher', () => {
           lawdCd: '11680',
           totalHouseholds: 1000,
           score: null,
-        }] : []) as Row[],
+        }] : text === MARKET_LIVE_SELECT ? emptyMarketLiveAggregates() : []) as Row[],
       }),
     };
     const collected = await collectPublicTransactionRelease(nullableScoreClient, {
@@ -810,7 +1041,8 @@ describe('local PostgreSQL public transaction publisher', () => {
     expect(store.writes).toHaveLength(0);
   });
 
-  it('uses explicit summary/index queries and excludes canceled/unknown-day rolling rows', () => {
+  it('uses exact summary, highlight, market-live, and apartment-index SQL semantics', () => {
+    const normalizedSql = (sql: string) => sql.replace(/\s+/g, ' ').trim();
     expect(SALE_SUMMARY_SELECT).toContain("right(deal_date, 2) <> '00'");
     expect(SALE_SUMMARY_SELECT).toContain('is_canceled = false');
     expect(SALE_SUMMARY_SELECT).toContain('history.deal_date < latest.deal_date');
@@ -822,6 +1054,52 @@ describe('local PostgreSQL public transaction publisher', () => {
     expect(RENT_SUMMARY_SELECT).toContain('monthly_rent > 0');
     expect(APARTMENT_INDEX_SELECT).not.toContain('SELECT *');
     expect(APARTMENT_INDEX_SELECT).toContain('FROM public.apt_scores');
+
+    expect(HIGHLIGHTS_NEW_HIGHS_SELECT).toContain("right(deal_date, 2) <> '00'");
+    expect(HIGHLIGHTS_NEW_HIGHS_SELECT).toContain('t.deal_date < l.deal_date');
+    expect(HIGHLIGHTS_NEW_HIGHS_SELECT).toContain('deal_amount > prev_high');
+    expect(HIGHLIGHTS_NEW_HIGHS_SELECT)
+      .toContain('deal_date DESC, deal_amount DESC, floor DESC');
+    expect(HIGHLIGHTS_NEW_HIGHS_SELECT).toContain('floor DESC NULLS LAST');
+    expect(HIGHLIGHTS_NEW_HIGHS_SELECT).toContain('area_r AS area');
+    expect(HIGHLIGHTS_NEW_HIGHS_SELECT).not.toContain('area_m2::float8 AS area');
+    expect(HIGHLIGHTS_NEW_HIGHS_SELECT.match(/\b(?:FROM|JOIN) transactions\b/g)).toHaveLength(2);
+    expect(normalizedSql(HIGHLIGHTS_NEW_HIGHS_SELECT)).toContain(
+      'ORDER BY deal_amount DESC, sigungu, umd_nm, apt_name, area_r, floor DESC NULLS LAST, deal_date DESC LIMIT $3',
+    );
+    expect(HIGHLIGHTS_SURGES_SELECT).toContain('row_number() OVER');
+    expect(HIGHLIGHTS_SURGES_SELECT).toContain('r1.rn = 1 AND r2.rn = 2');
+    expect(HIGHLIGHTS_SURGES_SELECT).toContain('r1.deal_amount > r2.deal_amount');
+    expect(HIGHLIGHTS_SURGES_SELECT).toContain('deal_date DESC, deal_amount DESC, floor DESC');
+    expect(normalizedSql(HIGHLIGHTS_SURGES_SELECT)).toContain(
+      'ORDER BY (r1.deal_amount - r2.deal_amount)::float8 / r2.deal_amount DESC, r1.sigungu, r1.umd_nm, r1.apt_name, r1.area_r, r1.floor DESC NULLS LAST, r1.deal_date DESC LIMIT $3',
+    );
+    expect(HIGHLIGHTS_PYEONG84_SELECT)
+      .toContain('round(area_m2::numeric)::int BETWEEN 80 AND 88');
+    expect(HIGHLIGHTS_PYEONG84_SELECT)
+      .toContain('DISTINCT ON (sigungu, umd_nm, apt_name)');
+    expect(HIGHLIGHTS_PYEONG84_SELECT)
+      .toContain('deal_amount DESC, deal_date DESC, floor DESC');
+    expect(normalizedSql(HIGHLIGHTS_PYEONG84_SELECT)).toContain(
+      'ORDER BY deal_amount DESC, sigungu, umd_nm, apt_name, area_r, floor DESC NULLS LAST, deal_date DESC LIMIT $3',
+    );
+    for (const query of [
+      HIGHLIGHTS_NEW_HIGHS_SELECT,
+      HIGHLIGHTS_SURGES_SELECT,
+      HIGHLIGHTS_PYEONG84_SELECT,
+    ]) {
+      expect(query).toContain('is_canceled = false');
+      expect(query).toContain('LIMIT $3');
+    }
+
+    expect(MARKET_LIVE_SELECT).toContain('SELECT unnest($1::text[]) AS sigungu');
+    expect(MARKET_LIVE_SELECT).toContain('deal_date >= $2 AND deal_date < $4');
+    expect(MARKET_LIVE_SELECT).toContain('w.deal_date >= $3');
+    expect(MARKET_LIVE_SELECT).toContain('w.deal_date < $3');
+    expect(MARKET_LIVE_SELECT).toContain('area_m2 BETWEEN 80 AND 88');
+    expect(MARKET_LIVE_SELECT).not.toContain('round(area_m2');
+    expect(MARKET_LIVE_SELECT).toContain('is_canceled = false');
+    expect(MARKET_LIVE_SELECT).toContain('LEFT JOIN w USING (sigungu)');
   });
 
   it('preserves unknown MOLIT days as YYYY-MM and refuses remote databases', () => {
