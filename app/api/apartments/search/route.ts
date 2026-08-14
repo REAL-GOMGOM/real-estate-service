@@ -12,6 +12,7 @@ import {
 } from '@/lib/public-snapshots/serving-artifacts';
 import {
   createPublicSnapshotRuntimeFromEnv,
+  isPublicSnapshotConfigured,
   type PublicSnapshotRuntime,
 } from '@/lib/public-snapshots/runtime';
 
@@ -44,8 +45,9 @@ async function searchSnapshot(
       generatedAt: result.data.generatedAt,
     };
   } catch {
-    // Generic envelope validation intentionally stays fail-open to the existing DB path.
-    console.warn('[apartments/search] apartment snapshot validation failed; using DB fallback');
+    // The caller decides whether legacy DB fallback is allowed. Once public
+    // serving is configured, a broken artifact must not resurrect stale Neon.
+    console.warn('[apartments/search] apartment snapshot validation failed');
     return null;
   }
 }
@@ -97,6 +99,22 @@ export async function GET(req: NextRequest) {
           'X-Naezip-Data-Source': 'snapshot',
           'X-Naezip-Snapshot-Generated-At': snapshotRows.generatedAt,
         },
+      },
+    );
+  }
+
+  if (isPublicSnapshotConfigured()) {
+    return NextResponse.json(
+      {
+        status: 'unavailable',
+        error: '검증된 단지 검색 스냅샷을 준비 중입니다',
+        results: [],
+        query: q,
+        count: 0,
+      },
+      {
+        status: 503,
+        headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300' },
       },
     );
   }

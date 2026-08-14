@@ -7,10 +7,12 @@ const mocks = vi.hoisted(() => ({
   createRuntime: vi.fn(),
   getNamedArtifact: vi.fn(),
   getBlogDb: vi.fn(),
+  isPublicSnapshotConfigured: vi.fn(),
 }));
 
 vi.mock('@/lib/public-snapshots/runtime', () => ({
   createPublicSnapshotRuntimeFromEnv: mocks.createRuntime,
+  isPublicSnapshotConfigured: mocks.isPublicSnapshotConfigured,
 }));
 
 vi.mock('@/lib/db/client', () => ({
@@ -62,6 +64,7 @@ describe('GET /api/apartments/search snapshot-first', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-11T03:00:00.000Z'));
     mocks.createRuntime.mockReturnValue({ getNamedArtifact: mocks.getNamedArtifact });
+    mocks.isPublicSnapshotConfigured.mockReturnValue(false);
     mocks.getNamedArtifact.mockResolvedValue({
       status: 'disabled',
       reason: 'base-url-not-configured',
@@ -168,5 +171,27 @@ describe('GET /api/apartments/search snapshot-first', () => {
     expect(body.results).toEqual([dbRow]);
     expect(response.headers.get('x-naezip-data-source')).toBeNull();
     expect(mocks.getBlogDb).toHaveBeenCalledOnce();
+  });
+
+  it('serving mode의 snapshot miss는 Neon 검색을 부활시키지 않는다', async () => {
+    mocks.isPublicSnapshotConfigured.mockReturnValue(true);
+    mocks.getNamedArtifact.mockResolvedValue({
+      status: 'unavailable',
+      reason: 'read-failed',
+    });
+
+    const response = await GET(new NextRequest(
+      'http://localhost/api/apartments/search?q=%EB%9E%98%EB%AF%B8%EC%95%88',
+    ));
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body).toMatchObject({
+      status: 'unavailable',
+      results: [],
+      query: '래미안',
+      count: 0,
+    });
+    expect(mocks.getBlogDb).not.toHaveBeenCalled();
   });
 });

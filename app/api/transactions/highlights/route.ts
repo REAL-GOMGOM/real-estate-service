@@ -9,6 +9,17 @@ import {
 } from '@/lib/transaction-identity';
 import { resolveAggWindow, kstCurrentYyyymm } from '@/lib/agg-window';
 import { fetchHighlightLists, type RawHighlightRow } from '@/lib/agg-queries';
+import {
+  createPublicSnapshotRuntimeFromEnv,
+  isPublicSnapshotConfigured,
+} from '@/lib/public-snapshots/runtime';
+import {
+  assertRolling30HighlightsEnvelope,
+  HIGHLIGHTS_ROLLING30_ARTIFACT_NAME,
+  isServingArtifactFresh,
+  TRANSACTION_SNAPSHOT_MAX_AGE_MS,
+  type Rolling30HighlightsData,
+} from '@/lib/public-snapshots/serving-artifacts';
 
 /**
  * 최근 30일 주요거래 API — SQL 푸시다운 전환 (2026-08-02).
@@ -20,6 +31,8 @@ import { fetchHighlightLists, type RawHighlightRow } from '@/lib/agg-queries';
  */
 
 const PER_CATEGORY = 8;
+const SUCCESS_CACHE_CONTROL = 'public, s-maxage=3600, stale-while-revalidate=86400';
+const DEGRADED_CACHE_CONTROL = 'public, s-maxage=300, stale-while-revalidate=600';
 
 interface Deal {
   district: string;
@@ -86,6 +99,38 @@ async function attachMasterIds(deals: Deal[]): Promise<void> {
   }
 }
 
+function degradedHighlightsResponse(
+  yyyymm: string,
+  window: { type: 'rolling30' | 'month'; from: string; to: string },
+): NextResponse {
+  return NextResponse.json(
+    {
+      status: 'degraded',
+      month: yyyymm,
+      window: { type: window.type, from: window.from, to: window.to },
+      coverage: '집계 데이터 일시 점검 중',
+      newHighs: [],
+      surges: [],
+      pyeong84: [],
+      updatedAt: new Date().toISOString(),
+      note: '검증된 특이 실거래 스냅샷을 준비 중입니다. 잠시 후 다시 확인해주세요.',
+    },
+    { headers: { 'Cache-Control': DEGRADED_CACHE_CONTROL } },
+  );
+}
+
+function matchesRequestedHighlights(
+  data: Rolling30HighlightsData,
+  requestedWindowTo: string,
+  now: Date,
+): boolean {
+  return data.window.to <= requestedWindowTo
+    && isServingArtifactFresh(data.updatedAt, {
+      now,
+      maxAgeMs: TRANSACTION_SNAPSHOT_MAX_AGE_MS,
+    });
+}
+
 export async function GET(req: NextRequest) {
   // 프리렌더 제외 (Cache Components 호환 방식 — 기존 그대로)
   await connection();
@@ -98,6 +143,34 @@ export async function GET(req: NextRequest) {
     );
   }
   const yyyymm = window.type === 'month' ? window.yyyymm! : kstCurrentYyyymm();
+  const servingMode = isPublicSnapshotConfigured();
+
+  if (window.type === 'rolling30') {
+    try {
+      const snapshot = await createPublicSnapshotRuntimeFromEnv()
+        .getNamedArtifact(HIGHLIGHTS_ROLLING30_ARTIFACT_NAME);
+      if (snapshot.status === 'success') {
+        try {
+          assertRolling30HighlightsEnvelope(snapshot.data);
+          if (matchesRequestedHighlights(snapshot.data.data, window.to, new Date())) {
+            return NextResponse.json(snapshot.data.data, {
+              headers: {
+                'Cache-Control': SUCCESS_CACHE_CONTROL,
+                'X-Naezip-Data-Source': 'snapshot',
+                'X-Naezip-Snapshot-Generated-At': snapshot.data.generatedAt,
+              },
+            });
+          }
+        } catch {
+          // Invalid artifacts are unavailable, never authoritative.
+        }
+      }
+    } catch {
+      // Runtime errors are handled below without reviving an older Neon aggregate.
+    }
+  }
+
+  if (servingMode) return degradedHighlightsResponse(yyyymm, window);
 
   try {
     const lists = await fetchHighlightLists(window.from, window.to, PER_CATEGORY);
@@ -130,7 +203,7 @@ export async function GET(req: NextRequest) {
         pyeong84,
         updatedAt: new Date().toISOString(),
       },
-      { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } }
+      { headers: { 'Cache-Control': SUCCESS_CACHE_CONTROL } }
     );
   } catch (error) {
     // DB 불가 시 빈 집계 강등 (500 방지) — 짧은 캐시로 복구 시 빠른 재반영
@@ -146,7 +219,7 @@ export async function GET(req: NextRequest) {
         updatedAt: new Date().toISOString(),
         note: '집계 데이터 일시 점검 중입니다. 잠시 후 다시 확인해주세요.',
       },
-      { headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' } }
+      { headers: { 'Cache-Control': DEGRADED_CACHE_CONTROL } }
     );
   }
 }
