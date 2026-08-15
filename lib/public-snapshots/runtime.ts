@@ -1,5 +1,6 @@
 import type {
   PublicNamedArtifactEnvelope,
+  PublicTransactionManifest,
   PublicTransactionSnapshot,
 } from './contract';
 import { PublicSnapshotValidationError } from './contract';
@@ -14,7 +15,7 @@ export function isPublicSnapshotConfigured(
   return Boolean(env[PUBLIC_SNAPSHOT_BASE_URL_ENV]?.trim());
 }
 
-export type PublicSnapshotRuntimeOperation = 'configuration' | 'district' | 'named-artifact';
+export type PublicSnapshotRuntimeOperation = 'configuration' | 'manifest' | 'district' | 'named-artifact';
 export type PublicSnapshotUnavailableReason =
   | 'invalid-base-url'
   | 'invalid-request'
@@ -136,14 +137,25 @@ export class PublicSnapshotRuntime {
     return { status: 'unavailable', reason };
   }
 
+  async getManifest(): Promise<PublicSnapshotRuntimeResult<PublicTransactionManifest>> {
+    const inactive = this.inactiveResult<PublicTransactionManifest>('manifest');
+    if (inactive) return inactive;
+    try {
+      return { status: 'success', data: await this.reader!.getManifest() };
+    } catch (error) {
+      return this.failedRead('manifest', error);
+    }
+  }
+
   async getDistrictSnapshot(
     lawdCd: string,
+    manifest?: PublicTransactionManifest,
   ): Promise<PublicSnapshotRuntimeResult<PublicTransactionSnapshot>> {
     const inactive = this.inactiveResult<PublicTransactionSnapshot>('district');
     if (inactive) return inactive;
     if (!/^\d{5}$/.test(lawdCd)) return this.invalidRequest('district');
     try {
-      return { status: 'success', data: await this.reader!.getDistrictSnapshot(lawdCd) };
+      return { status: 'success', data: await this.reader!.getDistrictSnapshot(lawdCd, manifest) };
     } catch (error) {
       return this.failedRead('district', error);
     }
@@ -151,6 +163,7 @@ export class PublicSnapshotRuntime {
 
   async getNamedArtifact<T = unknown>(
     name: string,
+    manifest?: PublicTransactionManifest,
   ): Promise<PublicSnapshotRuntimeResult<PublicNamedArtifactEnvelope<T>>> {
     const inactive = this.inactiveResult<PublicNamedArtifactEnvelope<T>>('named-artifact');
     if (inactive) return inactive;
@@ -158,7 +171,7 @@ export class PublicSnapshotRuntime {
       return this.invalidRequest('named-artifact');
     }
     try {
-      return { status: 'success', data: await this.reader!.getNamedArtifact<T>(name) };
+      return { status: 'success', data: await this.reader!.getNamedArtifact<T>(name, manifest) };
     } catch (error) {
       return this.failedRead('named-artifact', error);
     }

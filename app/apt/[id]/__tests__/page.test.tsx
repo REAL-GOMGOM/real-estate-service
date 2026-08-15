@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   connection: vi.fn(),
   getAptPageData: vi.fn(),
+  AptPageDataUnavailableError: class AptPageDataUnavailableError extends Error {},
 }));
 
 vi.mock('next/server', () => ({ connection: mocks.connection }));
@@ -13,13 +14,18 @@ vi.mock('next/navigation', () => ({
   },
 }));
 vi.mock('@/lib/apt-detail', () => ({
-  APT_PAGE_MONTHS: 12,
-  APT_RENT_MONTHS: 6,
+  AptPageDataUnavailableError: mocks.AptPageDataUnavailableError,
   getAptPageData: mocks.getAptPageData,
 }));
 vi.mock('@/components/layout/Header', () => ({ default: () => null }));
 vi.mock('@/components/layout/Footer', () => ({ default: () => null }));
 vi.mock('@/components/apt/PriceComboChart', () => ({ default: () => null }));
+vi.mock('@/components/shared/AnalysisPromoBar', () => ({ AnalysisPromoBar: () => null }));
+vi.mock('../AptShareActions', () => ({ default: () => null }));
+vi.mock('../AptTxTable', () => ({ default: () => null }));
+vi.mock('../AptDealTabs', () => ({
+  default: ({ children }: { children: ReactNode }) => children,
+}));
 
 import AptPage, { generateMetadata } from '../page';
 
@@ -33,15 +39,40 @@ const master = {
 function pageData(
   transactionsStatus: 'ok' | 'error',
   rentStatus: 'ok' | 'error',
-  { sales = 0, rents = 0 }: { sales?: number; rents?: number } = {},
+  {
+    sales = 0,
+    rents = 0,
+    salesMonths = 12,
+    rentMonths = 6,
+    allTimeHighStatus = 'ok',
+    salePrices,
+  }: {
+    sales?: number;
+    rents?: number;
+    salesMonths?: number;
+    rentMonths?: number;
+    allTimeHighStatus?: 'ok' | 'ambiguous' | 'error' | 'unavailable';
+    salePrices?: number[];
+  } = {},
 ) {
+  const prices = salePrices ?? Array.from({ length: sales }, (_, index) => 110_000 - index * 10_000);
   return {
     master,
     district: '강남구',
     group: {
       id: master.id, name: master.name, district: '강남구', dong: master.dong,
       buildYear: null, households: master.totalHouseholds, areas: [],
-      transactions: Array.from({ length: sales }, () => ({ price: 100_000 })),
+      transactions: prices.map((price, index) => ({
+        aptName: master.name,
+        district: '강남구',
+        dong: master.dong,
+        area: 84,
+        floor: 10,
+        price,
+        pricePerArea: Math.round(price / 84),
+        date: index === 0 ? '2026-08-15' : `2026-07-${String(15 - index).padStart(2, '0')}`,
+        buildYear: 2000,
+      })),
     },
     allTimeHigh: null,
     recentJeonse: [],
@@ -49,7 +80,9 @@ function pageData(
     aptScore: null,
     transactionsStatus,
     rentStatus,
-    allTimeHighStatus: 'ok' as const,
+    allTimeHighStatus,
+    salesMonths,
+    rentMonths,
   };
 }
 
@@ -116,6 +149,51 @@ describe('단지 페이지 원장 상태', () => {
     expect(text).toContain('최근6개월내전월세거래가없습니다');
     expect(text).not.toContain('데이터를불러오지못했습니다');
   });
+
+  it('스냅샷 조회 기간을 그대로 표시하고 12개월·6개월로 과장하지 않는다', async () => {
+    mocks.getAptPageData.mockResolvedValue(pageData('ok', 'ok', {
+      salesMonths: 2,
+      rentMonths: 2,
+      allTimeHighStatus: 'unavailable',
+    }));
+
+    const content = await renderAptContent();
+    const text = (await collectResolvedText(content)).join('').replace(/\s+/g, '');
+
+    expect(text).toContain('최근2개월내신고된매매거래가없습니다');
+    expect(text).toContain('최근2개월내전월세거래가없습니다');
+    expect(text).not.toContain('최근12개월');
+    expect(text).not.toContain('최근6개월');
+  });
+
+  it('스냅샷 최고가를 역대 전고점으로 부르지 않고 엄격한 경신만 표시한다', async () => {
+    mocks.getAptPageData.mockResolvedValue(pageData('ok', 'ok', {
+      salesMonths: 2,
+      rentMonths: 2,
+      allTimeHighStatus: 'unavailable',
+      salePrices: [110_000, 100_000],
+    }));
+
+    let content = await renderAptContent();
+    let text = (await collectResolvedText(content)).join('').replace(/\s+/g, '');
+
+    expect(text).toContain('2개월최고가회복률');
+    expect(text).toContain('2개월최고실거래가');
+    expect(text).not.toContain('2개월전고점회복률');
+    expect(text).toContain('기간내최고가경신');
+
+    mocks.getAptPageData.mockResolvedValue(pageData('ok', 'ok', {
+      salesMonths: 2,
+      rentMonths: 2,
+      allTimeHighStatus: 'unavailable',
+      salePrices: [100_000, 100_000],
+    }));
+    content = await renderAptContent();
+    text = (await collectResolvedText(content)).join('').replace(/\s+/g, '');
+
+    expect(text).not.toContain('기간내최고가경신');
+    expect(text).toContain('최근2개월최고가기준');
+  });
 });
 
 describe('단지 페이지 색인 메타데이터', () => {
@@ -143,11 +221,44 @@ describe('단지 페이지 색인 메타데이터', () => {
     expect(mocks.getAptPageData).toHaveBeenCalledWith(master.id);
   });
 
+  it('메타데이터도 실제 스냅샷 조회 기간을 사용한다', async () => {
+    mocks.getAptPageData.mockResolvedValue(pageData('ok', 'ok', {
+      sales: 1,
+      salesMonths: 2,
+      rentMonths: 2,
+      allTimeHighStatus: 'unavailable',
+    }));
+
+    const metadata = await generateMetadata({ params: Promise.resolve({ id: master.id }) });
+
+    expect(metadata.description).toContain('최근 2개월 시세 차트');
+    expect(metadata.description).toContain('2개월 최고가 회복률');
+    expect(metadata.description).not.toContain('최근 12개월');
+    expect(metadata.description).not.toContain('전고점 회복률');
+  });
+
   it('존재하지 않는 단지도 noindex,follow로 닫는다', async () => {
     mocks.getAptPageData.mockResolvedValue(null);
 
     const metadata = await generateMetadata({ params: Promise.resolve({ id: 'missing' }) });
 
     expect(metadata.robots).toEqual({ index: false, follow: true });
+  });
+
+  it('검증된 스냅샷을 읽지 못하면 오류 상세를 숨기고 noindex 메타데이터를 반환한다', async () => {
+    mocks.getAptPageData.mockRejectedValue(new mocks.AptPageDataUnavailableError());
+
+    const metadata = await generateMetadata({ params: Promise.resolve({ id: master.id }) });
+
+    expect(metadata.title).toBe('단지 상세 일시 점검 중 | 내집 My.ZIP');
+    expect(metadata.robots).toEqual({ index: false, follow: true });
+  });
+
+  it('예상하지 못한 메타데이터 오류는 숨기지 않는다', async () => {
+    const error = new Error('unexpected');
+    mocks.getAptPageData.mockRejectedValue(error);
+
+    await expect(generateMetadata({ params: Promise.resolve({ id: master.id }) }))
+      .rejects.toBe(error);
   });
 });

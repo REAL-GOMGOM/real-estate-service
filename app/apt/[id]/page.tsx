@@ -8,9 +8,8 @@ import Footer from '@/components/layout/Footer';
 import PriceComboChart from '@/components/apt/PriceComboChart';
 import { AnalysisPromoBar } from '@/components/shared/AnalysisPromoBar';
 import {
+  AptPageDataUnavailableError,
   getAptPageData,
-  APT_PAGE_MONTHS,
-  APT_RENT_MONTHS,
   type AptPageData,
 } from '@/lib/apt-detail';
 import {
@@ -44,7 +43,17 @@ export async function generateMetadata(
   // await params 가 첫 동적 접근이어야 PPR 셸 프리렌더가 여기서 안전하게
   // 지연된다 (blog/[slug] 패턴). connection() 을 먼저 호출하면 빌드 에러.
   const { id } = await params;
-  const data = await getAptPageData(decodeURIComponent(id));
+  let data: AptPageData | null;
+  try {
+    data = await getAptPageData(decodeURIComponent(id));
+  } catch (error) {
+    if (!(error instanceof AptPageDataUnavailableError)) throw error;
+    return {
+      title: '단지 상세 일시 점검 중 | 내집 My.ZIP',
+      description: '단지 상세 데이터를 잠시 불러오지 못했습니다. 실거래 조회는 계속 이용할 수 있습니다.',
+      robots: { index: false, follow: true },
+    };
+  }
   if (!data) {
     return {
       title: '단지를 찾을 수 없습니다 | 내집 My.ZIP',
@@ -56,9 +65,12 @@ export async function generateMetadata(
   const indexable = hasIndexableAptContent(data);
 
   const title = `${apt.name} 실거래가·시세 | 내집 My.ZIP`;
+  const recoveryDescription = data.allTimeHighStatus === 'unavailable'
+    ? `${data.salesMonths}개월 최고가 회복률`
+    : '전고점 회복률';
   const description =
-    `${apt.sigungu}${apt.dong ? ` ${apt.dong}` : ''} ${apt.name} 아파트 실거래가와 최근 ${APT_PAGE_MONTHS}개월 시세 차트, ` +
-    `전고점 회복률, 면적별 거래 내역${apt.totalHouseholds ? ` (${apt.totalHouseholds.toLocaleString()}세대)` : ''}. ` +
+    `${apt.sigungu}${apt.dong ? ` ${apt.dong}` : ''} ${apt.name} 아파트 실거래가와 최근 ${data.salesMonths}개월 시세 차트, ` +
+    `${recoveryDescription}, 면적별 거래 내역${apt.totalHouseholds ? ` (${apt.totalHouseholds.toLocaleString()}세대)` : ''}. ` +
     `국토교통부 실거래가 기반.`;
   const canonical = `${SITE_URL}/apt/${encodeURIComponent(apt.id)}`;
 
@@ -114,9 +126,11 @@ function DataLoadError({ label }: { label: string }) {
 function RentTransactionsPanel({
   transactions,
   status,
+  months,
 }: {
   transactions: RentTransaction[];
   status: AptPageData['rentStatus'];
+  months: number;
 }) {
   if (status === 'error') return <DataLoadError label="전월세 거래" />;
   if (transactions.length === 0) {
@@ -126,7 +140,7 @@ function RentTransactionsPanel({
         backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
       }}>
         <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>
-          최근 {APT_RENT_MONTHS}개월 내 전월세 거래가 없습니다.
+          최근 {months}개월 내 전월세 거래가 없습니다.
         </p>
       </div>
     );
@@ -142,7 +156,7 @@ function RentTransactionsPanel({
           전월세 거래
         </h2>
         <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
-          최근 {APT_RENT_MONTHS}개월 · 계약일순
+          최근 {months}개월 · 계약일순
         </span>
       </div>
       <div style={{ overflowX: 'auto' }}>
@@ -201,6 +215,8 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
     transactionsStatus,
     rentStatus,
     allTimeHighStatus,
+    salesMonths,
+    rentMonths,
   } = data;
 
   // 입지 점수 등급 라벨 (1.0 극상 ~ 5.0)
@@ -223,18 +239,24 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
   const recoveryPct = allTimeHigh && latest
     ? Math.round((latest.price / allTimeHigh.price) * 1000) / 10
     : recovery?.pct ?? null;
-  const recoveryLabel = allTimeHigh ? '역대 전고점 회복률' : '전고점 회복률';
+  const recoveryLabel = allTimeHigh
+    ? '역대 전고점 회복률'
+    : allTimeHighStatus === 'unavailable'
+      ? `${salesMonths}개월 최고가 회복률`
+      : `${salesMonths}개월 전고점 회복률`;
   const fallbackHighReason = allTimeHighStatus === 'ambiguous'
     ? '동명 단지 구분이 불가능해 역대 전고점 제외'
     : allTimeHighStatus === 'error'
       ? '역대 전고점 조회 실패'
-      : null;
+      : allTimeHighStatus === 'unavailable'
+        ? '공개 스냅샷에는 역대 전고점이 없어 기간 내 기준'
+        : null;
   const recoverySub = allTimeHigh
-    ? (recoveryPct !== null && recoveryPct >= 100
+    ? (latest && latest.price > allTimeHigh.price
         ? `전고점 경신 · 종전 ${fmtPrice(allTimeHigh.price)}`
         : `전고점 ${fmtPrice(allTimeHigh.price)} (${fmtContractDate(allTimeHigh.dealDate)})`)
     : (recovery
-        ? `${fallbackHighReason ? `${fallbackHighReason} · ` : ''}${recovery.pct >= 100 ? '기간 내 최고가 경신' : `최근 ${APT_PAGE_MONTHS}개월 최고가 기준`}`
+        ? `${fallbackHighReason ? `${fallbackHighReason} · ` : ''}${newHigh ? '기간 내 최고가 경신' : `최근 ${salesMonths}개월 최고가 기준`}`
         : fallbackHighReason ?? undefined);
 
   // 전세가율 (사이클 LL) — 대표 면적 최신 전세 보증금 ÷ 최근 매매가
@@ -247,6 +269,7 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
     district,
     q: group.name,
     aptId: master.id,
+    months: String(salesMonths),
   });
   if (group.dong) deepLinkParams.set('aptDong', group.dong);
   const deepLink = `/transactions?${deepLinkParams.toString()}`;
@@ -302,7 +325,7 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
             fontSize: '11px', fontWeight: 700, padding: '3px 9px', borderRadius: '6px',
             backgroundColor: 'var(--up-color, #C92F2F)', color: '#FFFFFF',
           }}>
-            신고가
+            {allTimeHighStatus === 'unavailable' ? `${salesMonths}개월 신고가` : '신고가'}
           </span>
         )}
         {aptScore?.isRegionTop && (
@@ -331,7 +354,7 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
               backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
             }}>
               <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>
-                최근 {APT_PAGE_MONTHS}개월 내 신고된 매매 거래가 없습니다.
+                최근 {salesMonths}개월 내 신고된 매매 거래가 없습니다.
               </p>
               <Link href={deepLink} style={{ display: 'inline-block', marginTop: '14px', fontSize: '13px', fontWeight: 700, color: 'var(--accent)' }}>
                 이 단지 실거래 다시 확인하기 →
@@ -339,7 +362,7 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
             </div>
           )}
           <div style={{ marginTop: '24px' }}>
-            <RentTransactionsPanel transactions={rentTransactions} status={rentStatus} />
+            <RentTransactionsPanel transactions={rentTransactions} status={rentStatus} months={rentMonths} />
           </div>
         </>
       ) : (
@@ -423,8 +446,8 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
           {/* 통계 카드 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', marginBottom: '20px' }}>
             <StatCard label="최근 실거래가" value={fmtPrice(latest.price)} sub={`${fmtContractDate(latest.date)} · ${latest.area}㎡`} />
-            <StatCard label={`${APT_PAGE_MONTHS}개월 평균`} value={fmtPrice(avg)} sub={`${sorted.length}건 기준`} />
-            <StatCard label="최고 실거래가" value={maxTx ? fmtPrice(maxPrice) : '—'} sub={maxTx ? fmtContractDate(maxTx.date) : undefined} />
+            <StatCard label={`${salesMonths}개월 평균`} value={fmtPrice(avg)} sub={`${sorted.length}건 기준`} />
+            <StatCard label={`${salesMonths}개월 최고 실거래가`} value={maxTx ? fmtPrice(maxPrice) : '—'} sub={maxTx ? fmtContractDate(maxTx.date) : undefined} />
             <StatCard
               label={recoveryLabel}
               value={recoveryPct !== null ? `${recoveryPct}%` : '—'}
@@ -454,7 +477,7 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
                 최근 거래 내역
               </h2>
               <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
-                최근 {APT_PAGE_MONTHS}개월 · 계약일순
+                최근 {salesMonths}개월 · 계약일순
               </span>
             </div>
             {/* 클라이언트 테이블 — 행 클릭 상세·건별 공유 (모달과 대칭, 2026-07-19) */}
@@ -463,7 +486,7 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
               district={district}
               dong={group.dong ?? null}
               transactions={sorted}
-              months={APT_PAGE_MONTHS}
+              months={salesMonths}
               maxPrice={maxPrice}
               limit={TABLE_LIMIT}
             />
@@ -478,7 +501,7 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
           </div>
           {/* 전월세 탭 패널 (전월세 v2) */}
           <div>
-            <RentTransactionsPanel transactions={rentTransactions} status={rentStatus} />
+            <RentTransactionsPanel transactions={rentTransactions} status={rentStatus} months={rentMonths} />
           </div>
           </AptDealTabs>
 
@@ -487,10 +510,12 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
             {allTimeHigh
               ? ' 역대 전고점은 2019년 이후 신고 최고가 기준입니다.'
               : allTimeHighStatus === 'ambiguous'
-                ? ` 동명 단지를 구분할 수 없는 역대 전고점은 제외하고 최근 ${APT_PAGE_MONTHS}개월 값만 사용했습니다.`
+                ? ` 동명 단지를 구분할 수 없는 역대 전고점은 제외하고 최근 ${salesMonths}개월 값만 사용했습니다.`
                 : allTimeHighStatus === 'error'
-                  ? ` 역대 전고점 조회 실패로 최근 ${APT_PAGE_MONTHS}개월 값만 사용했습니다.`
-                  : ` 전고점 회복률은 최근 ${APT_PAGE_MONTHS}개월 내 대표 면적 최고가 기준입니다.`}
+                  ? ` 역대 전고점 조회 실패로 최근 ${salesMonths}개월 값만 사용했습니다.`
+                  : allTimeHighStatus === 'unavailable'
+                    ? ` 공개 스냅샷에는 역대 전고점이 포함되지 않아 최근 ${salesMonths}개월 값만 사용했습니다.`
+                    : ` 전고점 회복률은 최근 ${salesMonths}개월 내 대표 면적 최고가 기준입니다.`}
             {jeonseRatio !== null && ' 전세가율은 대표 면적 최신 전세 보증금 ÷ 최근 매매가입니다.'}
           </p>
 

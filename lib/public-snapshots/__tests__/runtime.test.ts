@@ -93,6 +93,10 @@ describe('public snapshot fail-open runtime', () => {
       status: 'disabled',
       reason: 'base-url-not-configured',
     });
+    await expect(runtime.getManifest()).resolves.toEqual({
+      status: 'disabled',
+      reason: 'base-url-not-configured',
+    });
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
@@ -108,14 +112,21 @@ describe('public snapshot fail-open runtime', () => {
       NEXT_PUBLIC_TRANSACTION_SNAPSHOT_BASE_URL: 'https://data.example.test/',
     }, { fetchImpl });
 
-    const district = await runtime.getDistrictSnapshot('11680');
+    const manifest = await runtime.getManifest();
+    expect(manifest.status).toBe('success');
+    if (manifest.status !== 'success') throw new Error('manifest fixture failed');
+
+    const district = await runtime.getDistrictSnapshot('11680', manifest.data);
     expect(district.status).toBe('success');
     if (district.status === 'success') expect(district.data.recordCount).toBe(1);
 
-    const summary = await runtime.getNamedArtifact<Array<{ lawdCd: string }>>('summary/districts');
+    const summary = await runtime.getNamedArtifact<Array<{ lawdCd: string }>>(
+      'summary/districts',
+      manifest.data,
+    );
     expect(summary.status).toBe('success');
     if (summary.status === 'success') expect(summary.data.itemCount).toBe(1);
-    expect(fetchImpl).toHaveBeenCalledTimes(4);
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 
   it('marks malformed credentialed/query base URLs unavailable without requesting them', async () => {

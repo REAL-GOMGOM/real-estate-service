@@ -12,6 +12,20 @@ import { normalizeMLTMName } from '@/lib/normalize-mltm-name';
 import { isJeonse, type RentTransaction } from '@/lib/rent-shared';
 import { representativeArea, type AptGroup, type Transaction } from '@/lib/tx-shared';
 import {
+  APARTMENT_INDEX_ARTIFACT_NAME,
+  APARTMENT_INDEX_MAX_AGE_MS,
+  assertApartmentIndexEnvelope,
+  findApartmentIndexById,
+  isDistrictSnapshotFresh,
+  isServingArtifactFresh,
+  type ApartmentIndexItem,
+} from '@/lib/public-snapshots/serving-artifacts';
+import { assertPublicTransactionSnapshot, type PublicTransactionRecord } from '@/lib/public-snapshots/contract';
+import {
+  createPublicSnapshotRuntimeFromEnv,
+  isPublicSnapshotConfigured,
+} from '@/lib/public-snapshots/runtime';
+import {
   findApartmentIdentity,
   matchesApartmentIdentity,
   type ApartmentIdentity,
@@ -49,7 +63,35 @@ export interface AptPageData {
   transactionsStatus: 'ok' | 'error';
   rentStatus: 'ok' | 'error';
   /** apt_highs에는 법정동이 없어 동명 단지가 모호하면 역대값을 쓰지 않는다. */
-  allTimeHighStatus: 'ok' | 'ambiguous' | 'error';
+  allTimeHighStatus: 'ok' | 'ambiguous' | 'error' | 'unavailable';
+  /** 실제 응답에 포함된 매매·전월세 calendar month 수. */
+  salesMonths: number;
+  rentMonths: number;
+}
+
+export type AptPageDataUnavailableReason =
+  | 'snapshot-manifest-unavailable'
+  | 'apartment-index-unavailable'
+  | 'apartment-index-invalid'
+  | 'apartment-index-stale'
+  | 'district-snapshot-unavailable'
+  | 'district-snapshot-invalid'
+  | 'district-snapshot-stale'
+  | 'snapshot-release-mismatch'
+  | 'apartment-transaction-incomplete';
+
+/**
+ * 공개 스냅샷 serving mode에서 검증된 단지 상세를 만들 수 없음을 나타낸다.
+ * 외부 URL·응답 본문·하위 오류 메시지를 포함하지 않는 안전한 고정 오류다.
+ */
+export class AptPageDataUnavailableError extends Error {
+  readonly reason: AptPageDataUnavailableReason;
+
+  constructor(reason: AptPageDataUnavailableReason) {
+    super('Verified apartment snapshot data is unavailable');
+    this.name = 'AptPageDataUnavailableError';
+    this.reason = reason;
+  }
 }
 
 export const getApartmentById = cache(async (id: string): Promise<Apartment | null> => {
@@ -69,11 +111,216 @@ function monthsWindowStart(months: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
 }
 
+function calendarMonthStart(value: string, monthsBack: number): string {
+  const [year, month] = value.slice(0, 7).split('-').map(Number);
+  const shifted = new Date(Date.UTC(year, month - 1 - monthsBack, 1));
+  return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, '0')}-01`;
+}
+
+function calendarMonthCount(from: string, through: string): number {
+  const [fromYear, fromMonth] = from.slice(0, 7).split('-').map(Number);
+  const [throughYear, throughMonth] = through.slice(0, 7).split('-').map(Number);
+  return ((throughYear - fromYear) * 12) + throughMonth - fromMonth + 1;
+}
+
+function effectiveSnapshotWindow(
+  period: { from: string; through: string },
+  maximumMonths: number,
+): { fromMonth: string; months: number } {
+  const requestedStart = calendarMonthStart(period.through, maximumMonths - 1);
+  const from = period.from > requestedStart ? period.from : requestedStart;
+  return {
+    fromMonth: from.slice(0, 7),
+    months: calendarMonthCount(from, period.through),
+  };
+}
+
+function snapshotMaster(item: ApartmentIndexItem, generatedAt: string): Apartment {
+  return {
+    id: item.id,
+    name: item.name,
+    aliases: [...item.aliases],
+    sido: item.sido,
+    sigungu: item.sigungu,
+    dong: item.dong,
+    roadAddress: null,
+    jibunAddress: null,
+    lawdCd: item.lawdCd,
+    kaptCode: null,
+    totalHouseholds: item.totalHouseholds,
+    totalDongs: null,
+    lat: null,
+    lng: null,
+    source: 'snapshot',
+    updatedAt: new Date(generatedAt),
+  };
+}
+
+function recordMatchesUniqueApartment(
+  record: PublicTransactionRecord,
+  apartmentId: string,
+  identities: ApartmentIdentity[],
+): boolean {
+  if (record.apartmentId) return record.apartmentId === apartmentId;
+  return findApartmentIdentity(
+    { aptName: record.aptName, dong: record.dong },
+    identities,
+  )?.id === apartmentId;
+}
+
+function verifiedSnapshotFloor(record: PublicTransactionRecord): number {
+  if (record.floor === null) {
+    throw new AptPageDataUnavailableError('apartment-transaction-incomplete');
+  }
+  return record.floor;
+}
+
+async function getSnapshotAptPageData(id: string): Promise<AptPageData | null> {
+  const runtime = createPublicSnapshotRuntimeFromEnv();
+  const manifestResult = await runtime.getManifest().catch(() => null);
+  if (!manifestResult || manifestResult.status !== 'success') {
+    throw new AptPageDataUnavailableError('snapshot-manifest-unavailable');
+  }
+  const manifest = manifestResult.data;
+  const indexResult = await runtime
+    .getNamedArtifact<ApartmentIndexItem[]>(APARTMENT_INDEX_ARTIFACT_NAME, manifest)
+    .catch(() => null);
+  if (!indexResult || indexResult.status !== 'success') {
+    throw new AptPageDataUnavailableError('apartment-index-unavailable');
+  }
+
+  try {
+    assertApartmentIndexEnvelope(indexResult.data);
+  } catch {
+    throw new AptPageDataUnavailableError('apartment-index-invalid');
+  }
+  if (!isServingArtifactFresh(indexResult.data.generatedAt, {
+    maxAgeMs: APARTMENT_INDEX_MAX_AGE_MS,
+  })) {
+    throw new AptPageDataUnavailableError('apartment-index-stale');
+  }
+
+  // A fresh, strictly validated complete index is authoritative for existence.
+  const apartment = findApartmentIndexById(indexResult.data.data, id);
+  if (!apartment) return null;
+
+  const districtResult = await runtime.getDistrictSnapshot(apartment.lawdCd, manifest).catch(() => null);
+  if (!districtResult || districtResult.status !== 'success') {
+    throw new AptPageDataUnavailableError('district-snapshot-unavailable');
+  }
+  try {
+    assertPublicTransactionSnapshot(districtResult.data);
+  } catch {
+    throw new AptPageDataUnavailableError('district-snapshot-invalid');
+  }
+  if (!isDistrictSnapshotFresh(districtResult.data)) {
+    throw new AptPageDataUnavailableError('district-snapshot-stale');
+  }
+  if (districtResult.data.generatedAt !== indexResult.data.generatedAt) {
+    throw new AptPageDataUnavailableError('snapshot-release-mismatch');
+  }
+
+  const snapshot = districtResult.data;
+  const district = findDistrictByLawdCd(apartment.lawdCd) ?? apartment.sigungu;
+  if (snapshot.partition.lawdCd !== apartment.lawdCd
+    || snapshot.partition.district !== district) {
+    throw new AptPageDataUnavailableError('district-snapshot-invalid');
+  }
+
+  const master = snapshotMaster(apartment, indexResult.data.generatedAt);
+  const identities: ApartmentIdentity[] = indexResult.data.data
+    .filter((candidate) => candidate.lawdCd === apartment.lawdCd)
+    .map((candidate) => ({
+      id: candidate.id,
+      name: candidate.name,
+      aliases: candidate.aliases,
+      dong: candidate.dong,
+    }));
+  const saleWindow = effectiveSnapshotWindow(snapshot.period, APT_PAGE_MONTHS);
+  const rentWindow = effectiveSnapshotWindow(snapshot.period, APT_RENT_MONTHS);
+  const matchingRecords = snapshot.records
+    .filter((record) => recordMatchesUniqueApartment(record, master.id, identities))
+    .sort((left, right) => right.dealDate.localeCompare(left.dealDate)
+      || right.id.localeCompare(left.id));
+
+  const group: AptGroup = {
+    id: master.id,
+    name: master.name,
+    district,
+    dong: master.dong,
+    buildYear: null,
+    households: master.totalHouseholds,
+    areas: [],
+    transactions: [],
+  };
+  for (const record of matchingRecords) {
+    if (record.kind !== 'sale' || record.canceled
+      || record.dealDate.slice(0, 7) < saleWindow.fromMonth) continue;
+    const transaction: Transaction = {
+      aptName: master.name,
+      district,
+      dong: record.dong || master.dong,
+      area: Math.round(record.areaM2),
+      floor: verifiedSnapshotFloor(record),
+      price: record.amountManwon,
+      pricePerArea: Math.round(record.amountManwon / record.areaM2),
+      date: record.dealDate,
+      buildYear: record.buildYear,
+    };
+    group.transactions.push(transaction);
+    if (!group.areas.includes(transaction.area)) group.areas.push(transaction.area);
+    if (!group.buildYear && transaction.buildYear) group.buildYear = transaction.buildYear;
+  }
+  group.areas.sort((left, right) => left - right);
+
+  const allRent: RentTransaction[] = matchingRecords.flatMap((record) => {
+    if (record.kind !== 'rent' || record.dealDate.slice(0, 7) < rentWindow.fromMonth) return [];
+    return [{
+      aptName: record.aptName,
+      district,
+      dong: record.dong,
+      area: Math.round(record.areaM2),
+      floor: verifiedSnapshotFloor(record),
+      deposit: record.depositManwon,
+      monthlyRent: record.monthlyRentManwon,
+      date: record.dealDate,
+      buildYear: record.buildYear,
+      contractType: record.contractType === 'new'
+        ? '신규'
+        : record.contractType === 'renewal' ? '갱신' : '',
+      prevDeposit: record.previousDepositManwon,
+      prevMonthlyRent: record.previousMonthlyRentManwon,
+    }];
+  });
+  const rentTransactions = allRent.slice(0, APT_RENT_TABLE_LIMIT);
+  const recentJeonse = group.transactions.length > 0
+    ? allRent
+      .filter((transaction) => isJeonse(transaction)
+        && Math.abs(transaction.area - representativeArea(group)) <= 6)
+      .slice(0, 5)
+    : [];
+
+  return {
+    master,
+    district,
+    group,
+    allTimeHigh: null,
+    recentJeonse,
+    rentTransactions,
+    aptScore: null,
+    transactionsStatus: 'ok',
+    rentStatus: 'ok',
+    allTimeHighStatus: 'unavailable',
+    salesMonths: saleWindow.months,
+    rentMonths: rentWindow.months,
+  };
+}
+
 /**
  * generateMetadata와 페이지 본문이 같은 요청에서 공유하는 단지 상세 로더.
  * React cache는 요청 범위에서만 결과를 재사용해 DB 조회를 한 번으로 줄인다.
  */
-export const getAptPageData = cache(async (id: string): Promise<AptPageData | null> => {
+async function getLegacyAptPageData(id: string): Promise<AptPageData | null> {
   const master = await getApartmentById(id);
   if (!master) return null;
 
@@ -324,5 +571,16 @@ export const getAptPageData = cache(async (id: string): Promise<AptPageData | nu
     transactionsStatus,
     rentStatus,
     allTimeHighStatus,
+    salesMonths: APT_PAGE_MONTHS,
+    rentMonths: APT_RENT_MONTHS,
   };
+}
+
+/**
+ * generateMetadata와 페이지 본문이 같은 요청에서 공유하는 단지 상세 로더.
+ * 공개 스냅샷이 설정된 운영에서는 검증 실패 시 Neon으로 폴백하지 않는다.
+ */
+export const getAptPageData = cache(async (id: string): Promise<AptPageData | null> => {
+  if (isPublicSnapshotConfigured()) return getSnapshotAptPageData(id);
+  return getLegacyAptPageData(id);
 });
