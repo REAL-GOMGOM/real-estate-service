@@ -203,6 +203,8 @@ marker 설정:
 ```text
 NAEZIP_SYNC_HEALTH_MARKER=.local/macmini-sync-health.json
 NAEZIP_SYNC_HEALTH_MAX_AGE_HOURS=36
+NAEZIP_PUBLICATION_OUTCOME_MARKER=.local/public-snapshot-publication-outcome.json
+NAEZIP_PUBLICATION_ALERT_STATE_MARKER=.local/public-snapshot-alert-state.json
 ```
 
 production Blob/R2 모드의 단독 publisher는 marker가 없거나, 기본 36시간보다 오래됐거나, 최신
@@ -238,6 +240,61 @@ marker와 일치하는지 확인한다. 값을 생략한 standalone `--dry-run`�
 NAEZIP_SNAPSHOT_SOURCE_AT='marker.completedAt의 정확한 UTC ISO 값' \
   node --import tsx scripts/publish-public-transactions.ts --dry-run
 ```
+
+## 발행 결과 마커와 원격 freshness 점검
+
+wrapper는 shared publication lock을 획득한 뒤
+`NAEZIP_PUBLICATION_OUTCOME_MARKER`에 현재 발행 시도를 원자 기록한다. 기본 경로는
+`.local/public-snapshot-publication-outcome.json`이다. `attemptId`, 시작/완료 시각, `dryRun`,
+sync/publisher 종료코드와 `preflight`·`sync`·`publish`·`complete` 단계만 포함하며 URL, 토큰,
+DB 연결 문자열, 오류 본문은 넣지 않는다. 단계 진행 중에는 `status=running`, 정상 완료는
+`status=succeeded`, 확인된 실패는 `status=failed`다. 재부팅이나 SIGKILL 뒤 `running`이 남으면
+마지막 성공으로 해석하지 말고 sync health marker와 lock owner를 함께 조사한다. 이 결과 마커는
+sync health marker를 대체하거나 수정하지 않는다.
+
+고정 discovery manifest의 외부 freshness는 아래 read-only 명령으로 확인한다. 명령은
+`NEXT_PUBLIC_TRANSACTION_SNAPSHOT_BASE_URL`의 HTTPS root origin만 허용하고, strict v2 manifest를
+검증한 뒤 stdout에 고정 schema JSON 한 줄만 쓴다. URL·응답 본문·SDK 오류 문자열은 출력하지 않는다.
+공개 origin만 필요하므로 이 CLI는 비밀이 함께 든 `.env.local`을 읽지 않는다. shell에서 변수를
+export하거나 아래 monitor plist에 공개 origin만 직접 설정한다.
+
+```bash
+export NEXT_PUBLIC_TRANSACTION_SNAPSHOT_BASE_URL='https://STORE_ID.public.blob.vercel-storage.com/'
+npm run --silent snapshot:health
+```
+
+상태 및 종료코드 계약:
+
+- `0 / healthy`: `publishedAt`이 36시간 미만이다.
+- `1 / warning`: 36시간 이상 48시간 미만이다.
+- `2 / critical`: 48시간 이상, manifest가 5분 넘게 미래이거나 설정·요청·계약 검증에 실패했다.
+
+순수 점검 명령은 알림이나 상태 파일을 만들지 않는다. GUI LaunchAgent용 wrapper는 같은 JSON/종료코드
+계약을 유지하면서 macOS 알림을 추가한다.
+
+```bash
+npm run --silent snapshot:monitor
+```
+
+wrapper는 `NAEZIP_PUBLICATION_ALERT_STATE_MARKER`(기본
+`.local/public-snapshot-alert-state.json`)에 마지막 `healthy`·`warning`·`critical` 상태와 전이 시각만
+0600 파일로 원자 기록한다. 최초 정상 실행은 baseline만 저장하고 알리지 않는다. 정상→경고,
+경고→심각, 심각→경고와 경고/심각→정상 회복 때 각각 고정된 비밀 없는 macOS 알림을 한 번 보낸다.
+같은 상태가 반복되면 알리지 않는다. 알림이 실패하면 상태를 전진시키지 않아 다음 시간 실행에서
+다시 시도하지만, 이미 출력된 freshness JSON과 종료코드는 절대 바꾸지 않는다. 알림 직후 state write
+전에 프로세스가 종료되는 극히 짧은 구간에는 다음 실행에서 같은 알림이 한 번 더 나올 수 있다.
+
+`scripts/launchd/com.gomgom.naezip-snapshot-monitor.plist.example`은 1시간마다 이 wrapper를 실행해
+JSONL 로그와 로컬 데스크톱 알림을 남기는 별도 예시다. webhook·token은 사용하지 않는다. 실제 등록은
+이 저장소 변경에 포함되지 않으며, placeholder를 모두 치환하고 `plutil -lint`로 검증한 뒤 별도 운영
+승인을 받아 GUI domain에 설치한다. 로그인 세션이나 macOS 알림 권한이 없어서 `osascript`가 실패해도
+freshness 판정은 그대로 유지된다.
+
+publisher의 현재 단일 종료코드는 로컬 DB/계약 검증 실패와 Blob 네트워크 실패를 안전하게 구분하지
+못한다. 따라서 wrapper는 실패 시 publisher를 자동 재시도하지 않는다. 결과 마커와 원격 manifest를
+확인해 source marker가 여전히 유효하고 오류가 실제 일시 장애임을 운영자가 확인한 경우에만 shared
+lock 아래 standalone publisher를 수동으로 한 번 재실행한다. sync 전체를 먼저 반복하거나 무분별하게
+재시도하지 않는다.
 
 ## 단일 producer lock
 

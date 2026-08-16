@@ -28,6 +28,8 @@
     <string>__ABSOLUTE_SECURE_ENV_FILE__</string>
     <key>NAEZIP_SYNC_HEALTH_MARKER</key>
     <string>__ABSOLUTE_STATE_DIRECTORY__/macmini-sync-health.json</string>
+    <key>NAEZIP_PUBLICATION_OUTCOME_MARKER</key>
+    <string>__ABSOLUTE_STATE_DIRECTORY__/public-snapshot-publication-outcome.json</string>
     <key>NAEZIP_SNAPSHOT_LOCK_PATH</key>
     <string>__ABSOLUTE_STATE_DIRECTORY__/public-snapshot-publication.lock</string>
     <!-- Local-only by default. Change to 1 only after an explicit Neon quota review. -->

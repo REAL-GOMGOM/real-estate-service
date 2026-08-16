@@ -11,6 +11,15 @@ import {
   writeMacMiniSyncHealthMarker,
 } from '../lib/public-snapshots/publish-health';
 import {
+  PUBLICATION_OUTCOME_SCHEMA,
+  createPublicationAttemptId,
+  defaultPublicationOutcomeMarkerPath,
+  writePublicationOutcomeMarker,
+  type PublicationOutcomeMarker,
+  type PublicationOutcomeStage,
+  type PublicationOutcomeStatus,
+} from '../lib/public-snapshots/publication-observability';
+import {
   PUBLIC_SNAPSHOT_LOCK_TOKEN_ENV,
   withPublicSnapshotPublicationLock,
 } from '../lib/public-snapshots/publication-lock';
@@ -201,6 +210,8 @@ export async function runSyncAndPublish(
     tsxPath?: string;
     childEnv?: NodeJS.ProcessEnv;
     terminationSignal?: () => NodeJS.Signals | null;
+    outcomeMarkerPath?: string;
+    outcomeAttemptId?: string;
   } = {},
 ): Promise<number> {
   const runImpl = options.runImpl ?? run;
@@ -210,6 +221,44 @@ export async function runSyncAndPublish(
   const markerPath = options.markerPath ?? defaultMacMiniSyncHealthMarkerPath(childEnv);
   const terminationSignal = options.terminationSignal ?? (() => null);
   const syncStartedAt = now();
+  const outcomeMarkerPath = options.outcomeMarkerPath;
+  const outcomeAttemptId = options.outcomeAttemptId ?? createPublicationAttemptId();
+  const dryRun = options.publisherArgs?.includes('--dry-run') ?? false;
+  let outcome: PublicationOutcomeMarker = {
+    schema: PUBLICATION_OUTCOME_SCHEMA,
+    attemptId: outcomeAttemptId,
+    status: 'running',
+    stage: 'preflight',
+    startedAt: syncStartedAt.toISOString(),
+    completedAt: null,
+    sourceCompletedAt: null,
+    syncExitCode: null,
+    publisherExitCode: null,
+    dryRun,
+  };
+  const recordOutcome = async (
+    status: PublicationOutcomeStatus,
+    stage: PublicationOutcomeStage,
+    update: Partial<Pick<
+      PublicationOutcomeMarker,
+      'sourceCompletedAt' | 'syncExitCode' | 'publisherExitCode'
+    >> = {},
+  ) => {
+    if (!outcomeMarkerPath) return;
+    outcome = {
+      ...outcome,
+      ...update,
+      status,
+      stage,
+      completedAt: status === 'running' ? null : now().toISOString(),
+    };
+    await writePublicationOutcomeMarker(outcomeMarkerPath, outcome);
+  };
+
+  // This marker is separate from the source health gate. It makes a reboot or
+  // SIGKILL visible as an unfinished publication attempt without changing the
+  // sync marker's existing fail-closed semantics.
+  await recordOutcome('running', 'preflight');
 
   // Fail closed before sync mutates any local table. If this wrapper is killed or
   // the Mac reboots mid-sync, a standalone publisher sees exit 1 instead of the
@@ -231,6 +280,7 @@ export async function runSyncAndPublish(
       '[sync-and-publish] local snapshot schema preflight를 시작하지 못했습니다:',
       error instanceof Error ? error.message : error,
     );
+    await recordOutcome('failed', 'preflight');
     return 1;
   }
   if (preflightResult.code !== 0
@@ -240,9 +290,11 @@ export async function runSyncAndPublish(
       '[sync-and-publish] local snapshot schema preflight 실패 — '
       + 'scripts/bootstrap-local-apt-scores.ts --execute를 먼저 실행하세요.',
     );
+    await recordOutcome('failed', 'preflight');
     return 1;
   }
 
+  await recordOutcome('running', 'sync');
   let syncResult: SpawnResult;
   try {
     syncResult = await runImpl(tsxPath, ['scripts/macmini-sync.ts'], childEnv);
@@ -266,6 +318,10 @@ export async function runSyncAndPublish(
   });
   if (syncExitCode === 1) {
     console.error('[sync-and-publish] sync exit 1/source/local failure — public snapshot publish를 차단했습니다.');
+    await recordOutcome('failed', 'sync', {
+      sourceCompletedAt: syncCompletedAt.toISOString(),
+      syncExitCode,
+    });
     return 1;
   }
 
@@ -273,10 +329,30 @@ export async function runSyncAndPublish(
     ...childEnv,
     [SNAPSHOT_SOURCE_AT_ENV]: syncCompletedAt.toISOString(),
   } as NodeJS.ProcessEnv;
-  const publisherResult = await runImpl(tsxPath, [
-    'scripts/publish-public-transactions.ts',
-    ...(options.publisherArgs ?? []),
-  ], publisherEnv);
+  await recordOutcome('running', 'publish', {
+    sourceCompletedAt: syncCompletedAt.toISOString(),
+    syncExitCode,
+  });
+  let publisherResult: SpawnResult;
+  try {
+    publisherResult = await runImpl(tsxPath, [
+      'scripts/publish-public-transactions.ts',
+      ...(options.publisherArgs ?? []),
+    ], publisherEnv);
+  } catch (error) {
+    console.error(
+      '[sync-and-publish] public snapshot publisher를 시작하지 못했습니다:',
+      error instanceof Error ? error.message : error,
+    );
+    await recordOutcome('failed', 'publish');
+    return 1;
+  }
+  const publisherExitCode = publisherResult.code !== null
+    && Number.isSafeInteger(publisherResult.code)
+    && publisherResult.code >= 0
+    && publisherResult.code <= 255
+    ? publisherResult.code
+    : null;
   if (publisherResult.signal !== null || terminationSignal() !== null) {
     await writeMacMiniSyncHealthMarker(markerPath, {
       schema: MACMINI_SYNC_HEALTH_SCHEMA,
@@ -284,12 +360,15 @@ export async function runSyncAndPublish(
       exitCode: 1,
     });
     console.error('[sync-and-publish] 종료 신호를 받아 publish를 중단했습니다.');
+    await recordOutcome('failed', 'publish', { publisherExitCode });
     return 1;
   }
   if (publisherResult.code !== 0) {
     console.error('[sync-and-publish] public snapshot publisher가 실패했습니다.');
+    await recordOutcome('failed', 'publish', { publisherExitCode });
     return 1;
   }
+  await recordOutcome('succeeded', 'complete', { publisherExitCode: 0 });
   return 0;
 }
 
@@ -326,6 +405,7 @@ async function main(): Promise<number> {
         childEnv: lockedChildEnv,
         runImpl: childRunner.run,
         terminationSignal: childRunner.terminationSignal,
+        outcomeMarkerPath: defaultPublicationOutcomeMarkerPath(wrapperEnv),
       });
     });
   } finally {

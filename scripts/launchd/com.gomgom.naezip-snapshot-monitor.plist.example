@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.gomgom.naezip-snapshot-monitor</string>
+
+  <!-- Read-only public manifest check. Replace every placeholder before installation. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>__ABSOLUTE_NODE_BINARY__</string>
+    <string>--import</string>
+    <string>tsx</string>
+    <string>scripts/monitor-public-snapshot-freshness.ts</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__LONG_LIVED_REPOSITORY_ROOT__</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <!-- Public origin only. Do not place Blob tokens or database URLs in this plist. -->
+    <key>NEXT_PUBLIC_TRANSACTION_SNAPSHOT_BASE_URL</key>
+    <string>__PUBLIC_SNAPSHOT_BASE_URL__</string>
+    <key>NAEZIP_PUBLICATION_ALERT_STATE_MARKER</key>
+    <string>__ABSOLUTE_STATE_DIRECTORY__/public-snapshot-alert-state.json</string>
+  </dict>
+
+  <key>StartInterval</key>
+  <integer>3600</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <false/>
+  <key>LimitLoadToSessionType</key>
+  <string>Aqua</string>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>Umask</key>
+  <integer>63</integer>
+
+  <!-- One JSON line per run. GUI notifications are deduplicated by the state marker above. -->
+  <key>StandardOutPath</key>
+  <string>__ABSOLUTE_LOG_DIRECTORY__/naezip-snapshot-monitor.jsonl</string>
+  <key>StandardErrorPath</key>
+  <string>__ABSOLUTE_LOG_DIRECTORY__/naezip-snapshot-monitor.stderr.log</string>
+</dict>
+</plist>
