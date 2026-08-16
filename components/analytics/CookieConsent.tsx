@@ -107,7 +107,7 @@ export function CookieConsent() {
             <ConsentToggle label="필수" description="서비스 기본 동작과 동의 저장" checked disabled onChange={() => undefined} />
             <ConsentToggle
               label="방문 분석"
-              description="Google Analytics 이용 통계"
+              description="Google Analytics·가명 방문자 수 집계"
               checked={draft.analytics}
               onChange={(analytics) => setDraft((current) => ({ ...current, analytics }))}
             />

@@ -65,9 +65,9 @@ export default function PrivacyPage() {
                   />
                   <PolicyRow
                     category="방문 분석(선택)"
-                    items="온라인 식별자·쿠키, 페이지 조회와 이벤트, 브라우저·기기 및 대략적 지역 정보"
-                    purpose="이용 현황 측정과 서비스 개선"
-                    retention="동의 철회 시 신규 수집 중단. GA4 사용자·이벤트 데이터는 운영 속성의 보유 설정(2개월 또는 14개월)에 따라 삭제"
+                    items="온라인 식별자·쿠키, 페이지 조회와 이벤트, 브라우저·기기 및 대략적 지역 정보, IP 주소로 즉시 생성한 HMAC-SHA256 가명값(원문 미저장)"
+                    purpose="이용 현황 측정, 오늘·최근 7일·누적 순방문자 수의 오차 있는 근사 집계와 서비스 개선"
+                    retention="동의 철회 시 신규 수집 중단. 일별 HyperLogLog 집계는 35일, 누적 HyperLogLog 집계는 서비스 운영 기간 보관. GA4 사용자·이벤트 데이터는 운영 속성의 보유 설정(2개월 또는 14개월)에 따라 삭제"
                   />
                   <PolicyRow
                     category="광고(선택)"
@@ -93,7 +93,13 @@ export default function PrivacyPage() {
                 <code>naezip.cookie-consent</code>를 저장합니다.
               </li>
               <li>
-                방문 분석: 동의한 경우에만 Google Analytics를 불러옵니다.
+                방문 분석: 동의한 경우에만 Google Analytics를 불러오고 자체
+                순방문자 근사 집계에 참여시킵니다. 자체 집계는 IP 주소를 서버에서
+                비밀키 기반 HMAC-SHA256 가명값으로 즉시 변환하며, 원본 IP 주소는
+                집계 저장소에 저장하지 않습니다. 브라우저 정보는 봇 제외 판단에만
+                사용하고 개별 방문 기록으로 저장하지 않습니다.
+                저장소에는 개별 이용 기록이 아닌 HyperLogLog 확률형 집계만 남아
+                실제 수치와 작은 오차가 있을 수 있습니다.
               </li>
               <li>
                 광고: 광고 항목에 동의한 경우에만 Google AdSense와 쿠팡 파트너스
@@ -168,9 +174,9 @@ export default function PrivacyPage() {
                   />
                   <PolicyRow
                     category="Upstash Inc. · 미국 및 선택한 AWS 처리 지역"
-                    items="관리자 로그인·파일 업로드 요청 횟수 제한"
-                    purpose="관리 기능 이용 시 IP 주소와 관리자 계정 식별자가 암호화된 REST API로 전송"
-                    retention="속도 제한 윈도우와 서비스 운영에 필요한 기간 · privacy@upstash.com"
+                    items="관리자 로그인·파일 업로드 요청 횟수 제한, 선택적 순방문자 근사 집계"
+                    purpose="관리 기능 이용 시 IP 주소와 관리자 계정 식별자가 전송되며, 방문 분석 동의 시 서버가 생성한 HMAC-SHA256 가명값만 HyperLogLog 집계를 위해 암호화된 REST API로 전송"
+                    retention="속도 제한 윈도우, 일별 방문 집계 35일, 누적 방문 집계는 서비스 운영 기간 · privacy@upstash.com"
                   />
                   <PolicyRow
                     category="쿠팡 주식회사 · 대한민국"
@@ -267,7 +273,7 @@ export default function PrivacyPage() {
             className="border-t pt-6 text-sm"
             style={{ borderColor: 'var(--border)', color: 'var(--text-dim)' }}
           >
-            공고·시행일: 2026년 8월 9일 · 버전 2.1
+            공고·시행일: 2026년 8월 16일 · 버전 2.2
           </p>
         </div>
       </main>

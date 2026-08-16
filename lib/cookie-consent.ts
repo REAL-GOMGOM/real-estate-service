@@ -8,7 +8,7 @@
 export const CONSENT_STORAGE_KEY = 'naezip.cookie-consent';
 export const CONSENT_CHANGED_EVENT = 'naezip:consent-changed';
 export const COOKIE_SETTINGS_OPEN_EVENT = 'naezip:cookie-settings-open';
-export const CURRENT_CONSENT_VERSION = '2.1';
+export const CURRENT_CONSENT_VERSION = '2.2';
 
 export interface ConsentChoices {
   analytics: boolean;

@@ -12,7 +12,7 @@ import {
   trackAnalyticsEvent,
 } from '../cookie-consent';
 
-describe('cookie consent v2.1', () => {
+describe('cookie consent v2.2', () => {
   beforeEach(() => {
     window.localStorage.clear();
     window.dataLayer = [];
@@ -24,11 +24,11 @@ describe('cookie consent v2.1', () => {
     document.cookie = 'essential=; Max-Age=0; path=/';
   });
 
-  it('광고 선택이 없는 v1 저장값은 승계하지 않는다', () => {
+  it('방문 집계 고지 전의 v2.1 저장값은 승계하지 않는다', () => {
     window.localStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify({
       analytics: true,
       updatedAt: '2026-01-01T00:00:00.000Z',
-      version: '1.0',
+      version: '2.1',
     }));
 
     expect(getConsent()).toBeNull();
@@ -46,7 +46,7 @@ describe('cookie consent v2.1', () => {
       analytics: true,
       advertising: false,
       personalization: false,
-      version: '2.1',
+      version: '2.2',
     });
     expect(getConsent()).toMatchObject({ analytics: true, advertising: false, personalization: false });
     expect(gtag).toHaveBeenCalledWith('consent', 'update', {

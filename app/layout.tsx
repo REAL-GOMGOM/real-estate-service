@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { TelegramFloatingButton } from '@/components/shared/TelegramFloatingButton';
 import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics';
+import { VisitorAnalytics } from '@/components/analytics/VisitorAnalytics';
 import { CookieConsent } from '@/components/analytics/CookieConsent';
 import { AdSenseLoader } from '@/components/shared/AdSenseLoader';
 import { CookieSettingsButton } from '@/components/layout/CookieSettingsButton';
@@ -60,7 +61,7 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `window.dataLayer=window.dataLayer||[];window.gtag=window.gtag||function(){window.dataLayer.push(arguments)};window.gtag('consent','default',{analytics_storage:'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',wait_for_update:500});try{var c=JSON.parse(localStorage.getItem('naezip.cookie-consent'));if(c&&c.version==='2.1'&&typeof c.analytics==='boolean'&&typeof c.advertising==='boolean'&&typeof c.personalization==='boolean'){window.gtag('consent','update',{analytics_storage:c.analytics?'granted':'denied',ad_storage:c.advertising?'granted':'denied',ad_user_data:c.advertising?'granted':'denied',ad_personalization:c.advertising&&c.personalization?'granted':'denied'})}}catch(e){}`,
+            __html: `window.dataLayer=window.dataLayer||[];window.gtag=window.gtag||function(){window.dataLayer.push(arguments)};window.gtag('consent','default',{analytics_storage:'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',wait_for_update:500});try{var c=JSON.parse(localStorage.getItem('naezip.cookie-consent'));if(c&&c.version==='2.2'&&typeof c.analytics==='boolean'&&typeof c.advertising==='boolean'&&typeof c.personalization==='boolean'){window.gtag('consent','update',{analytics_storage:c.analytics?'granted':'denied',ad_storage:c.advertising?'granted':'denied',ad_user_data:c.advertising?'granted':'denied',ad_personalization:c.advertising&&c.personalization?'granted':'denied'})}}catch(e){}`,
           }}
         />
         <script dangerouslySetInnerHTML={{ __html: `document.documentElement.removeAttribute('data-theme');localStorage.removeItem('theme');` }} />
@@ -96,6 +97,7 @@ export default function RootLayout({
           <TelegramFloatingButton />
         </Suspense>
         <GoogleAnalytics />
+        <VisitorAnalytics />
         <CookieConsent />
         <CookieSettingsButton floating />
         <Suspense fallback={null}>
