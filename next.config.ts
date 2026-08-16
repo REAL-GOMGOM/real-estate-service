@@ -4,6 +4,11 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   poweredByHeader: false,
   serverExternalPackages: ['better-sqlite3'],
+  // `process.cwd()`로 읽는 OG 폰트는 정적 분석만으로 함수 번들에 포함되지 않는다.
+  // 모든 opengraph-image Node route trace에 필요한 파일 한 개만 명시적으로 포함한다.
+  outputFileTracingIncludes: {
+    '/opengraph-image': ['./public/fonts/Pretendard-Bold.otf'],
+  },
   // Vercel Blob 업로드 이미지를 next/Image가 최적화하도록 허용
   images: {
     remotePatterns: [
