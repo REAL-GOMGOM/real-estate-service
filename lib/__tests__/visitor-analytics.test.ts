@@ -13,8 +13,8 @@ import {
 const configuredEnv = {
   VERCEL_ENV: 'production',
   VISITOR_FINGERPRINT_SALT: 's'.repeat(32),
-  UPSTASH_REDIS_REST_URL: 'https://example.upstash.io',
-  UPSTASH_REDIS_REST_TOKEN: 'test-token',
+  UPSTASH_REDIS_REST_KV_REST_API_URL: 'https://example.upstash.io',
+  UPSTASH_REDIS_REST_KV_REST_API_TOKEN: 'test-token',
 };
 
 describe('visitor analytics aggregates', () => {

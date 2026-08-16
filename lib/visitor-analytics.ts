@@ -56,8 +56,8 @@ interface VisitorEnvironment {
   VERCEL_ENV?: string;
   VISITOR_FINGERPRINT_SALT?: string;
   ADMIN_IP_ALLOWLIST?: string;
-  UPSTASH_REDIS_REST_URL?: string;
-  UPSTASH_REDIS_REST_TOKEN?: string;
+  UPSTASH_REDIS_REST_KV_REST_API_URL?: string;
+  UPSTASH_REDIS_REST_KV_REST_API_TOKEN?: string;
 }
 
 export interface RecordVisitorInput {
@@ -69,8 +69,8 @@ export interface RecordVisitorInput {
 }
 
 function createRedisVisitorStore(env: VisitorEnvironment): VisitorAggregateStore {
-  const url = env.UPSTASH_REDIS_REST_URL?.trim();
-  const token = env.UPSTASH_REDIS_REST_TOKEN?.trim();
+  const url = env.UPSTASH_REDIS_REST_KV_REST_API_URL?.trim();
+  const token = env.UPSTASH_REDIS_REST_KV_REST_API_TOKEN?.trim();
   if (!url || !token) throw new Error('visitor Redis is not configured');
 
   // 방문 집계는 리포트용 KV와 절대 섞지 않고 전용 Upstash 설정만 사용한다.
@@ -143,7 +143,8 @@ function dailyExpiryUnix(now: Date): number {
 function hasVisitorConfiguration(env: VisitorEnvironment): boolean {
   const salt = env.VISITOR_FINGERPRINT_SALT?.trim();
   const hasVisitorRedis = Boolean(
-    env.UPSTASH_REDIS_REST_URL?.trim() && env.UPSTASH_REDIS_REST_TOKEN?.trim(),
+    env.UPSTASH_REDIS_REST_KV_REST_API_URL?.trim()
+      && env.UPSTASH_REDIS_REST_KV_REST_API_TOKEN?.trim(),
   );
   return Boolean(salt && salt.length >= 32 && hasVisitorRedis);
 }
