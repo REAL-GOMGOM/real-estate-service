@@ -1,4 +1,3 @@
-import { compileMDX } from 'next-mdx-remote/rsc';
 import remarkGfm from 'remark-gfm';
 import { preprocessMdxContent } from './preprocessor';
 import { mdxComponentNames } from '@/app/blog/components/mdx-components';
@@ -21,12 +20,22 @@ export type MdxValidationResult =
   | { ok: true }
   | { ok: false; error: string };
 
+/**
+ * Keep the ESM-only MDX compiler on a native dynamic-import boundary.
+ * This preserves the Next.js runtime path while also allowing offline
+ * `node --import tsx` maintenance commands to reuse the strict validator.
+ */
+async function loadMdxCompiler(): Promise<typeof import('next-mdx-remote/rsc')> {
+  return import('next-mdx-remote/rsc');
+}
+
 export async function validateMdx(content: string): Promise<MdxValidationResult> {
   if (typeof content !== 'string' || content.length === 0) {
     return { ok: false, error: '본문이 비어 있습니다' };
   }
 
   try {
+    const { compileMDX } = await loadMdxCompiler();
     await compileMDX({
       source: preprocessMdxContent(content),
       options: {
@@ -147,6 +156,7 @@ export async function validateMdxStrict(
 
   const usages: JsxUsage[] = [];
   try {
+    const { compileMDX } = await loadMdxCompiler();
     await compileMDX({
       source: preprocessMdxContent(content),
       options: {
