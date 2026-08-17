@@ -12,6 +12,7 @@ import type {
   PublicSnapshotRetentionReadResult,
 } from '../object-store';
 import {
+  PUBLIC_SNAPSHOT_RETENTION_DEFAULT_CONVERGENCE_HEAD_DELAY_MS,
   PUBLIC_SNAPSHOT_RETENTION_DEFAULT_KEEP_COUNT,
   PUBLIC_SNAPSHOT_RETENTION_DEFAULT_MAX_OBJECTS,
   PUBLIC_SNAPSHOT_RETENTION_DEFAULT_MAX_PAGES,
@@ -170,6 +171,7 @@ function createStore(input: {
     ...releases.flatMap(({ objects: releaseObjects }) => releaseObjects),
     ...(input.extraObjects ?? []),
   ].sort((left, right) => left.pathname.localeCompare(right.pathname));
+  const deletedPathnames = new Set<string>();
   const reads = new Map(releases.map((release) => [release.read.pathname, release.read]));
   const current = input.current ?? null;
   const discoveryEtag = current ? `discovery-${current.releaseId}` : null;
@@ -188,28 +190,41 @@ function createStore(input: {
       uploadedAt: current.read.uploadedAt,
     });
   }
-  const listRetentionObjects = vi.fn(async ({ cursor, limit }: {
+  const listRetentionObjects = vi.fn(async ({ prefix, cursor, limit }: {
     prefix: string;
     cursor?: string;
     limit: number;
   }) => {
     const offset = cursor ? Number(cursor) : 0;
-    const pageObjects = objects.slice(offset, offset + limit);
+    const visibleObjects = objects.filter((object) => (
+      !deletedPathnames.has(object.pathname) && object.pathname.startsWith(prefix)
+    ));
+    const pageObjects = visibleObjects.slice(offset, offset + limit);
     const nextOffset = offset + pageObjects.length;
     return {
       objects: pageObjects,
-      hasMore: nextOffset < objects.length,
-      cursor: nextOffset < objects.length ? String(nextOffset) : null,
+      hasMore: nextOffset < visibleObjects.length,
+      cursor: nextOffset < visibleObjects.length ? String(nextOffset) : null,
     };
   });
   const readRetentionObject = vi.fn(async (pathname: string) => reads.get(pathname) ?? null);
   const headRetentionDiscovery = vi.fn(async () => discoveryHead);
-  const deleteRetentionManifest = vi.fn(async (_pathname: string, _etag: string) => undefined);
-  const deleteRetentionObjects = vi.fn(async (_pathnames: readonly string[]) => undefined);
+  const headRetentionObject = vi.fn(async (pathname: string) => {
+    const object = objects.find((entry) => entry.pathname === pathname);
+    if (!object || deletedPathnames.has(pathname)) return null;
+    return { ...object };
+  });
+  const deleteRetentionManifest = vi.fn(async (pathname: string, _etag: string) => {
+    deletedPathnames.add(pathname);
+  });
+  const deleteRetentionObjects = vi.fn(async (pathnames: readonly string[]) => {
+    for (const pathname of pathnames) deletedPathnames.add(pathname);
+  });
   const store: PublicSnapshotRetentionObjectStore = {
     listRetentionObjects,
     readRetentionObject,
     headRetentionDiscovery,
+    headRetentionObject,
     deleteRetentionManifest,
     deleteRetentionObjects,
   };
@@ -220,6 +235,7 @@ function createStore(input: {
     listRetentionObjects,
     readRetentionObject,
     headRetentionDiscovery,
+    headRetentionObject,
     deleteRetentionManifest,
     deleteRetentionObjects,
   };
@@ -232,6 +248,7 @@ function releaseId(timestamp: string, digestCharacter: string): string {
 describe('public snapshot retention planner', () => {
   it('uses the intended production safety defaults', () => {
     expect(PUBLIC_SNAPSHOT_RETENTION_DEFAULT_KEEP_COUNT).toBe(30);
+    expect(PUBLIC_SNAPSHOT_RETENTION_DEFAULT_CONVERGENCE_HEAD_DELAY_MS).toBe(100);
     expect(PUBLIC_SNAPSHOT_RETENTION_DEFAULT_MAX_PAGES).toBe(20);
     expect(PUBLIC_SNAPSHOT_RETENTION_DEFAULT_MAX_OBJECTS).toBe(10_000);
   });
@@ -620,7 +637,8 @@ describe('public snapshot retention executor', () => {
       `manifest-${old.releaseId}`,
     );
     expect(fixture.deleteRetentionObjects.mock.calls.map(([batch]) => batch.length)).toEqual([10, 10, 9]);
-    expect(sleep).toHaveBeenCalledTimes(2);
+    expect(sleep.mock.calls.filter(([milliseconds]) => milliseconds === 1_000)).toHaveLength(2);
+    expect(sleep.mock.calls.filter(([milliseconds]) => milliseconds === 100)).toHaveLength(29);
     expect(sleep).toHaveBeenNthCalledWith(1, 1_000);
     expect(result).toMatchObject({
       completedReleaseIds: [old.releaseId],
@@ -644,6 +662,107 @@ describe('public snapshot retention executor', () => {
     ]));
   });
 
+  it('records completion only after an empty exact-prefix list and paced management HEADs converge', async () => {
+    const { fixture, plan, old } = await deletablePlan();
+    const firstExpectedPathname = old.objects[0].pathname;
+    fixture.headRetentionObject.mockResolvedValueOnce({ ...old.objects[0] });
+    const sleep = vi.fn(async (_milliseconds: number) => undefined);
+
+    const result = await executePublicSnapshotRetention(fixture.store, plan, {
+      maxConvergenceAttempts: 2,
+      sleep,
+    });
+
+    expect(result.completedReleaseIds).toEqual([old.releaseId]);
+    expect(fixture.headRetentionObject.mock.calls[0]?.[0]).toBe(firstExpectedPathname);
+    expect(fixture.listRetentionObjects.mock.calls.filter(
+      ([input]) => input.prefix === `${RELEASES_PREFIX}${old.releaseId}/`,
+    )).toHaveLength(2);
+    expect(sleep).toHaveBeenCalledWith(2_000);
+    expect(sleep.mock.calls.filter(([milliseconds]) => milliseconds === 100)).toHaveLength(29);
+  });
+
+  it('fails closed after delete acceptance when management convergence times out', async () => {
+    const { fixture, plan, old } = await deletablePlan();
+    fixture.headRetentionObject.mockImplementation(async (pathname: string) => {
+      const object = old.objects.find((entry) => entry.pathname === pathname);
+      return object ? { ...object } : null;
+    });
+    const sleep = vi.fn(async (_milliseconds: number) => undefined);
+
+    let failure: unknown;
+    try {
+      await executePublicSnapshotRetention(fixture.store, plan, {
+        maxConvergenceAttempts: 2,
+        sleep,
+      });
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(PublicSnapshotRetentionExecutionError);
+    expect(failure).toMatchObject({
+      message: `Retention delete was accepted but convergence remains unverified for release ${old.releaseId}`,
+      result: {
+        manifestTombstones: [`${RELEASES_PREFIX}${old.releaseId}/manifest.json`],
+        payloadObjectsDeleted: old.objects
+          .filter(({ pathname }) => !pathname.endsWith('/manifest.json'))
+          .map(({ pathname }) => pathname),
+        completedReleaseIds: [],
+      },
+    });
+    expect(sleep.mock.calls.filter(([milliseconds]) => milliseconds === 2_000)).toHaveLength(1);
+  });
+
+  it('fails closed on paginated unknown residue without exposing management details', async () => {
+    const { fixture, plan, old } = await deletablePlan();
+    const exactPrefix = `${RELEASES_PREFIX}${old.releaseId}/`;
+    const normalList = fixture.listRetentionObjects.getMockImplementation()!;
+    fixture.listRetentionObjects.mockImplementation(async (input) => {
+      if (input.prefix !== exactPrefix) return normalList(input);
+      if (!input.cursor) {
+        return {
+          objects: [{
+            pathname: `${exactPrefix}shards/00.json.gz`,
+            size: 1,
+            uploadedAt: OLD_UPLOAD,
+            etag: 'stale-known-object',
+          }],
+          hasMore: true,
+          cursor: 'private-management-cursor',
+        };
+      }
+      return {
+        objects: [{
+          pathname: `${exactPrefix}unknown-private-object.bin`,
+          size: 1,
+          uploadedAt: OLD_UPLOAD,
+          etag: 'private-management-etag',
+        }],
+        hasMore: false,
+        cursor: null,
+      };
+    });
+
+    let failure: unknown;
+    try {
+      await executePublicSnapshotRetention(fixture.store, plan, {
+        sleep: async () => undefined,
+      });
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toMatchObject({
+      message: `Retention delete was accepted but convergence remains unverified for release ${old.releaseId}`,
+      result: { completedReleaseIds: [] },
+    });
+    expect((failure as Error).message).not.toContain('private-management');
+    expect(fixture.listRetentionObjects.mock.calls.filter(
+      ([input]) => input.prefix === exactPrefix,
+    )).toHaveLength(2);
+  });
+
   it('aborts before mutation when discovery changed after planning', async () => {
     const { fixture, plan } = await deletablePlan();
     fixture.headRetentionDiscovery.mockResolvedValue({
@@ -657,6 +776,17 @@ describe('public snapshot retention executor', () => {
       name: 'PublicSnapshotRetentionExecutionError',
       result: { completedReleaseIds: [], manifestTombstones: [] },
     });
+    expect(fixture.deleteRetentionManifest).not.toHaveBeenCalled();
+    expect(fixture.deleteRetentionObjects).not.toHaveBeenCalled();
+  });
+
+  it('rejects convergence HEAD pacing below the management-operation safety floor', async () => {
+    const { fixture, plan } = await deletablePlan();
+
+    await expect(executePublicSnapshotRetention(fixture.store, plan, {
+      convergenceHeadDelayMs: 99,
+      sleep: async () => undefined,
+    })).rejects.toThrow('convergence HEAD delay must be at least 100ms');
     expect(fixture.deleteRetentionManifest).not.toHaveBeenCalled();
     expect(fixture.deleteRetentionObjects).not.toHaveBeenCalled();
   });
@@ -713,10 +843,12 @@ describe('public snapshot retention executor', () => {
       events.push('head');
       return fixture.discoveryHead;
     });
-    fixture.deleteRetentionManifest.mockImplementation(async (pathname: string) => {
+    const deleteManifest = fixture.deleteRetentionManifest.getMockImplementation()!;
+    fixture.deleteRetentionManifest.mockImplementation(async (pathname: string, etag: string) => {
       events.push(`manifest:${pathname}`);
+      await deleteManifest(pathname, etag);
     });
-    const sleep = vi.fn(async () => {
+    const sleep = vi.fn(async (_milliseconds: number) => {
       events.push('sleep');
     });
 
@@ -725,7 +857,8 @@ describe('public snapshot retention executor', () => {
     expect(secondManifestIndex).toBeGreaterThan(0);
     expect(events.slice(0, secondManifestIndex).at(-2)).toBe('sleep');
     expect(events.slice(0, secondManifestIndex).at(-1)).toBe('head');
-    expect(sleep).toHaveBeenCalledTimes(5); // two intra-release waits each, plus one inter-release wait
+    expect(sleep.mock.calls.filter(([milliseconds]) => milliseconds === 1_000)).toHaveLength(5);
+    expect(sleep.mock.calls.filter(([milliseconds]) => milliseconds === 100)).toHaveLength(58);
   });
 
   it('rejects a runtime-tampered plan before any delete', async () => {

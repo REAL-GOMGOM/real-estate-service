@@ -354,10 +354,18 @@ NAEZIP_SNAPSHOT_RETENTION_APPROVAL=20260813T010203Z-aaaaaaaaaaaa \
   --apply --confirm-release=20260813T010203Z-aaaaaaaaaaaa
 ```
 
-apply도 저장된 계획을 재사용하지 않고 잠금 안에서 inventory와 discovery를 다시 읽는다. executor는
+apply도 저장된 계획을 재사용하지 않고 잠금 안에서 inventory와 discovery를 다시 읽는다. 이 apply는
+자동 스케줄에 연결하지 않고 월 1회 점검 창에서 운영자가 plan을 검토한 뒤 수동으로만 실행한다. executor는
 각 release 삭제 직전에 discovery HEAD가 계획의 상태와 같은지 다시 검사한다. complete release는
 immutable root manifest를 조건부 tombstone한 뒤 payload를 최대 10개씩, batch 사이 최소 1초 간격으로
-삭제한다. 부분 실패 시 다음 release로 진행하지 않으며 완료된 release ID/객체 개수만 보고한다.
+삭제한다. 삭제 API가 성공을 반환해도 즉시 완료로 기록하지 않는다. management API로 해당 release의
+정확한 prefix를 bounded pagination하고, 목록이 0개가 된 뒤 계획에 있던 모든 객체를 management HEAD해
+없음을 확인해야만 완료 release ID를 기록한다. 기본 6회·2초 간격으로 bounded poll하며, HEAD 사이에는
+최소 100ms를 두어 관리 API 호출을 초당 10회 이하로 제한한다. public URL의 404나 CDN 응답은 완료
+근거로 사용하지 않는다.
+제한 횟수 안에 목록/HEAD가 수렴하지 않거나 pagination·metadata가 불완전하면 `delete accepted but
+convergence remains unverified`로 fail closed한다. 부분 실패 시 다음 release로 진행하지 않으며 검증까지
+끝난 release ID/객체 개수만 보고한다.
 
 ### 최초 seed 사전 점검
 

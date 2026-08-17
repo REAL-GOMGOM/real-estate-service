@@ -70,6 +70,8 @@ export interface PublicSnapshotRetentionDiscoveryHead {
   uploadedAt: string;
 }
 
+export type PublicSnapshotRetentionObjectHead = PublicSnapshotRetentionDiscoveryHead;
+
 /** Narrow management surface used only by the offline retention command. */
 export interface PublicSnapshotRetentionObjectStore {
   listRetentionObjects(input: {
@@ -79,6 +81,7 @@ export interface PublicSnapshotRetentionObjectStore {
   }): Promise<PublicSnapshotRetentionListPage>;
   readRetentionObject(pathname: string, maxBytes: number): Promise<PublicSnapshotRetentionReadResult | null>;
   headRetentionDiscovery(): Promise<PublicSnapshotRetentionDiscoveryHead | null>;
+  headRetentionObject(pathname: string): Promise<PublicSnapshotRetentionObjectHead | null>;
   deleteRetentionManifest(pathname: string, etag: string): Promise<void>;
   deleteRetentionObjects(pathnames: readonly string[]): Promise<void>;
 }
@@ -108,6 +111,9 @@ const PUBLIC_TRANSACTION_DISCOVERY_MANIFEST_KEY = `${PUBLIC_TRANSACTION_SNAPSHOT
 const PUBLIC_TRANSACTION_RELEASES_PREFIX = `${PUBLIC_TRANSACTION_SNAPSHOT_PREFIX}/releases/`;
 const PUBLIC_TRANSACTION_RELEASE_MANIFEST_PATTERN = new RegExp(
   `^${PUBLIC_TRANSACTION_RELEASES_PREFIX}(\\d{8}T\\d{6}Z-[a-f0-9]{12})/manifest\\.json$`,
+);
+const PUBLIC_TRANSACTION_EXACT_RELEASE_PREFIX_PATTERN = new RegExp(
+  `^${PUBLIC_TRANSACTION_RELEASES_PREFIX}\\d{8}T\\d{6}Z-[a-f0-9]{12}/$`,
 );
 const PUBLIC_TRANSACTION_RELEASE_PAYLOAD_PATTERN = new RegExp(
   `^${PUBLIC_TRANSACTION_RELEASES_PREFIX}(\\d{8}T\\d{6}Z-[a-f0-9]{12})/(?:`
@@ -440,8 +446,11 @@ export class VercelBlobSnapshotStore implements PublicSnapshotObjectStore, Publi
     cursor?: string;
     limit: number;
   }): Promise<PublicSnapshotRetentionListPage> {
-    if (input.prefix !== PUBLIC_TRANSACTION_RELEASES_PREFIX) {
-      throw new PublicSnapshotConfigurationError('Retention may list only the public-transactions/v2 releases prefix');
+    if (input.prefix !== PUBLIC_TRANSACTION_RELEASES_PREFIX
+      && !PUBLIC_TRANSACTION_EXACT_RELEASE_PREFIX_PATTERN.test(input.prefix)) {
+      throw new PublicSnapshotConfigurationError(
+        'Retention may list only the v2 releases root or one exact release prefix',
+      );
     }
     if (!Number.isSafeInteger(input.limit)
       || input.limit < 1
@@ -474,8 +483,8 @@ export class VercelBlobSnapshotStore implements PublicSnapshotObjectStore, Publi
 
     const objects = result.blobs.map((blob) => {
       assertSafeObjectKey(blob.pathname);
-      if (!blob.pathname.startsWith(PUBLIC_TRANSACTION_RELEASES_PREFIX)) {
-        throw new Error('Vercel Blob retention list escaped the v2 releases prefix');
+      if (!blob.pathname.startsWith(input.prefix)) {
+        throw new Error('Vercel Blob retention list escaped the requested release prefix');
       }
       this.pinAndValidateResult(blob, blob.pathname);
       if (!Number.isSafeInteger(blob.size) || blob.size < 0
@@ -545,6 +554,40 @@ export class VercelBlobSnapshotStore implements PublicSnapshotObjectStore, Publi
       || typeof result.etag !== 'string'
       || !result.etag.trim()) {
       throw new Error('Vercel Blob retention discovery head returned invalid metadata');
+    }
+    return {
+      pathname: result.pathname,
+      etag: result.etag,
+      size: result.size,
+      uploadedAt: result.uploadedAt.toISOString(),
+    };
+  }
+
+  async headRetentionObject(pathname: string): Promise<PublicSnapshotRetentionObjectHead | null> {
+    assertSafeObjectKey(pathname);
+    if (!PUBLIC_TRANSACTION_RELEASE_MANIFEST_PATTERN.test(pathname)
+      && !PUBLIC_TRANSACTION_RELEASE_PAYLOAD_PATTERN.test(pathname)) {
+      throw new PublicSnapshotConfigurationError(
+        'Retention may HEAD only an exact known v2 release object',
+      );
+    }
+    let result: HeadBlobResult;
+    try {
+      result = await this.headImpl(pathname, {
+        token: this.token,
+        abortSignal: AbortSignal.timeout(30_000),
+      });
+    } catch (error) {
+      if (error instanceof BlobNotFoundError) return null;
+      throw new Error('Vercel Blob retention release head failed');
+    }
+    this.pinAndValidateResult(result, pathname);
+    if (!Number.isSafeInteger(result.size) || result.size < 1
+      || !(result.uploadedAt instanceof Date)
+      || !Number.isFinite(result.uploadedAt.getTime())
+      || typeof result.etag !== 'string'
+      || !result.etag.trim()) {
+      throw new Error('Vercel Blob retention release head returned invalid metadata');
     }
     return {
       pathname: result.pathname,

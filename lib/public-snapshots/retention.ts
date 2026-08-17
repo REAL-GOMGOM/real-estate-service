@@ -7,6 +7,7 @@ import {
 import type {
   PublicSnapshotRetentionDiscoveryHead,
   PublicSnapshotRetentionListedObject,
+  PublicSnapshotRetentionObjectHead,
   PublicSnapshotRetentionObjectStore,
   PublicSnapshotRetentionReadResult,
 } from './object-store';
@@ -21,6 +22,9 @@ export const PUBLIC_SNAPSHOT_RETENTION_DEFAULT_MAX_OBJECTS = 10_000;
 export const PUBLIC_SNAPSHOT_RETENTION_DEFAULT_DELETE_BATCH_SIZE = 10;
 export const PUBLIC_SNAPSHOT_RETENTION_DEFAULT_DELETE_DELAY_MS = 1_000;
 export const PUBLIC_SNAPSHOT_RETENTION_DEFAULT_DELETE_ATTEMPTS = 3;
+export const PUBLIC_SNAPSHOT_RETENTION_DEFAULT_CONVERGENCE_ATTEMPTS = 6;
+export const PUBLIC_SNAPSHOT_RETENTION_DEFAULT_CONVERGENCE_DELAY_MS = 2_000;
+export const PUBLIC_SNAPSHOT_RETENTION_DEFAULT_CONVERGENCE_HEAD_DELAY_MS = 100;
 
 const MAX_MANIFEST_BYTES = 10 * 1024 * 1024;
 const RELEASES_PREFIX = `${PUBLIC_TRANSACTION_SNAPSHOT_PREFIX}/releases/`;
@@ -147,6 +151,9 @@ export interface PublicSnapshotRetentionExecutionOptions {
   batchSize?: number;
   batchDelayMs?: number;
   maxPayloadDeleteAttempts?: number;
+  maxConvergenceAttempts?: number;
+  convergenceDelayMs?: number;
+  convergenceHeadDelayMs?: number;
   sleep?: (milliseconds: number) => Promise<void>;
 }
 
@@ -208,6 +215,8 @@ function assertListedObject(object: PublicSnapshotRetentionListedObject): void {
 async function listAllRetentionObjects(
   store: PublicSnapshotRetentionObjectStore,
   policy: Required<Pick<PublicSnapshotRetentionPolicy, 'listLimit' | 'maxPages' | 'maxObjects'>>,
+  prefix = RELEASES_PREFIX,
+  expectedReleaseId?: string,
 ): Promise<PublicSnapshotRetentionListedObject[]> {
   assertPositiveInteger(policy.listLimit, 'Retention list limit', 1_000);
   assertPositiveInteger(policy.maxPages, 'Retention maximum page count', 10_000);
@@ -223,7 +232,7 @@ async function listAllRetentionObjects(
       throw new PublicSnapshotRetentionError('Retention inventory exceeded the maximum page count');
     }
     const page = await store.listRetentionObjects({
-      prefix: RELEASES_PREFIX,
+      prefix,
       limit: policy.listLimit,
       ...(cursor ? { cursor } : {}),
     });
@@ -235,6 +244,10 @@ async function listAllRetentionObjects(
     }
     for (const object of page.objects) {
       assertListedObject(object);
+      if (!object.pathname.startsWith(prefix)
+        || (expectedReleaseId && parseRetentionPath(object.pathname).releaseId !== expectedReleaseId)) {
+        throw new PublicSnapshotRetentionError('Retention list escaped the requested release prefix');
+      }
       if (previousPathname !== null && object.pathname <= previousPathname) {
         throw new PublicSnapshotRetentionError(
           'Retention inventory pathnames must be unique and strictly lexicographically ordered',
@@ -259,6 +272,63 @@ async function listAllRetentionObjects(
     cursor = page.cursor;
   }
   return objects;
+}
+
+function assertReleaseObjectHead(
+  head: PublicSnapshotRetentionObjectHead,
+  expectedPathname: string,
+): void {
+  if (head.pathname !== expectedPathname
+    || typeof head.etag !== 'string'
+    || !head.etag.trim()
+    || !Number.isSafeInteger(head.size)
+    || head.size < 1) {
+    throw new PublicSnapshotRetentionError('Release convergence HEAD returned invalid metadata');
+  }
+  finiteTimestamp(head.uploadedAt, 'Release convergence HEAD uploadedAt');
+}
+
+async function waitForReleaseDeletionConvergence(input: {
+  store: PublicSnapshotRetentionObjectStore;
+  candidate: PublicSnapshotRetentionDeleteCandidate;
+  maxAttempts: number;
+  delayMs: number;
+  headDelayMs: number;
+  sleep: (milliseconds: number) => Promise<void>;
+}): Promise<void> {
+  const releasePrefix = `${RELEASES_PREFIX}${input.candidate.releaseId}/`;
+  const expectedPathnames = [
+    ...(input.candidate.manifestPathname ? [input.candidate.manifestPathname] : []),
+    ...input.candidate.payloadPathnames,
+  ].sort();
+
+  for (let attempt = 1; attempt <= input.maxAttempts; attempt += 1) {
+    const listed = await listAllRetentionObjects(input.store, {
+      listLimit: PUBLIC_SNAPSHOT_RETENTION_DEFAULT_LIST_LIMIT,
+      maxPages: PUBLIC_SNAPSHOT_RETENTION_DEFAULT_MAX_PAGES,
+      maxObjects: PUBLIC_SNAPSHOT_RETENTION_DEFAULT_MAX_OBJECTS,
+    }, releasePrefix, input.candidate.releaseId);
+
+    let converged = listed.length === 0;
+    if (converged) {
+      // A zero-object management listing is necessary, but HEAD every object
+      // accepted by delete before declaring completion. This avoids treating a
+      // prematurely empty eventually-consistent listing as proof of deletion.
+      for (let index = 0; index < expectedPathnames.length; index += 1) {
+        if (index > 0) await input.sleep(input.headDelayMs);
+        const pathname = expectedPathnames[index];
+        const head = await input.store.headRetentionObject(pathname);
+        if (head) {
+          assertReleaseObjectHead(head, pathname);
+          converged = false;
+          break;
+        }
+      }
+    }
+    if (converged) return;
+    if (attempt < input.maxAttempts) await input.sleep(input.delayMs);
+  }
+  throw new PublicSnapshotRetentionError('Release deletion convergence timed out');
 }
 
 function groupInventory(objects: readonly PublicSnapshotRetentionListedObject[]): ReleaseInventory[] {
@@ -632,10 +702,25 @@ export async function executePublicSnapshotRetention(
   const batchDelayMs = options.batchDelayMs ?? PUBLIC_SNAPSHOT_RETENTION_DEFAULT_DELETE_DELAY_MS;
   const maxAttempts = options.maxPayloadDeleteAttempts
     ?? PUBLIC_SNAPSHOT_RETENTION_DEFAULT_DELETE_ATTEMPTS;
+  const maxConvergenceAttempts = options.maxConvergenceAttempts
+    ?? PUBLIC_SNAPSHOT_RETENTION_DEFAULT_CONVERGENCE_ATTEMPTS;
+  const convergenceDelayMs = options.convergenceDelayMs
+    ?? PUBLIC_SNAPSHOT_RETENTION_DEFAULT_CONVERGENCE_DELAY_MS;
+  const convergenceHeadDelayMs = options.convergenceHeadDelayMs
+    ?? PUBLIC_SNAPSHOT_RETENTION_DEFAULT_CONVERGENCE_HEAD_DELAY_MS;
   assertPositiveInteger(batchSize, 'Retention delete batch size', 10);
   assertPositiveInteger(batchDelayMs, 'Retention delete delay', 60_000);
   if (batchDelayMs < 1_000) throw new PublicSnapshotRetentionError('Retention delete delay must be at least 1000ms');
   assertPositiveInteger(maxAttempts, 'Retention delete retry count', 5);
+  assertPositiveInteger(maxConvergenceAttempts, 'Retention convergence attempt count', 60);
+  assertPositiveInteger(convergenceDelayMs, 'Retention convergence delay', 60_000);
+  if (convergenceDelayMs < 1_000) {
+    throw new PublicSnapshotRetentionError('Retention convergence delay must be at least 1000ms');
+  }
+  assertPositiveInteger(convergenceHeadDelayMs, 'Retention convergence HEAD delay', 60_000);
+  if (convergenceHeadDelayMs < 100) {
+    throw new PublicSnapshotRetentionError('Retention convergence HEAD delay must be at least 100ms');
+  }
   const sleep = options.sleep ?? ((milliseconds: number) => new Promise<void>(
     (resolve) => setTimeout(resolve, milliseconds),
   ));
@@ -680,13 +765,28 @@ export async function executePublicSnapshotRetention(
         if (!deleted) throw new PublicSnapshotRetentionError('A retention payload delete batch failed');
         mutable.payloadObjectsDeleted.push(...batch);
       }
-      mutable.completedReleaseIds.push(candidate.releaseId);
     } catch {
       throw new PublicSnapshotRetentionExecutionError(
         `Retention execution stopped while processing release ${candidate.releaseId}`,
         snapshotResult(mutable),
       );
     }
+    try {
+      await waitForReleaseDeletionConvergence({
+        store,
+        candidate,
+        maxAttempts: maxConvergenceAttempts,
+        delayMs: convergenceDelayMs,
+        headDelayMs: convergenceHeadDelayMs,
+        sleep,
+      });
+    } catch {
+      throw new PublicSnapshotRetentionExecutionError(
+        `Retention delete was accepted but convergence remains unverified for release ${candidate.releaseId}`,
+        snapshotResult(mutable),
+      );
+    }
+    mutable.completedReleaseIds.push(candidate.releaseId);
   }
   return snapshotResult(mutable);
 }

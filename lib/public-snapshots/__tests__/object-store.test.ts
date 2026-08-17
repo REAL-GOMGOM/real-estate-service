@@ -282,7 +282,7 @@ describe('public snapshot object stores', () => {
     expect((error as Error).message).not.toContain('secret');
   });
 
-  it('lists only the dedicated v2 releases prefix with bounded pagination and credentials', async () => {
+  it('lists only the v2 releases root or one exact release prefix with bounded pagination and credentials', async () => {
     const pathname = `${RELEASE_PREFIX}shards/00.json.gz`;
     const listImpl = vi.fn(async () => ({
       blobs: [listedBlob(pathname, { etag: 'listed-etag' })],
@@ -318,15 +318,26 @@ describe('public snapshot object stores', () => {
       abortSignal: expect.any(AbortSignal),
     }));
 
+    await expect(store.listRetentionObjects({ prefix: RELEASE_PREFIX, limit: 1 }))
+      .resolves.toMatchObject({ objects: [{ pathname }] });
+    expect(listImpl).toHaveBeenLastCalledWith(expect.objectContaining({
+      token: BLOB_TOKEN,
+      prefix: RELEASE_PREFIX,
+      limit: 1,
+      mode: 'expanded',
+    }));
+
     await expect(store.listRetentionObjects({ prefix: 'public-transactions/v1/releases/', limit: 1 }))
-      .rejects.toThrow('only the public-transactions/v2 releases prefix');
+      .rejects.toThrow('only the v2 releases root or one exact release prefix');
+    await expect(store.listRetentionObjects({ prefix: `${RELEASE_PREFIX}shards/`, limit: 1 }))
+      .rejects.toThrow('only the v2 releases root or one exact release prefix');
     await expect(store.listRetentionObjects({ prefix: RELEASES_PREFIX, limit: 0 }))
       .rejects.toThrow('list limit is invalid');
     await expect(store.listRetentionObjects({ prefix: RELEASES_PREFIX, limit: 1_001 }))
       .rejects.toThrow('list limit is invalid');
     await expect(store.listRetentionObjects({ prefix: RELEASES_PREFIX, limit: 1, cursor: '  ' }))
       .rejects.toThrow('list cursor is invalid');
-    expect(listImpl).toHaveBeenCalledTimes(1);
+    expect(listImpl).toHaveBeenCalledTimes(2);
   });
 
   it('fails closed on invalid pagination and listed objects outside the pinned Blob origin/path', async () => {
@@ -358,7 +369,14 @@ describe('public snapshot object stores', () => {
     await expect(store.listRetentionObjects(input)).rejects.toThrow('invalid pagination metadata');
     await expect(store.listRetentionObjects(input)).rejects.toThrow('public URL does not match');
     await expect(store.listRetentionObjects(input)).rejects.toThrow('public URL does not match');
-    await expect(store.listRetentionObjects(input)).rejects.toThrow('escaped the v2 releases prefix');
+    await expect(store.listRetentionObjects(input)).rejects.toThrow('escaped the requested release prefix');
+
+    listImpl.mockResolvedValueOnce({
+      blobs: [listedBlob(`${RELEASES_PREFIX}20260810T010203Z-bbbbbbbbbbbb/shards/00.json.gz`)],
+      hasMore: false,
+    });
+    await expect(store.listRetentionObjects({ prefix: RELEASE_PREFIX, limit: 1 }))
+      .rejects.toThrow('escaped the requested release prefix');
   });
 
   it('reads only discovery or exact release-root manifests with a dedicated token and timeout', async () => {
@@ -597,6 +615,43 @@ describe('public snapshot object stores', () => {
     await expect(store.headRetentionDiscovery()).resolves.toBeNull();
     await expect(store.headRetentionDiscovery())
       .rejects.toThrow('Vercel Blob retention discovery head failed');
+  });
+
+  it('HEADs exact known release objects through management APIs and sanitizes failures', async () => {
+    const payloadPathname = `${RELEASE_PREFIX}shards/00.json.gz`;
+    const sdkSecret = 'PRIVATE_RELEASE_HEAD_SDK_DETAIL';
+    const headImpl = vi.fn()
+      .mockResolvedValueOnce(listedBlob(payloadPathname, { etag: 'payload-etag' }))
+      .mockRejectedValueOnce(new BlobNotFoundError())
+      .mockRejectedValueOnce(new Error(sdkSecret));
+    const store = new VercelBlobSnapshotStore({
+      token: BLOB_TOKEN,
+      publicBaseUrl: 'https://store-id.public.blob.vercel-storage.com/',
+      headImpl: headImpl as never,
+    });
+
+    await expect(store.headRetentionObject(payloadPathname)).resolves.toMatchObject({
+      pathname: payloadPathname,
+      etag: 'payload-etag',
+      size: 123,
+    });
+    await expect(store.headRetentionObject(RELEASE_MANIFEST_KEY)).resolves.toBeNull();
+    let failure: unknown;
+    try {
+      await store.headRetentionObject(payloadPathname);
+    } catch (error) {
+      failure = error;
+    }
+    expect((failure as Error).message).toBe('Vercel Blob retention release head failed');
+    await expect(store.headRetentionObject(`${RELEASE_PREFIX}unknown.bin`))
+      .rejects.toThrow('only an exact known v2 release object');
+    expect(headImpl).toHaveBeenCalledWith(payloadPathname, {
+      token: BLOB_TOKEN,
+      abortSignal: expect.any(AbortSignal),
+    });
+
+    expect((failure as Error).message).not.toContain(sdkSecret);
+    expect((failure as Error).message).not.toContain(BLOB_TOKEN);
   });
 
   it('batch-deletes only bounded unique non-manifest objects under v2 releases', async () => {
