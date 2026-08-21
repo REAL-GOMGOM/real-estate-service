@@ -10,6 +10,7 @@
     "snapshot:health": "node --import tsx scripts/check-public-snapshot-freshness.ts",
     "snapshot:monitor": "node --import tsx scripts/monitor-public-snapshot-freshness.ts",
     "snapshot:retention": "node --import tsx scripts/retain-public-transactions.ts",
+    "blog:source:export": "node --import tsx scripts/export-public-blog-source.ts",
     "blog:snapshot:dry-run": "node --import tsx scripts/publish-public-blog.ts",
     "generate:insights": "tsx scripts/generate-location-insights.ts",
     "extract:csv": "tsx scripts/extract-csv-from-xlsx.ts",

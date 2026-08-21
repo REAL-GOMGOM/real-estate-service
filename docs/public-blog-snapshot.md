@@ -1,4 +1,35 @@
-# Public blog snapshot dry-run
+# Public blog snapshot source and dry-run
+
+## Export an exact trusted source
+
+When the authoritative blog database is reachable, export all and only
+published posts with an explicit destination:
+
+```bash
+mkdir -p /absolute/private/directory
+
+NAEZIP_ENV_FILE=/absolute/private/.env.local \
+npm run blog:source:export -- \
+  --output /absolute/private/directory/public-blog-source.json
+```
+
+The exporter runs one read-only `SELECT`. Categories are derived exclusively
+from published posts, and the result preserves post/category IDs, slugs,
+titles, excerpts, cover image URLs, publication/update timestamps, category
+names, MDX, and explicit `status="published"` fields.
+
+Before touching the destination it runs the production snapshot preflight,
+including the 43-post floor and strict MDX validation. It then atomically
+replaces only an absent or regular destination file, installs mode `0600`, and
+refuses a symlink. The parent directory must already exist. Query, validation,
+or write failures do not print content or `DATABASE_URL`; a failed validation
+cannot replace the previous successful export.
+
+This is a manual recovery/export command. Do not run it repeatedly while the
+database is returning a quota error, and do not place its private output in the
+repository.
+
+## Build the local serving snapshot
 
 This command builds the public blog snapshot from an explicit trusted export:
 
