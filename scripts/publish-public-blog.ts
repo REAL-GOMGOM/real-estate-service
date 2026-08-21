@@ -101,7 +101,7 @@ export function parsePublicBlogSnapshotCliArguments(
   return { help, sourcePath, outputDir };
 }
 
-async function readTrustedSource(sourcePath: string): Promise<unknown> {
+export async function readTrustedPublicBlogSourceFile(sourcePath: string): Promise<unknown> {
   let handle;
   try {
     handle = await open(sourcePath, constants.O_RDONLY | constants.O_NOFOLLOW);
@@ -164,7 +164,7 @@ export async function runPublicBlogSnapshotCli(
   const cwd = path.resolve(options.cwd ?? process.cwd());
   const sourcePath = path.resolve(cwd, parsed.sourcePath!);
   const outputDir = path.resolve(cwd, parsed.outputDir);
-  const source = await readTrustedSource(sourcePath);
+  const source = await readTrustedPublicBlogSourceFile(sourcePath);
   const result = await publishPublicBlogSnapshotDryRun({ source, outputDir });
   log(
     `[public-blog-snapshot] local dry-run complete: release=${result.releaseId}`

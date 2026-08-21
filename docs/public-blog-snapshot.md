@@ -85,3 +85,26 @@ manifest at `public-blog/v1/manifest.json` is replaced last.
 This dry-run output is not sufficient to activate the site reader. Remote
 publication and runtime activation must remain disabled until a complete
 trusted source has been recovered and separately reviewed.
+
+## Explicit Vercel Blob publication
+
+Only after the trusted source and dry-run have been reviewed, publish with the
+separate production command:
+
+```bash
+NAEZIP_ENV_FILE=/absolute/private/.env.local \
+npm run blog:snapshot:publish -- \
+  --source /absolute/private/public-blog-source.json \
+  --confirm-production
+```
+
+The private environment file must contain the dedicated
+`NAEZIP_BLOG_SNAPSHOT_BLOB_READ_WRITE_TOKEN` and the matching public origin in
+`NEXT_PUBLIC_BLOG_SNAPSHOT_BASE_URL`. The command never falls back to the
+generic `BLOB_READ_WRITE_TOKEN`.
+
+The payload and release manifest are immutable one-year-cache objects. The
+60-second discovery manifest is written last with ETag conditional replacement
+and anti-regression/conflict checks. A successful command also downloads and
+validates the manifest and payload through both Blob management access and the
+unauthenticated public reader. Retention is intentionally outside this command.

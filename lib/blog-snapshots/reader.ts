@@ -1,4 +1,3 @@
-import 'server-only';
 import { createHash } from 'node:crypto';
 
 import {
@@ -39,6 +38,7 @@ function assertPublicBlobOrigin(raw: string): URL {
   if (url.protocol !== 'https:'
     || url.username
     || url.password
+    || url.port
     || url.search
     || url.hash
     || url.pathname !== '/'
