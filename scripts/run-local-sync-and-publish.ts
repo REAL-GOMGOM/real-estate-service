@@ -25,7 +25,7 @@ import {
 } from '../lib/public-snapshots/publication-lock';
 
 const HELP = `
-Usage: npx tsx scripts/run-local-sync-and-publish.ts [--dry-run] [--allow-stale-local]
+Usage: node --import tsx scripts/run-local-sync-and-publish.ts [--dry-run] [--allow-stale-local]
 
 Runs macmini-sync first, atomically records its exit status, and invokes the public
 snapshot publisher only when sync exits 0 (healthy) or 2 (Neon-only degraded).
@@ -207,7 +207,7 @@ export async function runSyncAndPublish(
     runImpl?: RunChild;
     now?: () => Date;
     markerPath?: string;
-    tsxPath?: string;
+    nodePath?: string;
     childEnv?: NodeJS.ProcessEnv;
     terminationSignal?: () => NodeJS.Signals | null;
     outcomeMarkerPath?: string;
@@ -217,7 +217,14 @@ export async function runSyncAndPublish(
   const runImpl = options.runImpl ?? run;
   const childEnv = options.childEnv ?? process.env;
   const now = options.now ?? (() => new Date());
-  const tsxPath = options.tsxPath ?? path.resolve(process.cwd(), 'node_modules', '.bin', 'tsx');
+  // The tsx launcher in node_modules/.bin uses `#!/usr/bin/env node`. launchd's
+  // intentionally-small default PATH does not include Homebrew, so invoking that
+  // shim directly makes every scheduled child fail before its script starts.
+  // Reuse the absolute Node executable that is already running this wrapper and
+  // ask Node to import tsx itself; child startup is then independent of PATH.
+  const nodePath = options.nodePath ?? process.execPath;
+  const runTypeScript = (args: readonly string[], env: NodeJS.ProcessEnv) =>
+    runImpl(nodePath, ['--import', 'tsx', ...args], env);
   const markerPath = options.markerPath ?? defaultMacMiniSyncHealthMarkerPath(childEnv);
   const terminationSignal = options.terminationSignal ?? (() => null);
   const syncStartedAt = now();
@@ -271,7 +278,7 @@ export async function runSyncAndPublish(
 
   let preflightResult: SpawnResult;
   try {
-    preflightResult = await runImpl(tsxPath, [
+    preflightResult = await runTypeScript([
       'scripts/bootstrap-local-apt-scores.ts',
       '--check',
     ], childEnv);
@@ -297,7 +304,7 @@ export async function runSyncAndPublish(
   await recordOutcome('running', 'sync');
   let syncResult: SpawnResult;
   try {
-    syncResult = await runImpl(tsxPath, ['scripts/macmini-sync.ts'], childEnv);
+    syncResult = await runTypeScript(['scripts/macmini-sync.ts'], childEnv);
   } catch (error) {
     syncResult = { code: 1, signal: null };
     console.error('[sync-and-publish] sync 프로세스를 시작하지 못했습니다:', error instanceof Error ? error.message : error);
@@ -335,7 +342,7 @@ export async function runSyncAndPublish(
   });
   let publisherResult: SpawnResult;
   try {
-    publisherResult = await runImpl(tsxPath, [
+    publisherResult = await runTypeScript([
       'scripts/publish-public-transactions.ts',
       ...(options.publisherArgs ?? []),
     ], publisherEnv);

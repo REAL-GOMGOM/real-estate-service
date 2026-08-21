@@ -83,7 +83,7 @@ describe('publication outcome marker', () => {
       outcomeMarkerPath,
       outcomeAttemptId: ATTEMPT_ID,
       publisherArgs: ['--dry-run'],
-      tsxPath: '/test/tsx',
+      nodePath: '/test/node',
       childEnv: { NODE_ENV: 'test' },
       now: () => instants.shift()!,
       runImpl: async () => results.shift()!,
@@ -114,11 +114,11 @@ describe('publication outcome marker', () => {
       markerPath: path.join(directory, 'sync-health.json'),
       outcomeMarkerPath,
       outcomeAttemptId: ATTEMPT_ID,
-      tsxPath: '/test/tsx',
+      nodePath: '/test/node',
       childEnv: { NODE_ENV: 'test' },
       now: () => instants.shift()!,
       runImpl: async (_command, args) => {
-        if (args[0] === 'scripts/publish-public-transactions.ts') {
+        if (args[2] === 'scripts/publish-public-transactions.ts') {
           publisherCalls += 1;
           throw new Error('unclassified child launch failure');
         }

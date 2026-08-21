@@ -339,7 +339,7 @@ describe('sync-and-publish wrapper', () => {
       { env: { NAEZIP_SNAPSHOT_LOCK_PATH: lockPath } },
       async () => runSyncAndPublish({
         markerPath,
-        tsxPath: '/test/tsx',
+        nodePath: '/test/node',
         terminationSignal: () => receivedSignal,
         runImpl: async () => {
           receivedSignal = 'SIGINT';
@@ -405,6 +405,7 @@ describe('sync-and-publish wrapper', () => {
   it('records exit 2 and invokes publisher, but exit 1 blocks it', async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'naezip-wrapper-'));
     const markerPath = path.join(directory, 'health.json');
+    const childCommands: string[] = [];
     const commands: readonly string[][] = [];
     const called: string[][] = commands as string[][];
     const results = [
@@ -412,18 +413,23 @@ describe('sync-and-publish wrapper', () => {
       { code: 2, signal: null },
       { code: 0, signal: null },
     ];
-    const sharedChildEnv = { NODE_ENV: 'test', FROM_FILE: 'same-for-both' } as NodeJS.ProcessEnv;
+    const sharedChildEnv = {
+      NODE_ENV: 'test',
+      FROM_FILE: 'same-for-both',
+      PATH: '/usr/bin:/bin:/usr/sbin:/sbin',
+    } as NodeJS.ProcessEnv;
     const seenChildEnvs: NodeJS.ProcessEnv[] = [];
     const code = await runSyncAndPublish({
       markerPath,
-      tsxPath: '/test/tsx',
+      nodePath: '/test/node',
       now: () => new Date('2026-08-11T05:00:00.000Z'),
       publisherArgs: ['--dry-run'],
       childEnv: sharedChildEnv,
-      runImpl: async (_command, args, childEnv) => {
+      runImpl: async (command, args, childEnv) => {
+        childCommands.push(command);
         called.push([...args]);
         seenChildEnvs.push(childEnv);
-        if (args[0] === 'scripts/macmini-sync.ts') {
+        if (args[2] === 'scripts/macmini-sync.ts') {
           // The old healthy marker is invalidated before local sync can mutate a row.
           expect(JSON.parse(await readFile(markerPath, 'utf8'))).toMatchObject({ exitCode: 1 });
         }
@@ -431,10 +437,11 @@ describe('sync-and-publish wrapper', () => {
       },
     });
     expect(code).toBe(0);
+    expect(childCommands).toEqual(['/test/node', '/test/node', '/test/node']);
     expect(called).toEqual([
-      ['scripts/bootstrap-local-apt-scores.ts', '--check'],
-      ['scripts/macmini-sync.ts'],
-      ['scripts/publish-public-transactions.ts', '--dry-run'],
+      ['--import', 'tsx', 'scripts/bootstrap-local-apt-scores.ts', '--check'],
+      ['--import', 'tsx', 'scripts/macmini-sync.ts'],
+      ['--import', 'tsx', 'scripts/publish-public-transactions.ts', '--dry-run'],
     ]);
     expect(seenChildEnvs[0]).toBe(sharedChildEnv);
     expect(seenChildEnvs[1]).toBe(sharedChildEnv);
@@ -447,18 +454,18 @@ describe('sync-and-publish wrapper', () => {
     called.length = 0;
     const failed = await runSyncAndPublish({
       markerPath,
-      tsxPath: '/test/tsx',
+      nodePath: '/test/node',
       runImpl: async (_command, args) => {
         called.push([...args]);
-        return args[0] === 'scripts/bootstrap-local-apt-scores.ts'
+        return args[2] === 'scripts/bootstrap-local-apt-scores.ts'
           ? { code: 0, signal: null }
           : { code: 1, signal: null };
       },
     });
     expect(failed).toBe(1);
     expect(called).toEqual([
-      ['scripts/bootstrap-local-apt-scores.ts', '--check'],
-      ['scripts/macmini-sync.ts'],
+      ['--import', 'tsx', 'scripts/bootstrap-local-apt-scores.ts', '--check'],
+      ['--import', 'tsx', 'scripts/macmini-sync.ts'],
     ]);
     expect(JSON.parse(await readFile(markerPath, 'utf8'))).toMatchObject({ exitCode: 1 });
   });
@@ -475,7 +482,7 @@ describe('sync-and-publish wrapper', () => {
 
     const code = await runSyncAndPublish({
       markerPath,
-      tsxPath: '/test/tsx',
+      nodePath: '/test/node',
       now: () => instants.shift()!,
       childEnv: { NODE_ENV: 'test' },
       runImpl: async (_command, args) => {
@@ -486,8 +493,8 @@ describe('sync-and-publish wrapper', () => {
 
     expect(code).toBe(1);
     expect(commands).toEqual([
-      ['scripts/bootstrap-local-apt-scores.ts', '--check'],
-      ['scripts/macmini-sync.ts'],
+      ['--import', 'tsx', 'scripts/bootstrap-local-apt-scores.ts', '--check'],
+      ['--import', 'tsx', 'scripts/macmini-sync.ts'],
     ]);
     expect(JSON.parse(await readFile(markerPath, 'utf8'))).toMatchObject({
       completedAt: '2026-08-31T15:01:00.000Z',
@@ -508,7 +515,7 @@ describe('sync-and-publish wrapper', () => {
 
     const code = await runSyncAndPublish({
       markerPath,
-      tsxPath: '/test/tsx',
+      nodePath: '/test/node',
       childEnv: { NODE_ENV: 'test' },
       runImpl: async (_command, args) => {
         commands.push([...args]);
@@ -518,7 +525,7 @@ describe('sync-and-publish wrapper', () => {
 
     expect(code).toBe(1);
     expect(commands).toEqual([
-      ['scripts/bootstrap-local-apt-scores.ts', '--check'],
+      ['--import', 'tsx', 'scripts/bootstrap-local-apt-scores.ts', '--check'],
     ]);
     expect(JSON.parse(await readFile(markerPath, 'utf8'))).toMatchObject({ exitCode: 1 });
   });
