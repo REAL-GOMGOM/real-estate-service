@@ -95,8 +95,15 @@ separate production command:
 NAEZIP_ENV_FILE=/absolute/private/.env.local \
 npm run blog:snapshot:publish -- \
   --source /absolute/private/public-blog-source.json \
+  --confirm-release 20260817T010203Z-0123456789ab \
   --confirm-production
 ```
+
+Copy `--confirm-release` exactly from the reviewed dry-run output. The remote
+publisher rebuilds the candidate and compares its deterministic release ID with
+that approval before any Blob management or public request. A missing, malformed,
+duplicate, or mismatched approval fails without reading or writing the remote
+store. The separate `--confirm-production` flag is also required.
 
 The private environment file must contain the dedicated
 `NAEZIP_BLOG_SNAPSHOT_BLOB_READ_WRITE_TOKEN` and the matching public origin in

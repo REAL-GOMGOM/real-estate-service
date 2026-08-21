@@ -30,6 +30,7 @@ import {
 const NOW = new Date('2026-08-22T00:00:00.000Z');
 const BASE_URL = 'https://blog-store.public.blob.vercel-storage.com/';
 const TOKEN = 'vercel_blob_rw_blog-store_test-secret';
+const VALID_RELEASE_ID = '20260821T010203Z-aaaaaaaaaaaa';
 
 function source(
   generatedAt = '2026-08-21T01:02:03.000Z',
@@ -176,6 +177,7 @@ describe('public blog Vercel Blob publication', () => {
     expect(result.status).toBe(0);
     expect(result.stderr).toBe('');
     expect(result.stdout).toContain('--confirm-production');
+    expect(result.stdout).toContain('--confirm-release');
     expect(result.stdout).not.toContain('injected env');
   });
 
@@ -184,6 +186,7 @@ describe('public blog Vercel Blob publication', () => {
     const result = spawnSync(process.execPath, [
       '--import', 'tsx', scriptPath,
       '--source', '/private/source-must-not-be-read.json',
+      '--confirm-release', VALID_RELEASE_ID,
       '--confirm-production',
     ], {
       cwd: process.cwd(),
@@ -240,13 +243,14 @@ describe('public blog Vercel Blob publication', () => {
   it('publishes immutable objects first, discovery last, then completes both readbacks', async () => {
     const backend = memoryBlobBackend();
     const store = createStore(backend);
+    const release = await buildPublicBlogSnapshotRelease(source(), { now: NOW });
     const result = await publishPublicBlogSnapshotToBlob({
       source: source(),
+      expectedReleaseId: release.releaseId,
       store,
       publicFetchImpl: backend.publicFetchImpl,
       now: NOW,
     });
-    const release = await buildPublicBlogSnapshotRelease(source(), { now: NOW });
 
     expect(backend.order).toEqual([
       release.payloadKey,
@@ -374,6 +378,7 @@ describe('public blog Vercel Blob publication', () => {
     const release = await buildPublicBlogSnapshotRelease(source(), { now: NOW });
     const input = {
       source: source(),
+      expectedReleaseId: release.releaseId,
       store,
       publicFetchImpl: backend.publicFetchImpl,
       now: NOW,
@@ -396,6 +401,7 @@ describe('public blog Vercel Blob publication', () => {
   it('verifies immutable readback before moving discovery', async () => {
     const backend = memoryBlobBackend();
     const store = createStore(backend);
+    const release = await buildPublicBlogSnapshotRelease(source(), { now: NOW });
     const readObject = store.readObject.bind(store);
     vi.spyOn(store, 'readObject').mockImplementation(async (input) => {
       if (input.kind === 'release-manifest') {
@@ -406,6 +412,7 @@ describe('public blog Vercel Blob publication', () => {
 
     await expect(publishPublicBlogSnapshotToBlob({
       source: source(),
+      expectedReleaseId: release.releaseId,
       store,
       publicFetchImpl: backend.publicFetchImpl,
       now: NOW,
@@ -491,24 +498,86 @@ describe('public blog Vercel Blob publication', () => {
     })) as unknown as typeof fetch;
     await expect(publishPublicBlogSnapshotToBlob({
       source: source(),
+      expectedReleaseId: release.releaseId,
       store: createStore(backend),
       publicFetchImpl: stalePublicFetch,
       now: NOW,
     })).rejects.toThrow();
   });
 
+  it('rejects a mismatched release approval before every remote operation', async () => {
+    const candidateSource = source('2026-08-21T01:02:03.000Z', ' PRIVATE_SOURCE_CONTENT');
+    const approved = await buildPublicBlogSnapshotRelease(source(), { now: NOW });
+    const candidate = await buildPublicBlogSnapshotRelease(candidateSource, { now: NOW });
+    expect(candidate.releaseId).not.toBe(approved.releaseId);
+
+    const directory = await temporaryDirectory('naezip-blog-blob-approval-');
+    const sourcePath = path.join(directory, 'trusted-source.json');
+    await writeFile(sourcePath, stableJson(candidateSource), { mode: 0o600 });
+    const backend = memoryBlobBackend();
+    const log = vi.fn();
+    let caught: unknown;
+    try {
+      await runPublicBlogBlobPublishCli([
+        '--source', sourcePath,
+        '--confirm-release', approved.releaseId,
+        '--confirm-production',
+      ], {
+        env: { BLOB_READ_WRITE_TOKEN: 'CREDENTIAL_DO_NOT_ECHO' },
+        store: createStore(backend),
+        publicFetchImpl: backend.publicFetchImpl,
+        now: NOW,
+        log,
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect((caught as Error).message)
+      .toBe('Public blog release approval does not match candidate');
+    expect((caught as Error).message).not.toContain('PRIVATE_SOURCE_CONTENT');
+    expect((caught as Error).message).not.toContain('CREDENTIAL_DO_NOT_ECHO');
+    expect((caught as Error).message).not.toContain(sourcePath);
+    expect(log).not.toHaveBeenCalled();
+    expect(backend.putImpl).not.toHaveBeenCalled();
+    expect(backend.getImpl).not.toHaveBeenCalled();
+    expect(backend.publicFetchImpl).not.toHaveBeenCalled();
+    expect(backend.objects.size).toBe(0);
+  });
+
   it('keeps the production CLI explicit and does not log source content or credentials', async () => {
     expect(() => parsePublicBlogBlobPublishCliArguments([])).toThrow('--source is required');
     expect(() => parsePublicBlogBlobPublishCliArguments([
       '--source', '/private/source.json',
+      '--confirm-production',
+    ])).toThrow('--confirm-release is required');
+    expect(() => parsePublicBlogBlobPublishCliArguments([
+      '--source', '/private/source.json',
+      '--confirm-release', VALID_RELEASE_ID,
     ])).toThrow('--confirm-production is required');
     expect(() => parsePublicBlogBlobPublishCliArguments([
-      '--source', 'relative.json', '--confirm-production',
+      '--source', 'relative.json',
+      '--confirm-release', VALID_RELEASE_ID,
+      '--confirm-production',
     ])).toThrow('absolute file path');
+    expect(() => parsePublicBlogBlobPublishCliArguments([
+      '--source', '/private/source.json',
+      '--confirm-release', 'not-a-release',
+      '--confirm-production',
+    ])).toThrow('--confirm-release is invalid');
+    expect(() => parsePublicBlogBlobPublishCliArguments([
+      '--source', '/private/source.json',
+      '--confirm-release', VALID_RELEASE_ID,
+      '--confirm-release', VALID_RELEASE_ID,
+      '--confirm-production',
+    ])).toThrow('Duplicate release confirmation');
     let unknownError: unknown;
     try {
       parsePublicBlogBlobPublishCliArguments([
-        '--source', '/private/source.json', '--confirm-production', '--token=DO_NOT_ECHO',
+        '--source', '/private/source.json',
+        '--confirm-release', VALID_RELEASE_ID,
+        '--confirm-production',
+        '--token=DO_NOT_ECHO',
       ]);
     } catch (error) {
       unknownError = error;
@@ -519,10 +588,12 @@ describe('public blog Vercel Blob publication', () => {
     const directory = await temporaryDirectory('naezip-blog-blob-cli-');
     const sourcePath = path.join(directory, 'trusted-source.json');
     await writeFile(sourcePath, stableJson(source()), { mode: 0o600 });
+    const release = await buildPublicBlogSnapshotRelease(source(), { now: NOW });
     const backend = memoryBlobBackend();
     const log = vi.fn();
     await expect(runPublicBlogBlobPublishCli([
       '--source', sourcePath,
+      '--confirm-release', release.releaseId,
       '--confirm-production',
     ], {
       env: { BLOB_READ_WRITE_TOKEN: 'DO_NOT_LOG' },

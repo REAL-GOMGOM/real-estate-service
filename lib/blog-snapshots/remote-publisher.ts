@@ -1,3 +1,5 @@
+import { timingSafeEqual } from 'node:crypto';
+
 import { sha256Hex, stableJson } from '@/lib/public-snapshots/artifact';
 
 import {
@@ -18,6 +20,7 @@ import type {
 
 export interface PublishPublicBlogSnapshotToBlobInput {
   source: unknown;
+  expectedReleaseId: string;
   store: PublicBlogRemoteObjectStore;
   publicFetchImpl?: typeof fetch;
   now?: Date;
@@ -36,6 +39,25 @@ export class PublicBlogRemotePublicationError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'PublicBlogRemotePublicationError';
+  }
+}
+
+const PUBLIC_BLOG_RELEASE_ID_PATTERN = /^\d{8}T\d{6}Z-[a-f0-9]{12}$/;
+
+export function isPublicBlogReleaseId(value: unknown): value is string {
+  return typeof value === 'string' && PUBLIC_BLOG_RELEASE_ID_PATTERN.test(value);
+}
+
+function assertReleaseApproval(actualReleaseId: string, expectedReleaseId: unknown): void {
+  if (!isPublicBlogReleaseId(actualReleaseId) || !isPublicBlogReleaseId(expectedReleaseId)) {
+    throw new PublicBlogRemotePublicationError('Public blog release approval is invalid');
+  }
+  const actual = Buffer.from(actualReleaseId, 'utf8');
+  const expected = Buffer.from(expectedReleaseId, 'utf8');
+  if (!timingSafeEqual(actual, expected)) {
+    throw new PublicBlogRemotePublicationError(
+      'Public blog release approval does not match candidate',
+    );
   }
 }
 
@@ -68,6 +90,7 @@ export async function publishPublicBlogSnapshotToBlob(
 ): Promise<PublishPublicBlogSnapshotToBlobResult> {
   const now = input.now ?? new Date();
   const release = await buildPublicBlogSnapshotRelease(input.source, { now });
+  assertReleaseApproval(release.releaseId, input.expectedReleaseId);
 
   await input.store.putObject({
     kind: 'payload',
