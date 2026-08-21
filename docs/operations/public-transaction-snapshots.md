@@ -252,6 +252,11 @@ DB 연결 문자열, 오류 본문은 넣지 않는다. 단계 진행 중에는 
 마지막 성공으로 해석하지 말고 sync health marker와 lock owner를 함께 조사한다. 이 결과 마커는
 sync health marker를 대체하거나 수정하지 않는다.
 
+`--dry-run`은 운영 결과를 덮지 않고 설정 경로 뒤에 `.dry-run`을 붙인 별도 marker에만 기록한다.
+예를 들어 기본 운영 marker가 `public-snapshot-publication-outcome.json`이면 점검 결과는
+`public-snapshot-publication-outcome.json.dry-run`에 남는다. 따라서 실제 발행 실패 뒤 dry-run을
+실행해도 감시기가 읽는 마지막 운영 실패 증거는 그대로 보존된다.
+
 고정 discovery manifest의 외부 freshness는 아래 read-only 명령으로 확인한다. 명령은
 `NEXT_PUBLIC_TRANSACTION_SNAPSHOT_BASE_URL`의 HTTPS root origin만 허용하고, strict v2 manifest를
 검증한 뒤 stdout에 고정 schema JSON 한 줄만 쓴다. URL·응답 본문·SDK 오류 문자열은 출력하지 않는다.
@@ -269,8 +274,9 @@ npm run --silent snapshot:health
 - `1 / warning`: 36시간 이상 48시간 미만이다.
 - `2 / critical`: 48시간 이상, manifest가 5분 넘게 미래이거나 설정·요청·계약 검증에 실패했다.
 
-순수 점검 명령은 알림이나 상태 파일을 만들지 않는다. GUI LaunchAgent용 wrapper는 같은 JSON/종료코드
-계약을 유지하면서 macOS 알림을 추가한다.
+순수 점검 명령은 알림이나 상태 파일을 만들지 않는다. GUI LaunchAgent용 wrapper는 원격 freshness와
+로컬 `NAEZIP_PUBLICATION_OUTCOME_MARKER`를 결합해 더 나쁜 상태를 같은 JSON/종료코드 계약으로
+출력하고 macOS 알림을 추가한다.
 
 ```bash
 npm run --silent snapshot:monitor
@@ -283,6 +289,24 @@ wrapper는 `NAEZIP_PUBLICATION_ALERT_STATE_MARKER`(기본
 같은 상태가 반복되면 알리지 않는다. 알림이 실패하면 상태를 전진시키지 않아 다음 시간 실행에서
 다시 시도하지만, 이미 출력된 freshness JSON과 종료코드는 절대 바꾸지 않는다. 알림 직후 state write
 전에 프로세스가 종료되는 극히 짧은 구간에는 다음 실행에서 같은 알림이 한 번 더 나올 수 있다.
+
+운영 감시기는 KST 매일 05:00 발행을 기준으로 다음 producer 이상을 원격 manifest 노후화보다 먼저
+`critical / exit 2`로 판정한다.
+
+- 실제 발행(`dryRun=false`)의 마지막 결과가 `failed`이고 그 뒤 더 최신 공개 release가 없을 때:
+  `last-publication-failed`
+- 실제 발행이 90분 이상 `running`이고 그 뒤 더 최신 공개 release가 없을 때:
+  `publication-running-too-long`
+- KST 06:30까지 당일 05:00 이후의 성공 결과 또는 공개 release가 없을 때:
+  `scheduled-publication-missed`
+- producer 시작/완료 시각이 현재보다 5분 넘게 미래일 때:
+  `publication-outcome-in-future`
+
+dry-run 결과는 별도 marker에만 기록하며 정기 Production 발행의 성공 증거로 사용하지 않는다. 반대로 marker가 없거나 손상돼도
+당일 05:00 이후의 strict 공개 release가 확인되면 미실행으로 오판하지 않는다. monitor plist에는
+outcome marker의 절대경로를 명시한다. 이전 설치본처럼 이 변수가 없으면 alert-state marker와 같은
+state 디렉터리의 `public-snapshot-publication-outcome.json`만 안전한 호환 경로로 사용한다. 이 감시는
+알림만 강화하며 sync/publisher를 자동 재실행하거나 Blob·DB를 변경하지 않는다.
 
 `scripts/launchd/com.gomgom.naezip-snapshot-monitor.plist.example`은 1시간마다 이 wrapper를 실행해
 JSONL 로그와 로컬 데스크톱 알림을 남기는 별도 예시다. webhook·token은 사용하지 않는다. 실제 등록은

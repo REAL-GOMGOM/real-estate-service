@@ -14,6 +14,7 @@ import {
   PUBLICATION_OUTCOME_SCHEMA,
   createPublicationAttemptId,
   defaultPublicationOutcomeMarkerPath,
+  publicationOutcomeMarkerPathForRun,
   writePublicationOutcomeMarker,
   type PublicationOutcomeMarker,
   type PublicationOutcomeStage,
@@ -228,9 +229,11 @@ export async function runSyncAndPublish(
   const markerPath = options.markerPath ?? defaultMacMiniSyncHealthMarkerPath(childEnv);
   const terminationSignal = options.terminationSignal ?? (() => null);
   const syncStartedAt = now();
-  const outcomeMarkerPath = options.outcomeMarkerPath;
   const outcomeAttemptId = options.outcomeAttemptId ?? createPublicationAttemptId();
   const dryRun = options.publisherArgs?.includes('--dry-run') ?? false;
+  const outcomeMarkerPath = options.outcomeMarkerPath
+    ? publicationOutcomeMarkerPathForRun(options.outcomeMarkerPath, dryRun)
+    : undefined;
   let outcome: PublicationOutcomeMarker = {
     schema: PUBLICATION_OUTCOME_SCHEMA,
     attemptId: outcomeAttemptId,

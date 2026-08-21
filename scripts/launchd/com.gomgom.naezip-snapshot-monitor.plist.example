@@ -24,6 +24,8 @@
     <string>__PUBLIC_SNAPSHOT_BASE_URL__</string>
     <key>NAEZIP_PUBLICATION_ALERT_STATE_MARKER</key>
     <string>__ABSOLUTE_STATE_DIRECTORY__/public-snapshot-alert-state.json</string>
+    <key>NAEZIP_PUBLICATION_OUTCOME_MARKER</key>
+    <string>__ABSOLUTE_STATE_DIRECTORY__/public-snapshot-publication-outcome.json</string>
   </dict>
 
   <key>StartInterval</key>

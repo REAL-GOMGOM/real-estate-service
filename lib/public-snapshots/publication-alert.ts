@@ -33,7 +33,7 @@ const UTC_ISO_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
 const NOTIFICATION_TITLE = '내집 실거래 발행 상태';
 const NOTIFICATION_MESSAGES: Readonly<Record<PublicationAlertKind, string>> = Object.freeze({
   warning: '실거래 스냅샷이 36시간 이상 갱신되지 않았습니다.',
-  critical: '실거래 스냅샷이 48시간 이상 갱신되지 않았거나 확인에 실패했습니다.',
+  critical: '실거래 자동 발행이 실패·미실행됐거나 공개 스냅샷 확인에 실패했습니다.',
   recovery: '실거래 스냅샷 갱신 상태가 정상으로 회복되었습니다.',
 });
 

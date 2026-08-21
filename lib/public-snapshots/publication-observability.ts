@@ -9,6 +9,7 @@ import { PUBLIC_SNAPSHOT_BASE_URL_ENV } from './runtime';
 export const PUBLICATION_OUTCOME_SCHEMA = 'naezip.public-snapshot-publication-outcome.v1' as const;
 export const PUBLICATION_FRESHNESS_SCHEMA = 'naezip.public-snapshot-freshness.v1' as const;
 export const PUBLICATION_OUTCOME_MARKER_ENV = 'NAEZIP_PUBLICATION_OUTCOME_MARKER' as const;
+export const PUBLICATION_DRY_RUN_OUTCOME_SUFFIX = '.dry-run' as const;
 export const PUBLICATION_FRESHNESS_WARNING_HOURS = 36;
 export const PUBLICATION_FRESHNESS_CRITICAL_HOURS = 48;
 
@@ -38,6 +39,10 @@ export type PublicationFreshnessReason =
   | 'invalid-base-url'
   | 'invalid-manifest'
   | 'request-failed'
+  | 'last-publication-failed'
+  | 'publication-running-too-long'
+  | 'scheduled-publication-missed'
+  | 'publication-outcome-in-future'
   | 'invalid-arguments'
   | 'internal-error';
 
@@ -89,6 +94,14 @@ export function defaultPublicationOutcomeMarkerPath(
     env[PUBLICATION_OUTCOME_MARKER_ENV]
       ?? path.join(process.cwd(), '.local', 'public-snapshot-publication-outcome.json'),
   );
+}
+
+export function publicationOutcomeMarkerPathForRun(
+  markerPath: string,
+  dryRun: boolean,
+): string {
+  const resolved = path.resolve(markerPath);
+  return dryRun ? `${resolved}${PUBLICATION_DRY_RUN_OUTCOME_SUFFIX}` : resolved;
 }
 
 export function createPublicationAttemptId(): string {

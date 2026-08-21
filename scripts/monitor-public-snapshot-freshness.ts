@@ -6,10 +6,10 @@ import {
   type PublicationNotifier,
 } from '../lib/public-snapshots/publication-alert';
 import {
-  checkRemotePublicationFreshness,
   publicationFreshnessExitCode,
   type PublicationFreshnessResult,
 } from '../lib/public-snapshots/publication-observability';
+import { checkPublicationOperationalHealth } from '../lib/public-snapshots/publication-operational-health';
 import { runPublicSnapshotFreshnessMonitor } from './check-public-snapshot-freshness';
 
 export async function runPublicSnapshotFreshnessMonitorWithAlerts(
@@ -21,6 +21,7 @@ export async function runPublicSnapshotFreshnessMonitorWithAlerts(
     write?: (line: string) => void;
     notifier?: PublicationNotifier;
     alertStateMarkerPath?: string;
+    outcomeMarkerPath?: string;
     checkImpl?: () => Promise<PublicationFreshnessResult>;
   } = {},
 ): Promise<number> {
@@ -37,10 +38,11 @@ export async function runPublicSnapshotFreshnessMonitorWithAlerts(
 
   const freshness = options.checkImpl
     ? await options.checkImpl()
-    : await checkRemotePublicationFreshness({
+    : await checkPublicationOperationalHealth({
         env: options.env,
         fetchImpl: options.fetchImpl,
         now: options.now,
+        outcomeMarkerPath: options.outcomeMarkerPath,
       });
   (options.write ?? console.log)(JSON.stringify(freshness));
 

@@ -13,12 +13,14 @@ import {
   assertPublicationOutcomeMarker,
   checkRemotePublicationFreshness,
   evaluatePublicationFreshness,
+  publicationOutcomeMarkerPathForRun,
   publicationFreshnessExitCode,
   readPublicationOutcomeMarker,
   writePublicationOutcomeMarker,
   type PublicationOutcomeMarker,
 } from '../publication-observability';
 import { publishPublicSnapshotRelease } from '../publisher';
+import { checkPublicationOperationalHealth } from '../publication-operational-health';
 import { createPublicTransactionSnapshot } from '../source-mappers';
 import { runPublicSnapshotFreshnessMonitor } from '../../../scripts/check-public-snapshot-freshness';
 import { runSyncAndPublish } from '../../../scripts/run-local-sync-and-publish';
@@ -63,14 +65,23 @@ describe('publication outcome marker', () => {
       .toThrow('fields are invalid');
   });
 
-  it('records the final wrapper result without changing the sync health contract', async () => {
+  it('records a dry-run separately without erasing the last production failure', async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), 'naezip-wrapper-outcome-'));
     const markerPath = path.join(directory, 'sync-health.json');
     const outcomeMarkerPath = path.join(directory, 'publication-outcome.json');
+    const productionFailure = outcome({
+      status: 'failed',
+      stage: 'publish',
+      startedAt: '2026-08-15T20:00:00.000Z',
+      completedAt: '2026-08-15T20:10:00.000Z',
+      sourceCompletedAt: '2026-08-15T20:08:00.000Z',
+      publisherExitCode: 1,
+    });
+    await writePublicationOutcomeMarker(outcomeMarkerPath, productionFailure);
     const instants = [
-      new Date('2026-08-16T00:00:00.000Z'),
-      new Date('2026-08-16T00:08:00.000Z'),
-      new Date('2026-08-16T00:10:00.000Z'),
+      new Date('2026-08-15T20:20:00.000Z'),
+      new Date('2026-08-15T20:28:00.000Z'),
+      new Date('2026-08-15T20:30:00.000Z'),
     ];
     const results = [
       { code: 0, signal: null },
@@ -90,13 +101,34 @@ describe('publication outcome marker', () => {
     });
 
     expect(code).toBe(0);
-    await expect(readPublicationOutcomeMarker(outcomeMarkerPath)).resolves.toEqual(outcome({
-      startedAt: '2026-08-16T00:00:00.000Z',
-      completedAt: '2026-08-16T00:10:00.000Z',
-      sourceCompletedAt: '2026-08-16T00:08:00.000Z',
+    await expect(readPublicationOutcomeMarker(outcomeMarkerPath)).resolves.toEqual(productionFailure);
+    await expect(readPublicationOutcomeMarker(
+      publicationOutcomeMarkerPathForRun(outcomeMarkerPath, true),
+    )).resolves.toEqual(outcome({
+      startedAt: '2026-08-15T20:20:00.000Z',
+      completedAt: '2026-08-15T20:30:00.000Z',
+      sourceCompletedAt: '2026-08-15T20:28:00.000Z',
       syncExitCode: 2,
       dryRun: true,
     }));
+    await expect(checkPublicationOperationalHealth({
+      outcomeMarkerPath,
+      now: new Date('2026-08-15T20:40:00.000Z'),
+      remoteCheckImpl: async () => ({
+        schema: 'naezip.public-snapshot-freshness.v1',
+        status: 'healthy',
+        reason: 'fresh',
+        checkedAt: '2026-08-15T20:40:00.000Z',
+        warningAfterHours: 36,
+        criticalAfterHours: 48,
+        publishedAt: '2026-08-14T20:10:00.000Z',
+        releaseId: '20260814T201000Z-aaaaaaaaaaaa',
+        ageSeconds: 88_200,
+      }),
+    })).resolves.toMatchObject({
+      status: 'critical',
+      reason: 'last-publication-failed',
+    });
   });
 
   it('records a publish launch failure and never retries an unclassified failure', async () => {
