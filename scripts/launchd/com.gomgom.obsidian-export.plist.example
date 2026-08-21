@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.gomgom.obsidian-export</string>
+
+  <!-- Replace placeholders before installation. No shell or npx lookup is involved. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>__ABSOLUTE_NODE_BINARY__</string>
+    <string>--import</string>
+    <string>tsx</string>
+    <string>scripts/export-obsidian.ts</string>
+  </array>
+
+  <!-- Always use the reviewed long-lived clone, never a legacy or dated worktree. -->
+  <key>WorkingDirectory</key>
+  <string>__LONG_LIVED_REPOSITORY_ROOT__</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>NODE_ENV</key>
+    <string>production</string>
+    <!-- This file contains DATABASE_URL and must remain mode 0600. -->
+    <key>NAEZIP_ENV_FILE</key>
+    <string>__ABSOLUTE_SECURE_ENV_FILE__</string>
+  </dict>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>7</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <false/>
+  <key>KeepAlive</key>
+  <false/>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>Umask</key>
+  <integer>63</integer>
+
+  <key>StandardOutPath</key>
+  <string>__ABSOLUTE_LOG_DIRECTORY__/obsidian-export.log</string>
+  <key>StandardErrorPath</key>
+  <string>__ABSOLUTE_LOG_DIRECTORY__/obsidian-export-error.log</string>
+</dict>
+</plist>
