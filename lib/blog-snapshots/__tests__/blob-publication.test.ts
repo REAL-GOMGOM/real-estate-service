@@ -75,6 +75,41 @@ function emptySource(generatedAt = '2026-08-21T01:02:03.000Z'): TrustedPublicBlo
   };
 }
 
+function bootstrapSource(
+  postCount: number,
+  generatedAt: string,
+): TrustedPublicBlogSnapshotSource {
+  const category = {
+    id: '30000000-0000-4000-8000-000000000001',
+    slug: 'new-library',
+    name: '새 칼럼',
+  };
+  return {
+    schema: 'naezip.public-blog.source.v1',
+    generatedAt,
+    categories: postCount === 0 ? [] : [category],
+    posts: Array.from({ length: postCount }, (_, index) => {
+      const ordinal = String(index + 1).padStart(3, '0');
+      const timestamp = new Date(
+        Date.parse('2026-08-20T00:00:00.000Z') + index * 3_600_000,
+      ).toISOString();
+      return {
+        id: `40000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+        slug: `new-column-${ordinal}`,
+        title: `새 칼럼 ${ordinal}`,
+        excerpt: null,
+        coverImageUrl: null,
+        publishedAt: timestamp,
+        categorySlug: category.slug,
+        categoryName: category.name,
+        mdxContent: `# 새 칼럼 ${ordinal}\n\n본문`,
+        updatedAt: timestamp,
+        status: 'published' as const,
+      };
+    }),
+  };
+}
+
 interface StoredObject {
   body: Buffer;
   cacheSeconds: number;
@@ -340,6 +375,222 @@ describe('public blog Vercel Blob publication', () => {
     });
   });
 
+  it('advances the bootstrap lineage append-only with an exact predecessor', async () => {
+    const backend = memoryBlobBackend();
+    const store = createStore(backend);
+    const empty = await buildPublicBlogSnapshotRelease(
+      emptySource('2026-08-20T01:02:03.000Z'),
+      { now: NOW, publicationMode: 'empty-bootstrap' },
+    );
+    await publishPublicBlogSnapshotToBlob({
+      source: emptySource('2026-08-20T01:02:03.000Z'),
+      expectedReleaseId: empty.releaseId,
+      store,
+      publicFetchImpl: backend.publicFetchImpl,
+      now: NOW,
+      publicationMode: 'empty-bootstrap',
+    });
+
+    const firstSource = bootstrapSource(1, '2026-08-21T01:02:03.000Z');
+    const first = await buildPublicBlogSnapshotRelease(firstSource, {
+      now: NOW,
+      publicationMode: 'bootstrap-continuation',
+    });
+    await expect(publishPublicBlogSnapshotToBlob({
+      source: firstSource,
+      expectedReleaseId: first.releaseId,
+      expectedCurrentReleaseId: empty.releaseId,
+      store,
+      publicFetchImpl: backend.publicFetchImpl,
+      now: NOW,
+      publicationMode: 'bootstrap-continuation',
+    })).resolves.toMatchObject({ releaseId: first.releaseId, postCount: 1 });
+    await expect(publishPublicBlogSnapshotToBlob({
+      source: firstSource,
+      expectedReleaseId: first.releaseId,
+      expectedCurrentReleaseId: empty.releaseId,
+      store,
+      publicFetchImpl: backend.publicFetchImpl,
+      now: NOW,
+      publicationMode: 'bootstrap-continuation',
+    })).resolves.toMatchObject({ releaseId: first.releaseId, postCount: 1 });
+
+    const changedSource = bootstrapSource(2, '2026-08-21T02:02:03.000Z');
+    changedSource.posts[0].title = '기존 글 변경 시도';
+    const changed = await buildPublicBlogSnapshotRelease(changedSource, {
+      now: NOW,
+      publicationMode: 'bootstrap-continuation',
+    });
+    await expect(publishPublicBlogSnapshotToBlob({
+      source: changedSource,
+      expectedReleaseId: changed.releaseId,
+      expectedCurrentReleaseId: first.releaseId,
+      store,
+      publicFetchImpl: backend.publicFetchImpl,
+      now: NOW,
+      publicationMode: 'bootstrap-continuation',
+    })).rejects.toThrow('must be append-only');
+    expect(backend.objects.get(PUBLIC_BLOG_MANIFEST_KEY)?.body).toEqual(first.manifestBody);
+
+    const secondSource = bootstrapSource(2, '2026-08-21T02:02:03.000Z');
+    const second = await buildPublicBlogSnapshotRelease(secondSource, {
+      now: NOW,
+      publicationMode: 'bootstrap-continuation',
+    });
+    await expect(publishPublicBlogSnapshotToBlob({
+      source: secondSource,
+      expectedReleaseId: second.releaseId,
+      expectedCurrentReleaseId: empty.releaseId,
+      store,
+      publicFetchImpl: backend.publicFetchImpl,
+      now: NOW,
+      publicationMode: 'bootstrap-continuation',
+    })).rejects.toThrow('predecessor does not match');
+    expect(backend.objects.get(PUBLIC_BLOG_MANIFEST_KEY)?.body).toEqual(first.manifestBody);
+
+    await expect(publishPublicBlogSnapshotToBlob({
+      source: secondSource,
+      expectedReleaseId: second.releaseId,
+      expectedCurrentReleaseId: first.releaseId,
+      store,
+      publicFetchImpl: backend.publicFetchImpl,
+      now: NOW,
+      publicationMode: 'bootstrap-continuation',
+    })).resolves.toMatchObject({ releaseId: second.releaseId, postCount: 2 });
+  });
+
+  it('crosses from 42 to 43 posts only through the append-only continuation', async () => {
+    const current = await buildPublicBlogSnapshotRelease(
+      bootstrapSource(42, '2026-08-21T20:02:03.000Z'),
+      { now: NOW, publicationMode: 'bootstrap-continuation' },
+    );
+    const candidate = await buildPublicBlogSnapshotRelease(
+      bootstrapSource(43, '2026-08-21T21:02:03.000Z'),
+      { now: NOW, publicationMode: 'bootstrap-continuation' },
+    );
+    const backend = memoryBlobBackend(new Map([
+      [PUBLIC_BLOG_MANIFEST_KEY, {
+        body: current.manifestBody,
+        cacheSeconds: PUBLIC_BLOG_DISCOVERY_CACHE_SECONDS,
+        etag: 'current-discovery',
+      }],
+      [current.payloadKey, {
+        body: current.payloadBody,
+        cacheSeconds: PUBLIC_BLOG_IMMUTABLE_CACHE_SECONDS,
+        etag: 'current-payload',
+      }],
+      [candidate.payloadKey, {
+        body: candidate.payloadBody,
+        cacheSeconds: PUBLIC_BLOG_IMMUTABLE_CACHE_SECONDS,
+        etag: 'candidate-payload',
+      }],
+    ]));
+
+    await expect(createStore(backend).putObject({
+      kind: 'discovery-manifest',
+      key: PUBLIC_BLOG_MANIFEST_KEY,
+      body: candidate.manifestBody,
+      sha256: sha256Hex(candidate.manifestBody),
+      writePolicy: {
+        kind: 'bootstrap-continuation',
+        expectedCurrentReleaseId: current.releaseId,
+      },
+    })).resolves.toMatchObject({ key: PUBLIC_BLOG_MANIFEST_KEY });
+    expect(backend.objects.get(PUBLIC_BLOG_MANIFEST_KEY)?.body)
+      .toEqual(candidate.manifestBody);
+  });
+
+  it('accepts a continuation CAS race only when the winner is byte-identical', async () => {
+    const current = await buildPublicBlogSnapshotRelease(
+      emptySource('2026-08-20T09:02:03.000Z'),
+      { now: NOW, publicationMode: 'empty-bootstrap' },
+    );
+    const candidate = await buildPublicBlogSnapshotRelease(
+      bootstrapSource(1, '2026-08-21T09:02:03.000Z'),
+      { now: NOW, publicationMode: 'bootstrap-continuation' },
+    );
+    const backend = memoryBlobBackend(new Map([
+      [PUBLIC_BLOG_MANIFEST_KEY, {
+        body: current.manifestBody,
+        cacheSeconds: PUBLIC_BLOG_DISCOVERY_CACHE_SECONDS,
+        etag: 'current-discovery',
+      }],
+      [current.payloadKey, {
+        body: current.payloadBody,
+        cacheSeconds: PUBLIC_BLOG_IMMUTABLE_CACHE_SECONDS,
+        etag: 'current-payload',
+      }],
+      [candidate.payloadKey, {
+        body: candidate.payloadBody,
+        cacheSeconds: PUBLIC_BLOG_IMMUTABLE_CACHE_SECONDS,
+        etag: 'candidate-payload',
+      }],
+    ]));
+    backend.putImpl.mockImplementationOnce(async () => {
+      backend.objects.set(PUBLIC_BLOG_MANIFEST_KEY, {
+        body: candidate.manifestBody,
+        cacheSeconds: PUBLIC_BLOG_DISCOVERY_CACHE_SECONDS,
+        etag: 'winner-etag',
+      });
+      throw new Error('SDK precondition token=DO_NOT_ECHO');
+    });
+
+    await expect(createStore(backend).putObject({
+      kind: 'discovery-manifest',
+      key: PUBLIC_BLOG_MANIFEST_KEY,
+      body: candidate.manifestBody,
+      sha256: sha256Hex(candidate.manifestBody),
+      writePolicy: {
+        kind: 'bootstrap-continuation',
+        expectedCurrentReleaseId: current.releaseId,
+      },
+    })).resolves.toMatchObject({ etag: 'winner-etag' });
+
+    const competingSource = bootstrapSource(1, '2026-08-21T09:02:04.000Z');
+    competingSource.posts[0].title = '경쟁 후보';
+    const competing = await buildPublicBlogSnapshotRelease(competingSource, {
+      now: NOW,
+      publicationMode: 'bootstrap-continuation',
+    });
+    const losingBackend = memoryBlobBackend(new Map([
+      [PUBLIC_BLOG_MANIFEST_KEY, {
+        body: current.manifestBody,
+        cacheSeconds: PUBLIC_BLOG_DISCOVERY_CACHE_SECONDS,
+        etag: 'current-discovery',
+      }],
+      [current.payloadKey, {
+        body: current.payloadBody,
+        cacheSeconds: PUBLIC_BLOG_IMMUTABLE_CACHE_SECONDS,
+        etag: 'current-payload',
+      }],
+      [candidate.payloadKey, {
+        body: candidate.payloadBody,
+        cacheSeconds: PUBLIC_BLOG_IMMUTABLE_CACHE_SECONDS,
+        etag: 'candidate-payload',
+      }],
+    ]));
+    losingBackend.putImpl.mockImplementationOnce(async () => {
+      losingBackend.objects.set(PUBLIC_BLOG_MANIFEST_KEY, {
+        body: competing.manifestBody,
+        cacheSeconds: PUBLIC_BLOG_DISCOVERY_CACHE_SECONDS,
+        etag: 'competing-etag',
+      });
+      throw new Error('SDK precondition token=DO_NOT_ECHO');
+    });
+    await expect(createStore(losingBackend).putObject({
+      kind: 'discovery-manifest',
+      key: PUBLIC_BLOG_MANIFEST_KEY,
+      body: candidate.manifestBody,
+      sha256: sha256Hex(candidate.manifestBody),
+      writePolicy: {
+        kind: 'bootstrap-continuation',
+        expectedCurrentReleaseId: current.releaseId,
+      },
+    })).rejects.toThrow('continuation race lost');
+    expect(losingBackend.objects.get(PUBLIC_BLOG_MANIFEST_KEY)?.body)
+      .toEqual(competing.manifestBody);
+  });
+
   it('uses conditional ETag replacement and rejects discovery regression or conflict', async () => {
     const olderRelease = await buildPublicBlogSnapshotRelease(
       source('2026-08-20T01:02:03.000Z'),
@@ -398,6 +649,34 @@ describe('public blog Vercel Blob publication', () => {
     })).rejects.toThrow('standard discovery requires at least 43 posts');
     expect(unseededBackend.getImpl).not.toHaveBeenCalled();
     expect(unseededBackend.putImpl).not.toHaveBeenCalled();
+    for (const postCount of [1, 42]) {
+      const lowRelease = await buildPublicBlogSnapshotRelease(
+        bootstrapSource(postCount, '2026-08-21T19:02:03.000Z'),
+        { now: NOW, publicationMode: 'bootstrap-continuation' },
+      );
+      await expect(createStore(unseededBackend).putObject({
+        kind: 'discovery-manifest',
+        key: PUBLIC_BLOG_MANIFEST_KEY,
+        body: lowRelease.manifestBody,
+        sha256: sha256Hex(lowRelease.manifestBody),
+      })).rejects.toThrow('standard discovery requires at least 43 posts');
+    }
+    expect(unseededBackend.putImpl).not.toHaveBeenCalled();
+    const absentContinuation = await buildPublicBlogSnapshotRelease(
+      bootstrapSource(1, '2026-08-21T04:02:03.000Z'),
+      { now: NOW, publicationMode: 'bootstrap-continuation' },
+    );
+    await expect(createStore(unseededBackend).putObject({
+      kind: 'discovery-manifest',
+      key: PUBLIC_BLOG_MANIFEST_KEY,
+      body: absentContinuation.manifestBody,
+      sha256: sha256Hex(absentContinuation.manifestBody),
+      writePolicy: {
+        kind: 'bootstrap-continuation',
+        expectedCurrentReleaseId: emptyRelease.releaseId,
+      },
+    })).rejects.toThrow('predecessor is missing');
+    expect(unseededBackend.putImpl).not.toHaveBeenCalled();
 
     const normalRelease = await buildPublicBlogSnapshotRelease(
       source('2026-08-20T01:02:03.000Z'),
@@ -416,7 +695,7 @@ describe('public blog Vercel Blob publication', () => {
       key: PUBLIC_BLOG_MANIFEST_KEY,
       body: emptyRelease.manifestBody,
       sha256: sha256Hex(emptyRelease.manifestBody),
-      writePolicy: 'empty-bootstrap-seed',
+      writePolicy: { kind: 'empty-bootstrap-seed' },
     })).rejects.toThrow('refused empty bootstrap over existing discovery');
     expect(occupiedBackend.putImpl).not.toHaveBeenCalled();
     expect(occupiedBackend.objects.get(PUBLIC_BLOG_MANIFEST_KEY)?.body)
@@ -432,8 +711,20 @@ describe('public blog Vercel Blob publication', () => {
       key: PUBLIC_BLOG_MANIFEST_KEY,
       body: emptyRelease.manifestBody,
       sha256: sha256Hex(emptyRelease.manifestBody),
-      writePolicy: 'empty-bootstrap-seed',
+      writePolicy: { kind: 'empty-bootstrap-seed' },
     })).resolves.toMatchObject({ etag: 'empty-etag' });
+    expect(identicalBackend.putImpl).not.toHaveBeenCalled();
+
+    const bypass = await buildPublicBlogSnapshotRelease(
+      source('2026-08-21T06:02:03.000Z'),
+      { now: NOW },
+    );
+    await expect(createStore(identicalBackend).putObject({
+      kind: 'discovery-manifest',
+      key: PUBLIC_BLOG_MANIFEST_KEY,
+      body: bypass.manifestBody,
+      sha256: sha256Hex(bypass.manifestBody),
+    })).rejects.toThrow('bootstrap continuation is required');
     expect(identicalBackend.putImpl).not.toHaveBeenCalled();
   });
 
@@ -642,6 +933,27 @@ describe('public blog Vercel Blob publication', () => {
     expect(backend.objects.size).toBe(0);
   });
 
+  it('rejects a missing continuation predecessor before every remote operation', async () => {
+    const candidateSource = bootstrapSource(1, '2026-08-21T10:02:03.000Z');
+    const candidate = await buildPublicBlogSnapshotRelease(candidateSource, {
+      now: NOW,
+      publicationMode: 'bootstrap-continuation',
+    });
+    const backend = memoryBlobBackend();
+
+    await expect(publishPublicBlogSnapshotToBlob({
+      source: candidateSource,
+      expectedReleaseId: candidate.releaseId,
+      store: createStore(backend),
+      publicFetchImpl: backend.publicFetchImpl,
+      now: NOW,
+      publicationMode: 'bootstrap-continuation',
+    })).rejects.toThrow('predecessor approval is invalid');
+    expect(backend.putImpl).not.toHaveBeenCalled();
+    expect(backend.getImpl).not.toHaveBeenCalled();
+    expect(backend.publicFetchImpl).not.toHaveBeenCalled();
+  });
+
   it('keeps the production CLI explicit and does not log source content or credentials', async () => {
     expect(() => parsePublicBlogBlobPublishCliArguments([])).toThrow('--source is required');
     expect(() => parsePublicBlogBlobPublishCliArguments([
@@ -681,6 +993,36 @@ describe('public blog Vercel Blob publication', () => {
       '--confirm-empty-bootstrap',
       '--confirm-empty-bootstrap',
     ])).toThrow('Duplicate empty bootstrap confirmation');
+    expect(() => parsePublicBlogBlobPublishCliArguments([
+      '--source', '/private/source.json',
+      '--confirm-release', VALID_RELEASE_ID,
+      '--confirm-production',
+      '--confirm-bootstrap-continuation',
+    ])).toThrow('--confirm-current-release is required');
+    expect(() => parsePublicBlogBlobPublishCliArguments([
+      '--source', '/private/source.json',
+      '--confirm-release', VALID_RELEASE_ID,
+      '--confirm-production',
+      '--confirm-current-release', VALID_RELEASE_ID,
+    ])).toThrow('requires --confirm-bootstrap-continuation');
+    expect(parsePublicBlogBlobPublishCliArguments([
+      '--source', '/private/source.json',
+      '--confirm-release', VALID_RELEASE_ID,
+      '--confirm-production',
+      '--confirm-bootstrap-continuation',
+      '--confirm-current-release', VALID_RELEASE_ID,
+    ])).toMatchObject({
+      confirmBootstrapContinuation: true,
+      confirmCurrentRelease: VALID_RELEASE_ID,
+    });
+    expect(() => parsePublicBlogBlobPublishCliArguments([
+      '--source', '/private/source.json',
+      '--confirm-release', VALID_RELEASE_ID,
+      '--confirm-production',
+      '--confirm-empty-bootstrap',
+      '--confirm-bootstrap-continuation',
+      '--confirm-current-release', VALID_RELEASE_ID,
+    ])).toThrow('cannot be combined');
     let unknownError: unknown;
     try {
       parsePublicBlogBlobPublishCliArguments([
@@ -752,5 +1094,46 @@ describe('public blog Vercel Blob publication', () => {
       now: NOW,
       log: vi.fn(),
     })).resolves.toBe(0);
+  });
+
+  it('connects both bootstrap continuation approvals through the remote CLI', async () => {
+    const directory = await temporaryDirectory('naezip-blog-continuation-blob-cli-');
+    const sourcePath = path.join(directory, 'trusted-continuation-source.json');
+    const backend = memoryBlobBackend();
+    const store = createStore(backend);
+    const emptyInput = emptySource('2026-08-20T05:02:03.000Z');
+    const empty = await buildPublicBlogSnapshotRelease(emptyInput, {
+      now: NOW,
+      publicationMode: 'empty-bootstrap',
+    });
+    await publishPublicBlogSnapshotToBlob({
+      source: emptyInput,
+      expectedReleaseId: empty.releaseId,
+      store,
+      publicFetchImpl: backend.publicFetchImpl,
+      now: NOW,
+      publicationMode: 'empty-bootstrap',
+    });
+
+    const continuationInput = bootstrapSource(1, '2026-08-21T05:02:03.000Z');
+    const continuation = await buildPublicBlogSnapshotRelease(continuationInput, {
+      now: NOW,
+      publicationMode: 'bootstrap-continuation',
+    });
+    await writeFile(sourcePath, stableJson(continuationInput), { mode: 0o600 });
+    await expect(runPublicBlogBlobPublishCli([
+      '--source', sourcePath,
+      '--confirm-release', continuation.releaseId,
+      '--confirm-production',
+      '--confirm-bootstrap-continuation',
+      '--confirm-current-release', empty.releaseId,
+    ], {
+      store,
+      publicFetchImpl: backend.publicFetchImpl,
+      now: NOW,
+      log: vi.fn(),
+    })).resolves.toBe(0);
+    expect(backend.objects.get(PUBLIC_BLOG_MANIFEST_KEY)?.body)
+      .toEqual(continuation.manifestBody);
   });
 });

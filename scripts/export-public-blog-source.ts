@@ -11,13 +11,20 @@ import {
 
 export const PUBLIC_BLOG_SOURCE_EXPORT_CLI_HELP = `
 Usage: npm run blog:source:export -- --output <absolute-file.json>
+  [--confirm-bootstrap-continuation --lineage-started-at <UTC-ISO>]
 
 Reads published blog rows with one read-only SELECT, validates the complete
 naezip.public-blog.source.v1 export, and atomically installs a private 0600
 JSON file. The parent directory must already exist.
 
---output <file>  Required absolute destination file path.
---help, -h       Show this help.
+The default policy still requires at least 43 posts. Bootstrap continuation is
+an explicit temporary policy for 1..43 posts and never accepts an empty export.
+
+--output <file>                  Required absolute destination file path.
+--confirm-bootstrap-continuation
+                                 Explicitly validate a 1..43 post bootstrap export.
+--lineage-started-at <UTC-ISO>   Inclusive creation cutoff for that new lineage.
+--help, -h                       Show this help.
 `;
 
 export class PublicBlogSourceExportCliUsageError extends Error {
@@ -30,6 +37,8 @@ export class PublicBlogSourceExportCliUsageError extends Error {
 export interface PublicBlogSourceExportCliArguments {
   help: boolean;
   outputPath: string | null;
+  confirmBootstrapContinuation: boolean;
+  lineageStartedAt: string | null;
 }
 
 function takeOutputValue(
@@ -49,11 +58,32 @@ function takeOutputValue(
   return { value, nextIndex: index + 1 };
 }
 
+function takeLineageStartedAtValue(
+  args: readonly string[],
+  index: number,
+): { value: string; nextIndex: number } {
+  const argument = args[index];
+  if (argument.startsWith('--lineage-started-at=')) {
+    const value = argument.slice('--lineage-started-at='.length);
+    if (!value) {
+      throw new PublicBlogSourceExportCliUsageError('--lineage-started-at requires a value');
+    }
+    return { value, nextIndex: index };
+  }
+  const value = args[index + 1];
+  if (!value || value.startsWith('--')) {
+    throw new PublicBlogSourceExportCliUsageError('--lineage-started-at requires a value');
+  }
+  return { value, nextIndex: index + 1 };
+}
+
 export function parsePublicBlogSourceExportCliArguments(
   args: readonly string[],
 ): PublicBlogSourceExportCliArguments {
   let help = false;
   let outputPath: string | null = null;
+  let confirmBootstrapContinuation = false;
+  let lineageStartedAt: string | null = null;
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === '--help' || argument === '-h') {
@@ -70,10 +100,31 @@ export function parsePublicBlogSourceExportCliArguments(
       index = parsed.nextIndex;
       continue;
     }
+    if (argument === '--confirm-bootstrap-continuation') {
+      if (confirmBootstrapContinuation) {
+        throw new PublicBlogSourceExportCliUsageError(
+          'Duplicate bootstrap continuation confirmation',
+        );
+      }
+      confirmBootstrapContinuation = true;
+      continue;
+    }
+    if (argument === '--lineage-started-at'
+      || argument.startsWith('--lineage-started-at=')) {
+      if (lineageStartedAt !== null) {
+        throw new PublicBlogSourceExportCliUsageError('Duplicate lineage start option');
+      }
+      const parsed = takeLineageStartedAtValue(args, index);
+      lineageStartedAt = parsed.value;
+      index = parsed.nextIndex;
+      continue;
+    }
     // Never repeat an unknown argument: it may contain a pasted credential.
     throw new PublicBlogSourceExportCliUsageError('Unknown public blog source export option');
   }
-  if (help && outputPath !== null) {
+  if (help && (outputPath !== null
+    || confirmBootstrapContinuation
+    || lineageStartedAt !== null)) {
     throw new PublicBlogSourceExportCliUsageError('Help cannot be combined with export options');
   }
   if (!help && outputPath === null) {
@@ -82,7 +133,23 @@ export function parsePublicBlogSourceExportCliArguments(
   if (outputPath !== null && !path.isAbsolute(outputPath)) {
     throw new PublicBlogSourceExportCliUsageError('--output must be an absolute file path');
   }
-  return { help, outputPath };
+  if (confirmBootstrapContinuation && lineageStartedAt === null) {
+    throw new PublicBlogSourceExportCliUsageError('--lineage-started-at is required');
+  }
+  if (!confirmBootstrapContinuation && lineageStartedAt !== null) {
+    throw new PublicBlogSourceExportCliUsageError(
+      '--lineage-started-at requires --confirm-bootstrap-continuation',
+    );
+  }
+  if (lineageStartedAt !== null) {
+    const timestamp = Date.parse(lineageStartedAt);
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(lineageStartedAt)
+      || !Number.isFinite(timestamp)
+      || new Date(timestamp).toISOString() !== lineageStartedAt) {
+      throw new PublicBlogSourceExportCliUsageError('--lineage-started-at is invalid');
+    }
+  }
+  return { help, outputPath, confirmBootstrapContinuation, lineageStartedAt };
 }
 
 function createNeonQueryClient(databaseUrl: string | undefined): PublicBlogSourceQueryClient {
@@ -123,6 +190,10 @@ export async function runPublicBlogSourceExportCli(
     queryClient,
     outputPath: parsed.outputPath!,
     now: options.now,
+    publicationMode: parsed.confirmBootstrapContinuation
+      ? 'bootstrap-continuation'
+      : 'standard',
+    lineageStartedAt: parsed.lineageStartedAt ?? undefined,
   });
   log(
     `[public-blog-source] complete: release=${result.releaseId}`

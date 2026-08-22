@@ -26,6 +26,7 @@ export interface PublishPublicBlogSnapshotToBlobInput {
   publicFetchImpl?: typeof fetch;
   now?: Date;
   publicationMode?: PublicBlogPublicationMode;
+  expectedCurrentReleaseId?: string;
 }
 
 export interface PublishPublicBlogSnapshotToBlobResult {
@@ -96,6 +97,17 @@ export async function publishPublicBlogSnapshotToBlob(
     publicationMode: input.publicationMode,
   });
   assertReleaseApproval(release.releaseId, input.expectedReleaseId);
+  if (input.publicationMode === 'bootstrap-continuation') {
+    if (!isPublicBlogReleaseId(input.expectedCurrentReleaseId)) {
+      throw new PublicBlogRemotePublicationError(
+        'Public blog bootstrap predecessor approval is invalid',
+      );
+    }
+  } else if (input.expectedCurrentReleaseId !== undefined) {
+    throw new PublicBlogRemotePublicationError(
+      'Public blog bootstrap predecessor approval is not allowed',
+    );
+  }
 
   await input.store.putObject({
     kind: 'payload',
@@ -145,8 +157,13 @@ export async function publishPublicBlogSnapshotToBlob(
     body: release.manifestBody,
     sha256: sha256Hex(release.manifestBody),
     writePolicy: input.publicationMode === 'empty-bootstrap'
-      ? 'empty-bootstrap-seed'
-      : 'default',
+      ? { kind: 'empty-bootstrap-seed' }
+      : input.publicationMode === 'bootstrap-continuation'
+        ? {
+          kind: 'bootstrap-continuation',
+          expectedCurrentReleaseId: input.expectedCurrentReleaseId!,
+        }
+        : { kind: 'standard' },
   });
   const managementDiscovery = await input.store.readObject({
     kind: 'discovery-manifest',

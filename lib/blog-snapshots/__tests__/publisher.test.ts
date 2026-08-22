@@ -171,6 +171,13 @@ describe('offline public blog snapshot publisher', () => {
       '--source', 'source.json',
       '--confirm-empty-bootstrap', '--confirm-empty-bootstrap',
     ])).toThrow('Duplicate empty bootstrap confirmation');
+    expect(parsePublicBlogSnapshotCliArguments([
+      '--source', 'source.json', '--confirm-bootstrap-continuation',
+    ])).toMatchObject({ confirmBootstrapContinuation: true });
+    expect(() => parsePublicBlogSnapshotCliArguments([
+      '--source', 'source.json',
+      '--confirm-empty-bootstrap', '--confirm-bootstrap-continuation',
+    ])).toThrow('cannot be combined');
 
     const empty = fixtureSource(0);
     empty.categories = [];
@@ -192,6 +199,22 @@ describe('offline public blog snapshot publisher', () => {
       now: NOW,
       publicationMode: 'empty-bootstrap',
     })).rejects.toThrow('must not contain categories');
+    await expect(buildPublicBlogSnapshotRelease(empty, {
+      now: NOW,
+      publicationMode: 'bootstrap-continuation',
+    })).rejects.toThrow('requires 1 to 43');
+    await expect(buildPublicBlogSnapshotRelease(fixtureSource(1), {
+      now: NOW,
+      publicationMode: 'bootstrap-continuation',
+    })).resolves.toMatchObject({ manifest: { payload: { postCount: 1 } } });
+    await expect(buildPublicBlogSnapshotRelease(fixtureSource(43), {
+      now: NOW,
+      publicationMode: 'bootstrap-continuation',
+    })).resolves.toMatchObject({ manifest: { payload: { postCount: 43 } } });
+    await expect(buildPublicBlogSnapshotRelease(fixtureSource(44), {
+      now: NOW,
+      publicationMode: 'bootstrap-continuation',
+    })).rejects.toThrow('requires 1 to 43');
     expect(publisherModule).not.toHaveProperty('writePublicBlogSnapshotDryRun');
     expect(publisherModule).not.toHaveProperty('PUBLIC_BLOG_PRODUCTION_MINIMUM_POSTS');
   });

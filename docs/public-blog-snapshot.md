@@ -158,6 +158,46 @@ unknown source selection fails closed, and `database` mode is rejected on
 Vercel Preview/Production. Local maintenance may explicitly select
 `NAEZIP_PUBLIC_BLOG_SOURCE=database`; admin authoring remains database-backed.
 
-The empty bootstrap establishes only the safe zero-post baseline. The normal
-publisher still refuses 1–42 posts. A separately reviewed lineage-aware growth
-workflow is required before publishing the first new column.
+## Append-only growth from the empty baseline
+
+The normal publisher still refuses 1–42 posts. Until the new library reaches 43
+posts, export only posts published at or after the empty release timestamp:
+
+```bash
+NAEZIP_ENV_FILE=/absolute/private/.env.local \
+npm run blog:source:export -- \
+  --output /absolute/private/public-blog-source.json \
+  --confirm-bootstrap-continuation \
+  --lineage-started-at 2026-08-23T01:02:03.000Z
+```
+
+`--lineage-started-at` is an inclusive parameterized `created_at` cutoff. It
+prevents abandoned pre-bootstrap rows that remain in the database from entering
+the new source, even if an old draft is published later. Use the empty release's
+exact `generatedAt` value.
+
+Build and review the candidate with the matching continuation mode:
+
+```bash
+npm run blog:snapshot:dry-run -- \
+  --source /absolute/private/public-blog-source.json \
+  --confirm-bootstrap-continuation
+```
+
+Then approve both the candidate and the currently published predecessor:
+
+```bash
+NAEZIP_ENV_FILE=/absolute/private/.env.local \
+npm run blog:snapshot:publish -- \
+  --source /absolute/private/public-blog-source.json \
+  --confirm-release 20260824T010203Z-0123456789ab \
+  --confirm-current-release 20260823T010203Z-abcdef012345 \
+  --confirm-production \
+  --confirm-bootstrap-continuation
+```
+
+The store verifies both payloads and permits only a strictly newer, larger,
+append-only candidate: every existing post and category must remain byte-exact.
+The predecessor release is ETag-bound, so competing writers cannot skip or
+rewrite history. Use continuation for the 42-to-43 transition as well; normal
+43+ publication may resume only after the current discovery contains 43 posts.

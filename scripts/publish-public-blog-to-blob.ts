@@ -25,6 +25,10 @@ store, then verifies it through management and unauthenticated public reads.
 --confirm-production   Required explicit remote-write confirmation.
 --confirm-empty-bootstrap
                        Explicitly publish a zero-post, zero-category reset.
+--confirm-bootstrap-continuation
+                       Explicitly publish a 1..43 post append-only continuation.
+--confirm-current-release <id>
+                       Required predecessor ID for a bootstrap continuation.
 --help, -h             Show this help.
 
 Required environment:
@@ -45,12 +49,14 @@ export interface PublicBlogBlobPublishCliArguments {
   confirmRelease: string | null;
   confirmProduction: boolean;
   confirmEmptyBootstrap: boolean;
+  confirmBootstrapContinuation: boolean;
+  confirmCurrentRelease: string | null;
 }
 
 function takeOptionValue(
   args: readonly string[],
   index: number,
-  option: '--source' | '--confirm-release',
+  option: '--source' | '--confirm-release' | '--confirm-current-release',
 ): { value: string; nextIndex: number } {
   const argument = args[index];
   const inlinePrefix = `${option}=`;
@@ -74,6 +80,8 @@ export function parsePublicBlogBlobPublishCliArguments(
   let confirmRelease: string | null = null;
   let confirmProduction = false;
   let confirmEmptyBootstrap = false;
+  let confirmBootstrapContinuation = false;
+  let confirmCurrentRelease: string | null = null;
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === '--help' || argument === '-h') {
@@ -115,13 +123,36 @@ export function parsePublicBlogBlobPublishCliArguments(
       confirmEmptyBootstrap = true;
       continue;
     }
+    if (argument === '--confirm-bootstrap-continuation') {
+      if (confirmBootstrapContinuation) {
+        throw new PublicBlogBlobPublishCliUsageError(
+          'Duplicate bootstrap continuation confirmation',
+        );
+      }
+      confirmBootstrapContinuation = true;
+      continue;
+    }
+    if (argument === '--confirm-current-release'
+      || argument.startsWith('--confirm-current-release=')) {
+      if (confirmCurrentRelease !== null) {
+        throw new PublicBlogBlobPublishCliUsageError(
+          'Duplicate current release confirmation',
+        );
+      }
+      const parsed = takeOptionValue(args, index, '--confirm-current-release');
+      confirmCurrentRelease = parsed.value;
+      index = parsed.nextIndex;
+      continue;
+    }
     // Unknown arguments can contain copied credentials; never echo one.
     throw new PublicBlogBlobPublishCliUsageError('Unknown public blog Blob publish option');
   }
   if (help && (sourcePath !== null
     || confirmRelease !== null
     || confirmProduction
-    || confirmEmptyBootstrap)) {
+    || confirmEmptyBootstrap
+    || confirmBootstrapContinuation
+    || confirmCurrentRelease !== null)) {
     throw new PublicBlogBlobPublishCliUsageError('Help cannot be combined with publish options');
   }
   if (!help && sourcePath === null) {
@@ -133,8 +164,24 @@ export function parsePublicBlogBlobPublishCliArguments(
   if (!help && !confirmProduction) {
     throw new PublicBlogBlobPublishCliUsageError('--confirm-production is required');
   }
+  if (confirmEmptyBootstrap && confirmBootstrapContinuation) {
+    throw new PublicBlogBlobPublishCliUsageError(
+      'Empty bootstrap and bootstrap continuation cannot be combined',
+    );
+  }
+  if (confirmBootstrapContinuation && confirmCurrentRelease === null) {
+    throw new PublicBlogBlobPublishCliUsageError('--confirm-current-release is required');
+  }
+  if (!confirmBootstrapContinuation && confirmCurrentRelease !== null) {
+    throw new PublicBlogBlobPublishCliUsageError(
+      '--confirm-current-release requires --confirm-bootstrap-continuation',
+    );
+  }
   if (confirmRelease !== null && !isPublicBlogReleaseId(confirmRelease)) {
     throw new PublicBlogBlobPublishCliUsageError('--confirm-release is invalid');
+  }
+  if (confirmCurrentRelease !== null && !isPublicBlogReleaseId(confirmCurrentRelease)) {
+    throw new PublicBlogBlobPublishCliUsageError('--confirm-current-release is invalid');
   }
   if (sourcePath !== null && !path.isAbsolute(sourcePath)) {
     throw new PublicBlogBlobPublishCliUsageError('--source must be an absolute file path');
@@ -145,6 +192,8 @@ export function parsePublicBlogBlobPublishCliArguments(
     confirmRelease,
     confirmProduction,
     confirmEmptyBootstrap,
+    confirmBootstrapContinuation,
+    confirmCurrentRelease,
   };
 }
 
@@ -173,7 +222,12 @@ export async function runPublicBlogBlobPublishCli(
     store,
     publicFetchImpl: options.publicFetchImpl,
     now: options.now,
-    publicationMode: parsed.confirmEmptyBootstrap ? 'empty-bootstrap' : 'standard',
+    publicationMode: parsed.confirmEmptyBootstrap
+      ? 'empty-bootstrap'
+      : parsed.confirmBootstrapContinuation
+        ? 'bootstrap-continuation'
+        : 'standard',
+    expectedCurrentReleaseId: parsed.confirmCurrentRelease ?? undefined,
   });
   log(
     `[public-blog-blob] complete: release=${result.releaseId}`

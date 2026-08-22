@@ -11,7 +11,7 @@ const MAX_SOURCE_BYTES = PUBLIC_BLOG_MAX_PAYLOAD_BYTES + 2 * 1024 * 1024;
 
 export const PUBLIC_BLOG_SNAPSHOT_CLI_HELP = `
 Usage: npm run blog:snapshot:dry-run -- --source <trusted-source.json> [--output <directory>]
-  [--confirm-empty-bootstrap]
+  [--confirm-empty-bootstrap | --confirm-bootstrap-continuation]
 
 Builds a deterministic public blog snapshot in a local directory only. It never
 opens a network connection, reads a database, uploads to Blob, or changes a
@@ -21,6 +21,8 @@ runtime environment variable.
 --output <directory>  Local output root (default: ${DEFAULT_OUTPUT_DIRECTORY}).
 --confirm-empty-bootstrap
                       Explicitly build a one-time zero-post, zero-category reset.
+--confirm-bootstrap-continuation
+                      Explicitly build a 1..43 post bootstrap continuation.
 --help, -h            Show this help.
 
 Production safety policy requires at least 43 posts and every source post must
@@ -40,6 +42,7 @@ export interface PublicBlogSnapshotCliArguments {
   sourcePath: string | null;
   outputDir: string;
   confirmEmptyBootstrap: boolean;
+  confirmBootstrapContinuation: boolean;
 }
 
 function takeOptionValue(
@@ -69,6 +72,7 @@ export function parsePublicBlogSnapshotCliArguments(
   let outputDir = DEFAULT_OUTPUT_DIRECTORY;
   let outputSeen = false;
   let confirmEmptyBootstrap = false;
+  let confirmBootstrapContinuation = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
@@ -101,17 +105,40 @@ export function parsePublicBlogSnapshotCliArguments(
       confirmEmptyBootstrap = true;
       continue;
     }
+    if (argument === '--confirm-bootstrap-continuation') {
+      if (confirmBootstrapContinuation) {
+        throw new PublicBlogSnapshotCliUsageError(
+          'Duplicate bootstrap continuation confirmation',
+        );
+      }
+      confirmBootstrapContinuation = true;
+      continue;
+    }
     // Do not echo unknown arguments; users sometimes paste credentials here.
     throw new PublicBlogSnapshotCliUsageError('Unknown public blog snapshot option');
   }
 
-  if (help && (sourcePath !== null || outputSeen || confirmEmptyBootstrap)) {
+  if (help && (sourcePath !== null
+    || outputSeen
+    || confirmEmptyBootstrap
+    || confirmBootstrapContinuation)) {
     throw new PublicBlogSnapshotCliUsageError('Help cannot be combined with build options');
   }
   if (!help && sourcePath === null) {
     throw new PublicBlogSnapshotCliUsageError('--source is required');
   }
-  return { help, sourcePath, outputDir, confirmEmptyBootstrap };
+  if (confirmEmptyBootstrap && confirmBootstrapContinuation) {
+    throw new PublicBlogSnapshotCliUsageError(
+      'Empty bootstrap and bootstrap continuation cannot be combined',
+    );
+  }
+  return {
+    help,
+    sourcePath,
+    outputDir,
+    confirmEmptyBootstrap,
+    confirmBootstrapContinuation,
+  };
 }
 
 export async function readTrustedPublicBlogSourceFile(sourcePath: string): Promise<unknown> {
@@ -181,7 +208,11 @@ export async function runPublicBlogSnapshotCli(
   const result = await publishPublicBlogSnapshotDryRun({
     source,
     outputDir,
-    publicationMode: parsed.confirmEmptyBootstrap ? 'empty-bootstrap' : 'standard',
+    publicationMode: parsed.confirmEmptyBootstrap
+      ? 'empty-bootstrap'
+      : parsed.confirmBootstrapContinuation
+        ? 'bootstrap-continuation'
+        : 'standard',
   });
   log(
     `[public-blog-snapshot] local dry-run complete: release=${result.releaseId}`

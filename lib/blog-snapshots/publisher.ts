@@ -34,7 +34,10 @@ import {
 export const PUBLIC_BLOG_SOURCE_SCHEMA = 'naezip.public-blog.source.v1' as const;
 const PUBLIC_BLOG_PRODUCTION_MINIMUM_POSTS = 43;
 
-export type PublicBlogPublicationMode = 'standard' | 'empty-bootstrap';
+export type PublicBlogPublicationMode =
+  | 'standard'
+  | 'empty-bootstrap'
+  | 'bootstrap-continuation';
 
 export interface TrustedPublicBlogSnapshotSourcePost extends PublicBlogSnapshotPost {
   status: 'published';
@@ -251,7 +254,9 @@ export async function buildPublicBlogSnapshotRelease(
 ): Promise<BuiltPublicBlogSnapshotRelease> {
   const now = validNow(options.now);
   const publicationMode = options.publicationMode ?? 'standard';
-  if (publicationMode !== 'standard' && publicationMode !== 'empty-bootstrap') {
+  if (publicationMode !== 'standard'
+    && publicationMode !== 'empty-bootstrap'
+    && publicationMode !== 'bootstrap-continuation') {
     throw new PublicBlogSnapshotValidationError('source policy', [
       'publication mode is invalid',
     ]);
@@ -268,6 +273,13 @@ export async function buildPublicBlogSnapshotRelease(
     && canonical.posts.length < PUBLIC_BLOG_PRODUCTION_MINIMUM_POSTS) {
     throw new PublicBlogSnapshotValidationError('source policy', [
       `at least ${PUBLIC_BLOG_PRODUCTION_MINIMUM_POSTS} published posts are required`,
+    ]);
+  }
+  if (publicationMode === 'bootstrap-continuation'
+    && (canonical.posts.length < 1
+      || canonical.posts.length > PUBLIC_BLOG_PRODUCTION_MINIMUM_POSTS)) {
+    throw new PublicBlogSnapshotValidationError('source policy', [
+      `bootstrap continuation requires 1 to ${PUBLIC_BLOG_PRODUCTION_MINIMUM_POSTS} published posts`,
     ]);
   }
 

@@ -39,6 +39,7 @@ WITH published_posts AS MATERIALIZED (
   FROM posts AS p
   LEFT JOIN categories AS c ON c.id = p.category_id
   WHERE p.status = 'published'
+    AND ($1::timestamptz IS NULL OR p.created_at >= $1::timestamptz)
 ),
 published_categories AS (
   SELECT DISTINCT
@@ -84,12 +85,18 @@ export interface PublicBlogSourceQueryClient {
   query(queryText: string, params?: readonly unknown[]): Promise<readonly unknown[]>;
 }
 
+export type PublicBlogSourceExportMode = 'standard' | 'bootstrap-continuation';
+
 export interface ExportPublicBlogSourceInput {
   queryClient: PublicBlogSourceQueryClient;
   /** An explicit absolute file path. Its parent directory must already exist. */
   outputPath: string;
   /** Validation clock injection for deterministic tests. */
   now?: Date;
+  /** Explicitly opt into the temporary 1..43 post bootstrap lineage policy. */
+  publicationMode?: PublicBlogSourceExportMode;
+  /** Inclusive creation cutoff that excludes the abandoned pre-bootstrap library. */
+  lineageStartedAt?: string;
 }
 
 export interface ExportPublicBlogSourceResult {
@@ -254,16 +261,40 @@ async function writeAtomicPrivateFile(destination: string, body: Uint8Array): Pr
 
 /**
  * Query, validate, then atomically install one trusted source hand-off file.
- * No filesystem write begins until the complete 43+ post release passes the
- * same strict validation used by the offline snapshot publisher.
+ * No filesystem write begins until either the standard 43+ policy or the
+ * explicit 1..43 bootstrap-continuation policy passes the same strict
+ * validation used by the offline snapshot publisher.
  */
 export async function exportPublicBlogSource(
   input: ExportPublicBlogSourceInput,
 ): Promise<ExportPublicBlogSourceResult> {
   const outputPath = assertExplicitOutputPath(input.outputPath);
+  const publicationMode = input.publicationMode ?? 'standard';
+  if (publicationMode !== 'standard' && publicationMode !== 'bootstrap-continuation') {
+    throw new PublicBlogSourceExportError('Public blog source export mode is invalid');
+  }
+  let lineageStartedAt: string | null = null;
+  if (publicationMode === 'bootstrap-continuation') {
+    const candidate = input.lineageStartedAt;
+    const timestamp = typeof candidate === 'string' ? Date.parse(candidate) : Number.NaN;
+    if (!candidate
+      || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(candidate)
+      || !Number.isFinite(timestamp)
+      || new Date(timestamp).toISOString() !== candidate
+      || timestamp > (input.now ?? new Date()).getTime()) {
+      throw new PublicBlogSourceExportError(
+        'Public blog bootstrap lineage start is invalid',
+      );
+    }
+    lineageStartedAt = candidate;
+  } else if (input.lineageStartedAt !== undefined) {
+    throw new PublicBlogSourceExportError(
+      'Public blog bootstrap lineage start is not allowed',
+    );
+  }
   let rows: readonly unknown[];
   try {
-    rows = await input.queryClient.query(PUBLIC_BLOG_SOURCE_SELECT, []);
+    rows = await input.queryClient.query(PUBLIC_BLOG_SOURCE_SELECT, [lineageStartedAt]);
   } catch {
     throw new PublicBlogSourceExportError('Public blog source query failed');
   }
@@ -276,6 +307,7 @@ export async function exportPublicBlogSource(
   try {
     release = await buildPublicBlogSnapshotRelease(source, {
       now: input.now ?? new Date(),
+      publicationMode,
     });
   } catch (error) {
     if (error instanceof PublicBlogSnapshotValidationError) throw error;

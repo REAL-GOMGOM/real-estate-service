@@ -26,6 +26,7 @@ import {
 
 const NOW = new Date('2026-08-21T01:00:00.000Z');
 const GENERATED_AT = new Date('2026-08-21T00:00:00.000Z');
+const LINEAGE_STARTED_AT = '2026-08-20T00:00:00.000Z';
 
 function queryRow(postCount = 43) {
   const categories = [
@@ -42,7 +43,9 @@ function queryRow(postCount = 43) {
   ];
   return {
     generatedAt: GENERATED_AT,
-    categories,
+    categories: postCount === 0
+      ? []
+      : categories.slice(0, Math.min(postCount, categories.length)),
     posts: Array.from({ length: postCount }, (_, index) => {
       const category = categories[index % categories.length];
       const ordinal = String(index + 1).padStart(3, '0');
@@ -95,9 +98,10 @@ describe('trusted public blog source exporter', () => {
     });
 
     expect(client.query).toHaveBeenCalledOnce();
-    expect(client.query).toHaveBeenCalledWith(PUBLIC_BLOG_SOURCE_SELECT, []);
+    expect(client.query).toHaveBeenCalledWith(PUBLIC_BLOG_SOURCE_SELECT, [null]);
     const normalizedSql = PUBLIC_BLOG_SOURCE_SELECT.replace(/\s+/g, ' ').trim();
     expect(normalizedSql).toContain("WHERE p.status = 'published'");
+    expect(normalizedSql).toContain('p.created_at >= $1::timestamptz');
     expect(normalizedSql).toContain('FROM published_posts');
     expect(normalizedSql).not.toMatch(/\b(?:INSERT|UPDATE|DELETE|ALTER|DROP|TRUNCATE)\b/i);
 
@@ -168,6 +172,53 @@ describe('trusted public blog source exporter', () => {
 
     expect(await readFile(outputPath, 'utf8')).toBe('previous-success');
   });
+
+  it.each([1, 43])(
+    'exports %i posts only through the explicit bootstrap continuation mode',
+    async (postCount) => {
+      const directory = await temporaryDirectory('naezip-blog-source-continuation-');
+      const outputPath = path.join(directory, 'source.json');
+
+      if (postCount < 43) {
+        await expect(exportPublicBlogSource({
+          queryClient: queryClient(queryRow(postCount)),
+          outputPath,
+          now: NOW,
+        })).rejects.toThrow('at least 43 published posts are required');
+      }
+
+      const continuationClient = queryClient(queryRow(postCount));
+      await expect(exportPublicBlogSource({
+        queryClient: continuationClient,
+        outputPath,
+        now: NOW,
+        publicationMode: 'bootstrap-continuation',
+        lineageStartedAt: LINEAGE_STARTED_AT,
+      })).resolves.toMatchObject({ postCount });
+      expect(continuationClient.query)
+        .toHaveBeenCalledWith(PUBLIC_BLOG_SOURCE_SELECT, [LINEAGE_STARTED_AT]);
+      expect(JSON.parse(await readFile(outputPath, 'utf8')).posts).toHaveLength(postCount);
+      expect((await lstat(outputPath)).mode & 0o777).toBe(0o600);
+    },
+  );
+
+  it.each([0, 44])(
+    'rejects a %i-post continuation without replacing the previous export',
+    async (postCount) => {
+      const directory = await temporaryDirectory('naezip-blog-source-invalid-continuation-');
+      const outputPath = path.join(directory, 'source.json');
+      await writeFile(outputPath, 'previous-success');
+
+      await expect(exportPublicBlogSource({
+        queryClient: queryClient(queryRow(postCount)),
+        outputPath,
+        now: NOW,
+        publicationMode: 'bootstrap-continuation',
+        lineageStartedAt: LINEAGE_STARTED_AT,
+      })).rejects.toThrow('bootstrap continuation requires 1 to 43 published posts');
+      expect(await readFile(outputPath, 'utf8')).toBe('previous-success');
+    },
+  );
 
   it('leaves the previous success untouched when strict MDX validation fails', async () => {
     const directory = await temporaryDirectory('naezip-blog-source-mdx-');
@@ -282,6 +333,52 @@ describe('trusted public blog source exporter', () => {
     }
     expect((usageError as Error).message).toBe('Unknown public blog source export option');
     expect((usageError as Error).message).not.toContain('DO_NOT_ECHO');
+
+    expect(parsePublicBlogSourceExportCliArguments([
+      '--output', '/tmp/source.json',
+      '--confirm-bootstrap-continuation',
+      '--lineage-started-at', LINEAGE_STARTED_AT,
+    ])).toMatchObject({
+      confirmBootstrapContinuation: true,
+      lineageStartedAt: LINEAGE_STARTED_AT,
+    });
+    expect(() => parsePublicBlogSourceExportCliArguments([
+      '--output', '/tmp/source.json', '--confirm-bootstrap-continuation',
+    ])).toThrow('--lineage-started-at is required');
+    expect(() => parsePublicBlogSourceExportCliArguments([
+      '--output', '/tmp/source.json',
+      '--confirm-bootstrap-continuation', '--confirm-bootstrap-continuation',
+    ])).toThrow('Duplicate bootstrap continuation confirmation');
+    expect(() => parsePublicBlogSourceExportCliArguments([
+      '--help', '--confirm-bootstrap-continuation',
+    ])).toThrow('Help cannot be combined with export options');
+  });
+
+  it('connects the explicit bootstrap continuation CLI flag to the 1..43 policy', async () => {
+    const directory = await temporaryDirectory('naezip-blog-source-continuation-cli-');
+    const rejectedOutputPath = path.join(directory, 'rejected.json');
+    const outputPath = path.join(directory, 'source.json');
+
+    await expect(runPublicBlogSourceExportCli([
+      '--output', rejectedOutputPath,
+    ], {
+      queryClient: queryClient(queryRow(1)),
+      now: NOW,
+      log: vi.fn(),
+    })).rejects.toThrow('at least 43 published posts are required');
+
+    const log = vi.fn();
+    await expect(runPublicBlogSourceExportCli([
+      '--output', outputPath,
+      '--confirm-bootstrap-continuation',
+      '--lineage-started-at', LINEAGE_STARTED_AT,
+    ], {
+      queryClient: queryClient(queryRow(1)),
+      now: NOW,
+      log,
+    })).resolves.toBe(0);
+    expect(log.mock.calls.flat().join('\n')).toContain('posts=1 categories=1');
+    await expect(lstat(rejectedOutputPath)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('logs only release metadata when run through the injected CLI', async () => {

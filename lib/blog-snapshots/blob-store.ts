@@ -14,8 +14,11 @@ import {
   PUBLIC_BLOG_MAX_MANIFEST_BYTES,
   PUBLIC_BLOG_MAX_PAYLOAD_BYTES,
   PUBLIC_BLOG_SNAPSHOT_PREFIX,
+  assertPublicBlogPayloadMatchesManifest,
   assertPublicBlogSnapshotManifest,
   assertPublicBlogSnapshotPayload,
+  type PublicBlogSnapshotManifest,
+  type PublicBlogSnapshotPayload,
 } from './contract';
 
 export const PUBLIC_BLOG_BLOB_TOKEN_ENV = 'NAEZIP_BLOG_SNAPSHOT_BLOB_READ_WRITE_TOKEN' as const;
@@ -37,12 +40,17 @@ export type PublicBlogBlobObjectKind =
   | 'release-manifest'
   | 'discovery-manifest';
 
+export type PublicBlogBlobWritePolicy =
+  | { kind: 'standard' }
+  | { kind: 'empty-bootstrap-seed' }
+  | { kind: 'bootstrap-continuation'; expectedCurrentReleaseId: string };
+
 export interface PublicBlogBlobObjectInput {
   kind: PublicBlogBlobObjectKind;
   key: string;
   body: Uint8Array;
   sha256: string;
-  writePolicy?: 'default' | 'empty-bootstrap-seed';
+  writePolicy?: PublicBlogBlobWritePolicy;
 }
 
 export interface PublicBlogBlobObjectResult {
@@ -92,6 +100,10 @@ interface ExistingObject {
   body: Buffer;
   etag: string;
   url: string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function sha256(body: Uint8Array): string {
@@ -243,6 +255,34 @@ function discoveryIdentity(value: Record<string, unknown>): {
   };
 }
 
+function exactObjectsByIdArePreserved(
+  current: readonly Record<string, unknown>[],
+  candidate: readonly Record<string, unknown>[],
+): boolean {
+  const candidateById = new Map(candidate.map((value) => [value.id, value]));
+  return current.every((value) => {
+    const next = candidateById.get(value.id);
+    return next !== undefined && stableJson(next) === stableJson(value);
+  });
+}
+
+function assertBootstrapAppendOnly(
+  current: PublicBlogSnapshotPayload,
+  candidate: PublicBlogSnapshotPayload,
+): void {
+  const postsPreserved = exactObjectsByIdArePreserved(
+    current.posts as unknown as Record<string, unknown>[],
+    candidate.posts as unknown as Record<string, unknown>[],
+  );
+  const categoriesPreserved = exactObjectsByIdArePreserved(
+    current.categories as unknown as Record<string, unknown>[],
+    candidate.categories as unknown as Record<string, unknown>[],
+  );
+  if (!postsPreserved || !categoriesPreserved) {
+    throw new Error('Public blog Blob bootstrap continuation must be append-only');
+  }
+}
+
 function safeNow(now: () => Date): Date {
   const value = now();
   if (!(value instanceof Date) || !Number.isFinite(value.getTime())) {
@@ -312,7 +352,7 @@ export class PublicBlogVercelBlobStore implements PublicBlogRemoteObjectStore {
 
   private async readStoredObject(
     input: Pick<PublicBlogBlobManagementReadInput, 'key' | 'kind'>,
-    operation: 'preflight' | 'immutable recovery' | 'readback',
+    operation: 'preflight' | 'immutable recovery' | 'readback' | 'bootstrap lineage',
   ): Promise<ExistingObject | null> {
     const policy = this.policyForKey(input.kind, input.key);
     let result: GetBlobResult | null;
@@ -389,6 +429,29 @@ export class PublicBlogVercelBlobStore implements PublicBlogRemoteObjectStore {
     };
   }
 
+  private async readValidatedPayloadForManifest(
+    manifestValue: Record<string, unknown>,
+  ): Promise<PublicBlogSnapshotPayload> {
+    const manifest = manifestValue as unknown as PublicBlogSnapshotManifest;
+    const existing = await this.readStoredObject({
+      kind: 'payload',
+      key: manifest.payload.key,
+    }, 'bootstrap lineage');
+    if (!existing
+      || existing.body.byteLength !== manifest.payload.byteLength
+      || sha256(existing.body) !== manifest.payload.sha256) {
+      throw new Error('Public blog Blob bootstrap lineage payload is invalid');
+    }
+    const parsed = objectPolicyAndValue({
+      kind: 'payload',
+      key: manifest.payload.key,
+      body: existing.body,
+    }, safeNow(this.now));
+    const payload = parsed.value as unknown as PublicBlogSnapshotPayload;
+    assertPublicBlogPayloadMatchesManifest(payload, manifest);
+    return payload;
+  }
+
   private resolveExistingDiscovery(
     candidate: Record<string, unknown>,
     candidateSha256: string,
@@ -424,13 +487,22 @@ export class PublicBlogVercelBlobStore implements PublicBlogRemoteObjectStore {
     const body = Buffer.from(input.body);
     assertChecksum(body, input.sha256);
     const parsed = objectPolicyAndValue(input, safeNow(this.now));
-    const writePolicy = input.writePolicy ?? 'default';
-    if (writePolicy !== 'default' && writePolicy !== 'empty-bootstrap-seed') {
+    const writePolicy: PublicBlogBlobWritePolicy = input.writePolicy ?? { kind: 'standard' };
+    if (!isRecord(writePolicy)
+      || typeof writePolicy.kind !== 'string'
+      || !['standard', 'empty-bootstrap-seed', 'bootstrap-continuation']
+        .includes(writePolicy.kind)
+      || (writePolicy.kind === 'bootstrap-continuation'
+        ? (Object.keys(writePolicy).sort().join(',') !== 'expectedCurrentReleaseId,kind'
+          || typeof writePolicy.expectedCurrentReleaseId !== 'string'
+          || !RELEASE_ID_PATTERN.test(writePolicy.expectedCurrentReleaseId))
+        : Object.keys(writePolicy).join(',') !== 'kind')) {
       throw new PublicBlogBlobConfigurationError('Public blog Blob write policy is invalid');
     }
-    const emptyBootstrapSeed = writePolicy === 'empty-bootstrap-seed';
+    const emptyBootstrapSeed = writePolicy.kind === 'empty-bootstrap-seed';
+    const bootstrapContinuation = writePolicy.kind === 'bootstrap-continuation';
     const descriptor = parsed.value.payload as Record<string, unknown> | undefined;
-    if (writePolicy === 'default'
+    if (writePolicy.kind === 'standard'
       && input.kind === 'discovery-manifest'
       && (typeof descriptor?.postCount !== 'number'
         || descriptor.postCount < PUBLIC_BLOG_STANDARD_MINIMUM_POSTS)) {
@@ -446,11 +518,20 @@ export class PublicBlogVercelBlobStore implements PublicBlogRemoteObjectStore {
         'Public blog empty bootstrap write policy is invalid',
       );
     }
+    if (bootstrapContinuation
+      && (input.kind !== 'discovery-manifest'
+        || typeof descriptor?.postCount !== 'number'
+        || descriptor.postCount < 1
+        || descriptor.postCount > PUBLIC_BLOG_STANDARD_MINIMUM_POSTS)) {
+      throw new PublicBlogBlobConfigurationError(
+        'Public blog bootstrap continuation write policy is invalid',
+      );
+    }
     let existingDiscovery: ExistingObject | null = null;
     if (!parsed.policy.immutable) {
       existingDiscovery = await this.readStoredObject(input, 'preflight');
       if (existingDiscovery) {
-        if (emptyBootstrapSeed) {
+        if (emptyBootstrapSeed || bootstrapContinuation) {
           if (existingDiscovery.body.byteLength === body.byteLength
             && sha256(existingDiscovery.body) === input.sha256) {
             return {
@@ -460,14 +541,58 @@ export class PublicBlogVercelBlobStore implements PublicBlogRemoteObjectStore {
               byteLength: body.byteLength,
             };
           }
+        }
+        if (emptyBootstrapSeed) {
           throw new Error('Public blog Blob refused empty bootstrap over existing discovery');
         }
-        const resolved = this.resolveExistingDiscovery(
-          parsed.value,
-          input.sha256,
-          existingDiscovery,
-        );
-        if (resolved) return resolved;
+        if (bootstrapContinuation) {
+          const currentParsed = objectPolicyAndValue({
+            kind: 'discovery-manifest',
+            key: PUBLIC_BLOG_MANIFEST_KEY,
+            body: existingDiscovery.body,
+          }, safeNow(this.now));
+          const currentIdentity = discoveryIdentity(currentParsed.value);
+          const candidateIdentity = discoveryIdentity(parsed.value);
+          const currentDescriptor = currentParsed.value.payload as Record<string, unknown>;
+          const currentPostCount = currentDescriptor.postCount;
+          const candidatePostCount = descriptor!.postCount;
+          if (currentIdentity.releaseId !== writePolicy.expectedCurrentReleaseId) {
+            throw new Error('Public blog Blob bootstrap predecessor does not match');
+          }
+          if (typeof currentPostCount !== 'number'
+            || currentPostCount < 0
+            || currentPostCount >= PUBLIC_BLOG_STANDARD_MINIMUM_POSTS
+            || typeof candidatePostCount !== 'number'
+            || candidatePostCount <= currentPostCount
+            || Date.parse(candidateIdentity.publishedAt) <= Date.parse(currentIdentity.publishedAt)) {
+            throw new Error('Public blog Blob bootstrap continuation is invalid');
+          }
+          const [currentPayload, candidatePayload] = await Promise.all([
+            this.readValidatedPayloadForManifest(currentParsed.value),
+            this.readValidatedPayloadForManifest(parsed.value),
+          ]);
+          assertBootstrapAppendOnly(currentPayload, candidatePayload);
+        } else {
+          const currentParsed = objectPolicyAndValue({
+            kind: 'discovery-manifest',
+            key: PUBLIC_BLOG_MANIFEST_KEY,
+            body: existingDiscovery.body,
+          }, safeNow(this.now));
+          const currentDescriptor = currentParsed.value.payload as Record<string, unknown>;
+          if (writePolicy.kind === 'standard'
+            && typeof currentDescriptor.postCount === 'number'
+            && currentDescriptor.postCount < PUBLIC_BLOG_STANDARD_MINIMUM_POSTS) {
+            throw new Error('Public blog Blob bootstrap continuation is required');
+          }
+          const resolved = this.resolveExistingDiscovery(
+            parsed.value,
+            input.sha256,
+            existingDiscovery,
+          );
+          if (resolved) return resolved;
+        }
+      } else if (bootstrapContinuation) {
+        throw new Error('Public blog Blob bootstrap predecessor is missing');
       }
     }
 
@@ -515,7 +640,7 @@ export class PublicBlogVercelBlobStore implements PublicBlogRemoteObjectStore {
         throw new Error('Public blog Blob discovery update failed');
       }
       if (raced) {
-        if (emptyBootstrapSeed) {
+        if (emptyBootstrapSeed || bootstrapContinuation) {
           if (raced.body.byteLength === body.byteLength
             && sha256(raced.body) === input.sha256) {
             return {
@@ -525,7 +650,12 @@ export class PublicBlogVercelBlobStore implements PublicBlogRemoteObjectStore {
               byteLength: body.byteLength,
             };
           }
+        }
+        if (emptyBootstrapSeed) {
           throw new Error('Public blog Blob refused empty bootstrap over existing discovery');
+        }
+        if (bootstrapContinuation) {
+          throw new Error('Public blog Blob bootstrap continuation race lost');
         }
         const resolved = this.resolveExistingDiscovery(parsed.value, input.sha256, raced);
         if (resolved) return resolved;
