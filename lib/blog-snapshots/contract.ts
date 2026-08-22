@@ -264,7 +264,7 @@ export function assertPublicBlogSnapshotManifest(
       issues.push('manifest.payload.byteLength is invalid');
     }
     if (!Number.isSafeInteger(descriptor.postCount)
-      || (descriptor.postCount as number) < 1
+      || (descriptor.postCount as number) < 0
       || (descriptor.postCount as number) > PUBLIC_BLOG_MAX_POSTS) {
       issues.push('manifest.payload.postCount is invalid');
     }
@@ -298,9 +298,14 @@ export function assertPublicBlogSnapshotPayload(
     issues.push('payload.categories must be a bounded array');
   }
   if (!Array.isArray(value.posts)
-    || value.posts.length < 1
     || value.posts.length > PUBLIC_BLOG_MAX_POSTS) {
-    issues.push('payload.posts must be a nonempty bounded array');
+    issues.push('payload.posts must be a bounded array');
+  }
+  if (Array.isArray(value.posts)
+    && value.posts.length === 0
+    && Array.isArray(value.categories)
+    && value.categories.length !== 0) {
+    issues.push('an empty payload must not contain categories');
   }
   if (issues.length) throw new PublicBlogSnapshotValidationError('payload', issues);
   const categoryValues = value.categories as unknown[];

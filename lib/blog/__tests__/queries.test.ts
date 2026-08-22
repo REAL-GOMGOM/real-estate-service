@@ -79,6 +79,8 @@ beforeEach(() => {
   mocks.readPublicBlogSnapshotFromEnv.mockReset();
   // React cache is request-scoped. A fresh store models a new server render.
   mocks.requestCache = new Map();
+  vi.stubEnv('NAEZIP_PUBLIC_BLOG_SOURCE', 'snapshot');
+  vi.stubEnv('VERCEL_ENV', '');
 });
 
 describe('public blog query source selection', () => {
@@ -112,19 +114,46 @@ describe('public blog query source selection', () => {
     expect(mocks.readPublicBlogSnapshotFromEnv).toHaveBeenCalledTimes(2);
   });
 
-  it('uses the legacy DB only when the explicit reader reports disabled', async () => {
+  it('uses the legacy DB only in explicitly selected local database mode', async () => {
     const databaseCategories = [{ id: CATEGORY_ID, slug: 'market', name: '시장 DB' }];
     const database = fakeDb({ categories: databaseCategories });
+    vi.stubEnv('NAEZIP_PUBLIC_BLOG_SOURCE', 'database');
+    mocks.getBlogDb.mockReturnValue(database.db);
+
+    await expect(getAllCategories()).resolves.toEqual(databaseCategories);
+    expect(mocks.readPublicBlogSnapshotFromEnv).not.toHaveBeenCalled();
+    expect(mocks.getBlogDb).toHaveBeenCalledOnce();
+    expect(database.orderBy).toHaveBeenCalledOnce();
+  });
+
+  it('fails closed when snapshot mode has no configured snapshot', async () => {
     mocks.readPublicBlogSnapshotFromEnv.mockResolvedValue({
       status: 'unavailable',
       reason: 'disabled',
     });
-    mocks.getBlogDb.mockReturnValue(database.db);
 
-    await expect(getAllCategories()).resolves.toEqual(databaseCategories);
-    expect(mocks.readPublicBlogSnapshotFromEnv).toHaveBeenCalled();
-    expect(mocks.getBlogDb).toHaveBeenCalledOnce();
-    expect(database.orderBy).toHaveBeenCalledOnce();
+    await expect(getAllCategories()).rejects.toThrow('Public blog snapshot is required');
+    expect(mocks.getBlogDb).not.toHaveBeenCalled();
+  });
+
+  it('fails closed for a missing or unknown source mode and rejects DB mode on Vercel', async () => {
+    for (const source of [undefined, '', 'unknown']) {
+      if (source === undefined) vi.stubEnv('NAEZIP_PUBLIC_BLOG_SOURCE', undefined);
+      else vi.stubEnv('NAEZIP_PUBLIC_BLOG_SOURCE', source);
+      mocks.requestCache = new Map();
+      await expect(getAllCategories()).rejects.toThrow(
+        'Public blog source configuration is invalid',
+      );
+    }
+
+    vi.stubEnv('NAEZIP_PUBLIC_BLOG_SOURCE', 'database');
+    vi.stubEnv('VERCEL_ENV', 'preview');
+    mocks.requestCache = new Map();
+    await expect(getAllCategories()).rejects.toThrow(
+      'Public blog source configuration is invalid',
+    );
+    expect(mocks.readPublicBlogSnapshotFromEnv).not.toHaveBeenCalled();
+    expect(mocks.getBlogDb).not.toHaveBeenCalled();
   });
 
   it('propagates configured snapshot failures and never falls back to DB', async () => {
@@ -168,6 +197,30 @@ describe('public blog query source selection', () => {
     await expect(getPublishedPosts({ q: 'no match' })).resolves.toEqual({
       rows: [], total: 0, page: 1, totalPages: 0,
     });
+    expect(mocks.getBlogDb).not.toHaveBeenCalled();
+  });
+
+  it('serves a valid empty snapshot through every public facade without DB access', async () => {
+    const empty = payload();
+    empty.categories = [];
+    empty.posts = [];
+    mocks.readPublicBlogSnapshotFromEnv.mockResolvedValue({
+      status: 'available',
+      payload: empty,
+    });
+
+    const [page, detail, categories, slugs, feed] = await Promise.all([
+      getPublishedPosts(),
+      getPublishedPostBySlug('missing-post'),
+      getAllCategories(),
+      getAllPublishedSlugs(),
+      getRecentPublishedPostsForFeed(5),
+    ]);
+    expect(page).toEqual({ rows: [], total: 0, page: 1, totalPages: 0 });
+    expect(detail).toBeNull();
+    expect(categories).toEqual([]);
+    expect(slugs).toEqual([]);
+    expect(feed).toEqual([]);
     expect(mocks.getBlogDb).not.toHaveBeenCalled();
   });
 

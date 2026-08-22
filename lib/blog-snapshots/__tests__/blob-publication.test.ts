@@ -66,6 +66,15 @@ function source(
   };
 }
 
+function emptySource(generatedAt = '2026-08-21T01:02:03.000Z'): TrustedPublicBlogSnapshotSource {
+  return {
+    schema: 'naezip.public-blog.source.v1',
+    generatedAt,
+    categories: [],
+    posts: [],
+  };
+}
+
 interface StoredObject {
   body: Buffer;
   cacheSeconds: number;
@@ -178,6 +187,7 @@ describe('public blog Vercel Blob publication', () => {
     expect(result.stderr).toBe('');
     expect(result.stdout).toContain('--confirm-production');
     expect(result.stdout).toContain('--confirm-release');
+    expect(result.stdout).toContain('--confirm-empty-bootstrap');
     expect(result.stdout).not.toContain('injected env');
   });
 
@@ -296,6 +306,40 @@ describe('public blog Vercel Blob publication', () => {
     });
   });
 
+  it('publishes an empty bootstrap only with the explicit policy and exact approval', async () => {
+    const backend = memoryBlobBackend();
+    const store = createStore(backend);
+    const release = await buildPublicBlogSnapshotRelease(emptySource(), {
+      now: NOW,
+      publicationMode: 'empty-bootstrap',
+    });
+
+    await expect(publishPublicBlogSnapshotToBlob({
+      source: emptySource(),
+      expectedReleaseId: release.releaseId,
+      store,
+      publicFetchImpl: backend.publicFetchImpl,
+      now: NOW,
+    })).rejects.toThrow('at least 43');
+    expect(backend.putImpl).not.toHaveBeenCalled();
+    expect(backend.getImpl).not.toHaveBeenCalled();
+
+    await expect(publishPublicBlogSnapshotToBlob({
+      source: emptySource(),
+      expectedReleaseId: release.releaseId,
+      store,
+      publicFetchImpl: backend.publicFetchImpl,
+      now: NOW,
+      publicationMode: 'empty-bootstrap',
+    })).resolves.toMatchObject({
+      releaseId: release.releaseId,
+      postCount: 0,
+      categoryCount: 0,
+      managementReadback: true,
+      publicReadback: true,
+    });
+  });
+
   it('uses conditional ETag replacement and rejects discovery regression or conflict', async () => {
     const olderRelease = await buildPublicBlogSnapshotRelease(
       source('2026-08-20T01:02:03.000Z'),
@@ -338,6 +382,59 @@ describe('public blog Vercel Blob publication', () => {
       body: conflicting.manifestBody,
       sha256: sha256Hex(conflicting.manifestBody),
     })).rejects.toThrow('conflict');
+  });
+
+  it('seeds an empty discovery only when absent or already byte-identical', async () => {
+    const emptyRelease = await buildPublicBlogSnapshotRelease(emptySource(), {
+      now: NOW,
+      publicationMode: 'empty-bootstrap',
+    });
+    const unseededBackend = memoryBlobBackend();
+    await expect(createStore(unseededBackend).putObject({
+      kind: 'discovery-manifest',
+      key: PUBLIC_BLOG_MANIFEST_KEY,
+      body: emptyRelease.manifestBody,
+      sha256: sha256Hex(emptyRelease.manifestBody),
+    })).rejects.toThrow('standard discovery requires at least 43 posts');
+    expect(unseededBackend.getImpl).not.toHaveBeenCalled();
+    expect(unseededBackend.putImpl).not.toHaveBeenCalled();
+
+    const normalRelease = await buildPublicBlogSnapshotRelease(
+      source('2026-08-20T01:02:03.000Z'),
+      { now: NOW },
+    );
+    const existing = new Map<string, StoredObject>([[PUBLIC_BLOG_MANIFEST_KEY, {
+      body: normalRelease.manifestBody,
+      cacheSeconds: PUBLIC_BLOG_DISCOVERY_CACHE_SECONDS,
+      etag: 'normal-etag',
+    }]]);
+    const occupiedBackend = memoryBlobBackend(existing);
+    const occupiedStore = createStore(occupiedBackend);
+
+    await expect(occupiedStore.putObject({
+      kind: 'discovery-manifest',
+      key: PUBLIC_BLOG_MANIFEST_KEY,
+      body: emptyRelease.manifestBody,
+      sha256: sha256Hex(emptyRelease.manifestBody),
+      writePolicy: 'empty-bootstrap-seed',
+    })).rejects.toThrow('refused empty bootstrap over existing discovery');
+    expect(occupiedBackend.putImpl).not.toHaveBeenCalled();
+    expect(occupiedBackend.objects.get(PUBLIC_BLOG_MANIFEST_KEY)?.body)
+      .toEqual(normalRelease.manifestBody);
+
+    const identicalBackend = memoryBlobBackend(new Map([[PUBLIC_BLOG_MANIFEST_KEY, {
+      body: emptyRelease.manifestBody,
+      cacheSeconds: PUBLIC_BLOG_DISCOVERY_CACHE_SECONDS,
+      etag: 'empty-etag',
+    }]]));
+    await expect(createStore(identicalBackend).putObject({
+      kind: 'discovery-manifest',
+      key: PUBLIC_BLOG_MANIFEST_KEY,
+      body: emptyRelease.manifestBody,
+      sha256: sha256Hex(emptyRelease.manifestBody),
+      writePolicy: 'empty-bootstrap-seed',
+    })).resolves.toMatchObject({ etag: 'empty-etag' });
+    expect(identicalBackend.putImpl).not.toHaveBeenCalled();
   });
 
   it('accepts an exact discovery CAS race without overwriting the winner', async () => {
@@ -571,6 +668,19 @@ describe('public blog Vercel Blob publication', () => {
       '--confirm-release', VALID_RELEASE_ID,
       '--confirm-production',
     ])).toThrow('Duplicate release confirmation');
+    expect(parsePublicBlogBlobPublishCliArguments([
+      '--source', '/private/source.json',
+      '--confirm-release', VALID_RELEASE_ID,
+      '--confirm-production',
+      '--confirm-empty-bootstrap',
+    ])).toMatchObject({ confirmEmptyBootstrap: true });
+    expect(() => parsePublicBlogBlobPublishCliArguments([
+      '--source', '/private/source.json',
+      '--confirm-release', VALID_RELEASE_ID,
+      '--confirm-production',
+      '--confirm-empty-bootstrap',
+      '--confirm-empty-bootstrap',
+    ])).toThrow('Duplicate empty bootstrap confirmation');
     let unknownError: unknown;
     try {
       parsePublicBlogBlobPublishCliArguments([
@@ -607,5 +717,40 @@ describe('public blog Vercel Blob publication', () => {
     expect(messages).not.toContain('Blob 글');
     expect(messages).not.toContain('DO_NOT_LOG');
     expect(messages).not.toContain(sourcePath);
+  });
+
+  it('requires the empty-bootstrap CLI confirmation before every remote operation', async () => {
+    const directory = await temporaryDirectory('naezip-blog-empty-blob-cli-');
+    const sourcePath = path.join(directory, 'trusted-empty-source.json');
+    await writeFile(sourcePath, stableJson(emptySource()), { mode: 0o600 });
+    const release = await buildPublicBlogSnapshotRelease(emptySource(), {
+      now: NOW,
+      publicationMode: 'empty-bootstrap',
+    });
+    const backend = memoryBlobBackend();
+
+    await expect(runPublicBlogBlobPublishCli([
+      '--source', sourcePath,
+      '--confirm-release', release.releaseId,
+      '--confirm-production',
+    ], {
+      store: createStore(backend),
+      publicFetchImpl: backend.publicFetchImpl,
+      now: NOW,
+    })).rejects.toThrow('at least 43');
+    expect(backend.putImpl).not.toHaveBeenCalled();
+    expect(backend.getImpl).not.toHaveBeenCalled();
+
+    await expect(runPublicBlogBlobPublishCli([
+      '--source', sourcePath,
+      '--confirm-release', release.releaseId,
+      '--confirm-production',
+      '--confirm-empty-bootstrap',
+    ], {
+      store: createStore(backend),
+      publicFetchImpl: backend.publicFetchImpl,
+      now: NOW,
+      log: vi.fn(),
+    })).resolves.toBe(0);
   });
 });

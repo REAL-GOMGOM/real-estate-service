@@ -34,6 +34,8 @@ import {
 export const PUBLIC_BLOG_SOURCE_SCHEMA = 'naezip.public-blog.source.v1' as const;
 const PUBLIC_BLOG_PRODUCTION_MINIMUM_POSTS = 43;
 
+export type PublicBlogPublicationMode = 'standard' | 'empty-bootstrap';
+
 export interface TrustedPublicBlogSnapshotSourcePost extends PublicBlogSnapshotPost {
   status: 'published';
 }
@@ -53,6 +55,7 @@ export interface TrustedPublicBlogSnapshotSource {
 
 export interface BuildPublicBlogSnapshotOptions {
   now?: Date;
+  publicationMode?: PublicBlogPublicationMode;
 }
 
 export interface BuiltPublicBlogSnapshotRelease {
@@ -247,9 +250,22 @@ export async function buildPublicBlogSnapshotRelease(
   options: BuildPublicBlogSnapshotOptions = {},
 ): Promise<BuiltPublicBlogSnapshotRelease> {
   const now = validNow(options.now);
+  const publicationMode = options.publicationMode ?? 'standard';
+  if (publicationMode !== 'standard' && publicationMode !== 'empty-bootstrap') {
+    throw new PublicBlogSnapshotValidationError('source policy', [
+      'publication mode is invalid',
+    ]);
+  }
   assertExactTrustedSourceShape(sourceValue);
   const canonical = sourceAsCanonicalPayload(sourceValue, now);
-  if (canonical.posts.length < PUBLIC_BLOG_PRODUCTION_MINIMUM_POSTS) {
+  if (publicationMode === 'empty-bootstrap'
+    && (canonical.posts.length !== 0 || canonical.categories.length !== 0)) {
+    throw new PublicBlogSnapshotValidationError('source policy', [
+      'empty bootstrap requires exactly zero posts and zero categories',
+    ]);
+  }
+  if (publicationMode === 'standard'
+    && canonical.posts.length < PUBLIC_BLOG_PRODUCTION_MINIMUM_POSTS) {
     throw new PublicBlogSnapshotValidationError('source policy', [
       `at least ${PUBLIC_BLOG_PRODUCTION_MINIMUM_POSTS} published posts are required`,
     ]);
@@ -561,6 +577,7 @@ export async function publishPublicBlogSnapshotDryRun(
 ): Promise<PublishPublicBlogSnapshotDryRunResult> {
   const release = await buildPublicBlogSnapshotRelease(input.source, {
     now: input.now,
+    publicationMode: input.publicationMode,
   });
   const writeResult = await writePublicBlogSnapshotDryRun(release, {
     outputDir: input.outputDir,

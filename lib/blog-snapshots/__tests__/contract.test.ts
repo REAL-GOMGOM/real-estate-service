@@ -119,6 +119,22 @@ describe('public blog snapshot contract', () => {
     })).not.toThrow();
   });
 
+  it('accepts a canonical empty snapshot and matching zero-count manifest', () => {
+    const snapshot = payload();
+    snapshot.categories = [];
+    snapshot.posts = [];
+    const discovery = manifest(snapshot);
+
+    expect(() => assertPublicBlogSnapshotPayload(snapshot, { now: NOW })).not.toThrow();
+    expect(() => assertPublicBlogSnapshotManifest(discovery, { now: NOW })).not.toThrow();
+    expect(() => assertPublicBlogPayloadMatchesManifest(snapshot, discovery)).not.toThrow();
+
+    const categoriesWithoutPosts = payload();
+    categoriesWithoutPosts.posts = [];
+    expect(() => assertPublicBlogSnapshotPayload(categoriesWithoutPosts, { now: NOW }))
+      .toThrow('must not contain categories');
+  });
+
   it('rejects unsupported schemas, extra database fields, unsafe keys, and future timestamps', () => {
     const schema = payload() as unknown as Record<string, unknown>;
     schema.schema = 'naezip.public-blog.payload.v2';

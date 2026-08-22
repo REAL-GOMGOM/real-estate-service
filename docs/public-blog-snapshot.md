@@ -40,7 +40,7 @@ npm run blog:snapshot:dry-run -- \
 
 The command is deliberately offline-only. It writes under
 `.local/public-blog-snapshot-dry-run` by default and cannot upload to Blob,
-query a database, lower the 43-post production floor, or set
+query a database, silently lower the 43-post production floor, or set
 `NEXT_PUBLIC_BLOG_SNAPSHOT_BASE_URL`.
 
 The source must be exact `naezip.public-blog.source.v1` JSON. Unknown fields,
@@ -86,6 +86,24 @@ This dry-run output is not sufficient to activate the site reader. Remote
 publication and runtime activation must remain disabled until a complete
 trusted source has been recovered and separately reviewed.
 
+### One-time empty-library bootstrap
+
+When the previous library has been deliberately abandoned, a separate reset
+path can create a canonical snapshot with exactly zero posts and zero
+categories. Create a private `naezip.public-blog.source.v1` file with a
+canonical current `generatedAt` and empty `categories`/`posts` arrays, then run:
+
+```bash
+npm run blog:snapshot:dry-run -- \
+  --source /absolute/private/public-blog-empty-source.json \
+  --confirm-empty-bootstrap
+```
+
+The flag accepts only the exact `0 posts / 0 categories` state. It cannot
+publish a partial library or lower the normal 43-post floor. The database
+exporter never enables this mode, so a failed query cannot be mistaken for an
+intentional reset.
+
 ## Explicit Vercel Blob publication
 
 Only after the trusted source and dry-run have been reviewed, publish with the
@@ -105,6 +123,22 @@ that approval before any Blob management or public request. A missing, malformed
 duplicate, or mismatched approval fails without reading or writing the remote
 store. The separate `--confirm-production` flag is also required.
 
+Publishing a reviewed empty bootstrap requires every normal approval plus the
+dedicated reset confirmation:
+
+```bash
+NAEZIP_ENV_FILE=/absolute/private/.env.local \
+npm run blog:snapshot:publish -- \
+  --source /absolute/private/public-blog-empty-source.json \
+  --confirm-release 20260823T010203Z-0123456789ab \
+  --confirm-production \
+  --confirm-empty-bootstrap
+```
+
+An empty bootstrap is create-only: it may seed an absent discovery manifest or
+repeat the exact same bytes, but it cannot replace an existing blog release.
+Deploy the empty-capable reader before publishing this discovery manifest.
+
 The private environment file must contain the dedicated
 `NAEZIP_BLOG_SNAPSHOT_BLOB_READ_WRITE_TOKEN` and the matching public origin in
 `NEXT_PUBLIC_BLOG_SNAPSHOT_BASE_URL`. The command never falls back to the
@@ -115,3 +149,15 @@ The payload and release manifest are immutable one-year-cache objects. The
 and anti-regression/conflict checks. A successful command also downloads and
 validates the manifest and payload through both Blob management access and the
 unauthenticated public reader. Retention is intentionally outside this command.
+
+## Runtime source selection
+
+Public routes require `NAEZIP_PUBLIC_BLOG_SOURCE=snapshot` together with
+`NEXT_PUBLIC_BLOG_SNAPSHOT_BASE_URL` in Preview and Production. Missing or
+unknown source selection fails closed, and `database` mode is rejected on
+Vercel Preview/Production. Local maintenance may explicitly select
+`NAEZIP_PUBLIC_BLOG_SOURCE=database`; admin authoring remains database-backed.
+
+The empty bootstrap establishes only the safe zero-post baseline. The normal
+publisher still refuses 1–42 posts. A separately reviewed lineage-aware growth
+workflow is required before publishing the first new column.

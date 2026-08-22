@@ -23,6 +23,8 @@ store, then verifies it through management and unauthenticated public reads.
 --source <file>        Required absolute naezip.public-blog.source.v1 file.
 --confirm-release <id> Required exact release ID from the reviewed dry-run.
 --confirm-production   Required explicit remote-write confirmation.
+--confirm-empty-bootstrap
+                       Explicitly publish a zero-post, zero-category reset.
 --help, -h             Show this help.
 
 Required environment:
@@ -42,6 +44,7 @@ export interface PublicBlogBlobPublishCliArguments {
   sourcePath: string | null;
   confirmRelease: string | null;
   confirmProduction: boolean;
+  confirmEmptyBootstrap: boolean;
 }
 
 function takeOptionValue(
@@ -70,6 +73,7 @@ export function parsePublicBlogBlobPublishCliArguments(
   let sourcePath: string | null = null;
   let confirmRelease: string | null = null;
   let confirmProduction = false;
+  let confirmEmptyBootstrap = false;
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === '--help' || argument === '-h') {
@@ -102,10 +106,22 @@ export function parsePublicBlogBlobPublishCliArguments(
       confirmProduction = true;
       continue;
     }
+    if (argument === '--confirm-empty-bootstrap') {
+      if (confirmEmptyBootstrap) {
+        throw new PublicBlogBlobPublishCliUsageError(
+          'Duplicate empty bootstrap confirmation',
+        );
+      }
+      confirmEmptyBootstrap = true;
+      continue;
+    }
     // Unknown arguments can contain copied credentials; never echo one.
     throw new PublicBlogBlobPublishCliUsageError('Unknown public blog Blob publish option');
   }
-  if (help && (sourcePath !== null || confirmRelease !== null || confirmProduction)) {
+  if (help && (sourcePath !== null
+    || confirmRelease !== null
+    || confirmProduction
+    || confirmEmptyBootstrap)) {
     throw new PublicBlogBlobPublishCliUsageError('Help cannot be combined with publish options');
   }
   if (!help && sourcePath === null) {
@@ -123,7 +139,13 @@ export function parsePublicBlogBlobPublishCliArguments(
   if (sourcePath !== null && !path.isAbsolute(sourcePath)) {
     throw new PublicBlogBlobPublishCliUsageError('--source must be an absolute file path');
   }
-  return { help, sourcePath, confirmRelease, confirmProduction };
+  return {
+    help,
+    sourcePath,
+    confirmRelease,
+    confirmProduction,
+    confirmEmptyBootstrap,
+  };
 }
 
 export async function runPublicBlogBlobPublishCli(
@@ -151,6 +173,7 @@ export async function runPublicBlogBlobPublishCli(
     store,
     publicFetchImpl: options.publicFetchImpl,
     now: options.now,
+    publicationMode: parsed.confirmEmptyBootstrap ? 'empty-bootstrap' : 'standard',
   });
   log(
     `[public-blog-blob] complete: release=${result.releaseId}`

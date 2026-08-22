@@ -49,6 +49,18 @@ function payload(posts = Array.from({ length: 25 }, (_, index) => post(index))):
 }
 
 describe('public blog snapshot projections', () => {
+  it('projects an empty library as a normal zero-result state', () => {
+    const input = payload([]);
+    input.categories = [];
+
+    expect(getPublishedPostsFromSnapshot(input))
+      .toEqual({ rows: [], total: 0, page: 1, totalPages: 0 });
+    expect(getAllCategoriesFromSnapshot(input)).toEqual([]);
+    expect(getAllPublishedSlugsFromSnapshot(input)).toEqual([]);
+    expect(getPublishedPostBySlugFromSnapshot(input, 'missing')).toBeNull();
+    expect(getRecentPublishedPostsForFeedFromSnapshot(input)).toEqual([]);
+  });
+
   it('hydrates every public timestamp as Date while preserving DTO fields', () => {
     const input = payload([post(0)]);
 

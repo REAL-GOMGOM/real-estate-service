@@ -15,6 +15,20 @@ import {
 import type { PublicBlogSnapshotPayload } from '@/lib/blog-snapshots/contract';
 
 const SLUG_PATTERN = /^[a-z0-9-]{1,200}$/;
+export const PUBLIC_BLOG_SOURCE_ENV = 'NAEZIP_PUBLIC_BLOG_SOURCE' as const;
+const PUBLIC_VERCEL_ENVIRONMENTS = new Set(['preview', 'production']);
+
+function publicBlogSourceMode(
+  env: Readonly<Record<string, string | undefined>>,
+): 'snapshot' | 'database' {
+  const source = env[PUBLIC_BLOG_SOURCE_ENV]?.trim();
+  if (source === 'snapshot') return source;
+  if (source === 'database'
+    && !PUBLIC_VERCEL_ENVIRONMENTS.has(env.VERCEL_ENV?.trim() ?? '')) {
+    return source;
+  }
+  throw new Error('Public blog source configuration is invalid');
+}
 
 /** ILIKE 패턴 이스케이프 — % _ \ 무력화 (검색어를 리터럴로 취급) */
 function escapeLike(input: string): string {
@@ -64,8 +78,12 @@ const readPublicBlogSnapshotForRequest = cache(
 );
 
 async function getPublicBlogSnapshotForRequest(): Promise<PublicBlogSnapshotPayload | null> {
+  if (publicBlogSourceMode(process.env) === 'database') return null;
   const result = await readPublicBlogSnapshotForRequest();
-  return result.status === 'available' ? result.payload : null;
+  if (result.status !== 'available') {
+    throw new Error('Public blog snapshot is required');
+  }
+  return result.payload;
 }
 
 /**

@@ -11,6 +11,7 @@ import {
 } from './contract';
 import {
   buildPublicBlogSnapshotRelease,
+  type PublicBlogPublicationMode,
 } from './publisher';
 import { PublicBlogSnapshotReader } from './reader';
 import type {
@@ -24,6 +25,7 @@ export interface PublishPublicBlogSnapshotToBlobInput {
   store: PublicBlogRemoteObjectStore;
   publicFetchImpl?: typeof fetch;
   now?: Date;
+  publicationMode?: PublicBlogPublicationMode;
 }
 
 export interface PublishPublicBlogSnapshotToBlobResult {
@@ -89,7 +91,10 @@ export async function publishPublicBlogSnapshotToBlob(
   input: PublishPublicBlogSnapshotToBlobInput,
 ): Promise<PublishPublicBlogSnapshotToBlobResult> {
   const now = input.now ?? new Date();
-  const release = await buildPublicBlogSnapshotRelease(input.source, { now });
+  const release = await buildPublicBlogSnapshotRelease(input.source, {
+    now,
+    publicationMode: input.publicationMode,
+  });
   assertReleaseApproval(release.releaseId, input.expectedReleaseId);
 
   await input.store.putObject({
@@ -139,6 +144,9 @@ export async function publishPublicBlogSnapshotToBlob(
     key: release.manifestKey,
     body: release.manifestBody,
     sha256: sha256Hex(release.manifestBody),
+    writePolicy: input.publicationMode === 'empty-bootstrap'
+      ? 'empty-bootstrap-seed'
+      : 'default',
   });
   const managementDiscovery = await input.store.readObject({
     kind: 'discovery-manifest',

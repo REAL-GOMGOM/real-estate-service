@@ -154,7 +154,7 @@ describe('offline public blog snapshot publisher', () => {
     expect(right.releaseManifestBody.equals(left.releaseManifestBody)).toBe(true);
   });
 
-  it('enforces the production floor and exposes no CLI override for it', async () => {
+  it('keeps the production floor while requiring an exact empty-bootstrap policy', async () => {
     await expect(buildPublicBlogSnapshotRelease(fixtureSource(42), { now: NOW }))
       .rejects.toThrow('at least 43');
     await expect(buildPublicBlogSnapshotRelease(fixtureSource(), { now: NOW }))
@@ -164,8 +164,51 @@ describe('offline public blog snapshot publisher', () => {
     expect(() => parsePublicBlogSnapshotCliArguments([
       '--source', 'source.json', '--minimum-posts=1',
     ])).toThrow('Unknown public blog snapshot option');
+    expect(parsePublicBlogSnapshotCliArguments([
+      '--source', 'source.json', '--confirm-empty-bootstrap',
+    ])).toMatchObject({ confirmEmptyBootstrap: true });
+    expect(() => parsePublicBlogSnapshotCliArguments([
+      '--source', 'source.json',
+      '--confirm-empty-bootstrap', '--confirm-empty-bootstrap',
+    ])).toThrow('Duplicate empty bootstrap confirmation');
+
+    const empty = fixtureSource(0);
+    empty.categories = [];
+    await expect(buildPublicBlogSnapshotRelease(empty, { now: NOW }))
+      .rejects.toThrow('at least 43');
+    await expect(buildPublicBlogSnapshotRelease(empty, {
+      now: NOW,
+      publicationMode: 'empty-bootstrap',
+    })).resolves.toMatchObject({
+      payload: { categories: [], posts: [] },
+      manifest: { payload: { categoryCount: 0, postCount: 0 } },
+    });
+    await expect(buildPublicBlogSnapshotRelease(fixtureSource(1), {
+      now: NOW,
+      publicationMode: 'empty-bootstrap',
+    })).rejects.toThrow('exactly zero posts and zero categories');
+    const emptyWithCategory = fixtureSource(0);
+    await expect(buildPublicBlogSnapshotRelease(emptyWithCategory, {
+      now: NOW,
+      publicationMode: 'empty-bootstrap',
+    })).rejects.toThrow('must not contain categories');
     expect(publisherModule).not.toHaveProperty('writePublicBlogSnapshotDryRun');
     expect(publisherModule).not.toHaveProperty('PUBLIC_BLOG_PRODUCTION_MINIMUM_POSTS');
+  });
+
+  it('writes and reads an explicitly approved empty bootstrap locally', async () => {
+    const outputDir = await temporaryDirectory('naezip-blog-empty-bootstrap-');
+    const source = fixtureSource(0);
+    source.categories = [];
+    const result = await publishPublicBlogSnapshotDryRun({
+      source,
+      outputDir,
+      now: NOW,
+      publicationMode: 'empty-bootstrap',
+    });
+    expect(result.payload.posts).toEqual([]);
+    expect(result.payload.categories).toEqual([]);
+    expect(result.manifest.payload).toMatchObject({ postCount: 0, categoryCount: 0 });
   });
 
   it('finishes every validation before creating an output directory', async () => {
