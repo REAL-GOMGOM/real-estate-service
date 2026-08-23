@@ -21,6 +21,7 @@ const ranking = {
   },
   topPrice: {
     '등록 표본 전체': [{ rank: 1, aptName: '표본파크', district: '강남구', price: 200000, priceFormatted: '20.0억', area: 84, floor: 12, dealDate: '2026-08-01' }],
+    '전북특별자치도': [{ rank: 1, aptName: '전북표본', district: '전주시 완산구', price: 50000, priceFormatted: '5.0억', area: 84, floor: 8, dealDate: '2026-08-01' }],
   },
   volume: {
     '등록 표본 전체': [{ rank: 1, aptName: '거래파크', district: '강남구', count: 3, avgPriceFormatted: '19.0억' }],
@@ -36,7 +37,10 @@ beforeEach(() => {
       ok: true, status: 200, json: async () => ({
         period: '2026.07', frequency: 'monthly', type: 'sale',
         summary: { nationwide: 0.1, capital_area: 0.2, non_capital: 0 },
-        regions: [{ code: '11', name: '서울', change_rate: 0.3, direction: 'up' }],
+        regions: [
+          { code: '11', name: '서울', change_rate: 0.3, direction: 'up' },
+          { code: '52', name: '전북', change_rate: 0.1, direction: 'up' },
+        ],
       }),
     });
     if (input.startsWith('/api/ranking')) return Promise.resolve({ ok: true, status: 200, json: async () => ranking });
@@ -69,6 +73,7 @@ describe('MarketDashboard ranking summary', () => {
     expect(host.textContent).toContain('등록 표본의 최근 3개월 주목 거래');
     expect(host.textContent).toContain('랭킹 부가 지표가 부분 집계');
     expect(host.textContent).toContain('321건');
+    expect(host.textContent).toContain('전북표본');
     expect(host.textContent).not.toContain('최고가 거래');
   });
 });

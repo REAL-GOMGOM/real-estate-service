@@ -1,35 +1,15 @@
 'use client';
 
-import { useEffect } from 'react';
-import { usePathname } from 'next/navigation';
-
 const CONTENT_ID = 'main-content';
 
 /** 각 경로의 첫 <main>을 키보드 건너뛰기 링크 대상으로 연결한다. */
 export function SkipToContent() {
-  const pathname = usePathname();
-
-  useEffect(() => {
-    const main = document.querySelector<HTMLElement>('main');
-    if (!main) return;
-
-    const assignedId = !main.id;
-    const previousTabIndex = main.getAttribute('tabindex');
-    if (assignedId) main.id = CONTENT_ID;
-    main.tabIndex = -1;
-
-    return () => {
-      if (assignedId && main.id === CONTENT_ID) main.removeAttribute('id');
-      if (previousTabIndex === null) main.removeAttribute('tabindex');
-      else main.setAttribute('tabindex', previousTabIndex);
-    };
-  }, [pathname]);
-
   function focusMain(event: React.MouseEvent<HTMLAnchorElement>) {
     const main = document.querySelector<HTMLElement>('main');
     if (!main) return;
     event.preventDefault();
     if (!main.id) main.id = CONTENT_ID;
+    if (!main.hasAttribute('tabindex')) main.tabIndex = -1;
     main.focus({ preventScroll: true });
     main.scrollIntoView({ block: 'start' });
   }
