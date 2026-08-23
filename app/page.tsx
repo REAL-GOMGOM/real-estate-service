@@ -13,7 +13,6 @@ import NotableDealsCard from '@/components/landing/NotableDealsCard';
 import HomeCalculator from '@/components/landing/HomeCalculator';
 import NewsCard from '@/components/landing/NewsCard';
 import RealValueCard from '@/components/landing/RealValueCard';
-import HomeBlogFeed from '@/components/landing/HomeBlogFeed';
 import AddToHomeCta from '@/components/landing/AddToHomeCta';
 import { toSubscription } from '@/lib/adapters';
 import { fetchSubscriptions } from '@/lib/subscription-api';
@@ -34,9 +33,9 @@ export const metadata = createPageMetadata({
 /**
  * 메인 홈 — 대시보드형 리디자인 (2a 벤토 그리드 시안).
  *
- * 세로 랜딩 → 첫 화면 압축형 대시보드: 슬림 히어로 바 + 퀵액션 칩 + 벤토 3밴드
- * (실거래·특이거래·입지 / 국평 시세·계산기 / 청약·칼럼·뉴스).
- * 정적 콘텐츠(청약·칼럼·입지)는 서버 렌더(SEO), 라이브 카드는 클라 아일랜드.
+ * 첫 행동(단지 검색 → 실거래 확인)을 선명하게 두고, 자주 쓰는 실거래·입지는
+ * 바로 노출한다. 시장 분석·계산기는 필요할 때 펼치는 보조 영역으로 제공한다.
+ * 정적 콘텐츠(청약·입지)는 서버 렌더(SEO), 라이브 카드는 클라 아일랜드.
  * 데이터 장애 시 임시값을 실제 정보처럼 노출하지 않고 명시적인 상태를 표시한다.
  */
 
@@ -73,13 +72,6 @@ const TOP_LOCATIONS = getTopLocations(5).map((t) => ({
   score: t.score,
   qualityPercent: scoreToQualityPercent(t.score),
 }));
-
-// 히어로 스탯 — 시안의 마케팅 수치 대신 실데이터 기반 (커버리지는 등록 시군구 수 자동 집계)
-const HERO_STATS = [
-  { value: `${Object.keys(DISTRICT_CODE).length}개 시군구`, label: '실거래 조회 지원 지역' },
-  { value: '국토부 공개', label: '실거래 원천 데이터' },
-  { value: '84㎡ 국평', label: '구별 실거래 평균 집계' },
-];
 
 interface Sub { status: string; name: string; loc: string; period: string; units: number | null }
 type DataStatus = 'ok' | 'partial' | 'degraded';
@@ -127,7 +119,7 @@ async function SubscriptionScheduleCard() {
   }
   const real = allItems
     .filter((i) => i.status === 'ongoing' || i.status === 'upcoming')
-    .slice(0, 3)
+    .slice(0, 2)
     .map(toSubscription) as unknown as Sub[];
   const subs: Sub[] = real;
 
@@ -211,14 +203,21 @@ export default function HomePage() {
         .nz-band>*{min-width:0}
         .nz-band1{grid-template-columns:repeat(3,minmax(0,1fr))}
         .nz-band2{grid-template-columns:minmax(0,1fr) minmax(0,1.25fr) minmax(0,0.95fr)}
-        .nz-band3{grid-template-columns:minmax(0,1fr) minmax(0,1.25fr) minmax(0,1fr)}
+        .nz-band3{grid-template-columns:repeat(2,minmax(0,1fr))}
         @media (max-width:1080px){
           .nz-band1,.nz-band2,.nz-band3{grid-template-columns:minmax(0,1fr)}
           .nz-band2>*:first-child{order:2}
         }
         .nz-hero{display:flex;align-items:center;justify-content:space-between;gap:32px;flex-wrap:wrap}
-        .nz-heroright{display:flex;flex-direction:column;align-items:flex-end;gap:12px;flex-shrink:0}
-        .nz-searchform{display:flex;align-items:center;gap:9px;width:340px;max-width:100%;padding:12px 16px;background:#fff;border:1px solid #DDE3EE;border-radius:12px}
+        .nz-heroright{display:flex;flex-direction:column;align-items:stretch;gap:8px;width:400px;max-width:100%;flex-shrink:0}
+        .nz-searchform{display:flex;align-items:center;gap:9px;width:100%;max-width:100%;padding:12px 16px;background:#fff;border:1px solid #DDE3EE;border-radius:12px}
+        .nz-tools{border:1px solid #E1E5EC;border-radius:18px;background:#fff;overflow:hidden}
+        .nz-tools-summary{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 20px;cursor:pointer;list-style:none}
+        .nz-tools-summary::-webkit-details-marker{display:none}
+        .nz-tools-summary::after{content:'펼치기 +';font-size:12.5px;font-weight:700;color:#1B4DDB;white-space:nowrap}
+        .nz-tools[open]>.nz-tools-summary::after{content:'접기 −'}
+        .nz-tools[open]>.nz-tools-summary{border-bottom:1px solid #E7EAF0}
+        .nz-tools-content{padding:16px;background:#F5F6FA}
         @media (max-width:860px){
           .nz-heroright{width:100%;align-items:stretch}
           .nz-searchform{width:100%}
@@ -287,27 +286,23 @@ export default function HomePage() {
               margin: 0, fontSize: 'clamp(24px, 4vw, 30px)', lineHeight: 1.15,
               letterSpacing: '-0.03em', fontWeight: 800, color: INK,
             }}>
-              부동산의 모든 답을, 한 곳에 압축하다
+              우리 아파트, 얼마에 거래됐을까?
             </h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginTop: 14, flexWrap: 'wrap' }}>
-              {HERO_STATS.map((s) => (
-                <div key={s.label} style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
-                  <span style={{ fontFamily: 'var(--font-sg)', fontSize: 15, fontWeight: 700, color: INK }}>{s.value}</span>
-                  <span style={{ fontSize: 12, color: MUTED }}>{s.label}</span>
-                </div>
-              ))}
-            </div>
+            <p style={{ margin: '11px 0 0', maxWidth: 520, fontSize: 14, lineHeight: 1.55, color: NAV }}>
+              단지명을 검색하면 최근 실거래와 가격 흐름을 바로 확인할 수 있어요.
+              {' '}전국 {Object.keys(DISTRICT_CODE).length}개 시군구를 지원합니다.
+            </p>
           </div>
 
           <div className="nz-heroright">
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: INK2 }}>아파트 단지 검색</span>
             <HomeApartmentSearch />
-            <Link href="/region" style={{
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              background: BLUE, color: '#FFFFFF', fontWeight: 700, fontSize: 14.5,
-              padding: '12px 22px', borderRadius: 12, textDecoration: 'none',
-            }}>
-              지역 둘러보기 →
-            </Link>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11.5, color: MUTED }}>검색 결과를 고르면 실거래로 이동해요.</span>
+              <Link href="/region" style={{ color: BLUE, fontWeight: 700, fontSize: 12.5, textDecoration: 'none' }}>
+                단지를 모르면 지역으로 찾기 →
+              </Link>
+            </div>
           </div>
         </div>
       </section>
@@ -327,6 +322,11 @@ export default function HomePage() {
       {/* ── 벤토 그리드 ── */}
       <section style={{ background: '#F5F6FA' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 24px 30px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+          <div>
+            <h2 style={{ margin: 0, fontSize: 19, fontWeight: 800, letterSpacing: '-0.02em', color: INK }}>지금 확인할 정보</h2>
+            <p style={{ margin: '5px 0 0', fontSize: 12.5, color: MUTED }}>최근 실거래와 특이 거래를 먼저 확인하세요.</p>
+          </div>
 
           {/* 밴드 1 — 최근 실거래 · 특이 실거래 · 입지 TOP5 */}
           <div className="nz-band nz-band1">
@@ -373,28 +373,27 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* 밴드 2 — 국평 시세 · 내집마련 계산기 · 실질 가치 (2026-07-12 추가) */}
-          <div className="nz-band nz-band2">
-            <MarketLive />
-            <HomeCalculator />
-            <RealValueCard />
-          </div>
+          {/* 보조 도구 — 긴 홈에서 필요한 사용자만 펼쳐 확인 */}
+          <details className="nz-tools">
+            <summary className="nz-tools-summary">
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <strong style={{ fontSize: 15, color: INK }}>시장 분석·계산기</strong>
+                <span style={{ fontSize: 12, color: MUTED }}>국평 시세 · 내집마련 계산 · 실질 가치</span>
+              </span>
+            </summary>
+            <div className="nz-band nz-band2 nz-tools-content">
+              <MarketLive />
+              <HomeCalculator />
+              <RealValueCard />
+            </div>
+          </details>
 
-          {/* 밴드 3 — 청약 · 칼럼 · 뉴스 */}
+          {/* 밴드 3 — 청약 · 뉴스 (빈 칼럼 카드는 홈에서 제외) */}
           <div className="nz-band nz-band3">
             {/* 청약 일정 */}
             <Suspense fallback={<SubscriptionScheduleFallback />}>
               <SubscriptionScheduleCard />
             </Suspense>
-
-            {/* 부동산 인사이트 (칼럼) */}
-            <div style={{
-              background: '#FFFFFF', border: `1px solid ${BORDER}`, borderRadius: 18,
-              padding: 20, display: 'flex', flexDirection: 'column',
-            }}>
-              <CardHeader title="부동산 인사이트" moreHref="/blog" moreLabel="칼럼 전체 →" />
-              <HomeBlogFeed />
-            </div>
 
             {/* 오늘의 뉴스 */}
             <NewsCard />
