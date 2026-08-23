@@ -11,12 +11,12 @@ describe('visitor analytics rate limit', () => {
     expect(request().nextUrl.pathname).toBe('/api/analytics/visit');
 
     for (let index = 0; index < 6; index += 1) {
-      const response = proxy(request());
+      const response = await proxy(request());
       expect(response.status).toBe(200);
       expect(response.headers.get('x-ratelimit-limit')).toBe('6');
     }
 
-    const limited = proxy(request());
+    const limited = await proxy(request());
     expect(limited.status).toBe(429);
     await expect(limited.json()).resolves.toMatchObject({ error: expect.any(String) });
   });

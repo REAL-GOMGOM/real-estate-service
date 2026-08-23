@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { readPublicBlogSnapshotFromEnv } from '@/lib/blog-snapshots/reader';
+import { getPublishedPostBySlugFromSnapshot } from '@/lib/blog-snapshots/projection';
 
 // ── In-memory rate limit store ──
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -7,6 +9,40 @@ const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 const WINDOW_MS = 60_000; // 1분
 const MAX_REQUESTS = 60;  // 분당 60회
 const VISITOR_MAX_REQUESTS = 6; // 동일 IP의 방문 집계는 분당 6회만 허용
+const BLOG_DETAIL_PATH = /^\/blog\/([a-z0-9-]{1,200})$/;
+
+async function gatePublicBlogDetail(
+  request: NextRequest,
+  slug: string,
+): Promise<NextResponse> {
+  if (process.env.NAEZIP_PUBLIC_BLOG_SOURCE !== 'snapshot') {
+    return NextResponse.next();
+  }
+
+  try {
+    const snapshot = await readPublicBlogSnapshotFromEnv(process.env);
+    if (snapshot.status !== 'available') return NextResponse.next();
+    if (getPublishedPostBySlugFromSnapshot(snapshot.payload, slug)) {
+      return NextResponse.next();
+    }
+
+    // Decide the authoritative miss before React starts streaming. Rewriting
+    // to Next's built-in not-found document preserves the requested URL while
+    // returning a real 404 to browsers and crawlers.
+    const notFoundUrl = request.nextUrl.clone();
+    notFoundUrl.pathname = '/_not-found';
+    notFoundUrl.search = '';
+    return NextResponse.rewrite(notFoundUrl, {
+      status: 404,
+      headers: { 'X-Robots-Tag': 'noindex' },
+    });
+  } catch (error) {
+    // A transport or validation failure is not proof that a post is absent.
+    // Let the route render its existing service-unavailable fallback instead.
+    console.error('[blog/proxy] snapshot preflight unavailable', error);
+    return NextResponse.next();
+  }
+}
 
 // 오래된 항목 정리 (5분마다)
 let lastCleanup = Date.now();
@@ -29,6 +65,9 @@ function getClientIp(request: NextRequest): string {
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  const blogDetail = BLOG_DETAIL_PATH.exec(pathname);
+  if (blogDetail) return gatePublicBlogDetail(request, blogDetail[1]);
 
   // /api/* 경로에만 적용
   if (!pathname.startsWith('/api/')) {
@@ -76,5 +115,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: '/api/:path*',
+  matcher: ['/api/:path*', '/blog/:slug'],
 };
