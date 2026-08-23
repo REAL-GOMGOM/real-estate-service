@@ -885,6 +885,13 @@ function normalizeSearchText(value: string): string {
   return value.normalize('NFKC').replace(/\s+/g, '').toLocaleLowerCase('ko-KR');
 }
 
+function apartmentSearchIdentity(item: ApartmentIndexItem): string {
+  const normalizedName = normalizeSearchText(item.name);
+  const nameWithoutGenericSuffix = normalizedName.replace(/(?:아파트|apt)$/u, '');
+  const canonicalName = nameWithoutGenericSuffix || normalizedName;
+  return [item.lawdCd, normalizeSearchText(item.dong ?? ''), canonicalName].join('|');
+}
+
 export function searchApartmentIndex(
   index: readonly ApartmentIndexItem[],
   query: string,
@@ -893,7 +900,7 @@ export function searchApartmentIndex(
   const needle = normalizeSearchText(query.trim());
   if (!needle) return [];
   const limit = Math.min(Math.max(Math.trunc(options.limit ?? 10), 1), 100);
-  return index
+  const ranked = index
     .filter((item) => !options.lawdCd || item.lawdCd === options.lawdCd)
     .flatMap((item) => {
       const candidates = [item.name, ...item.aliases].map(normalizeSearchText);
@@ -905,9 +912,21 @@ export function searchApartmentIndex(
     })
     .sort((left, right) => left.rank - right.rank
       || left.item.name.length - right.item.name.length
-      || left.item.id.localeCompare(right.item.id))
-    .slice(0, limit)
-    .map(({ item }) => item);
+      || left.item.id.localeCompare(right.item.id));
+
+  // 국토부 원장명과 공동주택 마스터명이 `잠실엘스` / `잠실엘스아파트`처럼
+  // 따로 들어온 경우에도 사용자에게는 같은 동의 한 단지로 보여준다. 정렬을
+  // 먼저 적용해 검색어와 더 정확히 일치하는 표기를 대표 결과로 유지한다.
+  const seen = new Set<string>();
+  const results: ApartmentIndexItem[] = [];
+  for (const { item } of ranked) {
+    const identity = apartmentSearchIdentity(item);
+    if (seen.has(identity)) continue;
+    seen.add(identity);
+    results.push(item);
+    if (results.length >= limit) break;
+  }
+  return results;
 }
 
 export type SnapshotServeMissReason =

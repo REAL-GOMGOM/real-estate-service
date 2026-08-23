@@ -19,6 +19,10 @@ vi.mock('@/lib/db/client', () => ({
   getBlogDb: mocks.getBlogDb,
 }));
 
+vi.mock('next/cache', () => ({
+  cacheLife: vi.fn(),
+}));
+
 import { GET } from '../route';
 
 const apartment: ApartmentIndexItem = {
@@ -96,6 +100,8 @@ describe('GET /api/apartments/search snapshot-first', () => {
     expect(response.headers.get('x-naezip-data-source')).toBe('snapshot');
     expect(response.headers.get('x-naezip-snapshot-generated-at'))
       .toBe('2026-08-11T00:00:00.000Z');
+    expect(response.headers.get('cache-control'))
+      .toBe('public, max-age=60, s-maxage=300, stale-while-revalidate=3600');
     expect(body).toEqual({
       results: [{
         id: apartment.id,
@@ -148,6 +154,8 @@ describe('GET /api/apartments/search snapshot-first', () => {
 
     expect(response.status).toBe(200);
     expect(body).toEqual({ results: [dbRow], query: '래미안', count: 1 });
+    expect(response.headers.get('cache-control'))
+      .toBe('public, max-age=60, s-maxage=300, stale-while-revalidate=3600');
     expect(response.headers.get('x-naezip-data-source')).toBeNull();
     expect(db.select).toHaveBeenCalledOnce();
   });

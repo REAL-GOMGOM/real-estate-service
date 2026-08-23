@@ -68,7 +68,12 @@ describe('AptAutocomplete request ordering', () => {
     const input = host.querySelector('input')!;
     await type(input, '현대');
     await act(async () => {
-      vi.advanceTimersByTime(300);
+      vi.advanceTimersByTime(179);
+      await settle();
+    });
+    expect(pending).toHaveLength(0);
+    await act(async () => {
+      vi.advanceTimersByTime(1);
       await settle();
     });
     expect(pending).toHaveLength(1);
@@ -89,7 +94,7 @@ describe('AptAutocomplete request ordering', () => {
     expect(host.textContent).not.toContain('구형단지');
 
     await act(async () => {
-      vi.advanceTimersByTime(300);
+      vi.advanceTimersByTime(180);
       await settle();
     });
     expect(pending).toHaveLength(2);
@@ -105,5 +110,39 @@ describe('AptAutocomplete request ordering', () => {
 
     expect(host.textContent).toContain('래미안');
     expect(host.textContent).not.toContain('구형단지');
+  });
+
+  it('공백만 다른 같은 검색어는 5분 캐시를 재사용한다', async () => {
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => {
+      root!.render(<AptAutocomplete onSelect={() => undefined} />);
+    });
+
+    const input = host.querySelector('input')!;
+    await type(input, '래미안');
+    await act(async () => {
+      vi.advanceTimersByTime(180);
+      await settle();
+    });
+    await act(async () => {
+      pending[0].resolve({
+        ok: true,
+        json: async () => ({
+          results: [{ id: 'cached', name: '래미안', sido: '서울', sigungu: '서초구', dong: '반포동', lawdCd: '11650' }],
+        }),
+      });
+      await settle();
+    });
+
+    await type(input, '래미 안');
+    await act(async () => {
+      vi.advanceTimersByTime(180);
+      await settle();
+    });
+
+    expect(pending).toHaveLength(1);
+    expect(host.textContent).toContain('래미안');
   });
 });

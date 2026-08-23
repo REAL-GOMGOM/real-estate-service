@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { findDistrictByLawdCd } from '@/lib/district-codes';
 import {
@@ -10,7 +11,7 @@ import {
 export default function HomeApartmentSearch() {
   const router = useRouter();
 
-  function selectApartment(apartment: ApartmentSearchResult) {
+  const apartmentHref = useCallback((apartment: ApartmentSearchResult) => {
     const district =
       findDistrictByLawdCd(apartment.lawdCd) ?? apartment.sigungu;
     const params = new URLSearchParams({
@@ -19,8 +20,16 @@ export default function HomeApartmentSearch() {
       aptId: apartment.id,
     });
     if (apartment.dong) params.set('aptDong', apartment.dong);
-    router.push(`/transactions?${params.toString()}`);
-  }
+    return `/transactions?${params.toString()}`;
+  }, []);
+
+  const selectApartment = useCallback((apartment: ApartmentSearchResult) => {
+    router.push(apartmentHref(apartment));
+  }, [apartmentHref, router]);
+
+  const prefetchApartment = useCallback((apartment: ApartmentSearchResult) => {
+    router.prefetch(apartmentHref(apartment));
+  }, [apartmentHref, router]);
 
   return (
     <div
@@ -31,6 +40,8 @@ export default function HomeApartmentSearch() {
       <AptAutocomplete
         ariaLabel="단지명 검색"
         placeholder="단지명 검색 (예: 잠실엘스)"
+        onInputIntent={() => router.prefetch('/transactions')}
+        onResultIntent={prefetchApartment}
         onSelect={selectApartment}
       />
     </div>

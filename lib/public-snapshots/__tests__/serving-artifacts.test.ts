@@ -174,6 +174,22 @@ describe('serving named artifacts', () => {
     expect(() => assertApartmentIndexEnvelope({ ...envelope, itemCount: 2 }))
       .toThrow('itemCount does not match');
   });
+
+  it('deduplicates equivalent apartment suffixes after ranking and still fills the limit', () => {
+    const base = apartmentIndex[0];
+    const index: ApartmentIndexItem[] = [
+      { ...base, id: 'mltm-11710-잠실엘스', name: '잠실엘스', aliases: [], dong: '잠실동', lawdCd: '11710', sigungu: '송파구' },
+      { ...base, id: 'A13822004', name: '잠실엘스아파트', aliases: [], dong: '잠실동', lawdCd: '11710', sigungu: '송파구' },
+      { ...base, id: 'apt-ricenz', name: '잠실리센츠', aliases: [], dong: '잠실동', lawdCd: '11710', sigungu: '송파구' },
+    ];
+
+    expect(searchApartmentIndex(index, '잠실엘스', { limit: 10 }).map((item) => item.name))
+      .toEqual(['잠실엘스']);
+    expect(searchApartmentIndex(index, '잠실엘스아파트', { limit: 10 }).map((item) => item.name))
+      .toEqual(['잠실엘스아파트']);
+    expect(searchApartmentIndex(index, '잠실', { limit: 2 }).map((item) => item.name))
+      .toEqual(['잠실엘스', '잠실리센츠']);
+  });
 });
 
 describe('raw district snapshot response builders', () => {

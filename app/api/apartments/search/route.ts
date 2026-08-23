@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cacheLife } from 'next/cache';
 import { sql } from 'drizzle-orm';
 import { getBlogDb } from '@/lib/db/client';
 import { apartments } from '@/lib/db/schema';
@@ -20,17 +21,21 @@ const MIN_QUERY_LENGTH = 2;
 const MAX_QUERY_LENGTH = 50;
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 20;
+const SUCCESS_CACHE_CONTROL = 'public, max-age=60, s-maxage=300, stale-while-revalidate=3600';
 
 // `%`, `_`, `\\` 는 ILIKE 메타문자 — 사용자 입력은 escape 필요 (인젝션·풀스캔 방지)
 function escapeLike(input: string): string {
   return input.replace(/[\\%_]/g, (ch) => `\\${ch}`);
 }
 
-async function searchSnapshot(
-  runtime: PublicSnapshotRuntime,
-  query: string,
-  limit: number,
-): Promise<{ rows: ApartmentIndexItem[]; generatedAt: string } | null> {
+async function loadApartmentIndexSnapshot(): Promise<{
+  index: ApartmentIndexItem[];
+  generatedAt: string;
+} | null> {
+  'use cache';
+  cacheLife({ stale: 60, revalidate: 300, expire: 3600 });
+
+  const runtime: PublicSnapshotRuntime = createPublicSnapshotRuntimeFromEnv();
   const result = await runtime.getNamedArtifact<ApartmentIndexItem[]>(
     APARTMENT_INDEX_ARTIFACT_NAME,
   );
@@ -41,7 +46,7 @@ async function searchSnapshot(
       maxAgeMs: APARTMENT_INDEX_MAX_AGE_MS,
     })) return null;
     return {
-      rows: searchApartmentIndex(result.data.data, query, { limit }),
+      index: result.data.data,
       generatedAt: result.data.generatedAt,
     };
   } catch {
@@ -50,6 +55,18 @@ async function searchSnapshot(
     console.warn('[apartments/search] apartment snapshot validation failed');
     return null;
   }
+}
+
+async function searchSnapshot(
+  query: string,
+  limit: number,
+): Promise<{ rows: ApartmentIndexItem[]; generatedAt: string } | null> {
+  const snapshot = await loadApartmentIndexSnapshot();
+  if (snapshot === null) return null;
+  return {
+    rows: searchApartmentIndex(snapshot.index, query, { limit }),
+    generatedAt: snapshot.generatedAt,
+  };
 }
 
 export async function GET(req: NextRequest) {
@@ -78,11 +95,7 @@ export async function GET(req: NextRequest) {
   }
 
   // All request validation/normalization above must complete before snapshot I/O.
-  const snapshotRows = await searchSnapshot(
-    createPublicSnapshotRuntimeFromEnv(),
-    q,
-    limit,
-  );
+  const snapshotRows = await searchSnapshot(q, limit);
   if (snapshotRows !== null) {
     const results = snapshotRows.rows.map(({ id, name, sido, sigungu, dong, lawdCd }) => ({
       id,
@@ -96,6 +109,7 @@ export async function GET(req: NextRequest) {
       { results, query: q, count: results.length },
       {
         headers: {
+          'Cache-Control': SUCCESS_CACHE_CONTROL,
           'X-Naezip-Data-Source': 'snapshot',
           'X-Naezip-Snapshot-Generated-At': snapshotRows.generatedAt,
         },
@@ -136,11 +150,14 @@ export async function GET(req: NextRequest) {
       .orderBy(sql`length(${apartments.name}) ASC`)
       .limit(limit);
 
-    return NextResponse.json({
-      results: rows,
-      query:   q,
-      count:   rows.length,
-    });
+    return NextResponse.json(
+      {
+        results: rows,
+        query:   q,
+        count:   rows.length,
+      },
+      { headers: { 'Cache-Control': SUCCESS_CACHE_CONTROL } },
+    );
   } catch (error) {
     console.error('[apartments/search] DB 조회 실패:', error);
     return NextResponse.json({ error: '검색에 실패했습니다' }, { status: 500 });

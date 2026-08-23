@@ -10,9 +10,15 @@ import {
 } from 'react';
 import { Search, X, Loader2 } from 'lucide-react';
 
-const DEBOUNCE_MS = 300;
+const DEBOUNCE_MS = 180;
 const MIN_QUERY_LENGTH_FOR_FETCH = 2;
 const DROPDOWN_MAX_RESULTS = 10;
+const SEARCH_CACHE_TTL_MS = 5 * 60 * 1000;
+const SEARCH_CACHE_MAX_ENTRIES = 20;
+
+function normalizeSearchCacheKey(value: string): string {
+  return value.normalize('NFKC').replace(/\s+/g, '').toLocaleLowerCase('ko-KR');
+}
 
 export interface ApartmentSearchResult {
   id:      string;
@@ -29,6 +35,8 @@ interface AptAutocompleteProps {
   initialValue?: string;
   className?:   string;
   ariaLabel?:   string;
+  onInputIntent?: () => void;
+  onResultIntent?: (apt: ApartmentSearchResult) => void;
 }
 
 type FetchState =
@@ -44,6 +52,8 @@ export function AptAutocomplete({
   initialValue = '',
   className,
   ariaLabel = '아파트 단지 검색',
+  onInputIntent,
+  onResultIntent,
 }: AptAutocompleteProps) {
   const [query,   setQuery]   = useState(initialValue);
   const [state,   setState]   = useState<FetchState>({ kind: 'idle' });
@@ -54,6 +64,10 @@ export function AptAutocomplete({
   const inputRef     = useRef<HTMLInputElement | null>(null);
   const debounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef     = useRef<AbortController | null>(null);
+  const cacheRef     = useRef(new Map<string, {
+    expiresAt: number;
+    results: ApartmentSearchResult[];
+  }>());
 
   const listboxId = useId();
 
@@ -82,6 +96,17 @@ export function AptAutocomplete({
   const runSearch = useCallback(async (q: string) => {
     // 이전 요청 취소
     if (abortRef.current) abortRef.current.abort();
+    const key = normalizeSearchCacheKey(q);
+    const cached = cacheRef.current.get(key);
+    if (cached && cached.expiresAt > Date.now()) {
+      setState(cached.results.length === 0
+        ? { kind: 'empty' }
+        : { kind: 'ok', results: cached.results });
+      setFocusIdx(-1);
+      return;
+    }
+    if (cached) cacheRef.current.delete(key);
+
     const ctrl = new AbortController();
     abortRef.current = ctrl;
 
@@ -99,6 +124,14 @@ export function AptAutocomplete({
       const json = await res.json();
       if (abortRef.current !== ctrl) return; // stale
       const data: ApartmentSearchResult[] = Array.isArray(json.results) ? json.results : [];
+      if (cacheRef.current.size >= SEARCH_CACHE_MAX_ENTRIES) {
+        const oldestKey = cacheRef.current.keys().next().value;
+        if (oldestKey !== undefined) cacheRef.current.delete(oldestKey);
+      }
+      cacheRef.current.set(key, {
+        expiresAt: Date.now() + SEARCH_CACHE_TTL_MS,
+        results: data,
+      });
       setState(data.length === 0 ? { kind: 'empty' } : { kind: 'ok', results: data });
       setFocusIdx(-1);
     } catch (e: unknown) {
@@ -145,11 +178,15 @@ export function AptAutocomplete({
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setIsOpen(true);
-      setFocusIdx((i) => (i + 1) % results.length);
+      const nextIndex = (focusIdx + 1) % results.length;
+      setFocusIdx(nextIndex);
+      onResultIntent?.(results[nextIndex]);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setIsOpen(true);
-      setFocusIdx((i) => (i <= 0 ? results.length - 1 : i - 1));
+      const nextIndex = focusIdx <= 0 ? results.length - 1 : focusIdx - 1;
+      setFocusIdx(nextIndex);
+      onResultIntent?.(results[nextIndex]);
     } else if (e.key === 'Enter') {
       if (focusIdx >= 0 && focusIdx < results.length) {
         e.preventDefault();
@@ -197,7 +234,10 @@ export function AptAutocomplete({
           value={query}
           placeholder={placeholder}
           onChange={handleChange}
-          onFocus={() => setIsOpen(true)}
+          onFocus={() => {
+            setIsOpen(true);
+            onInputIntent?.();
+          }}
           onKeyDown={handleKeyDown}
           style={{
             width: '100%',
@@ -265,7 +305,10 @@ export function AptAutocomplete({
                 role="option"
                 aria-selected={isFocused}
                 onMouseDown={(e) => { e.preventDefault(); pick(apt); }}
-                onMouseEnter={() => setFocusIdx(i)}
+                onMouseEnter={() => {
+                  setFocusIdx(i);
+                  onResultIntent?.(apt);
+                }}
                 style={{
                   padding: '12px 14px',
                   cursor: 'pointer',
