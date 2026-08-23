@@ -3,6 +3,8 @@ import { DISTRICT_CODE } from '@/lib/district-codes';
 import { matchesQuery } from '@/lib/search-utils';
 import { getMonthList, fetchSilvMonthAllPages, revalidateForMonth } from '@/lib/molit-months';
 import { parseSilvXml, groupSilvTransactions } from '@/lib/silv-shared';
+import { createPublicSnapshotRuntimeFromEnv } from '@/lib/public-snapshots/runtime';
+import { buildPresaleResponseFromSnapshot } from '@/lib/public-snapshots/serving-artifacts';
 
 /**
  * 분양권 실거래 API — 분양권 탭.
@@ -17,13 +19,36 @@ const APT_NAME_MAX_LEN = 50;
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const district = searchParams.get('district')?.trim() || '강남구';
-  const months   = Math.min(parseInt(searchParams.get('months') ?? '3') || 3, 36);
+  const parsedMonths = parseInt(searchParams.get('months') ?? '3', 10);
+  const months   = Number.isFinite(parsedMonths)
+    ? Math.min(Math.max(parsedMonths, 1), 36)
+    : 3;
   const aptName  = (searchParams.get('aptName') ?? searchParams.get('q') ?? '').trim().slice(0, APT_NAME_MAX_LEN);
   const limit    = Math.min(Math.max(parseInt(searchParams.get('limit') ?? '60') || 60, 1), 100);
 
   const lawdCd = DISTRICT_CODE[district];
   if (!lawdCd) {
     return NextResponse.json({ error: '지원하지 않는 구: ' + district }, { status: 400 });
+  }
+
+  // 공개 스냅샷 hit는 API key 확인보다 먼저 처리한다. 이렇게 해야
+  // 공공 API 장애·한도 중에도 직전 검증본을 계속 제공할 수 있다.
+  try {
+    const snapshot = await createPublicSnapshotRuntimeFromEnv().getDistrictSnapshot(lawdCd);
+    if (snapshot.status === 'success') {
+      const served = buildPresaleResponseFromSnapshot(snapshot.data, { months, limit, aptName });
+      if (served.hit) {
+        return NextResponse.json(served.body, {
+          headers: {
+            'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
+            'X-Naezip-Data-Source': 'snapshot',
+            'X-Naezip-Snapshot-Generated-At': snapshot.data.generatedAt,
+          },
+        });
+      }
+    }
+  } catch {
+    // 스냅샷 변환 실패는 기존 공공 API 조회를 막지 않는다.
   }
 
   const rawKey = process.env.PUBLIC_DATA_API_KEY;
@@ -34,11 +59,15 @@ export async function GET(req: NextRequest) {
   const apiKey = decodeURIComponent(rawKey);
 
   try {
-    const xmls = await Promise.all(
-      getMonthList(months).map((yyyymm) =>
-        fetchSilvMonthAllPages(apiKey, lawdCd, yyyymm, revalidateForMonth(yyyymm)).catch(() => '')
+    const monthList = getMonthList(months);
+    const settled = await Promise.allSettled(
+      monthList.map((yyyymm) =>
+        fetchSilvMonthAllPages(apiKey, lawdCd, yyyymm, revalidateForMonth(yyyymm))
       )
     );
+    const failedMonths = monthList.filter((_, index) => settled[index].status === 'rejected');
+    const xmls = settled.flatMap((result) => result.status === 'fulfilled' ? [result.value] : []);
+    if (xmls.length === 0) throw new Error('all presale month requests failed');
 
     const transactions = xmls.flatMap((xml) => parseSilvXml(xml, district));
 
@@ -54,9 +83,17 @@ export async function GET(req: NextRequest) {
       // 페이로드 절감 — 카드는 최근 계약만 사용
       .map((g) => ({ ...g, txCount: g.transactions.length, transactions: g.transactions.slice(0, 10) }));
 
+    const isPartial = failedMonths.length > 0;
     return NextResponse.json(
-      { data: result, district, months, total: transactions.length },
-      { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } }
+      {
+        data: result,
+        district,
+        months,
+        total: transactions.length,
+        status: isPartial ? 'partial' : 'ok',
+        ...(isPartial ? { failedMonths } : {}),
+      },
+      { headers: { 'Cache-Control': isPartial ? 'no-store' : 'public, s-maxage=3600, stale-while-revalidate=86400' } }
     );
   } catch (error) {
     console.error('[transactions/silv API] 조회 실패:', error);

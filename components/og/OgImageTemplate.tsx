@@ -6,6 +6,7 @@
  */
 
 import type { RegionDetail } from '@/lib/types';
+import { buildRegionHeadline } from '@/lib/region-copy';
 
 const COLORS = {
   bg: '#FAFAFA',
@@ -17,11 +18,11 @@ const COLORS = {
 } as const;
 
 function getLevelLabel(score: number): string {
-  if (score < 2.0) return '최상급지';
-  if (score < 2.5) return '상급지';
-  if (score < 3.0) return '중상급지';
-  if (score < 3.5) return '중급지';
-  return '중하급지';
+  if (score < 2.0) return '자체 기준 최상위';
+  if (score < 2.5) return '자체 기준 상위';
+  if (score < 3.0) return '자체 기준 중상위';
+  if (score < 3.5) return '자체 기준 중위';
+  return '자체 기준 중하위';
 }
 
 interface Props {
@@ -29,7 +30,7 @@ interface Props {
 }
 
 export function OgImageTemplate({ region }: Props) {
-  const headline = region.insight.headline || `${region.name} 입지 분석`;
+  const headline = buildRegionHeadline(region);
   const level = getLevelLabel(region.score);
 
   return (
@@ -106,20 +107,19 @@ export function OgImageTemplate({ region }: Props) {
         {region.name}
       </div>
 
-      {/* 해설 헤드라인 */}
+      {/* 구조화 지표 헤드라인 */}
       <div
         style={{
           fontSize: '42px',
           fontWeight: 500,
           color: COLORS.accent,
-          fontStyle: 'italic',
           lineHeight: 1.3,
           marginBottom: '50px',
           display: 'flex',
           maxWidth: '1040px',
         }}
       >
-        &ldquo;{headline}&rdquo;
+        {headline}
       </div>
 
       {/* 하단 메타 */}
@@ -149,7 +149,7 @@ export function OgImageTemplate({ region }: Props) {
         </span>
         <span style={{ fontSize: '22px', color: COLORS.line }}>·</span>
         <span style={{ fontSize: '22px', fontWeight: 400, color: COLORS.inkSoft }}>
-          입지점수
+          자체 입지점수 · 낮을수록 상위
         </span>
         <span style={{ fontSize: '36px', fontWeight: 700, color: COLORS.accent }}>
           {region.score.toFixed(2)}

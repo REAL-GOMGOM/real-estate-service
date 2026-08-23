@@ -1,6 +1,6 @@
 /**
  * Dynamic OG Image for /region/[id] — Phase 5c-7 Stage 3
- * 126개 지역마다 고유 OG 이미지 생성.
+ * location-scores에 등록된 각 지역의 고유 OG 이미지 생성.
  */
 
 import { ImageResponse } from 'next/og';
@@ -9,7 +9,7 @@ import { OgImageTemplate } from '@/components/og/OgImageTemplate';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-export const alt = '내집(NAEZIP) 지역 입지 분석';
+export const alt = '내집(NAEZIP) 지역별 자체 입지 지표';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 

@@ -22,6 +22,12 @@ export interface SchoolData {
   science_high_rate: number | null;
   foreign_high_rate: number | null;
   autonomous_high_rate: number | null;
+  // ── 학교알리미 공시 확장 (2026-07) — 구버전 응답 호환을 위해 optional ──
+  class_count?: number | null;
+  per_class?: number | null;
+  move_in?: number | null;
+  move_out?: number | null;
+  hs_type?: string | null;
 }
 
 interface Props {
@@ -185,7 +191,36 @@ export default function SchoolDetailPanel({ school, nearbySchools, onClose, embe
           {school.coedu_type && (
             <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>{school.coedu_type}</span>
           )}
+          {school.hs_type && school.hs_type !== '일반고등학교' && (
+            <span style={{
+              fontSize: '11px', fontWeight: 700, padding: '1px 7px', borderRadius: '5px',
+              backgroundColor: '#EBC15C22', color: '#B8860B',
+            }}>
+              {school.hs_type.replace('고등학교', '고')}
+            </span>
+          )}
         </div>
+        {/* 학교알리미 공시 확장 — 학급당(과밀)·전출입(수요 프록시) */}
+        {(school.per_class != null || school.move_in != null) && (
+          <div style={{ display: 'flex', gap: '14px', marginTop: '8px', flexWrap: 'wrap' }}>
+            {school.per_class != null && (
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                학급당 <strong style={{ fontFamily: 'Roboto Mono, monospace' }}>{school.per_class}</strong>명
+                {school.class_count != null && ` · ${school.class_count}학급`}
+              </span>
+            )}
+            {school.move_in != null && school.move_out != null && (
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                연간 전입 {school.move_in} / 전출 {school.move_out}
+                {school.move_in - school.move_out !== 0 && (
+                  <strong style={{ color: school.move_in > school.move_out ? 'var(--up-color, #C92F2F)' : 'var(--text-dim)' }}>
+                    {' '}({school.move_in > school.move_out ? '+' : ''}{school.move_in - school.move_out})
+                  </strong>
+                )}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 특목고 진학률 (중학교만) */}

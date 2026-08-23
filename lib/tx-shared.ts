@@ -76,13 +76,17 @@ export function fmtContractDate(date: string): string {
   return d ? `${yy}.${m}.${d}` : `${yy}.${m}`;
 }
 
-/** 신고가 판정 — 동일 면적(±6㎡) 내 최신 거래가 기간 최고가 */
+/** 조회 기간 안에서 최신 거래가 동일 면적(±6㎡)의 종전 최고가를 엄격히 경신했는지 판정. */
 export function detectNewHigh(apt: AptGroup): boolean {
   if (apt.transactions.length < 2) return false;
   const sorted = [...apt.transactions].sort((a, b) => b.date.localeCompare(a.date));
   const latest = sorted[0];
-  const same   = apt.transactions.filter((t) => Math.abs(t.area - latest.area) <= 6);
-  return same.length > 1 && latest.price >= Math.max(...same.map((t) => t.price));
+  const prior = apt.transactions.filter(
+    (transaction) =>
+      transaction.date < latest.date &&
+      Math.abs(transaction.area - latest.area) <= 6,
+  );
+  return prior.length > 0 && latest.price > Math.max(...prior.map((t) => t.price));
 }
 
 /**

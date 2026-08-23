@@ -24,7 +24,10 @@ import { transactions, rentTransactions, type NewTransaction, type NewRentTransa
 
 export const maxDuration = 60;
 
-const SYNC_MONTHS = 1;               // 당월 재적재 (과거는 백필 담당)
+// 당월+전월 재적재 (더 과거는 백필 담당) — 신고기한 30일 구조상 전월 계약의
+// 지연신고·해제가 익월 내내 공개되므로, 당월만 돌리면 전월 원장이 동결된다
+// (2026-08-02 수정: 7월 말 사고 복구 중 발견 — 매달 말 데이터 구멍의 원인).
+const SYNC_MONTHS = 2;
 const CONCURRENCY = 8;
 const TIME_BUDGET_MS = 55_000;       // maxDuration 60s 안전 마진
 const TRADE_RETENTION_MONTHS = 13;   // 매매 — 최근 약 1년
@@ -101,8 +104,11 @@ export async function GET(req: NextRequest) {
     return result;
   }
 
-  // ── 매매 (항상 처음부터 — 주 데이터) ──
-  const trade = await runPhase(0, async (sigungu, lawdCd, yyyymm) => {
+  // ── 매매 (주 데이터) ──
+  // SYNC_MONTHS=2 로 잡이 2배 — 예산 초과 시 스킵 꼬리가 특정 구에 고정되지
+  // 않도록 전월세와 동일한 일별 시작점 로테이션 적용 (다음 날 우선 처리).
+  const tradeOffset = new Date().getUTCDate() % districts.length;
+  const trade = await runPhase(tradeOffset, async (sigungu, lawdCd, yyyymm) => {
     const xml = await fetchTradeMonthAllPages(apiKey, lawdCd, yyyymm, revalidateForMonth(yyyymm));
     const rows: NewTransaction[] = [];
     for (const item of parseTradeXml(xml)) {

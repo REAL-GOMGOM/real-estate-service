@@ -28,6 +28,7 @@ interface AptAutocompleteProps {
   placeholder?: string;
   initialValue?: string;
   className?:   string;
+  ariaLabel?:   string;
 }
 
 type FetchState =
@@ -42,6 +43,7 @@ export function AptAutocomplete({
   placeholder = '단지명 입력 (예: 잠실엘스)',
   initialValue = '',
   className,
+  ariaLabel = '아파트 단지 검색',
 }: AptAutocompleteProps) {
   const [query,   setQuery]   = useState(initialValue);
   const [state,   setState]   = useState<FetchState>({ kind: 'idle' });
@@ -111,13 +113,16 @@ export function AptAutocomplete({
     setIsOpen(true);
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    // 새 검색어의 debounce 동안 직전 응답이 도착해 낡은 후보를 노출하지 않도록
+    // 입력이 바뀌는 즉시 진행 중 요청을 무효화한다.
+    if (abortRef.current) abortRef.current.abort();
+    abortRef.current = null;
 
     if (v.trim().length < MIN_QUERY_LENGTH_FOR_FETCH) {
-      // 진행 중인 요청 취소·idle
-      if (abortRef.current) abortRef.current.abort();
       setState({ kind: 'idle' });
       return;
     }
+    setState({ kind: 'loading' });
     debounceRef.current = setTimeout(() => runSearch(v.trim()), DEBOUNCE_MS);
   }
 
@@ -154,10 +159,12 @@ export function AptAutocomplete({
   }
 
   function clearInput() {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
     setQuery('');
     setState({ kind: 'idle' });
     setFocusIdx(-1);
     if (abortRef.current) abortRef.current.abort();
+    abortRef.current = null;
     inputRef.current?.focus();
   }
 
@@ -182,6 +189,7 @@ export function AptAutocomplete({
           ref={inputRef}
           type="text"
           role="combobox"
+          aria-label={ariaLabel}
           aria-autocomplete="list"
           aria-expanded={showDropdown}
           aria-controls={listboxId}

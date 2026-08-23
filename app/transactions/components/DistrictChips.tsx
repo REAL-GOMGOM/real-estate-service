@@ -12,7 +12,7 @@ import type { DistrictStat } from '../types';
 
 interface DistrictChipsProps {
   districts: string[];             // 그룹 내 구 목록 (fallback 순서)
-  stats:     DistrictStat[] | null; // API 결과 (건수순 정렬) — null 이면 로딩
+  stats?:    DistrictStat[] | null; // API 결과 (건수순 정렬) — 없거나 비면 fallback
   active:    string;
   onPick:    (district: string) => void;
 }
@@ -22,8 +22,9 @@ function shortName(district: string): string {
 }
 
 export default function DistrictChips({ districts, stats, active, onPick }: DistrictChipsProps) {
-  // stats 있으면 건수순, 없으면 정의 순서
+  // 유효한 통계가 있으면 건수순, 없거나 빈 배열이면 정의 순서
   const items: { district: string; count: number | null; newHighs: number }[] = stats
+    && stats.length > 0
     ? stats.map((s) => ({ district: s.district, count: s.count, newHighs: s.newHighs }))
     : districts.map((d) => ({ district: d, count: null, newHighs: 0 }));
 

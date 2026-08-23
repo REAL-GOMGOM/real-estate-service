@@ -10,6 +10,8 @@ const MONO = "'Roboto Mono', var(--font-mono, monospace)";
 
 interface PriceChangeData {
   period: string;
+  frequency: 'monthly';
+  type: 'sale' | 'rent';
   summary: { nationwide: number; capital_area: number; non_capital: number };
   regions: { code: string; name: string; change_rate: number; direction: string }[];
 }
@@ -34,8 +36,24 @@ interface VolumeItem {
 }
 
 interface RankingData {
+  status: 'ok' | 'partial';
+  note?: string;
+  period: string;
+  area: string;
+  updatedAt: string;
+  coverage: {
+    source: string;
+    districtCount: number;
+    transactionCount: number;
+    from: string;
+    toExclusive: string;
+    firstDealDate: string | null;
+    lastDealDate: string | null;
+    label: string;
+  };
   topPrice: Record<string, TopPriceItem[]>;
   volume: Record<string, VolumeItem[]>;
+  newHigh: Record<string, unknown[]>;
   priceChange: {
     regions: { rank: number; name: string; changeRate: number; direction: string }[];
     seoulDistricts: { rank: number; name: string; changeRate: number; direction: string }[];
@@ -48,11 +66,60 @@ interface CofixData {
   name: string;
 }
 
+const ALL_REGISTERED = '등록 표본 전체';
+
 /* ── Helpers ── */
 
 function fmtRate(n: number): string {
   const sign = n > 0 ? '+' : '';
   return `${sign}${n.toFixed(2)}%`;
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function isArrayMap(value: unknown, isItem: (item: unknown) => boolean): boolean {
+  return isObject(value)
+    && Object.values(value).every((items) => Array.isArray(items) && items.every(isItem));
+}
+
+function isRankingData(value: unknown): value is RankingData {
+  if (!isObject(value) || (value.status !== 'ok' && value.status !== 'partial')) return false;
+  if (value.note !== undefined && typeof value.note !== 'string') return false;
+  const coverage = value.coverage;
+  const priceChange = value.priceChange;
+  if (!isObject(coverage)
+    || typeof coverage.source !== 'string'
+    || !isFiniteNumber(coverage.districtCount)
+    || !isFiniteNumber(coverage.transactionCount)
+    || typeof coverage.from !== 'string'
+    || typeof coverage.toExclusive !== 'string'
+    || typeof coverage.label !== 'string') return false;
+  if (!isArrayMap(value.topPrice, (item) => isObject(item)
+    && typeof item.aptName === 'string'
+    && typeof item.district === 'string'
+    && typeof item.priceFormatted === 'string')) return false;
+  if (!isArrayMap(value.volume, (item) => isObject(item)
+    && typeof item.aptName === 'string'
+    && typeof item.district === 'string'
+    && isFiniteNumber(item.count)
+    && typeof item.avgPriceFormatted === 'string')) return false;
+  if (!isArrayMap(value.newHigh, isObject) || !isObject(priceChange)) return false;
+  return Array.isArray(priceChange.regions)
+    && Array.isArray(priceChange.seoulDistricts)
+    && priceChange.seoulDistricts.every((item) => isObject(item)
+      && typeof item.name === 'string'
+      && isFiniteNumber(item.changeRate));
+}
+
+function formatCoverageDate(value: string): string {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return match ? `${match[1]}.${match[2]}.${match[3]}` : value;
 }
 
 function rateColor(n: number): string {
@@ -61,30 +128,10 @@ function rateColor(n: number): string {
   return 'var(--text-muted)';
 }
 
-function getMarketStatus(rate: number): { emoji: string; text: string } {
-  if (rate >= 0.5) return { emoji: '\uD83D\uDD25', text: '뚜렷한 상승세' };
-  if (rate >= 0.3) return { emoji: '\uD83D\uDCC8', text: '상승세' };
-  if (rate >= 0.1) return { emoji: '\uD83D\uDCC8', text: '완만한 상승' };
-  if (rate > -0.1) return { emoji: '\u27A1\uFE0F', text: '보합' };
-  if (rate > -0.3) return { emoji: '\uD83D\uDCC9', text: '완만한 하락' };
-  if (rate > -0.5) return { emoji: '\uD83D\uDCC9', text: '하락세' };
-  return { emoji: '\uD83E\uDDCA', text: '뚜렷한 하락세' };
+// 같은 화면의 세 집계값 중 상대 위치만 표시한다(시장 판정 임계값 아님).
+function rateToPosition(rate: number, maxAbs: number): number {
+  return 50 + (rate / Math.max(maxAbs, 0.01)) * 50;
 }
-
-// 변동률 → 게이지 위치 (0~100%)
-function rateToPosition(rate: number): number {
-  return Math.max(0, Math.min(100, ((rate + 1.5) / 3) * 100));
-}
-
-// 시도명 → 첫 번째 구 district key (간이 매핑)
-const REGION_FIRST_DISTRICT: Record<string, string> = {
-  '서울': '강남구', '부산': '부산 해운대구', '대구': '대구 수성구',
-  '인천': '인천 연수구', '광주': '광주 북구', '대전': '대전 유성구',
-  '울산': '울산 남구', '세종': '세종시', '경기': '성남시 분당구',
-  '강원': '춘천시', '충북': '청주시 흥덕구', '충남': '천안시 서북구',
-  '전북': '전주시 완산구', '전남': '순천시', '경북': '구미시',
-  '경남': '창원시 성산구', '제주': '제주시',
-};
 
 // ranking topPrice 키 → 짧은 시도명
 const REGION_SHORT: Record<string, string> = {
@@ -92,7 +139,7 @@ const REGION_SHORT: Record<string, string> = {
   '인천광역시': '인천', '광주광역시': '광주', '대전광역시': '대전',
   '울산광역시': '울산', '세종특별자치시': '세종', '경기도': '경기',
   '강원특별자치도': '강원', '충청북도': '충북', '충청남도': '충남',
-  '전라북도': '전북', '전라남도': '전남', '경상북도': '경북',
+  '전북특별자치도': '전북', '전라남도': '전남', '경상북도': '경북',
   '경상남도': '경남', '제주특별자치도': '제주',
 };
 
@@ -105,23 +152,48 @@ export default function MarketDashboard() {
   const [cofix, setCofix] = useState<CofixData | null>(null);
   const [priceErr, setPriceErr] = useState(false);
   const [rankErr, setRankErr] = useState(false);
+  const [cofixErr, setCofixErr] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    fetch('/api/price-change?type=sale')
-      .then((r) => r.json())
-      .then((d) => { if (d.regions) setPriceData(d); else setPriceErr(true); })
-      .catch(() => setPriceErr(true));
+    const controller = new AbortController();
+    const isAbort = (error: unknown) => controller.signal.aborted
+      || (error instanceof DOMException && error.name === 'AbortError');
 
-    fetch('/api/ranking?period=3&area=all')
-      .then((r) => r.json())
-      .then((d) => { if (d.topPrice) setRanking(d); else setRankErr(true); })
-      .catch(() => setRankErr(true));
+    fetch('/api/price-change?type=sale', { signal: controller.signal })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok || data.frequency !== 'monthly' || !Array.isArray(data.regions)) {
+          throw new Error(data.error || `가격지수 API HTTP ${response.status}`);
+        }
+        return data as PriceChangeData;
+      })
+      .then(setPriceData)
+      .catch((error) => { if (!isAbort(error)) setPriceErr(true); });
 
-    fetch('/api/loan/cofix')
-      .then((r) => r.json())
-      .then((d) => { if (d.rate) setCofix(d); })
-      .catch(() => {});
+    fetch('/api/ranking?period=3&area=all', { signal: controller.signal })
+      .then(async (response) => {
+        const data: unknown = await response.json().catch(() => null);
+        if (!response.ok || !isRankingData(data)) {
+          throw new Error(`랭킹 API HTTP ${response.status}`);
+        }
+        return data;
+      })
+      .then(setRanking)
+      .catch((error) => { if (!isAbort(error)) setRankErr(true); });
+
+    fetch('/api/loan/cofix', { signal: controller.signal })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok || typeof data.rate !== 'number' || !Number.isFinite(data.rate)) {
+          throw new Error(data.error || `대출평균금리 API HTTP ${response.status}`);
+        }
+        return data as CofixData;
+      })
+      .then(setCofix)
+      .catch((error) => { if (!isAbort(error)) setCofixErr(true); });
+
+    return () => controller.abort();
   }, []);
 
   function handleSearch() {
@@ -131,8 +203,8 @@ export default function MarketDashboard() {
   }
 
   const seoulRegion = priceData?.regions.find((r) => r.code === '11');
-  const topNation = ranking?.topPrice?.['전국']?.[0];
-  const topVolume = ranking?.volume?.['전국']?.[0];
+  const topNation = ranking?.topPrice?.[ALL_REGISTERED]?.[0];
+  const topVolume = ranking?.volume?.[ALL_REGISTERED]?.[0];
   const topDistrict = ranking?.priceChange?.seoulDistricts?.[0];
 
   return (
@@ -154,29 +226,49 @@ export default function MarketDashboard() {
         <section style={{ marginBottom: 48 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }} className="market-stat-grid">
             {priceData && seoulRegion ? (
-              <StatCard label="서울 주간" value={fmtRate(seoulRegion.change_rate)} color={rateColor(seoulRegion.change_rate)} />
+              <StatCard label="서울 월간" value={fmtRate(seoulRegion.change_rate)} sub={priceData.period} color={rateColor(seoulRegion.change_rate)} />
             ) : <Skeleton height={110} />}
 
             {priceData ? (
-              <StatCard label="수도권 주간" value={fmtRate(priceData.summary.capital_area)} color={rateColor(priceData.summary.capital_area)} />
+              <StatCard label="수도권 월간" value={fmtRate(priceData.summary.capital_area)} sub={priceData.period} color={rateColor(priceData.summary.capital_area)} />
             ) : <Skeleton height={110} />}
 
             {ranking && topNation ? (
-              <StatCard label="최고가 거래" value={topNation.priceFormatted} sub={topNation.aptName} color="var(--text-strong)" />
+              <StatCard label="표본 최고가" value={topNation.priceFormatted} sub={topNation.aptName} color="var(--text-strong)" />
             ) : rankErr ? <ErrorCard text="랭킹 데이터 없음" small /> : <Skeleton height={110} />}
 
             {cofix ? (
-              <StatCard label="COFIX" value={`${cofix.rate}%`} color="var(--text-strong)" />
+              <StatCard
+                label="예금은행 대출평균금리"
+                value={`${cofix.rate}%`}
+                sub={`${cofix.period} · 한국은행 ECOS`}
+                color="var(--text-strong)"
+              />
+            ) : cofixErr ? (
+              <ErrorCard text="대출평균금리 데이터 없음" small />
             ) : (
-              <StatCard label="기준금리" value="2.75%" color="var(--text-strong)" />
+              <Skeleton height={110} />
             )}
           </div>
+          {ranking?.status === 'partial' && (
+            <p
+              role="alert"
+              style={{
+                margin: '12px 0 0', padding: '10px 12px', borderRadius: 10,
+                border: '1px solid #D99B3D66', backgroundColor: '#D99B3D14',
+                color: '#A86613', fontSize: 12, lineHeight: 1.6,
+              }}
+            >
+              {ranking.note ?? '랭킹 부가 지표가 부분 집계되었습니다.'}
+              {' '}{ranking.coverage.label}, {ranking.coverage.transactionCount.toLocaleString()}건의 실거래 범위는 유지됩니다.
+            </p>
+          )}
         </section>
 
-        {/* ═══ ③ 시도별 시세 카드 ═══ */}
+        {/* ═══ ③ 시도별 월간 가격지수 카드 ═══ */}
         <section style={{ marginBottom: 48 }}>
           <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 20 }}>
-            시도별 시세
+            시도별 월간 가격지수 변동률
           </h2>
           {priceData ? (
             <RegionCards priceData={priceData} ranking={ranking} />
@@ -187,12 +279,16 @@ export default function MarketDashboard() {
           )}
         </section>
 
-        {/* ═══ ④ 이번 주 주목할 거래 ═══ */}
+        {/* ═══ ④ 등록 표본의 최근 3개월 주목 거래 ═══ */}
         {ranking && (topNation || topVolume || topDistrict) && (
           <section style={{ marginBottom: 48 }}>
             <h2 style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-strong)', marginBottom: 20 }}>
-              이번 주 주목할 거래
+              등록 표본의 최근 3개월 주목 거래
             </h2>
+            <p style={{ fontSize: 12, color: 'var(--text-dim)', margin: '-12px 0 16px' }}>
+              {ranking.coverage.label} · {ranking.coverage.transactionCount.toLocaleString()}건
+              {' · '}{formatCoverageDate(ranking.coverage.from)} 이상 ~ {formatCoverageDate(ranking.coverage.toExclusive)} 미만
+            </p>
             <div style={{
               display: 'flex', borderRadius: 16,
               backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
@@ -201,7 +297,7 @@ export default function MarketDashboard() {
               {topNation && (
                 <HighlightItem
                   icon={<Trophy size={16} />}
-                  label="최고가"
+                  label="표본 최고가"
                   value={`${topNation.aptName} ${topNation.priceFormatted}`}
                   onClick={() => router.push('/ranking')}
                 />
@@ -209,7 +305,7 @@ export default function MarketDashboard() {
               {topVolume && (
                 <HighlightItem
                   icon={<Flame size={16} />}
-                  label="최다거래"
+                  label="표본 최다거래"
                   value={`${topVolume.aptName} ${topVolume.count}건`}
                   border
                   onClick={() => router.push('/ranking')}
@@ -276,27 +372,25 @@ export default function MarketDashboard() {
 
 function TemperatureGauge({ data }: { data: PriceChangeData }) {
   const capital = data.summary.capital_area;
-  const status = getMarketStatus(capital);
   const items = [
     { label: '전국', rate: data.summary.nationwide },
     { label: '수도권', rate: data.summary.capital_area },
     { label: '지방', rate: data.summary.non_capital },
   ];
-
-  const capDesc = capital > 0 ? '상승세' : capital < 0 ? '하락세' : '보합세';
+  const maxAbs = Math.max(...items.map((item) => Math.abs(item.rate)), 0.01);
 
   return (
     <div style={{
       padding: 32, borderRadius: 20,
       backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)',
     }}>
-      {/* 상태 텍스트 */}
+      {/* 원자료 집계값 */}
       <div style={{ marginBottom: 24 }}>
         <p style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-strong)', margin: '0 0 6px' }}>
-          {status.emoji} {status.text}
+          수도권 월간 변동률 {fmtRate(capital)}
         </p>
         <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: 0 }}>
-          수도권({fmtRate(capital)}) 중심 {capDesc} &middot; {data.period}
+          월간 {data.period} · 아래 위치는 세 집계값 안의 상대 비교이며 상승·하락 적합성 판정이 아닙니다.
         </p>
       </div>
 
@@ -317,7 +411,7 @@ function TemperatureGauge({ data }: { data: PriceChangeData }) {
             }}>
               <div style={{
                 position: 'absolute', top: -3,
-                left: `${rateToPosition(item.rate)}%`,
+                left: `${rateToPosition(item.rate, maxAbs)}%`,
                 transform: 'translateX(-50%)',
                 width: 14, height: 14, borderRadius: 7,
                 backgroundColor: rateColor(item.rate),
@@ -368,7 +462,6 @@ function RegionCards({ priceData, ranking }: { priceData: PriceChangeData; ranki
         {regions.map((region) => {
           const fullName = Object.keys(REGION_SHORT).find((k) => REGION_SHORT[k] === region.name);
           const topItems = fullName ? ranking?.topPrice?.[fullName]?.slice(0, 3) : undefined;
-          const firstDistrict = REGION_FIRST_DISTRICT[region.name];
 
           return (
             <div key={region.code} style={{
@@ -410,18 +503,9 @@ function RegionCards({ priceData, ranking }: { priceData: PriceChangeData; ranki
                 )}
               </div>
 
-              {/* 자세히 */}
-              {firstDistrict && (
-                <button
-                  onClick={() => window.location.href = `/chart?district=${encodeURIComponent(firstDistrict)}`}
-                  style={{
-                    marginTop: 10, padding: 0, border: 'none', background: 'none',
-                    fontSize: 12, fontWeight: 600, color: 'var(--accent)', cursor: 'pointer',
-                  }}
-                >
-                  자세히 &rarr;
-                </button>
-              )}
+              <p style={{ margin: '10px 0 0', fontSize: 10.5, color: 'var(--text-dim)' }}>
+                시도 집계와 등록 표본 거래를 함께 표시
+              </p>
             </div>
           );
         })}

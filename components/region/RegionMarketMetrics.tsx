@@ -46,18 +46,18 @@ export function RegionMarketMetrics({ region }: Props) {
     {
       label: '평당가',
       value: formatKrwManwon(metrics.pricePerPyeong),
-      sub: '만원 / 평',
+      sub: '만원/3.3㎡ · 기준 시점 혼합',
     },
     {
       label: '2025 연간 변동',
       value: formatPercent(metrics.annualChange2025),
-      sub: '누계 기준',
+      sub: '2025년 수록 누계값',
       color: getChangeColor(metrics.annualChange2025),
     },
     {
-      label: '주간 변동',
+      label: '수록 주간 변동',
       value: formatPercent(metrics.weeklyChange2026),
-      sub: '2026 직전 주',
+      sub: '2026년 4월 연구표 수록값',
       color: getChangeColor(metrics.weeklyChange2026),
     },
     {
@@ -66,7 +66,7 @@ export function RegionMarketMetrics({ region }: Props) {
         metrics.jeonseRatio != null
           ? `${metrics.jeonseRatio.toFixed(1)}%`
           : '—',
-      sub: 'KB 기준',
+      sub: 'KB 참조 · 세부 기준일 상이',
     },
     {
       label: '미분양',
@@ -74,18 +74,18 @@ export function RegionMarketMetrics({ region }: Props) {
         metrics.unsold != null
           ? `${metrics.unsold.toLocaleString('ko-KR')}`
           : '—',
-      sub: '세대',
+      sub: '세대 · 세부 기준일 상이',
     },
     {
       label: '인구 순이동',
       value: formatPopulation(metrics.populationFlow),
-      sub: '명 / 월',
+      sub: '명/월 · 수록 월값',
       color: getPopulationColor(metrics.populationFlow),
     },
     {
       label: '거래량 변동',
       value: formatPercent(metrics.tradeVolumeChange),
-      sub: '전년 동기 대비',
+      sub: '수록 전년 동기 대비값',
       color: getChangeColor(metrics.tradeVolumeChange),
     },
   ];
@@ -130,6 +130,10 @@ export function RegionMarketMetrics({ region }: Props) {
           </div>
         ))}
       </div>
+      <p className="mt-4 text-xs leading-relaxed" style={{ color: 'var(--text-dim)' }}>
+        데이터셋 버전 {region.month}. 카드별 실제 관측일과 출처 주기가 달라 현재 실시간
+        시세로 해석할 수 없습니다. 최신 계약은 실거래 조회에서 별도로 확인하세요.
+      </p>
     </section>
   );
 }

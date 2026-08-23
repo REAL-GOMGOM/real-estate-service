@@ -3,8 +3,8 @@
 import { Calendar, Home, Users } from 'lucide-react';
 import { useMemo } from 'react';
 import type { SubscriptionItem } from '@/lib/types';
-import dayjs from 'dayjs';
 import { useMounted } from '@/hooks/useMounted';
+import { formatSubscriptionDday } from '@/lib/subscription-date';
 
 interface Props {
   items: SubscriptionItem[];
@@ -17,23 +17,15 @@ const STATUS_CONFIG = {
   closed:   { label: '청약 마감', color: 'var(--text-dim)', bg: 'rgba(100,116,139,0.12)'},
 };
 
-function formatPrice(manwon: number | null): string {
-  if (!manwon) return '미정';
-  return `${(manwon / 10000).toFixed(0)}억`;
-}
-
-function getDday(endDate: string, status: string, now: ReturnType<typeof dayjs>): string {
+function getDday(endDate: string, status: string, now: Date): string {
   if (status === 'closed') return '-';
-  const diff = dayjs(endDate).diff(now, 'day');
-  if (diff < 0) return '마감';
-  if (diff === 0) return 'D-day';
-  return `D-${diff}`;
+  return formatSubscriptionDday(endDate, now) ?? '일정 확인';
 }
 
 export default function SubscriptionTable({ items, onSelect }: Props) {
   // SSR/하이드레이션에서는 고정 기준일, 마운트 후 실제 현재 시각으로 파생
   const mounted = useMounted();
-  const now = useMemo(() => (mounted ? dayjs() : dayjs('2000-01-01')), [mounted]);
+  const now = useMemo(() => (mounted ? new Date() : new Date('2000-01-01T00:00:00.000Z')), [mounted]);
 
   if (items.length === 0) {
     return (
@@ -105,24 +97,21 @@ export default function SubscriptionTable({ items, onSelect }: Props) {
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                 <Home size={11} style={{ color: 'var(--text-dim)', flexShrink: 0 }} />
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                  {item.totalUnits.toLocaleString()}세대
+                  {item.totalUnits !== null ? `${item.totalUnits.toLocaleString()}세대` : '세대수 미표기'}
                 </span>
               </div>
-              {item.competitionRate !== null ? (
+              {item.competitionRates.length > 0 ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                   <Users size={11} style={{ color: '#2E7A4C', flexShrink: 0 }} />
                   <span style={{ fontSize: '12px', fontWeight: 700, color: '#2E7A4C', whiteSpace: 'nowrap' }}>
-                    {item.competitionRate}:1
+                    {item.competitionRates.length}개 주택형 공시
                   </span>
                 </div>
               ) : (
                 <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>경쟁률 미발표</span>
               )}
-              <span style={{
-                fontSize: '13px', fontWeight: 700,
-                fontFamily: 'Roboto Mono, monospace', color: '#F0A24B', whiteSpace: 'nowrap',
-              }}>
-                {formatPrice(item.minPrice)} ~ {formatPrice(item.maxPrice)}
+              <span style={{ fontSize: '12px', color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>
+                분양가: 청약홈 공고 확인
               </span>
             </div>
           </div>

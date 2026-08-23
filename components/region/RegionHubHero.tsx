@@ -1,7 +1,11 @@
 import Link from 'next/link';
 import { BRAND } from '@/lib/design-tokens';
 
-export function RegionHubHero() {
+interface RegionHubHeroProps {
+  regionCount: number;
+}
+
+export function RegionHubHero({ regionCount }: RegionHubHeroProps) {
   return (
     <section
       className="py-12 md:py-16"
@@ -14,10 +18,10 @@ export function RegionHubHero() {
               className="text-3xl md:text-5xl font-bold"
               style={{ color: BRAND.ink, letterSpacing: '-0.02em' }}
             >
-              전국 <span style={{ color: BRAND.primary }}>126개 지역</span> 입지 분석
+              등록 <span style={{ color: BRAND.primary }}>{regionCount}개 지역</span> 입지 지표
             </h1>
             <p className="mt-3 text-sm md:text-base" style={{ color: BRAND.inkSoft }}>
-              점수·시장 추세·AI 해설을 한눈에
+              자체 산식 점수와 수록 시장 지표를 한눈에
             </p>
           </div>
           <Link

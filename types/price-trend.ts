@@ -1,9 +1,20 @@
 /** 상승률 대시보드 관련 타입 */
 
-export type TrendPeriod = 'daily' | 'weekly' | 'quarterly' | 'half_yearly' | 'yearly';
+export type TrendPeriod = 'six_months' | 'one_year' | 'eighteen_months' | 'two_years';
 
 export interface PriceTrendData {
+  status: 'ok' | 'partial';
   period: TrendPeriod;
+  frequency: 'monthly';
+  metric: 'change_from_first_month_pct';
+  source: '한국부동산원 R-ONE';
+  coverage: {
+    requestedMonths: number;
+    returnedMonths: number;
+    unavailableMonths: number;
+    firstMonth: string;
+    lastMonth: string;
+  };
   data: Array<{
     date: string;
     regions: Record<string, number>;
@@ -11,11 +22,10 @@ export interface PriceTrendData {
 }
 
 export const PERIOD_OPTIONS: { label: string; value: TrendPeriod }[] = [
-  { label: '일간', value: 'daily' },
-  { label: '주간', value: 'weekly' },
-  { label: '분기', value: 'quarterly' },
-  { label: '반기', value: 'half_yearly' },
-  { label: '연간', value: 'yearly' },
+  { label: '6개월', value: 'six_months' },
+  { label: '1년', value: 'one_year' },
+  { label: '1년 6개월', value: 'eighteen_months' },
+  { label: '2년', value: 'two_years' },
 ];
 
 export const REGION_COLORS: Record<string, string> = {

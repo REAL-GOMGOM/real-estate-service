@@ -5,46 +5,65 @@ import { SITE_URL } from '@/lib/site';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = SITE_URL;
-  const now = new Date();
 
-  // 정적 페이지
+  // 변경 시각을 알 수 없는 정적 페이지에 요청 시각을 넣지 않는다.
+  // 매 요청마다 갱신된 것처럼 보이면 검색엔진의 변경 신호가 오염된다.
   const staticPages: MetadataRoute.Sitemap = [
-    { url: baseUrl, lastModified: now, changeFrequency: 'daily', priority: 1 },
-    { url: `${baseUrl}/transactions`, lastModified: now, changeFrequency: 'daily', priority: 0.9 },
-    { url: `${baseUrl}/chart`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
-    { url: `${baseUrl}/location-map`, lastModified: now, changeFrequency: 'weekly', priority: 0.8 },
-    { url: `${baseUrl}/region`, lastModified: now, changeFrequency: 'weekly', priority: 0.9 },
-    { url: `${baseUrl}/subscription`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
-    { url: `${baseUrl}/calendar`, lastModified: now, changeFrequency: 'weekly', priority: 0.7 },
-    { url: `${baseUrl}/gap-analysis`, lastModified: now, changeFrequency: 'weekly', priority: 0.7 },
-    { url: `${baseUrl}/dollar`, lastModified: now, changeFrequency: 'weekly', priority: 0.6 },
-    { url: `${baseUrl}/price-map`, lastModified: now, changeFrequency: 'weekly', priority: 0.6 },
-    { url: `${baseUrl}/news`, lastModified: now, changeFrequency: 'daily', priority: 0.6 },
-    { url: `${baseUrl}/gap-guide`, lastModified: now, changeFrequency: 'monthly', priority: 0.5 },
-    { url: `${baseUrl}/privacy`, lastModified: now, changeFrequency: 'yearly', priority: 0.3 },
-    { url: `${baseUrl}/blog`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
+    { url: baseUrl, changeFrequency: 'daily', priority: 1 },
+    { url: `${baseUrl}/transactions`, changeFrequency: 'daily', priority: 0.9 },
+    { url: `${baseUrl}/chart`, changeFrequency: 'daily', priority: 0.8 },
+    { url: `${baseUrl}/location-map`, changeFrequency: 'weekly', priority: 0.8 },
+    { url: `${baseUrl}/region`, changeFrequency: 'weekly', priority: 0.9 },
+    { url: `${baseUrl}/subscription`, changeFrequency: 'daily', priority: 0.8 },
+    { url: `${baseUrl}/calendar`, changeFrequency: 'weekly', priority: 0.7 },
+    { url: `${baseUrl}/gap-analysis`, changeFrequency: 'weekly', priority: 0.7 },
+    { url: `${baseUrl}/dollar`, changeFrequency: 'weekly', priority: 0.6 },
+    { url: `${baseUrl}/price-map`, changeFrequency: 'weekly', priority: 0.6 },
+    { url: `${baseUrl}/price-trend`, changeFrequency: 'monthly', priority: 0.6 },
+    { url: `${baseUrl}/gap-guide`, changeFrequency: 'monthly', priority: 0.5 },
+    { url: `${baseUrl}/market`, changeFrequency: 'daily', priority: 0.8 },
+    { url: `${baseUrl}/loan`, changeFrequency: 'monthly', priority: 0.7 },
+    { url: `${baseUrl}/highlights`, changeFrequency: 'daily', priority: 0.7 },
+    { url: `${baseUrl}/ranking`, changeFrequency: 'weekly', priority: 0.7 },
+    { url: `${baseUrl}/schools`, changeFrequency: 'monthly', priority: 0.7 },
+    { url: `${baseUrl}/privacy`, changeFrequency: 'yearly', priority: 0.3 },
+    { url: `${baseUrl}/terms`, changeFrequency: 'yearly', priority: 0.3 },
+    { url: `${baseUrl}/contact`, changeFrequency: 'yearly', priority: 0.3 },
+    { url: `${baseUrl}/blog`, changeFrequency: 'daily', priority: 0.8 },
   ];
 
-  // 126개 region URL
-  const regionIds = await getAllRegionIds();
+  // 블로그 DB가 중단돼도 정적·지역 URL은 계속 제공해야 한다.
+  const [regionResult, categoryResult, postResult] = await Promise.allSettled([
+    getAllRegionIds(),
+    getAllCategories(),
+    getAllPublishedSlugs(),
+  ]);
+
+  if (regionResult.status === 'rejected') {
+    console.error('[sitemap] region URLs unavailable', regionResult.reason);
+  }
+  if (categoryResult.status === 'rejected') {
+    console.error('[sitemap] blog categories unavailable', categoryResult.reason);
+  }
+  if (postResult.status === 'rejected') {
+    console.error('[sitemap] blog posts unavailable', postResult.reason);
+  }
+
+  const regionIds = regionResult.status === 'fulfilled' ? regionResult.value : [];
   const regionUrls: MetadataRoute.Sitemap = regionIds.map((id) => ({
     url: `${baseUrl}/region/${id}`,
-    lastModified: now,
     changeFrequency: 'weekly',
     priority: 0.8,
   }));
 
-  // /blog 카테고리 페이지
-  const cats = await getAllCategories();
+  const cats = categoryResult.status === 'fulfilled' ? categoryResult.value : [];
   const categoryUrls: MetadataRoute.Sitemap = cats.map((c) => ({
     url: `${baseUrl}/blog/category/${c.slug}`,
-    lastModified: now,
     changeFrequency: 'weekly',
     priority: 0.6,
   }));
 
-  // /blog 발행 글 상세
-  const slugs = await getAllPublishedSlugs();
+  const slugs = postResult.status === 'fulfilled' ? postResult.value : [];
   const postUrls: MetadataRoute.Sitemap = slugs.map((p) => ({
     url: `${baseUrl}/blog/${p.slug}`,
     lastModified: p.updatedAt,

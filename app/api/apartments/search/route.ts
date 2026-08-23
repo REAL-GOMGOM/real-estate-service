@@ -2,6 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { sql } from 'drizzle-orm';
 import { getBlogDb } from '@/lib/db/client';
 import { apartments } from '@/lib/db/schema';
+import {
+  APARTMENT_INDEX_ARTIFACT_NAME,
+  APARTMENT_INDEX_MAX_AGE_MS,
+  assertApartmentIndexEnvelope,
+  isServingArtifactFresh,
+  searchApartmentIndex,
+  type ApartmentIndexItem,
+} from '@/lib/public-snapshots/serving-artifacts';
+import {
+  createPublicSnapshotRuntimeFromEnv,
+  isPublicSnapshotConfigured,
+  type PublicSnapshotRuntime,
+} from '@/lib/public-snapshots/runtime';
 
 const MIN_QUERY_LENGTH = 2;
 const MAX_QUERY_LENGTH = 50;
@@ -11,6 +24,32 @@ const MAX_LIMIT = 20;
 // `%`, `_`, `\\` 는 ILIKE 메타문자 — 사용자 입력은 escape 필요 (인젝션·풀스캔 방지)
 function escapeLike(input: string): string {
   return input.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+async function searchSnapshot(
+  runtime: PublicSnapshotRuntime,
+  query: string,
+  limit: number,
+): Promise<{ rows: ApartmentIndexItem[]; generatedAt: string } | null> {
+  const result = await runtime.getNamedArtifact<ApartmentIndexItem[]>(
+    APARTMENT_INDEX_ARTIFACT_NAME,
+  );
+  if (result.status !== 'success') return null;
+  try {
+    assertApartmentIndexEnvelope(result.data);
+    if (!isServingArtifactFresh(result.data.generatedAt, {
+      maxAgeMs: APARTMENT_INDEX_MAX_AGE_MS,
+    })) return null;
+    return {
+      rows: searchApartmentIndex(result.data.data, query, { limit }),
+      generatedAt: result.data.generatedAt,
+    };
+  } catch {
+    // The caller decides whether legacy DB fallback is allowed. Once public
+    // serving is configured, a broken artifact must not resurrect stale Neon.
+    console.warn('[apartments/search] apartment snapshot validation failed');
+    return null;
+  }
 }
 
 export async function GET(req: NextRequest) {
@@ -36,6 +75,48 @@ export async function GET(req: NextRequest) {
     if (Number.isFinite(parsed)) {
       limit = Math.max(1, Math.min(MAX_LIMIT, parsed));
     }
+  }
+
+  // All request validation/normalization above must complete before snapshot I/O.
+  const snapshotRows = await searchSnapshot(
+    createPublicSnapshotRuntimeFromEnv(),
+    q,
+    limit,
+  );
+  if (snapshotRows !== null) {
+    const results = snapshotRows.rows.map(({ id, name, sido, sigungu, dong, lawdCd }) => ({
+      id,
+      name,
+      sido,
+      sigungu,
+      dong,
+      lawdCd,
+    }));
+    return NextResponse.json(
+      { results, query: q, count: results.length },
+      {
+        headers: {
+          'X-Naezip-Data-Source': 'snapshot',
+          'X-Naezip-Snapshot-Generated-At': snapshotRows.generatedAt,
+        },
+      },
+    );
+  }
+
+  if (isPublicSnapshotConfigured()) {
+    return NextResponse.json(
+      {
+        status: 'unavailable',
+        error: '검증된 단지 검색 스냅샷을 준비 중입니다',
+        results: [],
+        query: q,
+        count: 0,
+      },
+      {
+        status: 503,
+        headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300' },
+      },
+    );
   }
 
   try {

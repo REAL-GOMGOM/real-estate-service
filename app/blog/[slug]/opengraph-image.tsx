@@ -37,7 +37,12 @@ type ImageParams = Promise<{ slug: string }>;
 
 export default async function OpengraphImage({ params }: { params: ImageParams }) {
   const { slug } = await params;
-  const post = await getPublishedPostBySlug(slug);
+  let post: Awaited<ReturnType<typeof getPublishedPostBySlug>> = null;
+  try {
+    post = await getPublishedPostBySlug(slug);
+  } catch (error) {
+    console.error('[blog/opengraph-image] post unavailable', error);
+  }
 
   // 글 없을 때 fallback
   const title = post?.title ?? '내집(My.ZIP) 칼럼';

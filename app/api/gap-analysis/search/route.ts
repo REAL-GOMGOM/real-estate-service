@@ -1,84 +1,93 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { DISTRICT_CODE } from '@/lib/district-codes';
+import { parseGapTradesXml } from '@/lib/gap-analysis-data';
+import { fetchTradeMonthAllPages, getMonthList, revalidateForMonth } from '@/lib/molit-months';
 import { matchesQuery } from '@/lib/search-utils';
 
-const API_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev';
-
-/**
- * GET /api/gap-analysis/search?q=래미안&district=강남구
- * 실거래 데이터에서 단지 검색
- */
+/** GET /api/gap-analysis/search?q=래미안&district=강남구 */
 export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = request.nextUrl;
-    const q = searchParams.get('q') || '';
-    const district = searchParams.get('district') || '강남구';
+  const query = (request.nextUrl.searchParams.get('q') ?? '').trim();
+  const district = (request.nextUrl.searchParams.get('district') ?? '').trim();
 
-    if (q.length < 2) {
-      return NextResponse.json({ results: [] });
-    }
-
-    const lawdCd = DISTRICT_CODE[district];
-    if (!lawdCd) {
-      return NextResponse.json({ results: [] });
-    }
-
-    const apiKey = process.env.PUBLIC_DATA_API_KEY;
-    if (!apiKey) {
-      console.error('[gap-analysis/search API] PUBLIC_DATA_API_KEY 미설정');
-      return NextResponse.json({ error: '단지 검색에 실패했습니다' }, { status: 500 });
-    }
-
-    // 최근 3개월 데이터에서 검색
-    const now = new Date();
-    const months: string[] = [];
-    for (let i = 0; i < 3; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      months.push(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`);
-    }
-
-    const complexMap: Record<string, { name: string; dong: string; sizes: Set<number> }> = {};
-
-    for (const month of months) {
-      try {
-        const url = `${API_URL}?serviceKey=${apiKey}&LAWD_CD=${lawdCd}&DEAL_YMD=${month}&numOfRows=1000&pageNo=1`;
-        const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, next: { revalidate: 86400 } });
-        const text = await res.text();
-
-        // XML 파싱
-        const aptNames = text.match(/<aptNm>([^<]+)<\/aptNm>/g) || [];
-        const areas = text.match(/<excluUseAr>([^<]+)<\/excluUseAr>/g) || [];
-        const dongs = text.match(/<umdNm>([^<]+)<\/umdNm>/g) || [];
-
-        for (let i = 0; i < aptNames.length; i++) {
-          const name = aptNames[i].replace(/<\/?aptNm>/g, '').trim();
-          const area = parseFloat((areas[i] || '').replace(/<\/?excluUseAr>/g, '').trim());
-          const dong = (dongs[i] || '').replace(/<\/?umdNm>/g, '').trim();
-
-          if (!matchesQuery(name, q)) continue;
-
-          const key = `${dong}-${name}`;
-          if (!complexMap[key]) {
-            complexMap[key] = { name, dong, sizes: new Set() };
-          }
-          if (area > 0) complexMap[key].sizes.add(Math.round(area * 10) / 10);
-        }
-      } catch {
-        // 한 달 실패해도 계속
-      }
-    }
-
-    const results = Object.entries(complexMap).map(([key, val]) => ({
-      id: key,
-      name: val.name,
-      district,
-      dong: val.dong,
-      sizes: [...val.sizes].sort((a, b) => a - b),
-    })).slice(0, 20);
-
-    return NextResponse.json({ results });
-  } catch (error: unknown) {
-    console.error('[gap-analysis/search API]', error instanceof Error ? error.message : error);
-    return NextResponse.json({ error: '단지 검색에 실패했습니다' }, { status: 500 });
+  if (query.length < 2 || query.length > 80) {
+    return NextResponse.json({ status: 'invalid_request', error: '검색어는 2~80자로 입력해 주세요.' }, { status: 400 });
   }
+  const lawdCd = DISTRICT_CODE[district];
+  if (!lawdCd) {
+    return NextResponse.json({ status: 'invalid_request', error: '지원하지 않는 지역입니다.' }, { status: 400 });
+  }
+
+  const apiKey = process.env.PUBLIC_DATA_API_KEY;
+  if (!apiKey) {
+    console.error('[gap-analysis/search API] PUBLIC_DATA_API_KEY 미설정');
+    return NextResponse.json(
+      { status: 'unavailable', error: '국토교통부 단지 검색 연결 설정이 없습니다.' },
+      { status: 503 },
+    );
+  }
+
+  const months = getMonthList(3);
+  const settled = await Promise.allSettled(
+    months.map(async (month) => ({
+      month,
+      rows: parseGapTradesXml(
+        await fetchTradeMonthAllPages(apiKey, lawdCd, month, revalidateForMonth(month)),
+      ),
+    })),
+  );
+
+  const successfulMonths: string[] = [];
+  const failedMonths: string[] = [];
+  const rows = settled.flatMap((result, index) => {
+    if (result.status === 'fulfilled') {
+      successfulMonths.push(result.value.month);
+      return result.value.rows;
+    }
+    failedMonths.push(months[index]);
+    return [];
+  });
+
+  if (successfulMonths.length === 0) {
+    return NextResponse.json(
+      { status: 'unavailable', error: '국토교통부 단지 검색 원본을 확인하지 못했습니다.' },
+      { status: 502 },
+    );
+  }
+
+  const complexMap = new Map<string, { name: string; dong: string; sizes: Set<number> }>();
+  for (const row of rows) {
+    if (!matchesQuery(row.name, query)) continue;
+    const key = `${row.dong}\u0000${row.name}`;
+    const existing = complexMap.get(key) ?? { name: row.name, dong: row.dong, sizes: new Set<number>() };
+    existing.sizes.add(Math.round(row.area * 10) / 10);
+    complexMap.set(key, existing);
+  }
+
+  const results = [...complexMap.entries()]
+    .map(([id, value]) => ({
+      id,
+      name: value.name,
+      district,
+      dong: value.dong,
+      sizes: [...value.sizes].sort((a, b) => a - b),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ko') || a.dong.localeCompare(b.dong, 'ko'))
+    .slice(0, 20);
+
+  const status = failedMonths.length > 0 ? 'partial' : 'ok';
+  return NextResponse.json(
+    {
+      status,
+      results,
+      coverage: { requestedMonths: months, successfulMonths, failedMonths },
+      note: failedMonths.length > 0 ? '일부 월 원본이 실패해 확인된 월에서만 검색했습니다.' : undefined,
+    },
+    {
+      headers: {
+        'Cache-Control': status === 'ok'
+          ? 'public, s-maxage=3600, stale-while-revalidate=86400'
+          : 'private, no-store',
+      },
+    },
+  );
 }

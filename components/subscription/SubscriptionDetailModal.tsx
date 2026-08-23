@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { X, Calendar, Home, Users, TrendingUp, MapPin, ExternalLink } from 'lucide-react';
 import type { SubscriptionItem } from '@/lib/types';
-import dayjs from 'dayjs';
+import { formatSubscriptionDday } from '@/lib/subscription-date';
 
 interface Props {
   item: SubscriptionItem;
@@ -15,12 +15,6 @@ const STATUS_CONFIG = {
   ongoing:  { label: '청약 중',   color: '#2E7A4C', bg: 'rgba(111,192,138,0.12)'  },
   closed:   { label: '청약 마감', color: 'var(--text-dim)', bg: 'rgba(100,116,139,0.12)'},
 };
-
-function formatPrice(manwon: number | null): string {
-  if (!manwon) return '미정';
-  if (manwon >= 10000) return `${(manwon / 10000).toFixed(1)}억`;
-  return `${manwon.toLocaleString()}만`;
-}
 
 // 주택형 문자열에서 숫자 추출 후 평 단위로 변환
 // 예: "084.97A" → 25.7평, "59㎡" → 17.8평
@@ -34,10 +28,7 @@ function toPyeong(houseType: string): string | null {
 
 function getDday(endDate: string, status: string): string | null {
   if (status === 'closed') return null;
-  const diff = dayjs(endDate).diff(dayjs(), 'day');
-  if (diff < 0) return null;
-  if (diff === 0) return 'D-day';
-  return `D-${diff}`;
+  return formatSubscriptionDday(endDate);
 }
 
 function Row({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
@@ -150,19 +141,13 @@ export default function SubscriptionDetailModal({ item, onClose }: Props) {
 
           <Row icon={<Home size={15} />} label="공급 세대 / 주택형">
             <span>
-              {item.totalUnits > 0 ? `${item.totalUnits.toLocaleString()}세대` : '—'}
+              {item.totalUnits !== null ? `${item.totalUnits.toLocaleString()}세대` : '세대수 미표기'}
               {item.houseType ? ` · ${item.houseType}` : ''}
             </span>
           </Row>
 
           <Row icon={<TrendingUp size={15} />} label="분양가">
-            {item.minPrice || item.maxPrice ? (
-              <span style={{ fontFamily: 'Roboto Mono, monospace', fontWeight: 700, color: '#F0A24B' }}>
-                {formatPrice(item.minPrice)} ~ {formatPrice(item.maxPrice)}
-              </span>
-            ) : (
-              <span style={{ color: 'var(--text-dim)' }}>미정</span>
-            )}
+            <span style={{ color: 'var(--text-dim)' }}>청약홈 공고문에서 확인</span>
           </Row>
 
           <Row icon={<Users size={15} />} label="평형별 경쟁률">
@@ -231,7 +216,7 @@ export default function SubscriptionDetailModal({ item, onClose }: Props) {
 
         {/* 청약홈 바로가기 */}
         <a
-          href="https://www.applyhome.co.kr"
+          href={item.sourceUrl ?? 'https://www.applyhome.co.kr'}
           target="_blank"
           rel="noopener noreferrer"
           style={{
@@ -244,7 +229,7 @@ export default function SubscriptionDetailModal({ item, onClose }: Props) {
             transition: 'background 0.15s',
           }}
         >
-          청약홈에서 신청하기 <ExternalLink size={14} />
+          {item.sourceUrl ? '청약홈 공고 원문 확인하기' : '청약홈에서 확인하기'} <ExternalLink size={14} />
         </a>
       </div>
     </>

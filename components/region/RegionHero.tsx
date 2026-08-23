@@ -5,17 +5,11 @@ interface Props {
 }
 
 function getScoreLevel(score: number): { label: string; color: string } {
-  if (score < 2.0) return { label: '최상급지', color: 'var(--accent)' };
-  if (score < 2.5) return { label: '상급지', color: 'var(--accent)' };
-  if (score < 3.0) return { label: '중상급지', color: 'var(--text-primary)' };
-  if (score < 3.5) return { label: '중급지', color: 'var(--text-muted)' };
-  return { label: '중하급지', color: 'var(--text-muted)' };
-}
-
-function getTrendLabel(trend: 'up' | 'down' | 'flat'): string {
-  if (trend === 'up') return '↑ 상승';
-  if (trend === 'down') return '↓ 하락';
-  return '→ 보합';
+  if (score < 2.0) return { label: '자체 기준 최상위', color: 'var(--accent)' };
+  if (score < 2.5) return { label: '자체 기준 상위', color: 'var(--accent)' };
+  if (score < 3.0) return { label: '자체 기준 중상위', color: 'var(--text-primary)' };
+  if (score < 3.5) return { label: '자체 기준 중위', color: 'var(--text-muted)' };
+  return { label: '자체 기준 중하위', color: 'var(--text-muted)' };
 }
 
 export function RegionHero({ region }: Props) {
@@ -46,28 +40,27 @@ export function RegionHero({ region }: Props) {
           className="text-4xl md:text-5xl font-bold leading-tight"
           style={{ color: 'var(--text-strong)' }}
         >
-          {region.name} 입지 분석
+          {region.name} 입지 지표
         </h1>
 
         {/* 점수·트렌드 */}
         <div className="flex items-baseline gap-4 pt-2">
           <div>
             <div className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
-              입지 점수
+              자체 입지 점수 (1.00~5.00)
             </div>
             <div className="text-4xl font-bold" style={{ color: 'var(--accent)' }}>
               {region.score.toFixed(2)}
             </div>
           </div>
           <div className="text-sm" style={{ color: 'var(--text-muted)' }}>
-            {getTrendLabel(region.trend)}
-            {region.prevScore != null && ` · 이전 ${region.prevScore.toFixed(2)}`}
+            낮을수록 상위 · 등록 표본 상대평가
           </div>
         </div>
 
         {region.specialNote && (
           <p className="text-sm pt-2" style={{ color: 'var(--text-muted)' }}>
-            * {region.specialNote}
+            데이터셋 메모: {region.specialNote}
           </p>
         )}
       </div>

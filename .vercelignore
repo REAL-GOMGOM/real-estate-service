@@ -1,0 +1,19 @@
+# Local secrets and build artifacts
+.env*
+!.env.example
+.next/
+node_modules/
+coverage/
+*.log
+
+# Local research, handover notes, and recoverable working copies
+analysis/
+HANDOVER*.md
+data/research/
+data/.fuse_hidden*
+data/*.backup.json
+data/*.checkpoint.json
+
+# One-off local diagnostics that are not part of the deployed application
+check-coverage.mjs
+check-mltm.mjs

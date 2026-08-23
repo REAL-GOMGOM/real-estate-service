@@ -20,7 +20,7 @@ import {
  */
 
 interface BaseDeal {
-  district: string; apt: string; area: number; floor: number;
+  district: string; dong: string; apt: string; area: number; floor: number;
   price: number; date: string;
   masterId?: string | null;   // 있으면 단지 전용 페이지 링크 (사이클 JJ)
 }
@@ -97,14 +97,14 @@ function SectionCard({
 
 /** 카드뷰 개별 딜 카드 — 표의 한 행을 카드로 (모바일 가독) */
 function DealMiniCard({
-  district, apt, masterId, meta, price, priceColor, extra,
+  district, dong, apt, masterId, meta, price, priceColor, extra,
 }: {
-  district: string; apt: string; masterId?: string | null; meta: string;
+  district: string; dong: string; apt: string; masterId?: string | null; meta: string;
   price: string; priceColor?: string; extra?: string;
 }) {
   return (
     <Link
-      href={aptHref({ district, apt, masterId })}
+      href={aptHref({ district, dong, apt, masterId })}
       style={{
         display: 'block', padding: '13px 15px', borderRadius: '12px',
         backgroundColor: 'var(--bg-overlay, var(--bg-tertiary))',
@@ -118,7 +118,7 @@ function DealMiniCard({
         {apt}
       </p>
       <p style={{ margin: '3px 0 8px', fontSize: '11.5px', color: 'var(--text-dim)' }}>
-        {district} · {meta}
+        {district} {dong} · {meta}
       </p>
       <p style={{
         margin: 0, fontSize: '16px', fontWeight: 800, fontFamily: 'Roboto Mono, monospace',
@@ -136,16 +136,18 @@ function DealMiniCard({
 }
 
 /** 단지 링크 — 마스터 등록 단지는 전용 페이지, 아니면 실거래 검색 딥링크 */
-function aptHref(d: { district: string; apt: string; masterId?: string | null }): string {
-  return d.masterId
-    ? `/apt/${encodeURIComponent(d.masterId)}`
-    : `/transactions?district=${encodeURIComponent(d.district)}&q=${encodeURIComponent(d.apt)}`;
+function aptHref(d: { district: string; dong: string; apt: string; masterId?: string | null }): string {
+  if (d.masterId) return `/apt/${encodeURIComponent(d.masterId)}`;
+  const params = new URLSearchParams({ district: d.district, q: d.apt, aptDong: d.dong });
+  return `/transactions?${params.toString()}`;
 }
 
-function AptLink({ district, apt, masterId }: { district: string; apt: string; masterId?: string | null }) {
+function AptLink({ district, dong, apt, masterId }: {
+  district: string; dong: string; apt: string; masterId?: string | null;
+}) {
   return (
     <Link
-      href={aptHref({ district, apt, masterId })}
+      href={aptHref({ district, dong, apt, masterId })}
       style={{ color: 'var(--text-primary)', fontWeight: 700, textDecoration: 'none' }}
       className="hover:underline"
     >
@@ -168,12 +170,24 @@ export default function HighlightsClient() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    fetch('/api/transactions/highlights')
-      .then((r) => r.json())
-      .then((json) => { if (!cancelled) { setData(json); setFailed(!!json.error); } })
-      .catch(() => { if (!cancelled) setFailed(true); });
-    return () => { cancelled = true; };
+    const controller = new AbortController();
+    fetch('/api/transactions/highlights', { signal: controller.signal })
+      .then(async (response) => {
+        const json = await response.json();
+        const hasValidArrays = Array.isArray(json.newHighs)
+          && Array.isArray(json.surges)
+          && Array.isArray(json.pyeong84);
+        if (!response.ok || json.status !== 'ok' || !hasValidArrays) {
+          throw new Error(json.note || json.error || `주요거래 API HTTP ${response.status}`);
+        }
+        return json as HighlightsData;
+      })
+      .then((json) => setData(json))
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setFailed(true);
+      });
+    return () => controller.abort();
   }, [retryKey]);
 
   const loading = data === null && !failed;
@@ -185,12 +199,12 @@ export default function HighlightsClient() {
     const d = new Date();
     const dateStr = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
     const blob = await buildRankingShareImage({
-      title: `오늘의 주요거래 — ${sectionTitle}`,
-      subtitle: `${dateStr} 공개 · 최근 1개월 신고분 기준`,
+      title: `최근 30일 주요거래 — ${sectionTitle}`,
+      subtitle: `${dateStr} 기준 · 최근 30일 신고분`,
       rows: rows.slice(0, 5),
     });
     if (blob) {
-      await shareOrDownloadImage(blob, `내집-주요거래-${sectionTitle}.png`, `오늘의 주요거래 — ${sectionTitle}`);
+      await shareOrDownloadImage(blob, `내집-주요거래-${sectionTitle}.png`, `최근 30일 주요거래 — ${sectionTitle}`);
     }
   };
 
@@ -209,11 +223,11 @@ export default function HighlightsClient() {
               borderRadius: '99px', marginBottom: '12px',
             }}>
               <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#E23B3B', display: 'inline-block' }} />
-              {today.getFullYear() > 2000 ? fullDateLabel(today) : '—'} · 오늘 공개된 거래
+              {today.getFullYear() > 2000 ? fullDateLabel(today) : '—'} · 최근 30일 신고분
             </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
               <h1 style={{ margin: '0 0 6px', fontSize: 'clamp(22px, 3vw, 29px)', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.6px' }}>
-                오늘의 주요거래
+                최근 30일 주요거래
               </h1>
               {/* 표 ↔ 카드 보기 토글 (사이클 HH) */}
               <div style={{ display: 'flex', gap: '4px', padding: '3px', borderRadius: '10px', backgroundColor: 'var(--border-light)' }}>
@@ -264,10 +278,10 @@ export default function HighlightsClient() {
               {data.newHighs.length > 0 && (
                 <SectionCard
                   emoji="🔥" title="신고가 주요거래" sub="동일 면적 종전 최고가 경신"
-                  headers={['시군구', '아파트명', '면적', '가격', '종전 최고가', '계약일']}
+                  headers={['시군구·법정동', '아파트명', '면적', '가격', '종전 최고가', '계약일']}
                   onSave={() => saveSection('신고가', data.newHighs.map((d, i) => ({
                     rank: i + 1, name: d.apt,
-                    sub: `${d.district} · ${d.area}㎡ · ${fmtContractDate(d.date)} 계약`,
+                    sub: `${d.district} ${d.dong} · ${d.area}㎡ · ${fmtContractDate(d.date)} 계약`,
                     value: fmtPrice(d.price),
                     valueSub: `종전 ${fmtPrice(d.prevHigh)}`, valueColor: '#C92F2F',
                   })))}
@@ -276,7 +290,7 @@ export default function HighlightsClient() {
                   {view === 'card'
                     ? data.newHighs.map((d, i) => (
                         <DealMiniCard
-                          key={i} district={d.district} apt={d.apt} masterId={d.masterId}
+                          key={i} district={d.district} dong={d.dong} apt={d.apt} masterId={d.masterId}
                           meta={`${d.area}㎡ · ${fmtContractDate(d.date)}`}
                           price={fmtPrice(d.price)} priceColor="var(--up-color, #C92F2F)"
                           extra={`종전 ${fmtPrice(d.prevHigh)}`}
@@ -284,8 +298,8 @@ export default function HighlightsClient() {
                       ))
                     : data.newHighs.map((d, i) => (
                     <tr key={i} style={{ borderTop: '1px solid var(--border-light)' }}>
-                      <td style={tdStyle}>{d.district}</td>
-                      <td style={tdStyle}><AptLink district={d.district} apt={d.apt} masterId={d.masterId} /></td>
+                      <td style={tdStyle}>{d.district} {d.dong}</td>
+                      <td style={tdStyle}><AptLink district={d.district} dong={d.dong} apt={d.apt} masterId={d.masterId} /></td>
                       <td style={tdStyle}>{d.area}㎡</td>
                       <td style={{ ...tdStyle, fontWeight: 800, color: 'var(--up-color, #C92F2F)', fontFamily: 'Roboto Mono, monospace' }}>
                         {fmtPrice(d.price)}
@@ -301,10 +315,10 @@ export default function HighlightsClient() {
               {data.surges.length > 0 && (
                 <SectionCard
                   emoji="⚡" title="급등 거래" sub="직전 거래 대비 상승률"
-                  headers={['시군구', '아파트명', '면적', '가격', '직전 거래', '상승률']}
+                  headers={['시군구·법정동', '아파트명', '면적', '가격', '직전 거래', '상승률']}
                   onSave={() => saveSection('급등', data.surges.map((d, i) => ({
                     rank: i + 1, name: d.apt,
-                    sub: `${d.district} · ${d.area}㎡ · 직전 ${fmtPrice(d.prevPrice)}`,
+                    sub: `${d.district} ${d.dong} · ${d.area}㎡ · 직전 ${fmtPrice(d.prevPrice)}`,
                     value: fmtPrice(d.price),
                     valueSub: `▲ ${d.ratePct}%`, valueColor: '#C92F2F',
                   })))}
@@ -313,7 +327,7 @@ export default function HighlightsClient() {
                   {view === 'card'
                     ? data.surges.map((d, i) => (
                         <DealMiniCard
-                          key={i} district={d.district} apt={d.apt} masterId={d.masterId}
+                          key={i} district={d.district} dong={d.dong} apt={d.apt} masterId={d.masterId}
                           meta={`${d.area}㎡ · 직전 ${fmtPrice(d.prevPrice)}`}
                           price={fmtPrice(d.price)}
                           extra={`▲ ${d.ratePct}%`}
@@ -321,8 +335,8 @@ export default function HighlightsClient() {
                       ))
                     : data.surges.map((d, i) => (
                     <tr key={i} style={{ borderTop: '1px solid var(--border-light)' }}>
-                      <td style={tdStyle}>{d.district}</td>
-                      <td style={tdStyle}><AptLink district={d.district} apt={d.apt} masterId={d.masterId} /></td>
+                      <td style={tdStyle}>{d.district} {d.dong}</td>
+                      <td style={tdStyle}><AptLink district={d.district} dong={d.dong} apt={d.apt} masterId={d.masterId} /></td>
                       <td style={tdStyle}>{d.area}㎡</td>
                       <td style={{ ...tdStyle, fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>
                         {fmtPrice(d.price)}
@@ -340,10 +354,10 @@ export default function HighlightsClient() {
               {data.pyeong84.length > 0 && (
                 <SectionCard
                   emoji="🏆" title="국평(84㎡) 고가 거래" sub="전용 80~88㎡ 최고가"
-                  headers={['시군구', '아파트명', '면적', '가격', '층', '계약일']}
+                  headers={['시군구·법정동', '아파트명', '면적', '가격', '층', '계약일']}
                   onSave={() => saveSection('국평 고가', data.pyeong84.map((d, i) => ({
                     rank: i + 1, name: d.apt,
-                    sub: `${d.district} · ${d.area}㎡ · ${d.floor}층`,
+                    sub: `${d.district} ${d.dong} · ${d.area}㎡ · ${d.floor}층`,
                     value: fmtPrice(d.price),
                     valueSub: `${fmtContractDate(d.date)} 계약`,
                   })))}
@@ -352,7 +366,7 @@ export default function HighlightsClient() {
                   {view === 'card'
                     ? data.pyeong84.map((d, i) => (
                         <DealMiniCard
-                          key={i} district={d.district} apt={d.apt} masterId={d.masterId}
+                          key={i} district={d.district} dong={d.dong} apt={d.apt} masterId={d.masterId}
                           meta={`${d.area}㎡ · ${d.floor}층`}
                           price={fmtPrice(d.price)}
                           extra={fmtContractDate(d.date)}
@@ -360,8 +374,8 @@ export default function HighlightsClient() {
                       ))
                     : data.pyeong84.map((d, i) => (
                     <tr key={i} style={{ borderTop: '1px solid var(--border-light)' }}>
-                      <td style={tdStyle}>{d.district}</td>
-                      <td style={tdStyle}><AptLink district={d.district} apt={d.apt} masterId={d.masterId} /></td>
+                      <td style={tdStyle}>{d.district} {d.dong}</td>
+                      <td style={tdStyle}><AptLink district={d.district} dong={d.dong} apt={d.apt} masterId={d.masterId} /></td>
                       <td style={tdStyle}>{d.area}㎡</td>
                       <td style={{ ...tdStyle, fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>
                         {fmtPrice(d.price)}
@@ -374,7 +388,7 @@ export default function HighlightsClient() {
               )}
 
               <p style={{ fontSize: '11px', color: 'var(--text-dim)', lineHeight: 1.8 }}>
-                ※ 최근 1개월 공개분 · {data.coverage} · 출처: 국토교통부 실거래가 공개시스템
+                ※ 최근 30일 신고분 · {data.coverage} · 출처: 국토교통부 실거래가 공개시스템
               </p>
 
               <AnalysisPromoBar />

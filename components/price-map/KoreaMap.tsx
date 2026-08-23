@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ArrowLeft } from 'lucide-react';
+import { PRICE_CHANGE_FREQUENCY } from '@/lib/price-map-contract';
 import type { RegionChange } from '@/types/price-map';
 
 interface KoreaMapProps {
@@ -128,6 +129,7 @@ export default function KoreaMap({ regions, onRegionClick: _onRegionClick, trade
   const [selectedProvince, setSelectedProvince] = useState<string | null>(null); // API code (11, 26, ...)
   const [districtData, setDistrictData] = useState<DistrictData[]>([]);
   const [loadingDistricts, setLoadingDistricts] = useState(false);
+  const [districtError, setDistrictError] = useState<string | null>(null);
 
   const svgBaseWidth = 650;
 
@@ -153,21 +155,39 @@ export default function KoreaMap({ regions, onRegionClick: _onRegionClick, trade
   const handleProvinceClick = useCallback(async (apiCode: string) => {
     setSelectedProvince(apiCode);
     setLoadingDistricts(true);
+    setDistrictError(null);
+    setDistrictData([]);
     try {
-      const res = await fetch(`/api/price-change/districts?province=${apiCode}&type=${tradeType}`);
-      const json = await res.json();
+      const res = await fetch(
+        `/api/price-change/districts?province=${apiCode}&type=${tradeType}&period=${PRICE_CHANGE_FREQUENCY}`,
+      );
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof json.error === 'string' ? json.error : '구별 월간 변동률을 불러오지 못했습니다.');
+      }
+      if (json.frequency !== PRICE_CHANGE_FREQUENCY || !Array.isArray(json.districts)) {
+        throw new Error('구별 월간 변동률 응답 형식이 올바르지 않습니다.');
+      }
       setDistrictData(json.districts || []);
-    } catch {
+    } catch (caught) {
       setDistrictData([]);
+      setDistrictError(caught instanceof Error ? caught.message : '구별 월간 변동률을 불러오지 못했습니다.');
     } finally {
       setLoadingDistricts(false);
     }
+  }, [tradeType]);
+
+  useEffect(() => {
+    setSelectedProvince(null);
+    setDistrictData([]);
+    setDistrictError(null);
   }, [tradeType]);
 
   // 뒤로가기
   const handleBack = () => {
     setSelectedProvince(null);
     setDistrictData([]);
+    setDistrictError(null);
   };
 
   // 현재 보여줄 features와 bounds
@@ -231,6 +251,32 @@ export default function KoreaMap({ regions, onRegionClick: _onRegionClick, trade
       {loadingDistricts && (
         <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 10, color: 'var(--text-dim)', fontSize: '14px' }}>
           로딩 중...
+        </div>
+      )}
+
+      {selectedProvince && !loadingDistricts && districtError && (
+        <div
+          role="alert"
+          style={{
+            position: 'absolute', top: '52px', left: '50%', transform: 'translateX(-50%)',
+            zIndex: 10, width: 'min(360px, calc(100% - 32px))', padding: '12px',
+            borderRadius: '10px', border: '1px solid var(--border)',
+            backgroundColor: 'var(--bg-card)', color: 'var(--text-muted)',
+            textAlign: 'center', fontSize: '13px', boxShadow: 'var(--shadow-sm)',
+          }}
+        >
+          <p style={{ marginBottom: '8px' }}>{districtError}</p>
+          <button
+            type="button"
+            onClick={() => void handleProvinceClick(selectedProvince)}
+            style={{
+              padding: '7px 12px', borderRadius: '8px', border: 'none',
+              backgroundColor: 'var(--accent)', color: '#FFFFFF',
+              fontSize: '12px', fontWeight: 700, cursor: 'pointer',
+            }}
+          >
+            다시 시도
+          </button>
         </div>
       )}
 

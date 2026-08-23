@@ -1,431 +1,483 @@
 import { cacheLife } from 'next/cache';
-import type { SubscriptionItem, CompetitionRateEntry, SupplyDate } from '@/lib/types';
+import type { CompetitionRateEntry, SubscriptionItem, SupplyDate } from '@/lib/types';
+import {
+  deriveSubscriptionStatusOnDate,
+  normalizeSubscriptionDate,
+  type SubscriptionStatus,
+} from '@/lib/subscription-date';
+import { kstTodayIso } from '@/lib/agg-window';
 
-const ODCLOUD_BASE     = 'https://api.odcloud.kr/api';
-const APT_DETAIL_SVC   = 'ApplyhomeInfoDetailSvc/v1';
-const APT_CMPET_SVC    = 'ApplyhomeInfoCmpetRtSvc/v1';
-const FETCH_TIMEOUT_MS = 5000;
+const ODCLOUD_BASE = 'https://api.odcloud.kr/api';
+const APT_DETAIL_SVC = 'ApplyhomeInfoDetailSvc/v1';
+const APT_CMPET_SVC = 'ApplyhomeInfoCmpetRtSvc/v1';
+const FETCH_TIMEOUT_MS = 5_000;
+const MAX_ENDPOINT_PAGES = 50;
+const PAGE_BATCH_SIZE = 5;
+const CLOSED_HISTORY_DAYS = 180;
 
-type SubscriptionStatus = 'upcoming' | 'ongoing' | 'closed';
 type ApiRow = Record<string, string>;
 type RowSource = 'apt' | 'remndr' | 'arbitrary';
 
-// ────────────────────────────────────────────────
-// 잔여세대 HOUSE_SECD 분류 (사이클 E)
-// ────────────────────────────────────────────────
-const HOUSE_SECD_ILLEGAL = '06'; // 불법행위재공급
-// 04: 무순위 (default)
+const HOUSE_SECD_ILLEGAL = '06';
 
-// ────────────────────────────────────────────────
-// 날짜 → 상태 변환
-// ────────────────────────────────────────────────
-function deriveStatus(startDate: string, endDate: string): SubscriptionStatus {
-  if (!startDate || !endDate) return 'upcoming';
-  const today = new Date().toISOString().slice(0, 10);
-  if (today < startDate) return 'upcoming';
-  if (today > endDate) return 'closed';
-  return 'ongoing';
+interface EndpointDefinition {
+  key: string;
+  label: string;
+  service: string;
+  endpoint: string;
+  perPage: number;
+  source?: RowSource;
+  kind: 'detail' | 'model' | 'competition';
 }
 
-// ────────────────────────────────────────────────
-// 가격 필드 추출
-// ⚠️ 실제 API 응답 확인 전까지 후보 필드 순서대로 시도
-// ────────────────────────────────────────────────
-const PRICE_FIELD_CANDIDATES = [
-  'SUPLY_AMOUNT',
-  'LTTOT_TOP_PRICE',
-  'SUPLY_PRICE_MAX',
-  'HSHLD_PRICE',
+const ENDPOINTS: readonly EndpointDefinition[] = [
+  { key: 'aptDetail', label: '일반분양 공고', service: APT_DETAIL_SVC, endpoint: 'getAPTLttotPblancDetail', perPage: 100, source: 'apt', kind: 'detail' },
+  { key: 'aptModel', label: '일반분양 주택형', service: APT_DETAIL_SVC, endpoint: 'getAPTLttotPblancMdl', perPage: 300, kind: 'model' },
+  { key: 'aptCompetition', label: '일반분양 경쟁률', service: APT_CMPET_SVC, endpoint: 'getAPTLttotPblancCmpet', perPage: 300, kind: 'competition' },
+  { key: 'remainderDetail', label: '잔여세대 공고', service: APT_DETAIL_SVC, endpoint: 'getRemndrLttotPblancDetail', perPage: 100, source: 'remndr', kind: 'detail' },
+  { key: 'remainderModel', label: '잔여세대 주택형', service: APT_DETAIL_SVC, endpoint: 'getRemndrLttotPblancMdl', perPage: 300, kind: 'model' },
+  { key: 'remainderCompetition', label: '잔여세대 경쟁률', service: APT_CMPET_SVC, endpoint: 'getRemndrLttotPblancCmpet', perPage: 300, kind: 'competition' },
+  { key: 'optionalDetail', label: '임의공급 공고', service: APT_DETAIL_SVC, endpoint: 'getOPTLttotPblancDetail', perPage: 100, source: 'arbitrary', kind: 'detail' },
+  { key: 'optionalModel', label: '임의공급 주택형', service: APT_DETAIL_SVC, endpoint: 'getOPTLttotPblancMdl', perPage: 300, kind: 'model' },
+  { key: 'optionalCompetition', label: '임의공급 경쟁률', service: APT_CMPET_SVC, endpoint: 'getOPTLttotPblancCmpet', perPage: 300, kind: 'competition' },
+  { key: 'cancelCompetition', label: '취소후재공급 경쟁률', service: APT_CMPET_SVC, endpoint: 'getCancResplLttotPblancCmpet', perPage: 300, kind: 'competition' },
 ] as const;
 
-function extractPriceManwon(row: ApiRow): number | null {
-  for (const field of PRICE_FIELD_CANDIDATES) {
-    const raw = row[field];
-    if (!raw) continue;
-    const parsed = parseInt(raw.replace(/,/g, ''), 10);
-    if (!isNaN(parsed) && parsed > 0) return parsed;
-  }
-  return null;
+interface EndpointFetchResult {
+  data: ApiRow[];
+  complete: boolean;
+  totalCount: number;
+  fetchedPages: number;
+  failedPages: number[];
 }
 
-// ────────────────────────────────────────────────
-// 단일 odcloud 엔드포인트 호출
-// ────────────────────────────────────────────────
+export interface SubscriptionCoverage {
+  requestedEndpoints: number;
+  successfulEndpoints: number;
+  failedEndpoints: string[];
+  incompleteEndpoints: string[];
+  discardedRows: number;
+  historicalRowsExcluded: number;
+  displayWindowStart: string | null;
+}
+
+export interface SubscriptionFetchResult {
+  status: 'ok' | 'partial' | 'unavailable';
+  items: SubscriptionItem[];
+  coverage: SubscriptionCoverage;
+  note?: string;
+}
+
+function unavailableResult(note: string): SubscriptionFetchResult {
+  return {
+    status: 'unavailable',
+    items: [],
+    coverage: {
+      requestedEndpoints: ENDPOINTS.length,
+      successfulEndpoints: 0,
+      failedEndpoints: ENDPOINTS.map((endpoint) => endpoint.label),
+      incompleteEndpoints: [],
+      discardedRows: 0,
+      historicalRowsExcluded: 0,
+      displayWindowStart: null,
+    },
+    note,
+  };
+}
+
+function calendarDateDaysBefore(date: string, days: number): string {
+  const timestamp = Date.parse(`${date}T00:00:00Z`) - days * 86_400_000;
+  return new Date(timestamp).toISOString().slice(0, 10);
+}
+
+function normalizeApplyhomeUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !value.trim()) return undefined;
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== 'https:') return undefined;
+    const hostname = url.hostname.toLowerCase();
+    if (hostname !== 'applyhome.co.kr' && hostname !== 'www.applyhome.co.kr') return undefined;
+    return url.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+async function getSubscriptionToday(): Promise<string> {
+  'use cache';
+  cacheLife({ stale: 60, revalidate: 300, expire: 600 });
+  return kstTodayIso(new Date());
+}
+
 async function fetchOdcloudPage(
-  service:  string,
+  service: string,
   endpoint: string,
-  apiKey:   string,
-  page:     number,
-  perPage:  number,
+  apiKey: string,
+  page: number,
+  perPage: number,
 ): Promise<{ data: ApiRow[]; totalCount: number }> {
   const params = new URLSearchParams({
-    page:       String(page),
-    perPage:    String(perPage),
+    page: String(page),
+    perPage: String(perPage),
     returnType: 'JSON',
     serviceKey: apiKey,
   });
-
   const controller = new AbortController();
-  const timeoutId  = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    const res = await fetch(`${ODCLOUD_BASE}/${service}/${endpoint}?${params}`, {
+    const response = await fetch(`${ODCLOUD_BASE}/${service}/${endpoint}?${params}`, {
       signal: controller.signal,
+      headers: { Accept: 'application/json' },
+      next: { revalidate: 3_600 },
     });
-    if (!res.ok) throw new Error(`odcloud ${endpoint} HTTP ${res.status}`);
-    const json = await res.json() as { data?: ApiRow[]; totalCount?: number; matchCount?: number };
-    return {
-      data:       json.data ?? [],
-      totalCount: json.totalCount ?? json.matchCount ?? 0,
+    if (!response.ok) throw new Error(`odcloud ${endpoint} HTTP ${response.status}`);
+
+    const json = await response.json() as {
+      data?: unknown;
+      totalCount?: unknown;
+      matchCount?: unknown;
     };
+    const totalValue = json.totalCount ?? json.matchCount;
+    const totalCount = typeof totalValue === 'number'
+      ? totalValue
+      : typeof totalValue === 'string'
+        ? Number(totalValue)
+        : Number.NaN;
+
+    if (!Array.isArray(json.data) || !Number.isInteger(totalCount) || totalCount < 0) {
+      throw new Error(`odcloud ${endpoint} 응답 형식이 올바르지 않습니다`);
+    }
+
+    const data = json.data.filter(
+      (row): row is ApiRow => typeof row === 'object' && row !== null && !Array.isArray(row),
+    );
+    if (data.length !== json.data.length) {
+      throw new Error(`odcloud ${endpoint} 행 형식이 올바르지 않습니다`);
+    }
+    return { data, totalCount };
   } finally {
     clearTimeout(timeoutId);
   }
 }
 
-/** perPage씩 최대 maxPages 페이지까지 자동 페이징 */
 async function fetchOdcloudEndpoint(
-  service:   string,
-  endpoint:  string,
-  apiKey:    string,
-  perPage:   number,
-  maxPages = 3,
-): Promise<ApiRow[]> {
-  const first = await fetchOdcloudPage(service, endpoint, apiKey, 1, perPage);
-  const allData = [...first.data];
+  definition: EndpointDefinition,
+  apiKey: string,
+): Promise<EndpointFetchResult> {
+  const first = await fetchOdcloudPage(
+    definition.service,
+    definition.endpoint,
+    apiKey,
+    1,
+    definition.perPage,
+  );
+  const totalPages = Math.max(1, Math.ceil(first.totalCount / definition.perPage));
+  const requestedPages = Math.min(totalPages, MAX_ENDPOINT_PAGES);
+  const data = [...first.data];
+  const failedPages: number[] = [];
 
-  const totalPages = Math.min(maxPages, Math.ceil(first.totalCount / perPage));
-  if (totalPages > 1) {
-    const rest = await Promise.allSettled(
-      Array.from({ length: totalPages - 1 }, (_, i) =>
-        fetchOdcloudPage(service, endpoint, apiKey, i + 2, perPage),
-      ),
+  const remainingPages = Array.from({ length: Math.max(0, requestedPages - 1) }, (_, index) => index + 2);
+  for (let index = 0; index < remainingPages.length; index += PAGE_BATCH_SIZE) {
+    const batch = remainingPages.slice(index, index + PAGE_BATCH_SIZE);
+    const settled = await Promise.allSettled(
+      batch.map((page) => fetchOdcloudPage(
+        definition.service,
+        definition.endpoint,
+        apiKey,
+        page,
+        definition.perPage,
+      )),
     );
-    for (const r of rest) {
-      if (r.status === 'fulfilled') allData.push(...r.value.data);
-    }
+    settled.forEach((result, resultIndex) => {
+      if (result.status === 'fulfilled') data.push(...result.value.data);
+      else failedPages.push(batch[resultIndex]);
+    });
   }
 
-  return allData;
+  return {
+    data,
+    complete: totalPages <= MAX_ENDPOINT_PAGES
+      && failedPages.length === 0
+      && data.length >= first.totalCount,
+    totalCount: first.totalCount,
+    fetchedPages: requestedPages - failedPages.length,
+    failedPages,
+  };
 }
 
-// ────────────────────────────────────────────────
-// 주택관리번호별 가격·면적 집계
-// ────────────────────────────────────────────────
 interface HouseStats {
-  minPrice: number | null;
-  maxPrice: number | null;
-  minArea:  number | null;
-  maxArea:  number | null;
+  minArea: number | null;
+  maxArea: number | null;
 }
 
 function buildHouseStatsMap(modelRows: ApiRow[]): Map<string, HouseStats> {
   const map = new Map<string, HouseStats>();
-
   for (const row of modelRows) {
     const houseNo = row['HOUSE_MANAGE_NO'];
     if (!houseNo) continue;
-
-    const price = extractPriceManwon(row);
-    const area  = parseFloat(row['SUPLY_AR'] ?? '') || null;
-    const curr  = map.get(houseNo) ?? { minPrice: null, maxPrice: null, minArea: null, maxArea: null };
-
+    const parsedArea = Number.parseFloat(row['SUPLY_AR'] ?? '');
+    const area = Number.isFinite(parsedArea) && parsedArea > 0 ? parsedArea : null;
+    const current = map.get(houseNo) ?? { minArea: null, maxArea: null };
     map.set(houseNo, {
-      minPrice: price === null ? curr.minPrice : curr.minPrice === null ? price : Math.min(curr.minPrice, price),
-      maxPrice: price === null ? curr.maxPrice : curr.maxPrice === null ? price : Math.max(curr.maxPrice, price),
-      minArea:  area  === null ? curr.minArea  : curr.minArea  === null ? area  : Math.min(curr.minArea,  area),
-      maxArea:  area  === null ? curr.maxArea  : curr.maxArea  === null ? area  : Math.max(curr.maxArea,  area),
+      minArea: area === null || current.minArea !== null && current.minArea <= area ? current.minArea : area,
+      maxArea: area === null || current.maxArea !== null && current.maxArea >= area ? current.maxArea : area,
     });
   }
-
   return map;
 }
 
-// ────────────────────────────────────────────────
-// 주택관리번호별 경쟁률 집계 (평형별 상세 + 전체 평균)
-// ────────────────────────────────────────────────
-
-// 주택형 필드명 후보 — 실제 응답 확인 전 순서대로 시도
-const HOUSE_TYPE_FIELD_CANDIDATES = ['HOUSE_TY', 'HOUSING_TYPE', 'HOUSEHOLD_TYPE'] as const;
-
-function extractHouseType(row: ApiRow): string {
-  for (const field of HOUSE_TYPE_FIELD_CANDIDATES) {
-    const val = row[field]?.trim();
-    if (val) return val;
-  }
-  // 면적으로 폴백: "084.97A" 같은 숫자형 필드가 있을 경우 ㎡ 단위로 변환
-  const area = parseFloat(row['SUPLY_AR'] ?? '');
-  if (!isNaN(area) && area > 0) return `${Math.round(area)}㎡`;
-  return '기타';
+interface CompetitionMapValue {
+  entries: CompetitionRateEntry[];
 }
 
-interface CmpetAccEntry {
-  houseType: string;
-  rate:      number;
-  reqCount:  number | null;
-}
-
-interface CmpetMapValue {
-  entries:     CmpetAccEntry[];
-  overallRate: number;  // 평형별 평균
-}
-
-function buildCompetitionRateMap(cmpetRows: ApiRow[]): Map<string, CmpetMapValue> {
-  // houseNo → 평형별 항목 배열
-  const raw = new Map<string, CmpetAccEntry[]>();
-
+function buildCompetitionRateMap(cmpetRows: ApiRow[]): Map<string, CompetitionMapValue> {
+  const raw = new Map<string, CompetitionRateEntry[]>();
   for (const row of cmpetRows) {
     const houseNo = row['HOUSE_MANAGE_NO'];
-    if (!houseNo) continue;
+    const rateValue = Number.parseFloat((row['CMPET_RATE'] ?? '').replace(/,/g, ''));
+    if (!houseNo || !Number.isFinite(rateValue) || rateValue < 0) continue;
 
-    const rateRaw = row['CMPET_RATE'];
-    if (!rateRaw) continue;
-
-    const rate = parseFloat(rateRaw.replace(/,/g, ''));
-    if (isNaN(rate)) continue;
-
-    const reqCountRaw = row['REQ_CNT'];
-    const reqCount    = reqCountRaw ? parseInt(reqCountRaw.replace(/,/g, ''), 10) || null : null;
-    const houseType   = extractHouseType(row);
-
-    const list = raw.get(houseNo) ?? [];
-    list.push({ houseType, rate, reqCount });
-    raw.set(houseNo, list);
+    const countValue = Number.parseInt((row['REQ_CNT'] ?? '').replace(/,/g, ''), 10);
+    const entry: CompetitionRateEntry = {
+      houseType: row['HOUSE_TY']?.trim() || '주택형 미표기',
+      rate: rateValue,
+      reqCount: Number.isInteger(countValue) && countValue >= 0 ? countValue : null,
+    };
+    const entries = raw.get(houseNo) ?? [];
+    entries.push(entry);
+    raw.set(houseNo, entries);
   }
-
-  const result = new Map<string, CmpetMapValue>();
-  for (const [houseNo, entries] of raw) {
-    const sum         = entries.reduce((acc, e) => acc + e.rate, 0);
-    const overallRate = Math.round((sum / entries.length) * 10) / 10;
-    result.set(houseNo, { entries, overallRate });
-  }
-  return result;
+  return new Map(Array.from(raw, ([houseNo, entries]) => [houseNo, { entries }]));
 }
 
-// ────────────────────────────────────────────────
-// 공급유형별 일정 추출 — source 분기 (사이클 E)
-// ────────────────────────────────────────────────
-
-// APT 분양 — 기존 4종 중 1·2순위 + 특별 (etc 폐기, 잔여세대로 이관)
 const APT_SUPPLY_DATE_FIELDS: [string, SupplyDate['type'], string][] = [
-  ['SPSPLY_RCEPT_BGNDE',        'special', '특별공급'],
-  ['GNRL_RNK1_CRSPAREA_RCPTDE', 'first',   '1순위'],
-  ['GNRL_RNK2_CRSPAREA_RCPTDE', 'second',  '2순위'],
+  ['SPSPLY_RCEPT_BGNDE', 'special', '특별공급'],
+  ['GNRL_RNK1_CRSPAREA_RCPTDE', 'first', '1순위'],
+  ['GNRL_RNK2_CRSPAREA_RCPTDE', 'second', '2순위'],
 ];
 
-// 잔여세대·임의공급 공통 일정 필드 (특별·일반 두 줄)
 const REMNDR_OR_ARBITRARY_DATE_FIELDS: [string, string][] = [
   ['SPSPLY_RCEPT_BGNDE', '특별공급'],
-  ['GNRL_RCEPT_BGNDE',   '일반공급'],
+  ['GNRL_RCEPT_BGNDE', '일반공급'],
 ];
 
 function extractAptSupplyDates(row: ApiRow): SupplyDate[] {
-  const dates: SupplyDate[] = [];
-  for (const [field, type, label] of APT_SUPPLY_DATE_FIELDS) {
-    const val = row[field]?.trim();
-    if (val && val.length >= 8) {
-      dates.push({ type, label, date: val });
-    }
-  }
-  return dates;
+  return APT_SUPPLY_DATE_FIELDS.flatMap(([field, type, label]) => {
+    const date = normalizeSubscriptionDate(row[field]);
+    return date ? [{ type, label, date }] : [];
+  });
 }
 
-function classifyRemndrType(houseSecd: string): 'unranked' | 'illegal' {
+function classifyRemainderType(houseSecd: string): 'unranked' | 'illegal' {
   return houseSecd === HOUSE_SECD_ILLEGAL ? 'illegal' : 'unranked';
 }
 
-function extractRemndrSupplyDates(row: ApiRow): SupplyDate[] {
-  const type = classifyRemndrType(row['HOUSE_SECD'] ?? '04');
+function extractRemainderSupplyDates(row: ApiRow): SupplyDate[] {
+  const type = classifyRemainderType(row['HOUSE_SECD'] ?? '04');
   const typeLabel = type === 'illegal' ? '불법행위재공급' : '무순위';
-  const dates: SupplyDate[] = [];
-  for (const [field, baseLabel] of REMNDR_OR_ARBITRARY_DATE_FIELDS) {
-    const val = row[field]?.trim();
-    if (val && val.length >= 8) {
-      dates.push({ type, label: `${typeLabel}-${baseLabel}`, date: val });
-    }
-  }
-  return dates;
+  return REMNDR_OR_ARBITRARY_DATE_FIELDS.flatMap(([field, label]) => {
+    const date = normalizeSubscriptionDate(row[field]);
+    return date ? [{ type, label: `${typeLabel}-${label}`, date }] : [];
+  });
 }
 
 function extractArbitrarySupplyDates(row: ApiRow): SupplyDate[] {
-  const dates: SupplyDate[] = [];
-  for (const [field, baseLabel] of REMNDR_OR_ARBITRARY_DATE_FIELDS) {
-    const val = row[field]?.trim();
-    if (val && val.length >= 8) {
-      dates.push({ type: 'arbitrary', label: `임의공급-${baseLabel}`, date: val });
-    }
-  }
-  return dates;
+  return REMNDR_OR_ARBITRARY_DATE_FIELDS.flatMap(([field, label]) => {
+    const date = normalizeSubscriptionDate(row[field]);
+    return date ? [{ type: 'arbitrary' as const, label: `임의공급-${label}`, date }] : [];
+  });
 }
 
-// ────────────────────────────────────────────────
-// API 행 → SubscriptionItem 변환 (source 분기, 사이클 E)
-// ────────────────────────────────────────────────
 function buildHouseType(stats: HouseStats | undefined): string {
-  if (!stats) return '';
-  const { minArea, maxArea } = stats;
-  if (minArea === null) return '';
-  if (maxArea === null || minArea === maxArea) return `${Math.round(minArea)}㎡`;
-  return `${Math.round(minArea)}㎡~${Math.round(maxArea)}㎡`;
+  if (!stats || stats.minArea === null) return '';
+  if (stats.maxArea === null || stats.minArea === stats.maxArea) return `${Math.round(stats.minArea)}㎡`;
+  return `${Math.round(stats.minArea)}㎡~${Math.round(stats.maxArea)}㎡`;
 }
 
 function mapRowToItem(
-  row:      ApiRow,
-  source:   RowSource,
+  row: ApiRow,
+  source: RowSource,
   statsMap: Map<string, HouseStats>,
-  cmpetMap: Map<string, CmpetMapValue>,
+  competitionMap: Map<string, CompetitionMapValue>,
+  evaluationDate: string,
 ): SubscriptionItem | null {
   const houseNo = row['HOUSE_MANAGE_NO'];
-  const name    = row['HOUSE_NM']?.trim();
+  const name = row['HOUSE_NM']?.trim();
   if (!houseNo || !name) return null;
 
-  let startDate: string;
-  let endDate: string;
+  let rawStartDate: string;
+  let rawEndDate: string;
   let supplyDates: SupplyDate[];
   let supplyCategory: SubscriptionItem['supplyCategory'];
   let idPrefix: string;
 
   if (source === 'apt') {
-    startDate = row['RCEPT_BGNDE'] ?? '';
-    endDate   = row['RCEPT_ENDDE'] ?? '';
+    rawStartDate = row['RCEPT_BGNDE'] ?? '';
+    rawEndDate = row['RCEPT_ENDDE'] ?? '';
     supplyDates = extractAptSupplyDates(row);
     supplyCategory = 'apt';
     idPrefix = 'apt';
   } else if (source === 'remndr') {
-    // 버그 수정: 잔여세대 청약접수일 필드 (사이클 E)
-    startDate = row['SUBSCRPT_RCEPT_BGNDE'] ?? row['GNRL_RCEPT_BGNDE'] ?? '';
-    endDate   = row['SUBSCRPT_RCEPT_ENDDE'] ?? row['GNRL_RCEPT_ENDDE'] ?? '';
-    supplyDates = extractRemndrSupplyDates(row);
-    const remndrType = classifyRemndrType(row['HOUSE_SECD'] ?? '04');
-    supplyCategory = remndrType === 'illegal' ? 'remndr-illegal' : 'remndr-unranked';
+    rawStartDate = row['SUBSCRPT_RCEPT_BGNDE'] ?? row['GNRL_RCEPT_BGNDE'] ?? '';
+    rawEndDate = row['SUBSCRPT_RCEPT_ENDDE'] ?? row['GNRL_RCEPT_ENDDE'] ?? '';
+    supplyDates = extractRemainderSupplyDates(row);
+    const remainderType = classifyRemainderType(row['HOUSE_SECD'] ?? '04');
+    supplyCategory = remainderType === 'illegal' ? 'remndr-illegal' : 'remndr-unranked';
     idPrefix = supplyCategory;
   } else {
-    // arbitrary (임의공급)
-    startDate = row['SUBSCRPT_RCEPT_BGNDE'] ?? row['GNRL_RCEPT_BGNDE'] ?? '';
-    endDate   = row['SUBSCRPT_RCEPT_ENDDE'] ?? row['GNRL_RCEPT_ENDDE'] ?? '';
+    rawStartDate = row['SUBSCRPT_RCEPT_BGNDE'] ?? row['GNRL_RCEPT_BGNDE'] ?? '';
+    rawEndDate = row['SUBSCRPT_RCEPT_ENDDE'] ?? row['GNRL_RCEPT_ENDDE'] ?? '';
     supplyDates = extractArbitrarySupplyDates(row);
     supplyCategory = 'arbitrary';
     idPrefix = 'arbitrary';
   }
 
-  const stats = statsMap.get(houseNo);
-  const cmpet = cmpetMap.get(houseNo);
+  const startDate = normalizeSubscriptionDate(rawStartDate);
+  const endDate = normalizeSubscriptionDate(rawEndDate);
+  const status = startDate && endDate
+    ? deriveSubscriptionStatusOnDate(startDate, endDate, evaluationDate)
+    : null;
+  if (!startDate || !endDate || !status) return null;
 
-  const competitionRates: CompetitionRateEntry[] = cmpet?.entries.map((e) => ({
-    houseType: e.houseType,
-    rate:      e.rate,
-    reqCount:  e.reqCount,
-  })) ?? [];
+  const stats = statsMap.get(houseNo);
+  const competitionRates = competitionMap.get(houseNo)?.entries ?? [];
+  const units = Number.parseInt(row['TOT_SUPLY_HSHLDCO'] ?? '', 10);
 
   return {
-    id:               `${idPrefix}-${houseNo}`,
+    id: `${idPrefix}-${houseNo}`,
     name,
-    district:         row['SUBSCRPT_AREA_CODE_NM']?.trim() ?? '',
-    address:          row['HSSPLY_ADRES']?.trim() ?? '',
+    district: row['SUBSCRPT_AREA_CODE_NM']?.trim() ?? '',
+    address: row['HSSPLY_ADRES']?.trim() ?? '',
     startDate,
     endDate,
-    announceDate:     row['PRZWNER_PRESNATN_DE'] ?? '',
-    totalUnits:       parseInt(row['TOT_SUPLY_HSHLDCO'] ?? '0', 10) || 0,
-    competitionRate:  cmpet?.overallRate ?? null,
+    announceDate: normalizeSubscriptionDate(row['PRZWNER_PRESNATN_DE']) ?? '',
+    totalUnits: Number.isInteger(units) && units > 0 ? units : null,
+    competitionRate: null,
     competitionRates,
-    status:           deriveStatus(startDate, endDate),
-    minPrice:         stats?.minPrice ?? null,
-    maxPrice:         stats?.maxPrice ?? null,
-    houseType:        buildHouseType(stats),
+    status,
+    // 공급유형별 가격 필드 의미를 실응답으로 검증하기 전까지 숫자를 노출하지 않는다.
+    minPrice: null,
+    maxPrice: null,
+    houseType: buildHouseType(stats),
     supplyDates,
     supplyCategory,
+    sourceUrl: normalizeApplyhomeUrl(row['PBLANC_URL']),
   };
 }
 
-// ────────────────────────────────────────────────
-// 상태 정렬 우선순위
-// ────────────────────────────────────────────────
 const STATUS_ORDER: Record<SubscriptionStatus, number> = {
-  ongoing:  0,
+  ongoing: 0,
   upcoming: 1,
-  closed:   2,
+  closed: 2,
 };
 
-// ────────────────────────────────────────────────
-// 메인 fetch 함수 (1시간 캐시)
-// 사이클 E: APT(분양) + 잔여세대 + 임의공급 + 취소후재공급(Cmpet only) = 10 endpoint
-// ────────────────────────────────────────────────
-export async function fetchSubscriptions(): Promise<SubscriptionItem[]> {
-  'use cache';
-  cacheLife('hours');
-
+export async function fetchSubscriptions(evaluationDate?: string): Promise<SubscriptionFetchResult> {
   const rawKey = process.env.PUBLIC_DATA_API_KEY;
-  if (!rawKey) throw new Error('PUBLIC_DATA_API_KEY 환경변수가 설정되지 않았습니다');
-  const apiKey = decodeURIComponent(rawKey);
+  if (!rawKey) return unavailableResult('공공데이터 API 환경설정을 확인하고 있습니다.');
 
-  // 10개 엔드포인트 병렬 호출 — 일부 실패해도 나머지 결과 사용
-  const [
-    aptDetailResult,
-    aptModelResult,
-    aptCmpetResult,
-    remndrDetailResult,
-    remndrModelResult,
-    remndrCmpetResult,
-    optDetailResult,
-    optModelResult,
-    optCmpetResult,
-    cancResplCmpetResult,
-  ] = await Promise.allSettled([
-    // APT 분양
-    fetchOdcloudEndpoint(APT_DETAIL_SVC, 'getAPTLttotPblancDetail',    apiKey, 100, 3),
-    fetchOdcloudEndpoint(APT_DETAIL_SVC, 'getAPTLttotPblancMdl',       apiKey, 300, 2),
-    fetchOdcloudEndpoint(APT_CMPET_SVC,  'getAPTLttotPblancCmpet',     apiKey, 300, 2),
-    // 잔여세대 (무순위·불법행위재공급, HOUSE_SECD로 분류)
-    fetchOdcloudEndpoint(APT_DETAIL_SVC, 'getRemndrLttotPblancDetail', apiKey, 100, 3),
-    fetchOdcloudEndpoint(APT_DETAIL_SVC, 'getRemndrLttotPblancMdl',    apiKey, 300, 2),
-    fetchOdcloudEndpoint(APT_CMPET_SVC,  'getRemndrLttotPblancCmpet',  apiKey, 300, 2),
-    // 임의공급 (사이클 E 신규)
-    fetchOdcloudEndpoint(APT_DETAIL_SVC, 'getOPTLttotPblancDetail',    apiKey, 100, 3),
-    fetchOdcloudEndpoint(APT_DETAIL_SVC, 'getOPTLttotPblancMdl',       apiKey, 300, 2),
-    fetchOdcloudEndpoint(APT_CMPET_SVC,  'getOPTLttotPblancCmpet',     apiKey, 300, 2),
-    // 취소후재공급 (Cmpet only — Detail endpoint 없음)
-    fetchOdcloudEndpoint(APT_CMPET_SVC,  'getCancResplLttotPblancCmpet', apiKey, 300, 2),
-  ]);
+  let apiKey: string;
+  try {
+    apiKey = decodeURIComponent(rawKey);
+  } catch {
+    return unavailableResult('공공데이터 API 환경설정 형식이 올바르지 않습니다.');
+  }
 
-  const aptDetails    = aptDetailResult.status    === 'fulfilled' ? aptDetailResult.value    : [];
-  const aptModels     = aptModelResult.status     === 'fulfilled' ? aptModelResult.value     : [];
-  const aptCmpet      = aptCmpetResult.status     === 'fulfilled' ? aptCmpetResult.value     : [];
-  const remndrDetails = remndrDetailResult.status === 'fulfilled' ? remndrDetailResult.value : [];
-  const remndrModels  = remndrModelResult.status  === 'fulfilled' ? remndrModelResult.value  : [];
-  const remndrCmpet   = remndrCmpetResult.status  === 'fulfilled' ? remndrCmpetResult.value  : [];
-  const optDetails    = optDetailResult.status    === 'fulfilled' ? optDetailResult.value    : [];
-  const optModels     = optModelResult.status     === 'fulfilled' ? optModelResult.value     : [];
-  const optCmpet      = optCmpetResult.status     === 'fulfilled' ? optCmpetResult.value     : [];
-  const cancResplCmpet = cancResplCmpetResult.status === 'fulfilled' ? cancResplCmpetResult.value : [];
+  const settled = await Promise.allSettled(
+    ENDPOINTS.map((definition) => fetchOdcloudEndpoint(definition, apiKey)),
+  );
+  const successful = new Map<string, EndpointFetchResult>();
+  const failedEndpoints: string[] = [];
+  const incompleteEndpoints: string[] = [];
 
-  // 가격·면적·경쟁률은 모든 source 합산 (HOUSE_MANAGE_NO 단일 키)
-  const statsMap = buildHouseStatsMap([...aptModels, ...remndrModels, ...optModels]);
-  const cmpetMap = buildCompetitionRateMap([
-    ...aptCmpet,
-    ...remndrCmpet,
-    ...optCmpet,
-    ...cancResplCmpet, // 취소후재공급 경쟁률은 동일 houseNo면 함께 매핑
-  ]);
+  settled.forEach((result, index) => {
+    const definition = ENDPOINTS[index];
+    if (result.status === 'fulfilled') {
+      successful.set(definition.key, result.value);
+      if (!result.value.complete) incompleteEndpoints.push(definition.label);
+    } else {
+      failedEndpoints.push(definition.label);
+    }
+  });
 
-  const seenIds   = new Set<string>();
+  const detailDefinitions = ENDPOINTS.filter((definition) => definition.kind === 'detail');
+  const availableDetailDefinitions = detailDefinitions.filter((definition) => successful.has(definition.key));
+  const baseCoverage: SubscriptionCoverage = {
+    requestedEndpoints: ENDPOINTS.length,
+    successfulEndpoints: successful.size,
+    failedEndpoints,
+    incompleteEndpoints,
+    discardedRows: 0,
+    historicalRowsExcluded: 0,
+    displayWindowStart: null,
+  };
+
+  if (availableDetailDefinitions.length === 0) {
+    return {
+      status: 'unavailable',
+      items: [],
+      coverage: baseCoverage,
+      note: '청약홈 공고 원본을 불러오지 못했습니다. 임시 공고를 대신 표시하지 않습니다.',
+    };
+  }
+
+  const statusDate = normalizeSubscriptionDate(evaluationDate) ?? await getSubscriptionToday();
+
+  const modelRows = ENDPOINTS
+    .filter((definition) => definition.kind === 'model')
+    .flatMap((definition) => successful.get(definition.key)?.data ?? []);
+  const competitionRows = ENDPOINTS
+    .filter((definition) => definition.kind === 'competition')
+    .flatMap((definition) => successful.get(definition.key)?.data ?? []);
+  const statsMap = buildHouseStatsMap(modelRows);
+  const competitionMap = buildCompetitionRateMap(competitionRows);
+
+  const seenIds = new Set<string>();
   const items: SubscriptionItem[] = [];
-
-  // source별로 박아 mapRowToItem에 정확한 source 전달
-  const groups: { rows: ApiRow[]; source: RowSource }[] = [
-    { rows: aptDetails,    source: 'apt' },
-    { rows: remndrDetails, source: 'remndr' },
-    { rows: optDetails,    source: 'arbitrary' },
-  ];
-
-  for (const { rows, source } of groups) {
-    for (const row of rows) {
-      const item = mapRowToItem(row, source, statsMap, cmpetMap);
-      if (item && !seenIds.has(item.id)) {
+  let discardedRows = 0;
+  for (const definition of availableDetailDefinitions) {
+    const source = definition.source;
+    if (!source) continue;
+    for (const row of successful.get(definition.key)?.data ?? []) {
+      const item = mapRowToItem(row, source, statsMap, competitionMap, statusDate);
+      if (!item) {
+        discardedRows += 1;
+        continue;
+      }
+      if (!seenIds.has(item.id)) {
         seenIds.add(item.id);
         items.push(item);
       }
     }
   }
 
-  return items.sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]);
+  const displayWindowStart = calendarDateDaysBefore(statusDate, CLOSED_HISTORY_DAYS);
+  const displayItems = items.filter(
+    (item) => item.status !== 'closed' || item.endDate >= displayWindowStart,
+  );
+  const coverage = {
+    ...baseCoverage,
+    discardedRows,
+    historicalRowsExcluded: items.length - displayItems.length,
+    displayWindowStart,
+  };
+  const status: SubscriptionFetchResult['status'] = failedEndpoints.length > 0
+    || incompleteEndpoints.length > 0
+    || discardedRows > 0
+    ? 'partial'
+    : 'ok';
+  const noteParts: string[] = [];
+  if (failedEndpoints.length > 0) noteParts.push(`${failedEndpoints.length}개 자료 호출 실패`);
+  if (incompleteEndpoints.length > 0) noteParts.push(`${incompleteEndpoints.length}개 자료 부분 수집`);
+  if (discardedRows > 0) noteParts.push(`날짜·필수값 오류 ${discardedRows}건 제외`);
+
+  return {
+    status,
+    items: displayItems.sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]
+      || a.startDate.localeCompare(b.startDate)),
+    coverage,
+    note: noteParts.length > 0
+      ? `일부 자료만 표시합니다: ${noteParts.join(', ')}.`
+      : undefined,
+  };
 }

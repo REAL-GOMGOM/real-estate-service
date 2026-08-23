@@ -7,15 +7,25 @@ import SubscriptionTable from '@/components/subscription/SubscriptionTable';
 import SubscriptionDetailModal from '@/components/subscription/SubscriptionDetailModal';
 import SubscriptionCalendar from '@/components/subscription/SubscriptionCalendar';
 import type { SubscriptionItem } from '@/lib/types';
+import type { SubscriptionCoverage } from '@/lib/subscription-api';
 import { matchesQuery } from '@/lib/search-utils';
+import { TrackedTelegramLink } from '@/components/shared/TrackedTelegramLink';
 
 interface Props {
   items: SubscriptionItem[];
+  dataStatus?: 'ok' | 'partial' | 'degraded';
+  note?: string;
+  coverage?: SubscriptionCoverage;
 }
 
 const STATUS_ORDER = { ongoing: 0, upcoming: 1, closed: 2 } as const;
 
-export default function SubscriptionClientPage({ items }: Props) {
+export default function SubscriptionClientPage({
+  items,
+  dataStatus = 'ok',
+  note,
+  coverage,
+}: Props) {
   const [viewMode,         setViewMode]         = useState<'list' | 'calendar'>('calendar');
   const [selectedStatus,   setSelectedStatus]   = useState('전체');
   const [selectedDistrict, setSelectedDistrict] = useState('전체');
@@ -70,54 +80,111 @@ export default function SubscriptionClientPage({ items }: Props) {
             청약 정보
           </h1>
           <p style={{ fontSize: '15px', color: 'var(--text-muted)' }}>
-            전국 아파트 청약 일정, 경쟁률, 공급유형별 접수일을 한눈에 확인하세요. 출처: 한국부동산원 청약홈
+            진행·예정 공고 전체와 최근 180일 마감 공고의 일정·공시 경쟁률을 확인하세요. 출처: 한국부동산원 청약홈
           </p>
         </div>
 
-        {/* 요약 통계 카드 */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-          gap: '16px',
-          marginBottom: '32px',
-        }}>
-          {stats.map((stat) => (
-            <div
-              key={stat.label}
-              style={{
-                padding: '20px 24px',
-                borderRadius: '16px',
-                backgroundColor: 'var(--bg-card)',
-                border: '1px solid var(--border)',
-              }}
+        {dataStatus === 'degraded' ? (
+          <section
+            role="status"
+            style={{
+              padding: '24px',
+              borderRadius: '16px',
+              backgroundColor: '#FFF8F7',
+              border: '1px solid #F2D7D5',
+              marginBottom: '32px',
+            }}
+          >
+            <h2 style={{ margin: 0, fontSize: '17px', color: '#8A2C25' }}>
+              청약 데이터를 잠시 불러오지 못했습니다.
+            </h2>
+            <p style={{ margin: '8px 0 0', fontSize: '14px', lineHeight: 1.7, color: 'var(--text-muted)' }}>
+              임시 공고를 대신 표시하지 않습니다. 잠시 후 새로고침하거나 청약홈 원문에서 확인해 주세요.
+            </p>
+            <a
+              href="https://www.applyhome.co.kr"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ display: 'inline-block', marginTop: '14px', color: 'var(--accent)', fontWeight: 700 }}
             >
-              <p style={{ fontSize: '13px', color: 'var(--text-dim)', marginBottom: '8px' }}>{stat.label}</p>
-              <p style={{
-                fontSize: '28px', fontWeight: 800,
-                fontFamily: 'Roboto Mono, monospace',
-                color: stat.color,
-              }}>
-                {stat.value}
-                <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-dim)', marginLeft: '4px' }}>건</span>
-              </p>
-              {stat.range && (
-                <p style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '6px', fontFamily: 'Roboto Mono, monospace' }}>
-                  {stat.range}
+              청약홈에서 확인하기 →
+            </a>
+          </section>
+        ) : (
+          <>
+            {dataStatus === 'partial' && (
+              <section
+                role="status"
+                style={{
+                  padding: '16px 18px',
+                  borderRadius: '14px',
+                  backgroundColor: '#FFF9EC',
+                  border: '1px solid #E9D39C',
+                  marginBottom: '24px',
+                  color: '#71551C',
+                }}
+              >
+                <p style={{ margin: 0, fontSize: '14px', fontWeight: 700 }}>
+                  현재 수집된 일부 공고만 표시합니다.
                 </p>
-              )}
+                <p style={{ margin: '6px 0 0', fontSize: '12px', lineHeight: 1.6 }}>
+                  {note ?? '일부 청약홈 자료가 응답하지 않았습니다.'}
+                  {coverage && ` (${coverage.successfulEndpoints}/${coverage.requestedEndpoints}개 자료 호출 성공)`}
+                </p>
+              </section>
+            )}
+            {coverage?.displayWindowStart && (
+              <p style={{ margin: '-10px 0 22px', fontSize: '12px', color: 'var(--text-dim)' }}>
+                표시 범위: 진행·예정 공고 전체 · 마감일 {coverage.displayWindowStart} 이후 공고
+                {coverage.historicalRowsExcluded > 0 && ` · 이전 마감 ${coverage.historicalRowsExcluded.toLocaleString()}건 제외`}
+              </p>
+            )}
+            {/* 요약 통계 카드 */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+              gap: '16px',
+              marginBottom: '32px',
+            }}>
+              {stats.map((stat) => (
+                <div
+                  key={stat.label}
+                  style={{
+                    padding: '20px 24px',
+                    borderRadius: '16px',
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px solid var(--border)',
+                  }}
+                >
+                  <p style={{ fontSize: '13px', color: 'var(--text-dim)', marginBottom: '8px' }}>{stat.label}</p>
+                  <p style={{
+                    fontSize: '28px', fontWeight: 800,
+                    fontFamily: 'Roboto Mono, monospace',
+                    color: stat.color,
+                  }}>
+                    {stat.value}
+                    <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-dim)', marginLeft: '4px' }}>건</span>
+                  </p>
+                  {stat.range && (
+                    <p style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '6px', fontFamily: 'Roboto Mono, monospace' }}>
+                      {stat.range}
+                    </p>
+                  )}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
 
         {/* 뷰 모드 토글 */}
-        <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', padding: '4px', borderRadius: '12px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)', width: 'fit-content' }}>
+        <div role="group" aria-label="청약 정보 보기 방식" style={{ display: 'flex', gap: '4px', marginBottom: '24px', padding: '4px', borderRadius: '12px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)', width: 'fit-content' }}>
           {([
             { mode: 'calendar' as const,  icon: <CalendarDays size={15} />, label: '달력' },
             { mode: 'list' as const,     icon: <List size={15} />,         label: '목록' },
           ]).map(({ mode, icon, label }) => (
             <button
+              type="button"
               key={mode}
               onClick={() => setViewMode(mode)}
+              aria-pressed={viewMode === mode}
               style={{
                 display: 'flex', alignItems: 'center', gap: '6px',
                 padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 600,
@@ -154,13 +221,33 @@ export default function SubscriptionClientPage({ items }: Props) {
           <SubscriptionCalendar items={filteredItems} onSelect={setSelectedItem} />
         )}
 
-        {/* 상세 모달 */}
-        {selectedItem && (
-          <SubscriptionDetailModal
-            item={selectedItem}
-            onClose={() => setSelectedItem(null)}
-          />
+            {/* 상세 모달 */}
+            {selectedItem && (
+              <SubscriptionDetailModal
+                item={selectedItem}
+                onClose={() => setSelectedItem(null)}
+              />
+            )}
+          </>
         )}
+
+        <section style={{ marginTop: '36px', padding: '20px', borderRadius: '16px', background: '#EEF3FF', border: '1px solid #D8E2FF', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '16px', color: 'var(--text-primary)' }}>
+              새 청약·주요 부동산 소식 받아보기
+            </h2>
+            <p style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+              운영 일정에 따라 선별한 소식을 내집 텔레그램 채널에서 전합니다.
+            </p>
+          </div>
+          <TrackedTelegramLink
+            href={process.env.NEXT_PUBLIC_TELEGRAM_CHANNEL_URL || 'https://t.me/realMyzip'}
+            placement="subscription_inline_cta"
+            style={{ padding: '11px 16px', borderRadius: '10px', background: '#1B4DDB', color: '#FFFFFF', fontSize: '13px', fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}
+          >
+            채널 참여하기 →
+          </TrackedTelegramLink>
+        </section>
 
         {/* 면책 문구 */}
         <p style={{
@@ -176,7 +263,8 @@ export default function SubscriptionClientPage({ items }: Props) {
             style={{ color: 'var(--accent)', marginLeft: '4px' }}
           >
             청약홈(applyhome.co.kr)
-          </a>에서 확인하세요.
+          </a>에서 공고문·분양가·접수 조건을 다시 확인하세요. 화면 성능을 위해 마감 공고는 최근 180일만 표시하며,
+          API에서 의미가 명확히 확인되지 않은 가격 필드는 표시하지 않습니다.
         </p>
       </div>
     </main>

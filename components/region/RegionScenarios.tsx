@@ -47,7 +47,7 @@ export function RegionScenarios({ region }: Props) {
           { label: '시세중심', value: scenarios.price },
           { label: '성장중심', value: scenarios.growth },
           { label: '인프라중심', value: scenarios.infra },
-          { label: '변동폭', value: scenarios.sensitivity },
+          { label: '표준편차(민감도)', value: scenarios.sensitivity },
         ].map((item) => (
           <div
             key={item.label}
@@ -74,7 +74,7 @@ export function RegionScenarios({ region }: Props) {
       </dl>
 
       <p className="text-xs mt-4" style={{ color: 'var(--text-muted)' }}>
-        변동폭 {sensitivity.toFixed(2)} → <strong>{sensitivityLabel}</strong>
+        표준편차(민감도) {sensitivity.toFixed(2)} → <strong>{sensitivityLabel}</strong>
       </p>
     </section>
   );

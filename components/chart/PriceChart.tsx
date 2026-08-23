@@ -52,7 +52,7 @@ function CustomTooltip({ active, payload, label }: {
       <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '8px' }}>{label}</p>
       {count && (
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', marginBottom: '4px' }}>
-          <span style={{ fontSize: '12px', color: '#8FACEE' }}>매매물량</span>
+          <span style={{ fontSize: '12px', color: '#8FACEE' }}>거래 건수</span>
           <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>
             {count.value}개
           </span>
@@ -60,7 +60,7 @@ function CustomTooltip({ active, payload, label }: {
       )}
       {avgPrice && (
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', marginBottom: '4px' }}>
-          <span style={{ fontSize: '12px', color: '#E8663C' }}>매호가(평균)</span>
+          <span style={{ fontSize: '12px', color: '#E8663C' }}>평균 실거래가</span>
           <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>
             {toEok(avgPrice.value)}
           </span>
@@ -68,7 +68,7 @@ function CustomTooltip({ active, payload, label }: {
       )}
       {minPrice && (
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px' }}>
-          <span style={{ fontSize: '12px', color: '#E23B3B' }}>매호가(저)</span>
+          <span style={{ fontSize: '12px', color: '#E23B3B' }}>최저 실거래가</span>
           <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>
             {toEok(minPrice.value)}
           </span>
@@ -83,9 +83,9 @@ function CustomLegend() {
   return (
     <div style={{ display: 'flex', gap: '16px', justifyContent: 'flex-end', marginBottom: '8px' }}>
       {[
-        { color: '#8FACEE', label: '매매물량', dashed: false, bar: true },
-        { color: '#E8663C', label: '매호가(평균)', dashed: false, bar: false },
-        { color: '#E23B3B', label: '매호가(저)',   dashed: true,  bar: false },
+        { color: '#8FACEE', label: '거래 건수', dashed: false, bar: true },
+        { color: '#E8663C', label: '평균 실거래가', dashed: false, bar: false },
+        { color: '#E23B3B', label: '최저 실거래가', dashed: true,  bar: false },
       ].map((item) => (
         <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
           {item.bar ? (

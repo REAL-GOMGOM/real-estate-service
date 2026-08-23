@@ -1,12 +1,13 @@
 import Link from 'next/link';
 import type { RegionDetail } from '@/lib/types';
+import { TrackedTelegramLink } from '@/components/shared/TrackedTelegramLink';
 
 interface Props {
   region: RegionDetail;
 }
 
 export function RegionCTA({ region }: Props) {
-  const telegramUrl = process.env.NEXT_PUBLIC_TELEGRAM_CHANNEL_URL;
+  const telegramUrl = process.env.NEXT_PUBLIC_TELEGRAM_CHANNEL_URL || 'https://t.me/realMyzip';
   const mapUrl = `/location-map?highlight=${region.id}`;
 
   return (
@@ -23,20 +24,17 @@ export function RegionCTA({ region }: Props) {
           입지지도에서 {region.name} 보기 →
         </Link>
 
-        {telegramUrl && (
-          <a
-            href={telegramUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-center px-6 py-3 rounded-lg border font-medium transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2"
-            style={{
-              borderColor: 'var(--border)',
-              color: 'var(--text-primary)',
-            }}
-          >
-            내집 텔레그램 채널 참여 →
-          </a>
-        )}
+        <TrackedTelegramLink
+          href={telegramUrl}
+          placement="region_detail_cta"
+          className="inline-flex items-center justify-center px-6 py-3 rounded-lg border font-medium transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2"
+          style={{
+            borderColor: 'var(--border)',
+            color: 'var(--text-primary)',
+          }}
+        >
+          내집 텔레그램 채널 참여 →
+        </TrackedTelegramLink>
       </div>
     </section>
   );

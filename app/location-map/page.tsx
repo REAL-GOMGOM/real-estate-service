@@ -11,14 +11,34 @@ import SchoolDetailPanel, { type SchoolData } from '@/components/location-map/Sc
 import BottomSheet from '@/components/common/BottomSheet';
 import FloatingNavPanel from '@/components/location-map/FloatingNavPanel';
 import type { LocationScore } from '@/lib/types';
-import locationScoresJson from '@/data/location-scores.json';
+import { PUBLIC_LOCATION_SCORES } from '@/lib/location-score-data';
 
-const ALL_LOCATIONS = locationScoresJson as LocationScore[];
+const ALL_LOCATIONS: LocationScore[] = PUBLIC_LOCATION_SCORES;
 
 const VALID_REGIONS = [
   '전체', '서울', '경기', '인천', '1기신도시', '2기신도시', '3기신도시',
   '부산', '대구', '울산',
 ];
+
+const SCHOOL_SIDO_BY_REGION: Record<string, string> = {
+  서울: '서울특별시',
+  경기: '경기도',
+  인천: '인천광역시',
+  부산: '부산광역시',
+  대구: '대구광역시',
+  울산: '울산광역시',
+};
+
+function distanceKm(a: SchoolData, b: SchoolData): number {
+  const toRadians = (degrees: number) => degrees * Math.PI / 180;
+  const lat1 = toRadians(a.latitude);
+  const lat2 = toRadians(b.latitude);
+  const deltaLat = lat2 - lat1;
+  const deltaLng = toRadians(b.longitude - a.longitude);
+  const haversine = Math.sin(deltaLat / 2) ** 2
+    + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+}
 
 function isValidRegion(value: string | null): value is string {
   return value !== null && VALID_REGIONS.includes(value);
@@ -51,6 +71,7 @@ function LocationMapContent() {
   const [activeLayers, setActiveLayers] = useState<Set<string>>(() => new Set());
   const [schools, setSchools] = useState<SchoolData[]>([]);
   const [selectedSchool, setSelectedSchool] = useState<SchoolData | null>(null);
+  const [schoolNotice, setSchoolNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -100,13 +121,51 @@ function LocationMapContent() {
   }, [selectedRegion]);
 
   useEffect(() => {
-    // 켜진 레이어가 없으면 호출 불필요 (목록 비우기는 toggleLayer 에서 처리)
     if (activeLayers.size === 0) return;
-    const district = selectedRegion === '전체' ? '' : selectedRegion;
-    fetch(`/api/map/schools${district ? `?district=${encodeURIComponent(district)}` : ''}`)
-      .then((res) => res.json())
-      .then((json) => setSchools(json.schools || []))
-      .catch(() => { /* 실패 시 기존 데이터 유지 */ });
+    const sido = SCHOOL_SIDO_BY_REGION[selectedRegion];
+    if (!sido) {
+      const noticeTimer = window.setTimeout(() => {
+        setSchools([]);
+        setSelectedSchool(null);
+        setSchoolNotice('학교 레이어는 서울·경기·인천·부산·대구·울산 권역을 선택하면 표시됩니다.');
+      }, 0);
+      return () => window.clearTimeout(noticeTimer);
+    }
+
+    const controller = new AbortController();
+    const loadingTimer = window.setTimeout(() => {
+      setSchools([]);
+      setSelectedSchool(null);
+      setSchoolNotice('학교알리미 공시 위치를 불러오는 중입니다.');
+    }, 0);
+    const params = new URLSearchParams({ sido, limit: '3000' });
+    fetch(`/api/map/schools?${params}`, { signal: controller.signal })
+      .then(async (response) => {
+        const json = await response.json();
+        if (
+          !response.ok
+          || !Array.isArray(json?.schools)
+          || typeof json?.total !== 'number'
+          || json.total > json.schools.length
+        ) {
+          throw new Error(typeof json?.error === 'string' ? json.error : '학교 데이터가 일부만 반환되었습니다.');
+        }
+        return json.schools as SchoolData[];
+      })
+      .then((items) => {
+        setSchools(items);
+        setSchoolNotice(`${sido} 학교 ${items.length.toLocaleString()}개교 · 학교알리미 공시 위치`);
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setSchools([]);
+        setSchoolNotice('학교 데이터를 불러오지 못했습니다. 권역을 다시 선택해 재시도해 주세요.');
+      });
+
+    return () => {
+      window.clearTimeout(loadingTimer);
+      controller.abort();
+    };
   }, [activeLayers.size, selectedRegion]);
 
   const toggleLayer = (key: string) => {
@@ -115,7 +174,11 @@ function LocationMapContent() {
     else next.add(key);
     setActiveLayers(next);
     // 레이어가 모두 꺼지면 학교 목록도 비움 (기존 동작 유지)
-    if (next.size === 0) setSchools([]);
+    if (next.size === 0) {
+      setSchools([]);
+      setSelectedSchool(null);
+      setSchoolNotice(null);
+    }
   };
 
   const handleSchoolClick = (school: SchoolData) => {
@@ -130,7 +193,13 @@ function LocationMapContent() {
 
   const nearbySchools = useMemo(() => {
     if (!selectedSchool) return [];
-    return schools.filter((s) => s.district === selectedSchool.district && s.id !== selectedSchool.id);
+    return schools
+      .filter((school) => school.school_level === 'middle' && school.id !== selectedSchool.id)
+      .map((school) => ({ school, distance: distanceKm(selectedSchool, school) }))
+      .filter(({ distance }) => distance <= 3)
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, 5)
+      .map(({ school }) => school);
   }, [selectedSchool, schools]);
 
   const mapArea = (
@@ -155,6 +224,19 @@ function LocationMapContent() {
         </div>
       )}
       {!isMobile && !selectedLocation && !selectedSchool && <FloatingNavPanel />}
+      {activeLayers.size > 0 && schoolNotice && (
+        <div
+          role="status"
+          style={{
+            position: 'absolute', top: 14, left: '50%', transform: 'translateX(-50%)', zIndex: 20,
+            maxWidth: 'calc(100% - 32px)', padding: '8px 12px', borderRadius: 9,
+            background: 'rgba(11,21,36,0.88)', color: '#FFFFFF', fontSize: 11.5,
+            boxShadow: '0 4px 16px rgba(0,0,0,0.2)', textAlign: 'center',
+          }}
+        >
+          {schoolNotice}
+        </div>
+      )}
       {!isMobile && selectedLocation && (
         <LocationDetailPanel
           location={selectedLocation}

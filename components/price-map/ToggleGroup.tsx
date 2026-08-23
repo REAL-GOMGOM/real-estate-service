@@ -8,13 +8,15 @@ interface ToggleGroupProps<T extends string> {
 
 export default function ToggleGroup<T extends string>({ options, selected, onChange }: ToggleGroupProps<T>) {
   return (
-    <div style={{
+    <div role="group" aria-label="보기 선택" style={{
       display: 'inline-flex', borderRadius: '10px', overflow: 'hidden',
       border: '1px solid var(--border)',
     }}>
       {options.map((opt) => (
         <button
           key={opt.value}
+          type="button"
+          aria-pressed={selected === opt.value}
           onClick={() => onChange(opt.value)}
           style={{
             padding: '8px 18px', fontSize: '13px', fontWeight: 600,

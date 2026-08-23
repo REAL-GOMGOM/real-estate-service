@@ -14,12 +14,14 @@ import { RegionNearby } from '@/components/region/RegionNearby';
 import { RegionDataSource } from '@/components/region/RegionDataSource';
 import { RegionCTA } from '@/components/region/RegionCTA';
 import { AdSlot } from '@/components/shared/AdSlot';
+import { buildRegionHeadline, buildRegionSummary } from '@/lib/region-copy';
+import { SITE_URL } from '@/lib/site';
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-// SSG: 빌드 시 126개 페이지 미리 생성
+// SSG: 빌드 시 location-scores에 등록된 전체 지역 페이지 생성
 export async function generateStaticParams() {
   const ids = await getAllRegionIds();
   return ids.map((id) => ({ id }));
@@ -36,23 +38,22 @@ export async function generateMetadata({
     return { title: '지역을 찾을 수 없습니다 | 내집(NAEZIP)' };
   }
 
-  const title = `${region.name} 입지 분석 | 내집(NAEZIP)`;
-  const description =
-    region.insight.summary ||
-    `${region.region} ${region.name}의 입지 점수, 시세, 교통·학군 지표를 분석합니다. 내집(NAEZIP)에서 확인하세요.`;
-  const canonical = `https://www.naezipkorea.com/region/${region.id}`;
+  const title = `${region.name} 입지 지표 | 내집(NAEZIP)`;
+  const description = buildRegionSummary(region);
+  const headline = buildRegionHeadline(region);
+  const canonical = `${SITE_URL}/region/${region.id}`;
 
   return {
     title,
     description,
     alternates: { canonical },
     openGraph: {
-      title: `${region.name} — ${region.insight.headline || '입지 분석'}`,
+      title: headline,
       description,
       url: canonical,
       siteName: '내집(NAEZIP)',
       locale: 'ko_KR',
-      type: 'article',
+      type: 'website',
     },
     twitter: {
       card: 'summary_large_image',
@@ -70,9 +71,9 @@ async function RegionContent({ id }: { id: string }) {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: '홈', item: 'https://www.naezipkorea.com' },
-      { '@type': 'ListItem', position: 2, name: '입지지도', item: 'https://www.naezipkorea.com/location-map' },
-      { '@type': 'ListItem', position: 3, name: region.region, item: `https://www.naezipkorea.com/location-map?region=${encodeURIComponent(region.region)}` },
+      { '@type': 'ListItem', position: 1, name: '홈', item: SITE_URL },
+      { '@type': 'ListItem', position: 2, name: '입지지도', item: `${SITE_URL}/location-map` },
+      { '@type': 'ListItem', position: 3, name: region.region, item: `${SITE_URL}/location-map?region=${encodeURIComponent(region.region)}` },
       { '@type': 'ListItem', position: 4, name: region.name },
     ],
   };
@@ -87,14 +88,14 @@ async function RegionContent({ id }: { id: string }) {
       : {}),
   };
 
-  const articleLd = {
+  const webPageLd = {
     '@context': 'https://schema.org',
-    '@type': 'Article',
-    headline: region.insight.headline || `${region.name} 입지 분석`,
-    description: region.insight.summary || `${region.region} ${region.name}의 입지 점수와 시세 분석`,
-    author: { '@type': 'Organization', name: '내집(NAEZIP)', url: 'https://www.naezipkorea.com' },
-    publisher: { '@type': 'Organization', name: '내집(NAEZIP)', url: 'https://www.naezipkorea.com' },
-    datePublished: region.lastUpdated || region.month,
+    '@type': 'WebPage',
+    name: buildRegionHeadline(region),
+    description: buildRegionSummary(region),
+    url: `${SITE_URL}/region/${region.id}`,
+    isPartOf: { '@type': 'WebSite', name: '내집(NAEZIP)', url: SITE_URL },
+    about: { '@type': 'Place', name: region.name },
     dateModified: region.lastUpdated || region.month,
   };
 
@@ -102,7 +103,7 @@ async function RegionContent({ id }: { id: string }) {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(placeLd) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(webPageLd) }} />
 
       <RegionBreadcrumb region={region} />
       <RegionHero region={region} />

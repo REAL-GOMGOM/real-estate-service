@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.gomgom.naezip-sync-and-publish</string>
+
+  <!-- Replace placeholders before installation. No shell is involved. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>__ABSOLUTE_NODE_BINARY__</string>
+    <string>--import</string>
+    <string>tsx</string>
+    <string>scripts/run-local-sync-and-publish.ts</string>
+    <!-- Object-store-only dry run: MOLIT/local PG sync is real. Require backup+restore check first. -->
+    <string>--dry-run</string>
+  </array>
+
+  <!-- Promote the verified RC commit to a stable clone; never use a dated Codex worktree. -->
+  <key>WorkingDirectory</key>
+  <string>__LONG_LIVED_REPOSITORY_ROOT__</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>NODE_ENV</key>
+    <string>production</string>
+    <key>NAEZIP_ENV_FILE</key>
+    <string>__ABSOLUTE_SECURE_ENV_FILE__</string>
+    <key>NAEZIP_SYNC_HEALTH_MARKER</key>
+    <string>__ABSOLUTE_STATE_DIRECTORY__/macmini-sync-health.json</string>
+    <key>NAEZIP_PUBLICATION_OUTCOME_MARKER</key>
+    <string>__ABSOLUTE_STATE_DIRECTORY__/public-snapshot-publication-outcome.json</string>
+    <key>NAEZIP_SNAPSHOT_LOCK_PATH</key>
+    <string>__ABSOLUTE_STATE_DIRECTORY__/public-snapshot-publication.lock</string>
+    <!-- Local-only by default. Change to 1 only after an explicit Neon quota review. -->
+    <key>NAEZIP_ENABLE_NEON_CACHE_WRITE</key>
+    <string>0</string>
+  </dict>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>5</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <false/>
+  <key>KeepAlive</key>
+  <false/>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>Umask</key>
+  <integer>63</integer>
+
+  <key>StandardOutPath</key>
+  <string>__ABSOLUTE_LOG_DIRECTORY__/naezip-sync-and-publish.stdout.log</string>
+  <key>StandardErrorPath</key>
+  <string>__ABSOLUTE_LOG_DIRECTORY__/naezip-sync-and-publish.stderr.log</string>
+</dict>
+</plist>

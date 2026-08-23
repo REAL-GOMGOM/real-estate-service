@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import remarkGfm from 'remark-gfm';
+import { Suspense } from 'react';
 
 import { mdxComponents } from '@/app/blog/components/mdx-components';
 import { getPostByIdForAdmin } from '@/lib/blog/queries';
@@ -18,7 +19,7 @@ export const metadata: Metadata = {
   title: '미리보기 — 내집(My.ZIP)',
 };
 
-export default async function PreviewPage({ params }: PreviewPageProps) {
+async function PreviewContent({ params }: PreviewPageProps) {
   const { id } = await params;
   const post = await getPostByIdForAdmin(id);
   if (!post) notFound();
@@ -59,5 +60,19 @@ export default async function PreviewPage({ params }: PreviewPageProps) {
         />
       </article>
     </main>
+  );
+}
+
+export default function PreviewPage({ params }: PreviewPageProps) {
+  return (
+    <Suspense
+      fallback={(
+        <main className="mx-auto max-w-4xl px-4 py-8">
+          <p className="text-sm text-slate-500">미리보기를 불러오는 중…</p>
+        </main>
+      )}
+    >
+      <PreviewContent params={params} />
+    </Suspense>
   );
 }

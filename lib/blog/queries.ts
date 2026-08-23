@@ -1,9 +1,34 @@
 import 'server-only';
+import { cache } from 'react';
 import { and, count, desc, eq, ilike, or } from 'drizzle-orm';
 import { getBlogDb } from '@/lib/db/client';
 import { posts, categories } from '@/lib/db/schema';
+import { readPublicBlogSnapshotFromEnv } from '@/lib/blog-snapshots/reader';
+import {
+  PUBLIC_BLOG_POSTS_PER_PAGE,
+  getAllCategoriesFromSnapshot,
+  getAllPublishedSlugsFromSnapshot,
+  getPublishedPostBySlugFromSnapshot,
+  getPublishedPostsFromSnapshot,
+  getRecentPublishedPostsForFeedFromSnapshot,
+} from '@/lib/blog-snapshots/projection';
+import type { PublicBlogSnapshotPayload } from '@/lib/blog-snapshots/contract';
 
 const SLUG_PATTERN = /^[a-z0-9-]{1,200}$/;
+export const PUBLIC_BLOG_SOURCE_ENV = 'NAEZIP_PUBLIC_BLOG_SOURCE' as const;
+const PUBLIC_VERCEL_ENVIRONMENTS = new Set(['preview', 'production']);
+
+function publicBlogSourceMode(
+  env: Readonly<Record<string, string | undefined>>,
+): 'snapshot' | 'database' {
+  const source = env[PUBLIC_BLOG_SOURCE_ENV]?.trim();
+  if (source === 'snapshot') return source;
+  if (source === 'database'
+    && !PUBLIC_VERCEL_ENVIRONMENTS.has(env.VERCEL_ENV?.trim() ?? '')) {
+    return source;
+  }
+  throw new Error('Public blog source configuration is invalid');
+}
 
 /** ILIKE 패턴 이스케이프 — % _ \ 무력화 (검색어를 리터럴로 취급) */
 function escapeLike(input: string): string {
@@ -41,7 +66,25 @@ export type PostsPage = {
   totalPages: number;
 };
 
-const PER_PAGE = 12;
+const PER_PAGE = PUBLIC_BLOG_POSTS_PER_PAGE;
+
+/**
+ * One public render must use one immutable blog release. React cache shares the
+ * manifest+payload read between metadata/page siblings without persisting a
+ * rejected read across requests.
+ */
+const readPublicBlogSnapshotForRequest = cache(
+  () => readPublicBlogSnapshotFromEnv(process.env),
+);
+
+async function getPublicBlogSnapshotForRequest(): Promise<PublicBlogSnapshotPayload | null> {
+  if (publicBlogSourceMode(process.env) === 'database') return null;
+  const result = await readPublicBlogSnapshotForRequest();
+  if (result.status !== 'available') {
+    throw new Error('Public blog snapshot is required');
+  }
+  return result.payload;
+}
 
 /**
  * 발행된 글 목록 (페이지네이션, 카테고리 필터).
@@ -49,7 +92,7 @@ const PER_PAGE = 12;
  * 모든 쿼리는 status='published' 강제.
  * draft 글은 외부에서 절대 노출되지 않도록 이 함수만 사용.
  */
-export async function getPublishedPosts({
+async function getPublishedPostsFromDb({
   page = 1,
   categorySlug,
   q,
@@ -136,11 +179,24 @@ export async function getPublishedPosts({
   return { rows: safeRows, total, page: safePage, totalPages };
 }
 
+export async function getPublishedPosts(
+  options: {
+    page?: number;
+    categorySlug?: string;
+    /** 제목·요약 검색어 (2026-07-12) — 공백 트림, 100자 컷 */
+    q?: string;
+  } = {},
+): Promise<PostsPage> {
+  const snapshot = await getPublicBlogSnapshotForRequest();
+  if (snapshot) return getPublishedPostsFromSnapshot(snapshot, options);
+  return getPublishedPostsFromDb(options);
+}
+
 /**
  * 발행된 글 상세 (slug로 조회).
  * 못 찾거나 draft면 null 반환 → 페이지에서 notFound().
  */
-export async function getPublishedPostBySlug(
+async function getPublishedPostBySlugFromDb(
   slug: string,
 ): Promise<PublicPostDetail | null> {
   if (!SLUG_PATTERN.test(slug)) return null;
@@ -181,6 +237,17 @@ export async function getPublishedPostBySlug(
   };
 }
 
+export async function getPublishedPostBySlug(
+  slug: string,
+): Promise<PublicPostDetail | null> {
+  // Invalid public identifiers remain an authoritative logical miss and never
+  // trigger snapshot or database I/O.
+  if (!SLUG_PATTERN.test(slug)) return null;
+  const snapshot = await getPublicBlogSnapshotForRequest();
+  if (snapshot) return getPublishedPostBySlugFromSnapshot(snapshot, slug);
+  return getPublishedPostBySlugFromDb(slug);
+}
+
 /**
  * Admin 전용 — id 기반 fetch, draft 포함
  * (protected) route group 안에서만 호출됨. 외부 노출 X.
@@ -201,11 +268,17 @@ export async function getPostByIdForAdmin(id: string) {
 /**
  * 카테고리 list (탭용).
  */
-export async function getAllCategories(): Promise<PublicCategory[]> {
+async function getAllCategoriesFromDb(): Promise<PublicCategory[]> {
   return getBlogDb()
     .select({ id: categories.id, slug: categories.slug, name: categories.name })
     .from(categories)
     .orderBy(categories.name);
+}
+
+export async function getAllCategories(): Promise<PublicCategory[]> {
+  const snapshot = await getPublicBlogSnapshotForRequest();
+  if (snapshot) return getAllCategoriesFromSnapshot(snapshot);
+  return getAllCategoriesFromDb();
 }
 
 export type PublishedSlugItem = {
@@ -220,7 +293,7 @@ export type PublishedSlugItem = {
  * mdxContent 같은 무거운 필드 제외 → sitemap 빌드 빠름.
  * 글 수가 폭증하면 페이지네이션 추가 (Phase 2).
  */
-export async function getAllPublishedSlugs(): Promise<PublishedSlugItem[]> {
+async function getAllPublishedSlugsFromDb(): Promise<PublishedSlugItem[]> {
   const rows = await getBlogDb()
     .select({
       slug: posts.slug,
@@ -240,6 +313,12 @@ export async function getAllPublishedSlugs(): Promise<PublishedSlugItem[]> {
     }));
 }
 
+export async function getAllPublishedSlugs(): Promise<PublishedSlugItem[]> {
+  const snapshot = await getPublicBlogSnapshotForRequest();
+  if (snapshot) return getAllPublishedSlugsFromSnapshot(snapshot);
+  return getAllPublishedSlugsFromDb();
+}
+
 export type FeedItem = {
   slug: string;
   title: string;
@@ -252,7 +331,7 @@ export type FeedItem = {
 /**
  * RSS 피드용 최근 발행 글 (가벼운 list, 본문 X).
  */
-export async function getRecentPublishedPostsForFeed(
+async function getRecentPublishedPostsForFeedFromDb(
   limit = 50,
 ): Promise<FeedItem[]> {
   const rows = await getBlogDb()
@@ -280,4 +359,14 @@ export async function getRecentPublishedPostsForFeed(
       updatedAt: r.updatedAt,
       categoryName: r.categoryName,
     }));
+}
+
+export async function getRecentPublishedPostsForFeed(
+  limit = 50,
+): Promise<FeedItem[]> {
+  const snapshot = await getPublicBlogSnapshotForRequest();
+  if (snapshot) {
+    return getRecentPublishedPostsForFeedFromSnapshot(snapshot, limit);
+  }
+  return getRecentPublishedPostsForFeedFromDb(limit);
 }

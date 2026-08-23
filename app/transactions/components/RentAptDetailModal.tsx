@@ -109,9 +109,13 @@ export default function RentAptDetailModal({ apt, onClose, months, initialTx }: 
     };
   };
 
+  const apartmentQuery = () =>
+    `district=${encodeURIComponent(apt.district)}` +
+    `&q=${encodeURIComponent(apt.name)}` +
+    (apt.dong ? `&aptDong=${encodeURIComponent(apt.dong)}` : '');
+
   const deepLinkUrl = (tx: RentTransaction) =>
-    `${window.location.origin}/transactions?district=${encodeURIComponent(apt.district)}` +
-    `&q=${encodeURIComponent(apt.name)}&months=${months}` +
+    `${window.location.origin}/transactions?${apartmentQuery()}&months=${months}` +
     `&dealType=${isJeonse(tx) ? 'jeonse' : 'monthly'}&rtx=${encodeURIComponent(rentTxKey(tx))}`;
 
   // 건별 이미지 공유 — 그 계약 건을 헤드로 한 카드 (기존 buildRentShareCard 재사용)
@@ -492,7 +496,7 @@ export default function RentAptDetailModal({ apt, onClose, months, initialTx }: 
               onClick={async () => {
                 const url = latest
                   ? deepLinkUrl(latest)
-                  : `${window.location.origin}/transactions?district=${encodeURIComponent(apt.district)}&q=${encodeURIComponent(apt.name)}`;
+                  : `${window.location.origin}/transactions?${apartmentQuery()}`;
                 const text = latest
                   ? buildRentTxShareText({
                       aptName: apt.name,

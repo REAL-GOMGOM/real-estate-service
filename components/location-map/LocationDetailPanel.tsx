@@ -1,32 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { X, TrendingUp, TrendingDown, Minus, MapPin, AlertTriangle, BarChart2 } from 'lucide-react';
+import { X, MapPin, AlertTriangle, BarChart2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import type { LocationScore } from '@/lib/types';
 import { getScoreColor, getScoreBgColor } from './LocationSidebar';
 import { DISTRICT_CODE } from '@/lib/district-codes';
 
-const FALLBACK_DISTRICT_MAP: Record<string, string> = {
-  '서울특별시': '강남구',
-  '부산광역시': '부산 해운대구',
-  '대구광역시': '대구 수성구',
-  '울산광역시': '울산 남구',
-  '인천광역시': '인천 연수구',
-  '성남·송파·하남': '송파구',
-  '광명·시흥': '광명시',
-};
-
-function getChartDistrict(location: LocationScore): string {
+function getChartDistrict(location: LocationScore): string | null {
   const dist = location.district;
-  const name = location.name;
   if (DISTRICT_CODE[dist]) return dist;
-  if (FALLBACK_DISTRICT_MAP[dist]) return FALLBACK_DISTRICT_MAP[dist];
-  const match = Object.keys(DISTRICT_CODE).find(
-    key => key.startsWith(dist) || key.startsWith(name)
-  );
-  if (match) return match;
-  return '강남구';
+  return null;
 }
 
 interface Props {
@@ -36,9 +20,7 @@ interface Props {
 }
 
 export default function LocationDetailPanel({ location, onClose, embedded }: Props) {
-  const scoreDiff = (location.score - location.prevScore).toFixed(1);
-  const isUp   = location.trend === 'up';
-  const isDown = location.trend === 'down';
+  const chartDistrict = getChartDistrict(location);
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -68,6 +50,8 @@ export default function LocationDetailPanel({ location, onClose, embedded }: Pro
 
       {/* 닫기 */}
       <button
+        type="button"
+        aria-label="상세 정보 닫기"
         onClick={onClose}
         style={{
           position: 'absolute', top: '16px', right: '16px',
@@ -81,20 +65,22 @@ export default function LocationDetailPanel({ location, onClose, embedded }: Pro
       </button>
 
       {/* 차트 보기 버튼 */}
-      <Link
-        href={`/chart?district=${encodeURIComponent(getChartDistrict(location))}`}
-        style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-          padding: '10px', borderRadius: '12px', marginBottom: '14px',
-          backgroundColor: 'var(--accent-bg)',
-          border: '1px solid var(--accent-border)',
-          color: 'var(--accent)', textDecoration: 'none',
-          fontSize: '13px', fontWeight: 600,
-        }}
-      >
-        <BarChart2 size={15} />
-        이 지역 아파트 차트 보기
-      </Link>
+      {chartDistrict && (
+        <Link
+          href={`/chart?district=${encodeURIComponent(chartDistrict)}`}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+            padding: '10px', borderRadius: '12px', marginBottom: '14px',
+            backgroundColor: 'var(--accent-bg)',
+            border: '1px solid var(--accent-border)',
+            color: 'var(--accent)', textDecoration: 'none',
+            fontSize: '13px', fontWeight: 600,
+          }}
+        >
+          <BarChart2 size={15} />
+          {chartDistrict} 아파트 차트 보기
+        </Link>
+      )}
 
       {/* 토허제 경고 배너 */}
       {location.isToheo && (
@@ -136,7 +122,7 @@ export default function LocationDetailPanel({ location, onClose, embedded }: Pro
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         <div>
-          <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>입지 점수</p>
+          <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>자체 입지 점수 · 낮을수록 상위</p>
           <p style={{
             fontSize: '28px', fontWeight: 800,
             fontFamily: 'Roboto Mono, monospace',
@@ -145,40 +131,25 @@ export default function LocationDetailPanel({ location, onClose, embedded }: Pro
             {location.score.toFixed(1)}
           </p>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>전월 대비</p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}>
-            {isUp   && <TrendingUp   size={16} style={{ color: 'var(--up-color)' }} />}
-            {isDown && <TrendingDown size={16} style={{ color: 'var(--down-color)' }} />}
-            {!isUp && !isDown && <Minus size={16} style={{ color: 'var(--text-dim)' }} />}
-            <span style={{
-              fontSize: '16px', fontWeight: 700,
-              fontFamily: 'Roboto Mono, monospace',
-              color: isUp ? 'var(--up-color)' : isDown ? 'var(--down-color)' : 'var(--text-dim)',
-            }}>
-              {isUp ? '+' : ''}{scoreDiff}
-            </span>
-          </div>
+        <div style={{ textAlign: 'right', maxWidth: 100 }}>
+          <p style={{ fontSize: '10px', color: 'var(--text-muted)', lineHeight: 1.45 }}>
+            공개·민간·추정 입력을 가중 합산한 자체 비교 지표
+          </p>
         </div>
       </div>
 
       {/* 상세 정보 */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {[
-          { label: '기준 월',   value: location.month },
-          { label: '원본 AI 점수', value: location.prevScore.toFixed(1), mono: true },
-          {
-            label: '트렌드',
-            value: location.trend === 'up' ? '상승 ▲' : location.trend === 'down' ? '하락 ▼' : '보합 —',
-            color: location.trend === 'up' ? 'var(--up-color)' : location.trend === 'down' ? 'var(--down-color)' : 'var(--text-dim)',
-          },
+          { label: '자료 기준',   value: location.month },
+          { label: '재산정 전 참고값', value: location.prevScore.toFixed(1), mono: true },
           ...(location.region ? [{ label: '권역', value: location.region }] : []),
         ].map((item) => (
           <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '13px', color: 'var(--text-dim)' }}>{item.label}</span>
             <span style={{
               fontSize: '13px', fontWeight: 600,
-              color: item.color ?? 'var(--text-primary)',
+              color: 'var(--text-primary)',
               fontFamily: item.mono ? 'Roboto Mono, monospace' : 'inherit',
             }}>
               {item.value}

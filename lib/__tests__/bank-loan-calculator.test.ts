@@ -2,7 +2,7 @@
  * bank-loan-calculator 특성테스트 (Y5) — 시중은행 주담대 시뮬레이터 현재 동작 고정.
  *
  * 특성(현재 동작) 주의 사항:
- * - DSR/스트레스 DSR 초과는 warnings에만 기록, feasible은 true 유지.
+ * - 일반/스트레스 DSR 40% 초과는 보수적으로 feasible=false 처리.
  * - 스트레스 가산(0.75%p)은 변동금리에만 적용.
  */
 import { describe, it, expect } from 'vitest';
@@ -76,7 +76,7 @@ describe('simulateBankLoan — 대출 불필요·경고 특성', () => {
     expect(r.scheduleMin).toHaveLength(0);
   });
 
-  it('DSR·스트레스 DSR 초과 → 경고 2건, feasible은 true 유지 (특성)', () => {
+  it('DSR·스트레스 DSR 초과 → 거절 사유 2건, feasible=false', () => {
     const r = simulateBankLoan({
       ...BASE,
       housePrice: 80000,
@@ -91,10 +91,31 @@ describe('simulateBankLoan — 대출 불필요·경고 특성', () => {
     expect(r.ltvUsed).toBe(50);
     expect(r.dsr).toBe(47.45);
     expect(r.stressedDsr).toBe(51.03);
-    expect(r.warnings).toEqual([
-      '일반 DSR 47.45% — 40% 초과로 대출 불가능할 수 있습니다',
-      '스트레스 DSR 51.03% — 변동금리 규제 초과',
+    expect(r.rejectReasons).toEqual([
+      '일반 DSR 47.45% > 40%: 시뮬레이터의 일반 한도를 초과했습니다.',
+      '스트레스 DSR 51.03% > 40%: 변동금리 심사 기준을 초과했습니다.',
     ]);
-    expect(r.feasible).toBe(true);
+    expect(r.warnings).toEqual([]);
+    expect(r.feasible).toBe(false);
+  });
+
+  it('일반 DSR은 40% 이내여도 스트레스 DSR이 초과하면 가능한 대출로 판정하지 않는다', () => {
+    const r = simulateBankLoan({
+      ...BASE,
+      housePrice: 80000,
+      deposit: 20000,
+      income: 7000,
+      existingDebtPayment: 300,
+      rateMin: 4.2,
+      rateMax: 4.8,
+      regulation: 'adjusted',
+    });
+
+    expect(r.dsr).toBeLessThanOrEqual(40);
+    expect(r.stressedDsr).toBeGreaterThan(40);
+    expect(r.rejectReasons).toEqual([
+      `스트레스 DSR ${r.stressedDsr}% > 40%: 변동금리 심사 기준을 초과했습니다.`,
+    ]);
+    expect(r.feasible).toBe(false);
   });
 });

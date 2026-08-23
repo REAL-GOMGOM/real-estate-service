@@ -11,6 +11,7 @@ import { SITE_URL, SITE_NAME } from '@/lib/site';
 import { PostCard } from '../../components/PostCard';
 import { CategoryTabs } from '../../components/CategoryTabs';
 import { Pagination } from '../../components/Pagination';
+import { BlogServiceUnavailable } from '../../components/BlogServiceUnavailable';
 
 const SLUG_PATTERN = /^[a-z0-9-]{1,200}$/;
 
@@ -22,7 +23,16 @@ export async function generateMetadata({ params }: { params: Params }) {
   if (!SLUG_PATTERN.test(categorySlug)) {
     return { title: `칼럼 — ${SITE_NAME}` };
   }
-  const cats = await getAllCategories();
+  let cats;
+  try {
+    cats = await getAllCategories();
+  } catch (error) {
+    console.error('[blog/category] metadata unavailable', error);
+    return {
+      title: `칼럼 — ${SITE_NAME}`,
+      robots: { index: false, follow: true },
+    };
+  }
   const cat = cats.find((c) => c.slug === categorySlug);
   if (!cat) return { title: `칼럼 — ${SITE_NAME}` };
 
@@ -40,11 +50,18 @@ export async function generateMetadata({ params }: { params: Params }) {
       siteName: SITE_NAME,
       locale: 'ko_KR',
       type: 'website',
+      images: [{
+        url: `${SITE_URL}/opengraph-image`,
+        width: 1200,
+        height: 630,
+        alt: `${cat.name} 부동산 칼럼`,
+      }],
     },
     twitter: {
       card: 'summary_large_image',
       title: `${cat.name} — 칼럼`,
       description,
+      images: [`${SITE_URL}/opengraph-image`],
     },
   };
 }
@@ -91,17 +108,33 @@ async function Shell({
   const { categorySlug } = await params;
   if (!SLUG_PATTERN.test(categorySlug)) notFound();
 
-  const cats = await getAllCategories();
+  let cats;
+  try {
+    cats = await getAllCategories();
+  } catch (error) {
+    console.error('[blog/category] category list unavailable', error);
+    return (
+      <BlogServiceUnavailable retryHref={`/blog/category/${categorySlug}`} />
+    );
+  }
   const cat = cats.find((c) => c.slug === categorySlug);
   if (!cat) notFound();
 
   const sp = await searchParams;
-  const page = Number(sp.page ?? 1) || 1;
+  const parsedPage = Number(sp.page ?? 1);
+  const page = Number.isSafeInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
 
-  const { rows, totalPages } = await getPublishedPosts({
-    page,
-    categorySlug,
-  });
+  let postsPage;
+  try {
+    postsPage = await getPublishedPosts({ page, categorySlug });
+  } catch (error) {
+    console.error('[blog/category] post list unavailable', error);
+    return (
+      <BlogServiceUnavailable retryHref={`/blog/category/${categorySlug}`} />
+    );
+  }
+
+  const { rows, totalPages } = postsPage;
 
   // 검색 결과 breadcrumb 노출용 schema.org BreadcrumbList
   const breadcrumbLd = {

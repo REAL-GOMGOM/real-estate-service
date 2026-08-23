@@ -7,6 +7,12 @@ import { parseRentXml, groupRentTransactions, isJeonse, type RentTransaction } f
 import { getBlogDb } from '@/lib/db/client';
 import { rentTransactions } from '@/lib/db/schema';
 import { txSource } from '@/lib/tx-source';
+import { transactionGroupKey } from '@/lib/transaction-identity';
+import {
+  createPublicSnapshotRuntimeFromEnv,
+  isPublicSnapshotConfigured,
+} from '@/lib/public-snapshots/runtime';
+import { buildRentResponseFromSnapshot } from '@/lib/public-snapshots/serving-artifacts';
 
 /**
  * 전월세 실거래 API — 사이클 II (전세·월세 탭) + DB 전환 (2026-07-18)
@@ -65,21 +71,21 @@ async function fetchDbRentGroupsFast(
   // Q2 — 그룹 집계 (거래량순 상위 limit)
   const groupRes = await db.execute(sql`
     SELECT apt_name,
+           umd_nm,
            count(*)::int             AS tx_count,
            max(deposit)::int         AS max_deposit,
            max(monthly_rent)::int    AS max_monthly,
            max(build_year)::int      AS build_year,
-           min(umd_nm)               AS dong,
            array_agg(DISTINCT round(area_m2)::int) AS areas
     FROM rent_transactions
     WHERE lawd_cd = ${lawdCd} AND deal_date >= ${fromDate}${rentCond}
-    GROUP BY apt_name
+    GROUP BY apt_name, umd_nm
     ORDER BY count(*) DESC
     LIMIT ${limit}
   `);
   const groupRows = execRows<{
     apt_name: string; tx_count: number; max_deposit: number; max_monthly: number;
-    build_year: number | null; dong: string | null; areas: number[];
+    build_year: number | null; umd_nm: string; areas: number[];
   }>(groupRes);
   if (groupRows.length === 0) return null;
 
@@ -89,11 +95,12 @@ async function fetchDbRentGroupsFast(
     SELECT apt_name, umd_nm, area_m2, floor, deposit, monthly_rent, deal_date,
            build_year, contract_type, prev_deposit, prev_monthly_rent
     FROM (
-      SELECT *, ROW_NUMBER() OVER (PARTITION BY apt_name ORDER BY deal_date DESC) AS rn
+      SELECT *, ROW_NUMBER() OVER (PARTITION BY apt_name, umd_nm ORDER BY deal_date DESC) AS rn
       FROM rent_transactions
       WHERE lawd_cd = ${lawdCd} AND deal_date >= ${fromDate}${rentCond}
         AND apt_name = ANY(${names})
     ) t WHERE rn <= ${TOP_TX_PER_GROUP}
+    ORDER BY apt_name, umd_nm, deal_date DESC
   `);
   const txRows = execRows<{
     apt_name: string; umd_nm: string; area_m2: number; floor: number | null;
@@ -118,22 +125,23 @@ async function fetchDbRentGroupsFast(
       prevDeposit:      r.prev_deposit,
       prevMonthlyRent:  r.prev_monthly_rent,
     };
-    const arr = txByApt.get(r.apt_name);
+    const groupKey = transactionGroupKey(r.apt_name, r.umd_nm);
+    const arr = txByApt.get(groupKey);
     if (arr) arr.push(tx);
-    else txByApt.set(r.apt_name, [tx]);
+    else txByApt.set(groupKey, [tx]);
   }
 
   const groups = groupRows.map((g) => ({
-    id:           g.apt_name.replace(/\s/g, '-'),
+    id:           `${g.umd_nm || 'unknown'}-${g.apt_name}`.replace(/\s/g, '-'),
     name:         g.apt_name,
     district,
-    dong:         g.dong,
+    dong:         g.umd_nm,
     buildYear:    g.build_year,
     areas:        [...(g.areas ?? [])].sort((a, b) => a - b),
     txCount:        g.tx_count,
     maxDeposit:     g.max_deposit,
     maxMonthlyRent: g.max_monthly,
-    transactions: txByApt.get(g.apt_name) ?? [],
+    transactions: txByApt.get(transactionGroupKey(g.apt_name, g.umd_nm)) ?? [],
   }));
 
   return { groups, total };
@@ -186,7 +194,10 @@ async function fetchDbRentTx(lawdCd: string, district: string, months: number): 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const district = searchParams.get('district')?.trim() || '강남구';
-  const months   = Math.min(parseInt(searchParams.get('months') ?? '3') || 3, 36);
+  const parsedMonths = parseInt(searchParams.get('months') ?? '3', 10);
+  const months   = Number.isFinite(parsedMonths)
+    ? Math.min(Math.max(parsedMonths, 1), 36)
+    : 3;
   const rentType = searchParams.get('rentType') ?? 'all';   // all | jeonse | monthly
   const aptName  = (searchParams.get('aptName') ?? searchParams.get('q') ?? '').trim().slice(0, APT_NAME_MAX_LEN);
   const limit    = Math.min(Math.max(parseInt(searchParams.get('limit') ?? '60') || 60, 1), 100);
@@ -196,16 +207,43 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: '지원하지 않는 구: ' + district }, { status: 400 });
   }
 
-  const rawKey = process.env.PUBLIC_DATA_API_KEY;
-  if (!rawKey) {
-    console.error('[transactions/rent API] PUBLIC_DATA_API_KEY 미설정');
-    return NextResponse.json({ error: '전월세 데이터를 불러올 수 없습니다' }, { status: 500 });
+  if (!['all', 'jeonse', 'monthly'].includes(rentType)) {
+    return NextResponse.json({ error: '지원하지 않는 전월세 유형입니다' }, { status: 400 });
   }
-  const apiKey = decodeURIComponent(rawKey);
+  const servingMode = isPublicSnapshotConfigured();
+
+  // Mac mini에서 검증·발행한 직전 스냅샷을 우선 사용한다. 스냅샷이
+  // 없거나 손상됐거나 요청 기간을 커버하지 못할 때만 기존 DB/live 경로로 폴백한다.
+  try {
+    const snapshot = await createPublicSnapshotRuntimeFromEnv().getDistrictSnapshot(lawdCd);
+    if (snapshot.status === 'success') {
+      const served = buildRentResponseFromSnapshot(snapshot.data, {
+        months,
+        limit,
+        aptName,
+        rentType: rentType as 'all' | 'jeonse' | 'monthly',
+      });
+      if (served.hit) {
+        return NextResponse.json(served.body, {
+          headers: {
+            'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
+            'X-Naezip-Data-Source': 'snapshot',
+            'X-Naezip-Snapshot-Generated-At': snapshot.data.generatedAt,
+          },
+        });
+      }
+    }
+  } catch {
+    // 스냅샷 변환 실패는 기존 DB/live 조회를 막지 않는다.
+  }
+
+  const rawKey = process.env.PUBLIC_DATA_API_KEY;
+  const apiKey = rawKey ? decodeURIComponent(rawKey) : null;
+  const source = servingMode ? 'live' : txSource();
 
   try {
     // 고속 경로 — 검색어 없는 목록 조회는 SQL 집계 푸시다운 (실패 시 아래 행 경로로)
-    if (txSource() === 'db' && !aptName) {
+    if (source === 'db' && !aptName) {
       const fast = await fetchDbRentGroupsFast(lawdCd, district, months, rentType, limit)
         .catch((e) => {
           console.warn('[transactions/rent API] 푸시다운 실패 — 행 경로 폴백:', e instanceof Error ? e.message : e);
@@ -213,16 +251,17 @@ export async function GET(req: NextRequest) {
         });
       if (fast) {
         return NextResponse.json(
-          { data: fast.groups, district, months, rentType, total: fast.total },
+          { data: fast.groups, district, months, rentType, total: fast.total, status: 'ok' },
           { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } }
         );
       }
     }
 
     let transactions: RentTransaction[] = [];
+    let failedMonths: string[] = [];
 
     // DB 우선 (Phase 2) — 미적재·실패 시 live 폴백 (안전망)
-    if (txSource() === 'db') {
+    if (source === 'db') {
       try {
         transactions = await fetchDbRentTx(lawdCd, district, months);
       } catch (e) {
@@ -234,11 +273,22 @@ export async function GET(req: NextRequest) {
     }
 
     if (transactions.length === 0) {
-      const xmls = await Promise.all(
-        getMonthList(months).map((yyyymm) =>
-          fetchRentMonthAllPages(apiKey, lawdCd, yyyymm, revalidateForMonth(yyyymm)).catch(() => '')
+      if (!apiKey) {
+        console.error('[transactions/rent API] DB 미적재 + PUBLIC_DATA_API_KEY 미설정');
+        return NextResponse.json(
+          { error: '전월세 데이터를 불러올 수 없습니다' },
+          { status: 503 },
+        );
+      }
+      const monthList = getMonthList(months);
+      const settled = await Promise.allSettled(
+        monthList.map((yyyymm) =>
+          fetchRentMonthAllPages(apiKey, lawdCd, yyyymm, revalidateForMonth(yyyymm))
         )
       );
+      failedMonths = monthList.filter((_, index) => settled[index].status === 'rejected');
+      const xmls = settled.flatMap((result) => result.status === 'fulfilled' ? [result.value] : []);
+      if (xmls.length === 0) throw new Error('all rent month requests failed');
       transactions = xmls.flatMap((xml) => parseRentXml(xml, district));
     }
 
@@ -264,12 +314,24 @@ export async function GET(req: NextRequest) {
         transactions: g.transactions.slice(0, 10),
       }));
 
+    const isPartial = failedMonths.length > 0;
     return NextResponse.json(
-      { data: result, district, months, rentType, total: transactions.length },
-      { headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400' } }
+      {
+        data: result,
+        district,
+        months,
+        rentType,
+        total: transactions.length,
+        status: isPartial ? 'partial' : 'ok',
+        ...(isPartial ? { failedMonths } : {}),
+      },
+      { headers: { 'Cache-Control': isPartial ? 'no-store' : 'public, s-maxage=3600, stale-while-revalidate=86400' } }
     );
   } catch (error) {
     console.error('[transactions/rent API] 조회 실패:', error);
-    return NextResponse.json({ error: '전월세 조회 실패' }, { status: 500 });
+    return NextResponse.json(
+      { error: '전월세 조회 실패' },
+      { status: servingMode ? 503 : 500, headers: servingMode ? { 'Cache-Control': 'no-store' } : undefined },
+    );
   }
 }

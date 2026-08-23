@@ -4,15 +4,15 @@
  * 빌드 시점에 JSON 2개를 읽어 결합 (SSG이므로 런타임 부담 0).
  */
 
-import scoresData from '@/data/location-scores.json';
 import insightsData from '@/data/location-insights.json';
 import type {
   LocationScore,
   LocationInsight,
   RegionDetail,
 } from './types';
+import { PUBLIC_LOCATION_SCORES } from '@/lib/location-score-data';
 
-const scores = scoresData as LocationScore[];
+const scores: LocationScore[] = PUBLIC_LOCATION_SCORES;
 const insights = insightsData as LocationInsight[];
 
 const scoreById = new Map(scores.map((s) => [s.id, s]));

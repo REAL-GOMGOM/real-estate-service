@@ -1,17 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-
-/**
- * 쿠팡 파트너스 다이내믹 배너 (캐러셀 680×140, iframe 임베드) — 전역 푸터 상단 배치
- *
- * 정책 준수:
- * - 소재 원형 그대로 노출 (2026-06-08 커버형 배너 금지: 덮개 디자인·클릭 유도 문구 불가)
- * - 하단 대가성 고지 문구 필수 표기 (파트너스 규정)
- * - 팝업·전면 형태 금지 (애드센스 심사 "방해되는 광고" 리스크 회피)
- *
- * 모바일: 컨테이너 폭 기준 transform scale 축소 — 소재 변형이 아니라 크기 조정.
- */
+import { usePathname } from 'next/navigation';
+import { useConsent } from '@/hooks/useConsent';
+import { shouldShowFooterCoupang } from '@/lib/marketing-routes';
 
 const BANNER_ID = 987354;
 const TRACKING_CODE = 'AF2740428';
@@ -19,52 +11,90 @@ const BASE_W = 680;
 const BASE_H = 140;
 
 interface CoupangBannerProps {
-  /** footer: 전역 푸터 상단 (배경·보더) / inline: 콘텐츠 사이 인피드 (투명·컴팩트) */
+  /** footer: 전역 푸터 상단 / inline: 콘텐츠 사이 인피드 */
   variant?: 'footer' | 'inline';
-  /** 파트너스 성과 추적용 지면 식별자 (예: footer, blog-end, tx-feed) */
+  /** 파트너스 성과 추적용 지면 식별자 */
   subId?: string;
 }
 
 export default function CoupangBanner({ variant = 'footer', subId = '' }: CoupangBannerProps) {
+  const pathname = usePathname();
+  const consent = useConsent();
   const wrapRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
+  const [scale, setScale] = useState<number | null>(null);
+  const enabled = consent?.advertising === true && (
+    variant === 'inline' || shouldShowFooterCoupang(pathname)
+  );
 
   useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const update = () => setScale(Math.min(1, el.clientWidth / BASE_W));
+    if (!enabled) return;
+    const element = wrapRef.current;
+    if (!element) return;
+
+    const update = () => setScale(Math.min(1, element.clientWidth / BASE_W));
     update();
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', update);
+      return () => window.removeEventListener('resize', update);
+    }
+
     const observer = new ResizeObserver(update);
-    observer.observe(el);
+    observer.observe(element);
     return () => observer.disconnect();
-  }, []);
+  }, [enabled]);
+
+  if (!enabled) return null;
 
   return (
-    <div style={variant === 'footer' ? {
-      backgroundColor: 'var(--bg-tertiary)',
-      borderTop: '1px solid var(--border-light)',
-      padding: '20px 24px 10px',
-    } : {
-      padding: '6px 0 2px',
-    }}>
-      <div ref={wrapRef} style={{ maxWidth: `${BASE_W}px`, margin: '0 auto' }}>
-        <div style={{ height: `${Math.round(BASE_H * scale)}px`, overflow: 'hidden' }}>
-          <iframe
-            src={`https://ads-partners.coupang.com/widgets.html?id=${BANNER_ID}&template=carousel&trackingCode=${TRACKING_CODE}&subId=${encodeURIComponent(subId)}&width=${BASE_W}&height=${BASE_H}&tsource=`}
-            width={BASE_W}
-            height={BASE_H}
-            frameBorder="0"
-            scrolling="no"
-            loading="lazy"
-            referrerPolicy="unsafe-url"
-            title="쿠팡 파트너스 광고"
-            style={{ transform: `scale(${scale})`, transformOrigin: 'left top', display: 'block', border: 0 }}
-          />
+    <aside
+      aria-label="쿠팡 파트너스 제휴 광고"
+      style={variant === 'footer' ? {
+        backgroundColor: 'var(--bg-tertiary)',
+        borderTop: '1px solid var(--border-light)',
+        padding: '20px 24px 10px',
+      } : {
+        padding: '8px 0 4px',
+      }}
+    >
+      <div style={{ maxWidth: `${BASE_W}px`, margin: '0 auto' }}>
+        <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-dim)', textAlign: 'center', margin: '0 0 6px' }}>
+          제휴 광고 · 쿠팡 파트너스
+        </p>
+        <div
+          ref={wrapRef}
+          style={{
+            position: 'relative',
+            width: '100%',
+            aspectRatio: `${BASE_W} / ${BASE_H}`,
+            overflow: 'hidden',
+          }}
+        >
+          {scale !== null && (
+            <iframe
+              src={`https://ads-partners.coupang.com/widgets.html?id=${BANNER_ID}&template=carousel&trackingCode=${TRACKING_CODE}&subId=${encodeURIComponent(subId)}&width=${BASE_W}&height=${BASE_H}&tsource=`}
+              width={BASE_W}
+              height={BASE_H}
+              frameBorder="0"
+              scrolling="no"
+              loading="lazy"
+              referrerPolicy="strict-origin-when-cross-origin"
+              title="쿠팡 파트너스 상품 광고"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                transform: `scale(${scale})`,
+                transformOrigin: 'left top',
+                display: 'block',
+                border: 0,
+              }}
+            />
+          )}
         </div>
-        <p style={{ fontSize: '11px', color: 'var(--text-dim)', textAlign: 'center', margin: '8px 0 0' }}>
+        <p style={{ fontSize: '12px', lineHeight: 1.5, color: 'var(--text-dim)', textAlign: 'center', margin: '8px 0 0' }}>
           이 광고는 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.
         </p>
       </div>
-    </div>
+    </aside>
   );
 }

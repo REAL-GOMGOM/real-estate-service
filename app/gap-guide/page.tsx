@@ -15,13 +15,14 @@ export default function GapGuidePage() {
   const [salePrice, setSalePrice] = useState(50000); // 만원
   const [rentPrice, setRentPrice] = useState(40000);
 
-  const gap = salePrice - rentPrice;
-  const rentRatio = salePrice > 0 ? +((rentPrice / salePrice) * 100).toFixed(1) : 0;
+  const effectiveRentPrice = Math.min(rentPrice, salePrice);
+  const gap = salePrice - effectiveRentPrice;
+  const rentRatio = salePrice > 0 ? +((effectiveRentPrice / salePrice) * 100).toFixed(1) : 0;
 
   const simulations = [5000, 10000, 15000, 20000, 30000].map((rise) => ({
     rise,
     newPrice: salePrice + rise,
-    roi: gap > 0 ? +((rise / gap) * 100).toFixed(0) : 0,
+    simpleMultiple: gap > 0 ? +((rise / gap) * 100).toFixed(0) : null,
   }));
 
   return (
@@ -32,25 +33,30 @@ export default function GapGuidePage() {
           <SubPageHeader parentLabel="갭분석" parentHref="/gap-analysis" />
 
           <h1 style={{ fontSize: 'clamp(24px, 4vw, 32px)', fontWeight: 800, color: 'var(--text-strong)', marginBottom: '8px' }}>
-            갭투자 가이드
+            매매·전세 갭 구조 가이드
           </h1>
           <p style={{ fontSize: '15px', color: 'var(--text-muted)', marginBottom: '32px', lineHeight: '1.7' }}>
-            매매가와 전세가의 차이(갭)만큼만 자기 자본을 투자하여 부동산을 매수하는 전략입니다.
+            매매가와 전세 보증금의 단순 차이를 계산하고, 이 값만으로 판단할 수 없는 비용과 위험을 함께 확인합니다.
           </p>
 
           {/* 시뮬레이터 */}
           <div style={{ padding: '24px', borderRadius: '16px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)', marginBottom: '32px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
               <Calculator size={20} style={{ color: 'var(--accent)' }} />
-              <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)' }}>투자금 시뮬레이터</h2>
+              <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-strong)' }}>단순 갭 계산기</h2>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
               <div>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>매매가</label>
+                <label htmlFor="gap-sale-price" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>매매가</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <input type="range" min={10000} max={200000} step={1000} value={salePrice}
-                    onChange={(e) => setSalePrice(Number(e.target.value))}
+                  <input id="gap-sale-price" type="range" min={10000} max={200000} step={1000} value={salePrice}
+                    aria-valuetext={fmtPrice(salePrice)}
+                    onChange={(e) => {
+                      const nextSalePrice = Number(e.target.value);
+                      setSalePrice(nextSalePrice);
+                      setRentPrice((current) => Math.min(current, nextSalePrice));
+                    }}
                     style={{ flex: 1, accentColor: 'var(--accent)' }} />
                   <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-strong)', fontFamily: 'Roboto Mono, monospace', minWidth: '60px' }}>
                     {fmtPrice(salePrice)}
@@ -58,13 +64,14 @@ export default function GapGuidePage() {
                 </div>
               </div>
               <div>
-                <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>전세가</label>
+                <label htmlFor="gap-rent-price" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>전세가</label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <input type="range" min={5000} max={salePrice} step={1000} value={Math.min(rentPrice, salePrice)}
+                  <input id="gap-rent-price" type="range" min={5000} max={salePrice} step={1000} value={effectiveRentPrice}
+                    aria-valuetext={fmtPrice(effectiveRentPrice)}
                     onChange={(e) => setRentPrice(Number(e.target.value))}
                     style={{ flex: 1, accentColor: 'var(--success)' }} />
                   <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-strong)', fontFamily: 'Roboto Mono, monospace', minWidth: '60px' }}>
-                    {fmtPrice(rentPrice)}
+                    {fmtPrice(effectiveRentPrice)}
                   </span>
                 </div>
               </div>
@@ -73,36 +80,41 @@ export default function GapGuidePage() {
             {/* 결과 */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px' }}>
               <div style={{ padding: '16px', borderRadius: '12px', backgroundColor: 'var(--btn-bg)', textAlign: 'center' }}>
-                <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '4px' }}>갭 (투자금)</p>
+                <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '4px' }}>매매−전세 단순 차이</p>
                 <p style={{ fontSize: '24px', fontWeight: 800, color: '#EBC15C', fontFamily: 'Roboto Mono, monospace' }}>{fmtPrice(gap)}</p>
               </div>
               <div style={{ padding: '16px', borderRadius: '12px', backgroundColor: 'var(--btn-bg)', textAlign: 'center' }}>
                 <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '4px' }}>전세가율</p>
-                <p style={{ fontSize: '24px', fontWeight: 800, color: rentRatio >= 70 ? 'var(--success-text, #2E7A4C)' : 'var(--danger-text, #C92F2F)', fontFamily: 'Roboto Mono, monospace' }}>{rentRatio}%</p>
+                <p style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-strong)', fontFamily: 'Roboto Mono, monospace' }}>{rentRatio}%</p>
               </div>
-              <div style={{ padding: '16px', borderRadius: '12px', backgroundColor: rentRatio >= 70 ? 'var(--success-bg, #E9F6EE)' : 'var(--danger-bg, #FDECEC)', textAlign: 'center' }}>
-                <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '4px' }}>판정</p>
-                <p style={{ fontSize: '18px', fontWeight: 800, color: rentRatio >= 70 ? 'var(--success-text, #2E7A4C)' : 'var(--danger-text, #C92F2F)' }}>
-                  {rentRatio >= 80 ? '매우 적합' : rentRatio >= 70 ? '적합' : rentRatio >= 60 ? '주의' : '비추천'}
+              <div style={{ padding: '16px', borderRadius: '12px', backgroundColor: 'var(--warning-bg, #FBF3DC)', textAlign: 'center' }}>
+                <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '4px' }}>해석</p>
+                <p style={{ fontSize: '15px', fontWeight: 800, color: 'var(--warning-text, #8A6A1F)' }}>
+                  적합성 판정 아님
                 </p>
               </div>
             </div>
 
-            {/* 수익률 테이블 */}
+            {/* 단순 민감도 테이블 */}
             <div style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border)' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', padding: '8px 14px', backgroundColor: 'var(--btn-bg)' }}>
                 <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-dim)' }}>매매가 상승</span>
                 <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-dim)', textAlign: 'center' }}>매도 시세</span>
-                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-dim)', textAlign: 'right' }}>수익률</span>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-dim)', textAlign: 'right' }}>상승액÷현재 차이</span>
               </div>
               {simulations.map((s) => (
                 <div key={s.rise} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', padding: '10px 14px', borderTop: '1px solid var(--border-light)' }}>
                   <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>+{fmtPrice(s.rise)}</span>
                   <span style={{ fontSize: '13px', color: 'var(--text-primary)', textAlign: 'center', fontFamily: 'Roboto Mono' }}>{fmtPrice(s.newPrice)}</span>
-                  <span style={{ fontSize: '14px', fontWeight: 700, textAlign: 'right', fontFamily: 'Roboto Mono', color: 'var(--up-color)' }}>+{s.roi}%</span>
+                  <span style={{ fontSize: '14px', fontWeight: 700, textAlign: 'right', fontFamily: 'Roboto Mono', color: 'var(--text-primary)' }}>
+                    {s.simpleMultiple === null ? '계산 불가' : `${s.simpleMultiple}%`}
+                  </span>
                 </div>
               ))}
             </div>
+            <p style={{ margin: '10px 0 0', fontSize: '11px', color: 'var(--text-dim)', lineHeight: 1.6 }}>
+              위 비율은 세금·중개보수·대출이자·보유비용·보증금 반환을 반영하지 않은 단순 민감도이며 실제 수익률이 아닙니다.
+            </p>
           </div>
 
           {/* 체크포인트 */}
@@ -112,12 +124,12 @@ export default function GapGuidePage() {
               갭투자 체크포인트
             </h2>
             {[
-              { item: '전세가율', desc: '70% 이상 권장' },
-              { item: '입지', desc: '교통·학군·편의시설 상위' },
-              { item: '인구 흐름', desc: '인구 순유입 지역 우선' },
-              { item: '공급 물량', desc: '향후 2~3년 입주 물량 적은 곳' },
-              { item: '전세 수요', desc: '안정적 전세 수요 존재 여부' },
-              { item: '보유 기간', desc: '최소 2년 이상 보유 계획' },
+              { item: '전세가율', desc: '높고 낮음만으로 안전성·적합성을 판단할 수 없음' },
+              { item: '입지', desc: '교통·학군·편의시설의 실제 접근성과 변화 확인' },
+              { item: '인구 흐름', desc: '전입·전출과 가구 수 추이를 원자료로 확인' },
+              { item: '공급 물량', desc: '예정 물량의 시점·취소·지연 가능성 확인' },
+              { item: '전세 수요', desc: '최근 계약량·보증금 추이와 공실 위험 확인' },
+              { item: '보유 기간', desc: '현금흐름과 매도 제한·세제를 함께 검토' },
               { item: '자금 여력', desc: '역전세 대비 여유 자금 확보' },
             ].map((c) => (
               <div key={c.item} style={{ display: 'flex', gap: '12px', padding: '10px 0', borderBottom: '1px solid var(--border-light)' }}>

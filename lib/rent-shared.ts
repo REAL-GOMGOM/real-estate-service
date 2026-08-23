@@ -7,6 +7,7 @@
 import type { ShareCardData } from '@/lib/share-image';
 import type { Pt } from '@/lib/svg-smooth';
 import { decodeXmlEntities } from '@/lib/xml-entities';
+import { transactionGroupKey } from '@/lib/transaction-identity';
 
 export interface RentTransaction {
   aptName:      string;
@@ -96,9 +97,10 @@ export function parseRentXml(xml: string, district: string): RentTransaction[] {
 export function groupRentTransactions(txs: RentTransaction[]): RentAptGroup[] {
   const grouped: Record<string, RentAptGroup> = {};
   for (const tx of txs) {
-    if (!grouped[tx.aptName]) {
-      grouped[tx.aptName] = {
-        id:           tx.aptName.replace(/\s/g, '-'),
+    const groupKey = transactionGroupKey(tx.aptName, tx.dong);
+    if (!grouped[groupKey]) {
+      grouped[groupKey] = {
+        id:           `${tx.dong || 'unknown'}-${tx.aptName}`.replace(/\s/g, '-'),
         name:         tx.aptName,
         district:     tx.district,
         dong:         tx.dong || null,
@@ -107,7 +109,7 @@ export function groupRentTransactions(txs: RentTransaction[]): RentAptGroup[] {
         transactions: [],
       };
     }
-    const g = grouped[tx.aptName];
+    const g = grouped[groupKey];
     g.transactions.push(tx);
     if (!g.areas.includes(tx.area)) g.areas.push(tx.area);
     if (!g.buildYear && tx.buildYear) g.buildYear = tx.buildYear;

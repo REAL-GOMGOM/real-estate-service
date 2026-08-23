@@ -4,8 +4,8 @@ import { NextResponse } from 'next/server';
  * 금리 추이 API — 사이클 Y (대출 시뮬레이터 금리 변화 표시)
  *
  * GET /api/loan/rate-history
- * → 최근 12개월 COFIX(신규취급액)·한국은행 기준금리 시계열.
- *   은행대출 탭 = COFIX (변동금리 기준지표), 정부대출 탭 = 기준금리 (정책 방향).
+ * → 최근 12개월 예금은행 대출평균금리(신규취급액)·한국은행 기준금리 시계열.
+ *   은행대출 탭 = 예금은행 대출평균금리, 정부대출 탭 = 기준금리 (정책 방향).
  *
  * 출처: 한국은행 ECOS. 일 1회 캐시.
  */
@@ -13,7 +13,7 @@ import { NextResponse } from 'next/server';
 const BOK_API_KEY = process.env.BOK_API_KEY ?? '';
 const BOK_BASE = 'https://ecos.bok.or.kr/api/StatisticSearch';
 
-// COFIX 신규취급액: 121Y006/010190000 (월), 한은 기준금리: 722Y001/0101000 (월)
+// 예금은행 대출평균금리: 121Y006/BECBLA01 (월), 한은 기준금리: 722Y001/0101000 (월)
 const SERIES = {
   cofix: { stat: '121Y006', item: 'BECBLA01', name: '예금은행 대출평균금리(신규취급액)' },
   base:  { stat: '722Y001', item: '0101000',   name: '한국은행 기준금리' },

@@ -14,7 +14,8 @@ export default function RegionRankingTable({ data, regions }: RegionRankingTable
     if (data.length === 0) return [];
     const latest = data[data.length - 1].regions;
     return regions
-      .map((r) => ({ name: r, value: latest[r] ?? 0 }))
+      .filter((r) => typeof latest[r] === 'number')
+      .map((r) => ({ name: r, value: latest[r] }))
       .sort((a, b) => b.value - a.value);
   }, [data, regions]);
 
@@ -32,7 +33,7 @@ export default function RegionRankingTable({ data, regions }: RegionRankingTable
       }}>
         <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-dim)' }}>순위</span>
         <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-dim)' }}>지역</span>
-        <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-dim)', textAlign: 'right' }}>변동률</span>
+        <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-dim)', textAlign: 'right' }}>기준월 대비</span>
       </div>
       {ranking.map((r, i) => (
         <div

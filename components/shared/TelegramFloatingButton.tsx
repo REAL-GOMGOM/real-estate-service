@@ -1,55 +1,61 @@
 'use client';
 
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { BRAND } from '@/lib/design-tokens';
+import { shouldShowTelegramFab } from '@/lib/marketing-routes';
+import { trackAnalyticsEvent } from '@/lib/cookie-consent';
 
-// 텔레그램 채널 플로팅 버튼
 export function TelegramFloatingButton() {
-  const [hovered, setHovered] = useState(false);
-  const url = process.env.NEXT_PUBLIC_TELEGRAM_CHANNEL_URL;
+  const pathname = usePathname();
+  const [active, setActive] = useState(false);
+  const url = process.env.NEXT_PUBLIC_TELEGRAM_CHANNEL_URL || 'https://t.me/realMyzip';
 
-  if (!url) return null;
+  if (!shouldShowTelegramFab(pathname)) return null;
 
   return (
     <a
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={() => setActive(true)}
+      onMouseLeave={() => setActive(false)}
+      onFocus={() => setActive(true)}
+      onBlur={() => setActive(false)}
+      onClick={() => trackAnalyticsEvent('telegram_click', {
+        placement: 'floating_button',
+        page_path: pathname,
+      })}
       aria-label="내집 텔레그램 채널 참여하기"
-      className="group fixed right-6 z-50 flex items-center gap-2 transition-all duration-300 bottom-[calc(1.5rem+env(safe-area-inset-bottom))] motion-reduce:transition-none focus-visible:outline-none"
-      style={{
-        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
-      }}
+      className="group fixed right-4 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] z-50 flex h-14 w-14 items-center justify-center rounded-full transition-transform duration-300 motion-reduce:transition-none md:right-6 md:bottom-[calc(1.5rem+env(safe-area-inset-bottom))]"
+      style={{ transform: active ? 'translateY(-2px)' : 'translateY(0)' }}
     >
-      {/* 툴팁 */}
-      <div
-        className="px-3 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-300"
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute top-1/2 hidden rounded-full px-3 py-2 text-sm font-medium whitespace-nowrap transition-all duration-300 motion-reduce:transition-none md:block"
         style={{
+          right: 'calc(100% + 8px)',
           backgroundColor: BRAND.ink,
           color: 'white',
-          opacity: hovered ? 1 : 0,
-          transform: hovered ? 'translateX(0)' : 'translateX(10px)',
-          pointerEvents: hovered ? 'auto' : 'none',
+          opacity: active ? 1 : 0,
+          transform: active ? 'translate(0, -50%)' : 'translate(10px, -50%)',
           boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
         }}
       >
         내집 커뮤니티 참여 →
-      </div>
+      </span>
 
-      {/* 텔레그램 블루 버튼 */}
-      <div
-        className="w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 motion-reduce:transition-none group-focus-visible:ring-4 group-focus-visible:ring-offset-2 group-focus-visible:ring-black"
+      <span
+        aria-hidden="true"
+        className="flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-shadow duration-300 group-focus-visible:ring-4 group-focus-visible:ring-black group-focus-visible:ring-offset-2 motion-reduce:transition-none"
         style={{
           backgroundColor: '#1B4DDB',
-          boxShadow: hovered
+          boxShadow: active
             ? '0 8px 24px rgba(0,0,0,0.2)'
             : '0 4px 12px rgba(0,0,0,0.12)',
         }}
       >
         <svg
-          aria-hidden="true"
           width="26"
           height="26"
           viewBox="0 0 24 24"
@@ -62,7 +68,7 @@ export function TelegramFloatingButton() {
           <path d="M22 2 11 13" />
           <path d="m22 2-7 20-4-9-9-4 20-7z" />
         </svg>
-      </div>
+      </span>
     </a>
   );
 }

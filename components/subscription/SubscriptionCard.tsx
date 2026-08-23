@@ -1,8 +1,8 @@
 'use client';
 
-import { Calendar, Home, Users, TrendingUp } from 'lucide-react';
+import { Calendar, Home, Users } from 'lucide-react';
 import type { SubscriptionItem } from '@/lib/types';
-import dayjs from 'dayjs';
+import { formatSubscriptionDday } from '@/lib/subscription-date';
 
 interface Props {
   item: SubscriptionItem;
@@ -14,16 +14,8 @@ const STATUS_CONFIG = {
   closed:   { label: '청약 마감', color: 'var(--text-dim)', bg: 'rgba(100,116,139,0.12)'},
 };
 
-function formatPrice(manwon: number | null): string {
-  if (!manwon) return '미정';
-  return `${(manwon / 10000).toFixed(0)}억`;
-}
-
 function getDday(endDate: string): string {
-  const diff = dayjs(endDate).diff(dayjs(), 'day');
-  if (diff < 0) return '마감';
-  if (diff === 0) return 'D-day';
-  return `D-${diff}`;
+  return formatSubscriptionDday(endDate) ?? '일정 확인';
 }
 
 export default function SubscriptionCard({ item }: Props) {
@@ -91,7 +83,8 @@ export default function SubscriptionCard({ item }: Props) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
           <Home size={12} style={{ color: 'var(--text-dim)' }} />
           <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-            {item.totalUnits.toLocaleString()}세대 · {item.houseType}
+            {item.totalUnits !== null ? `${item.totalUnits.toLocaleString()}세대` : '세대수 미표기'}
+            {item.houseType ? ` · ${item.houseType}` : ''}
           </span>
         </div>
       </div>
@@ -103,23 +96,17 @@ export default function SubscriptionCard({ item }: Props) {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
           <Users size={12} style={{ color: 'var(--text-dim)' }} />
-          {item.competitionRate !== null ? (
+          {item.competitionRates.length > 0 ? (
             <span style={{ fontSize: '13px', fontWeight: 700, color: '#2E7A4C' }}>
-              {item.competitionRate}:1
+              {item.competitionRates.length}개 주택형 공시
             </span>
           ) : (
             <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>경쟁률 미발표</span>
           )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <TrendingUp size={12} style={{ color: '#F0A24B' }} />
-          <span style={{
-            fontSize: '13px', fontWeight: 700,
-            fontFamily: 'Roboto Mono, monospace', color: '#F0A24B',
-          }}>
-            {formatPrice(item.minPrice)} ~ {formatPrice(item.maxPrice)}
-          </span>
-        </div>
+        <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
+          분양가: 청약홈 공고 확인
+        </span>
       </div>
     </div>
   );

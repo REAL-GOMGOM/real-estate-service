@@ -1,15 +1,16 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Bitcoin, DollarSign, RefreshCw } from 'lucide-react';
+import type { DollarQuoteProvenance } from '@/lib/types';
 
 interface Props {
   baseYear:    number;
-  baseRate:    number;
+  baseRate:    number | null;
   compareYear: number;
-  compareRate: number;
-  onBtcKrw:          (price: number | null) => void;
-  onGoldKrwPerGram:  (price: number | null) => void;
+  compareRate: number | null;
+  baseSource?: DollarQuoteProvenance;
+  compareSource?: DollarQuoteProvenance;
 }
 
 interface CryptoData {
@@ -36,13 +37,10 @@ function GoldIcon({ size = 16 }: { size?: number }) {
 
 export default function CryptoTicker({
   baseYear, baseRate, compareYear, compareRate,
-  onBtcKrw, onGoldKrwPerGram,
+  baseSource, compareSource,
 }: Props) {
   const [data, setData]       = useState<CryptoData | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const callbackRef = useRef({ onBtcKrw, onGoldKrwPerGram });
-  callbackRef.current = { onBtcKrw, onGoldKrwPerGram };
 
   async function refresh() {
     setLoading(true);
@@ -50,11 +48,11 @@ export default function CryptoTicker({
       const res  = await fetch('/api/crypto');
       const json = await res.json() as CryptoData;
       setData(json);
-      callbackRef.current.onBtcKrw(json.btcKrw);
-      callbackRef.current.onGoldKrwPerGram(json.goldKrwPerGram);
     } catch {
-      callbackRef.current.onBtcKrw(null);
-      callbackRef.current.onGoldKrwPerGram(null);
+      setData({
+        btcUsd: null, btcKrw: null, goldUsdPerGram: null,
+        goldKrwPerGram: null, updatedAt: null, error: '현재 시세 조회 실패',
+      });
     } finally {
       setLoading(false);
     }
@@ -66,8 +64,10 @@ export default function CryptoTicker({
     return () => clearInterval(id);
   }, []);
 
-  const rateChange = ((compareRate - baseRate) / baseRate) * 100;
-  const weakened   = rateChange > 0;
+  const rateChange = baseRate !== null && compareRate !== null && baseRate > 0
+    ? ((compareRate - baseRate) / baseRate) * 100
+    : null;
+  const weakened = rateChange !== null && rateChange > 0;
 
   const cards = [
     // ── 달러 ──
@@ -75,8 +75,8 @@ export default function CryptoTicker({
       group: 'USD',
       icon:  <DollarSign size={15} />,
       label: `${baseYear}년 USD/KRW`,
-      value: `₩${baseRate.toLocaleString()}`,
-      sub:   '기준년도 연평균',
+      value: baseRate !== null ? `₩${baseRate.toLocaleString()}` : '—',
+      sub:   baseSource?.source ?? '출처 확인 중',
       color: '#F0A24B',
       bg:    'rgba(245,158,11,0.07)',
       bd:    'rgba(245,158,11,0.18)',
@@ -86,8 +86,10 @@ export default function CryptoTicker({
       group: 'USD',
       icon:  <DollarSign size={15} />,
       label: `${compareYear}년 USD/KRW`,
-      value: `₩${compareRate.toLocaleString()}`,
-      sub:   `${weakened ? '▲' : '▼'} ${Math.abs(rateChange).toFixed(1)}% (${weakened ? '원화 약세' : '원화 강세'})`,
+      value: compareRate !== null ? `₩${compareRate.toLocaleString()}` : '—',
+      sub: rateChange !== null
+        ? `${weakened ? '▲' : '▼'} ${Math.abs(rateChange).toFixed(1)}% · ${compareSource?.source ?? '출처 확인 중'}`
+        : compareSource?.source ?? '출처 확인 중',
       color: weakened ? '#E85D5D' : '#2E7A4C',
       bg:    weakened ? 'rgba(232,93,93,0.07)' : 'rgba(111,192,138,0.07)',
       bd:    weakened ? 'rgba(232,93,93,0.18)'  : 'rgba(111,192,138,0.18)',
@@ -174,9 +176,14 @@ export default function CryptoTicker({
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end' }}>
+        {data?.error && (
+          <span role="status" style={{ fontSize: '10px', color: '#B7791F', marginRight: 'auto' }}>
+            {data.error} — 현재 BTC·PAXG 값은 표시하지 않습니다.
+          </span>
+        )}
         {data?.updatedAt && (
           <span style={{ fontSize: '10px', color: 'var(--text-dim)' }}>
-            {fmtTime(data.updatedAt)} 기준 · PAX Gold(PAXG) 추적
+            {fmtTime(data.updatedAt)} 기준 · CoinGecko BTC·PAX Gold(PAXG) 호가
           </span>
         )}
         <button

@@ -15,6 +15,12 @@ export const DIDIMDOL_NEWLYWED_RATE_TABLE = [
 ];
 
 // 소득(만원) + 대출기간(년) → 기본금리 조회
+export const DIDIMDOL_RATE_TABLE_TERMS = [10, 15, 20] as const;
+
+export function hasDirectDidimdolRate(term: number): boolean {
+  return DIDIMDOL_RATE_TABLE_TERMS.includes(term as (typeof DIDIMDOL_RATE_TABLE_TERMS)[number]);
+}
+
 export function getBaseRate(
   income: number,
   term: number,
@@ -26,6 +32,8 @@ export function getBaseRate(
   const row = table.find((r) => income <= r.incomeMax) || table[table.length - 1];
   if (term <= 10) return row.rate10;
   if (term <= 15) return row.rate15;
+  // 30년 별도 열은 현재 저장 데이터에 없다. 호출부는 반드시 20년 값 대체
+  // 가정임을 사용자에게 표시해야 한다.
   return row.rate20;
 }
 

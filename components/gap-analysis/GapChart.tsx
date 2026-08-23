@@ -14,13 +14,15 @@ export default function GapChart({ result }: GapChartProps) {
 
   if (hasB) {
     // 모드 1: 단지 vs 단지 갭 차트
+    const labelA = [result.complexA.name, result.complexA.dong].filter(Boolean).join(' · ');
+    const labelB = [result.complexB!.name, result.complexB!.dong].filter(Boolean).join(' · ');
     const chartData = result.monthlyGap.map((g) => {
       const a = result.complexA.prices.find((p) => p.date === g.date);
       const b = result.complexB?.prices.find((p) => p.date === g.date);
       return {
         date: g.date.slice(2), // "25-01"
-        [result.complexA.name]: a ? Math.round(a.avgPrice / 10000 * 10) / 10 : null,
-        [result.complexB!.name]: b ? Math.round(b.avgPrice / 10000 * 10) / 10 : null,
+        priceA: a ? Math.round(a.avgPrice / 10000 * 10) / 10 : null,
+        priceB: b ? Math.round(b.avgPrice / 10000 * 10) / 10 : null,
         gap: Math.round(g.gap / 10000 * 10) / 10,
       };
     });
@@ -37,9 +39,9 @@ export default function GapChart({ result }: GapChartProps) {
             formatter={(value: unknown, name: unknown) => [`${value}억`, String(name)]}
           />
           <Legend wrapperStyle={{ fontSize: '12px' }} />
-          <Line yAxisId="price" type="monotone" dataKey={result.complexA.name} stroke="#1B4DDB" strokeWidth={2} dot={{ r: 2 }} />
+          <Line yAxisId="price" type="monotone" dataKey="priceA" name={labelA} stroke="#1B4DDB" strokeWidth={2} dot={{ r: 2 }} />
           {result.complexB && (
-            <Line yAxisId="price" type="monotone" dataKey={result.complexB.name} stroke="#6FC08A" strokeWidth={2} dot={{ r: 2 }} />
+            <Line yAxisId="price" type="monotone" dataKey="priceB" name={labelB} stroke="#6FC08A" strokeWidth={2} dot={{ r: 2 }} />
           )}
           <Bar yAxisId="gap" dataKey="gap" fill="#EBC15C" opacity={0.4} barSize={12} name="갭" />
           <ReferenceLine yAxisId="gap" y={Math.round(result.historicalAvgGap / 10000 * 10) / 10} stroke="#E23B3B" strokeDasharray="5 5" label={{ value: '평균 갭', fill: '#E23B3B', fontSize: 10 }} />

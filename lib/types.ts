@@ -1,15 +1,17 @@
 /** 서비스 전반에서 사용하는 공통 타입 정의 */
 
 export interface DollarApiResult {
+  status:                 'ok' | 'partial';
   aptName:               string;
   district:              string;
   baseYear:              number;
   compareYear:           number;
   basePriceKrw:          number | null;
   comparePriceKrw:       number | null;
-  baseExchangeRate:      number;
-  compareExchangeRate:   number;
-  // 연간 평균 역사적 시세 (BTC/금 변동 비교용) — Bitcoin 미존재 연도면 null
+  baseExchangeRate:      number | null;
+  compareExchangeRate:   number | null;
+  // 연도별 환산 기준. provenance가 live_proxy/static_estimate 여부를 명시한다.
+  // Bitcoin 미존재 연도 또는 자료를 확인할 수 없는 경우 null.
   baseBtcKrw:            number | null;
   compareBtcKrw:         number | null;
   baseGoldKrwPerGram:    number | null;
@@ -19,6 +21,39 @@ export interface DollarApiResult {
   availableAreas?: { area: number; count: number; baseCount: number }[];
   baseIsYtd?:      boolean;
   compareIsYtd?:   boolean;
+  warnings:        string[];
+  provenance: {
+    transactions: {
+      source: string;
+      matchMethod: string;
+      cancellationExcluded: true;
+      aggregation: string;
+      base: DollarTransactionWindow;
+      compare: DollarTransactionWindow;
+    };
+    exchangeRate: { base: DollarQuoteProvenance; compare: DollarQuoteProvenance };
+    bitcoin: { base: DollarQuoteProvenance; compare: DollarQuoteProvenance };
+    gold: { base: DollarQuoteProvenance; compare: DollarQuoteProvenance };
+  };
+}
+
+export interface DollarQuoteProvenance {
+  mode: 'official' | 'live_proxy' | 'static_estimate' | 'unavailable';
+  source: string;
+  period: string;
+  asOf?: string;
+  note: string;
+}
+
+export interface DollarTransactionWindow {
+  requestedMonths: string[];
+  successfulMonths: string[];
+  failedMonths: string[];
+  matchedMonths: string[];
+  sampleCount: number;
+  allAreaSampleCount: number;
+  canceledExcluded: number;
+  fallbackUsed: boolean;
 }
 
 export interface ApartmentEntry {
@@ -135,7 +170,8 @@ export interface SubscriptionItem {
   startDate: string;
   endDate: string;
   announceDate: string;
-  totalUnits: number;
+  /** 공고에 총 공급 세대수가 명시되지 않은 경우 null */
+  totalUnits: number | null;
   competitionRate: number | null;
   competitionRates: CompetitionRateEntry[];
   status: 'upcoming' | 'ongoing' | 'closed';
@@ -143,6 +179,8 @@ export interface SubscriptionItem {
   maxPrice: number | null;
   houseType: string;
   supplyDates: SupplyDate[];
+  /** 청약홈 공고 원문. applyhome.co.kr HTTPS URL만 허용한다. */
+  sourceUrl?: string;
   /** 공급 카테고리 — apt(분양) / 잔여세대-무순위 / 잔여세대-불법행위 / 임의공급 */
   supplyCategory: 'apt' | 'remndr-unranked' | 'remndr-illegal' | 'arbitrary';
 }

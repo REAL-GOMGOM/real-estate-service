@@ -1,11 +1,15 @@
-/**
- * AdSense Placeholder Component — Phase 5c-7 Stage 2.6
- *
- * AdSense 계정 승인 대기 중에는 placeholder 대신 자체 광고 문의 CTA를 렌더.
- * (사이클 W — "승인 후 표시" 문구가 방문자에게 그대로 노출되던 문제 해소)
- * NEXT_PUBLIC_ADSENSE_CLIENT + slotId 둘 다 있을 때만 실제 광고 로드.
- */
-import Link from 'next/link';
+'use client';
+
+import { useCallback, useEffect, useRef } from 'react';
+import { useConsent } from '@/hooks/useConsent';
+import { ADSENSE_READY_EVENT } from './AdSenseLoader';
+import { useAdSenseRegionEligibility } from '@/hooks/useAdSenseRegionEligibility';
+
+declare global {
+  interface Window {
+    adsbygoogle?: Array<Record<string, unknown>>;
+  }
+}
 
 interface AdSlotProps {
   type: 'article' | 'bottom';
@@ -13,58 +17,54 @@ interface AdSlotProps {
   label?: string;
 }
 
-export function AdSlot({ type: _type, slotId, label = '광고' }: AdSlotProps) {
+/** 광고 동의 후 수동 요청하며, 광고 크기만큼 공간을 먼저 예약한다. */
+export function AdSlot({ type, slotId, label = '광고' }: AdSlotProps) {
+  const consent = useConsent();
+  const pushed = useRef(false);
   const publisherId = process.env.NEXT_PUBLIC_ADSENSE_CLIENT;
   const isProduction = process.env.NODE_ENV === 'production';
-  const hasAdSense = Boolean(publisherId && slotId);
+  const baseEnabled = isProduction && Boolean(publisherId && slotId) && consent?.advertising === true;
+  const enabled = useAdSenseRegionEligibility(baseEnabled);
 
-  if (isProduction && hasAdSense) {
-    return (
-      <div className="mx-auto max-w-5xl px-4 md:px-6 py-6">
-        <div className="text-xs text-center mb-2" style={{ color: 'var(--text-muted)' }}>
-          {label}
-        </div>
+  const requestAd = useCallback(() => {
+    if (!enabled || pushed.current) return;
+    try {
+      window.adsbygoogle = window.adsbygoogle ?? [];
+      window.adsbygoogle.push({});
+      pushed.current = true;
+    } catch {
+      // 차단 확장 프로그램이나 공급자 스크립트 실패 시 빈 예약 영역만 유지한다.
+    }
+  }, [enabled]);
+
+  useEffect(() => {
+    if (!enabled) {
+      pushed.current = false;
+      return;
+    }
+    requestAd();
+    window.addEventListener(ADSENSE_READY_EVENT, requestAd);
+    return () => window.removeEventListener(ADSENSE_READY_EVENT, requestAd);
+  }, [enabled, requestAd]);
+
+  if (!enabled || !publisherId || !slotId) return null;
+
+  const reservedHeight = type === 'article' ? 280 : 250;
+
+  return (
+    <aside className="mx-auto max-w-5xl px-4 py-6 md:px-6" aria-label={`${label} 영역`}>
+      <div className="mb-2 text-center text-xs" style={{ color: 'var(--text-muted)' }}>
+        {label}
+      </div>
+      <div style={{ minHeight: `${reservedHeight}px` }}>
         <ins
           className="adsbygoogle block"
-          style={{ display: 'block' }}
+          style={{ display: 'block', minHeight: `${reservedHeight}px` }}
           data-ad-client={publisherId}
           data-ad-slot={slotId}
           data-ad-format="auto"
           data-full-width-responsive="true"
         />
-      </div>
-    );
-  }
-
-  // AdSense 미승인 상태 — 자체 광고 문의 CTA (빈 placeholder 노출 방지)
-  return (
-    <aside
-      className="mx-auto max-w-5xl px-4 md:px-6 py-6"
-      aria-label="광고 문의 영역"
-    >
-      <div
-        className="relative flex flex-col items-center justify-center gap-3 min-h-[120px] md:min-h-[150px] rounded-2xl px-6 py-8 text-center overflow-hidden"
-        style={{ backgroundColor: 'var(--ink, #14213D)' }}
-      >
-        <span
-          className="absolute top-3 right-4 text-[10px] font-semibold tracking-wider"
-          style={{ color: 'rgba(255,255,255,0.35)' }}
-        >
-          AD
-        </span>
-        <p className="text-base md:text-lg font-bold" style={{ color: '#FFFFFF' }}>
-          이 자리에 광고, 어떠세요?
-        </p>
-        <p className="text-xs md:text-sm" style={{ color: 'rgba(255,255,255,0.65)' }}>
-          부동산 관심 독자에게 정확히 닿는 지면 · 분양·중개·금융 광고 추천
-        </p>
-        <Link
-          href="/contact"
-          className="mt-1 rounded-full px-5 py-2 text-sm font-bold transition-opacity hover:opacity-85"
-          style={{ backgroundColor: '#FFFFFF', color: 'var(--ink, #14213D)' }}
-        >
-          광고 문의하기
-        </Link>
       </div>
     </aside>
   );

@@ -9,9 +9,15 @@
 
 interface TxErrorStateProps {
   onRetry: () => void;
+  title?: string;
+  description?: string;
 }
 
-export function TxErrorState({ onRetry }: TxErrorStateProps) {
+export function TxErrorState({
+  onRetry,
+  title = '데이터를 불러오지 못했어요',
+  description = '데이터 서버 응답이 지연되고 있습니다. 잠시 후 다시 시도해주세요.',
+}: TxErrorStateProps) {
   return (
     <div
       role="alert"
@@ -34,10 +40,10 @@ export function TxErrorState({ onRetry }: TxErrorStateProps) {
         </svg>
       </div>
       <div style={{ fontSize: '17px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '8px' }}>
-        데이터를 불러오지 못했어요
+        {title}
       </div>
       <div style={{ fontSize: '13.5px', color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: '22px' }}>
-        국토부 실거래 서버 응답이 지연되고<br />있습니다. 잠시 후 다시 시도해주세요.
+        {description}
       </div>
       <button
         onClick={onRetry}

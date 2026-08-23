@@ -6,23 +6,20 @@ import KoreaMap from '@/components/price-map/KoreaMap';
 import MapLegend from '@/components/price-map/MapLegend';
 import SummaryBox from '@/components/price-map/SummaryBox';
 import ToggleGroup from '@/components/price-map/ToggleGroup';
-import type { PriceChangeData, TradeType, PeriodType, RegionChange } from '@/types/price-map';
+import { isMonthlyPriceChangeData, PRICE_CHANGE_FREQUENCY } from '@/lib/price-map-contract';
+import type { PriceChangeData, TradeType, RegionChange } from '@/types/price-map';
 
 const TRADE_OPTIONS = [
   { label: '매매', value: 'sale' as TradeType },
   { label: '전세', value: 'rent' as TradeType },
 ];
 
-const PERIOD_OPTIONS = [
-  { label: '주간', value: 'weekly' as PeriodType },
-  { label: '월간', value: 'monthly' as PeriodType },
-];
-
 function PriceMapContent() {
   const [tradeType, setTradeType] = useState<TradeType>('sale');
-  const [period, setPeriod] = useState<PeriodType>('weekly');
   const [data, setData] = useState<PriceChangeData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
   const [selectedRegion, setSelectedRegion] = useState<RegionChange | null>(null);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -33,22 +30,40 @@ function PriceMapContent() {
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  const fetchData = useCallback(async (type: TradeType, p: PeriodType) => {
+  const fetchData = useCallback(async (type: TradeType, signal: AbortSignal) => {
     setLoading(true);
+    setError(null);
+    setData(null);
+    setSelectedRegion(null);
     try {
-      const res = await fetch(`/api/price-change?type=${type}&period=${p}`);
-      const json = await res.json();
-      if (!json.error) setData(json);
-    } catch {
-      // 기존 데이터 유지
+      const res = await fetch(
+        `/api/price-change?type=${type}&period=${PRICE_CHANGE_FREQUENCY}`,
+        { signal },
+      );
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof json.error === 'string' ? json.error : '월간 변동률을 불러오지 못했습니다.');
+      }
+      if (!isMonthlyPriceChangeData(json)) {
+        throw new Error('월간 변동률 응답 형식이 올바르지 않습니다.');
+      }
+      if (json.regions.length === 0) {
+        throw new Error('표시할 월간 변동률 데이터가 없습니다.');
+      }
+      if (!signal.aborted) setData(json);
+    } catch (caught) {
+      if (signal.aborted) return;
+      setError(caught instanceof Error ? caught.message : '월간 변동률을 불러오지 못했습니다.');
     } finally {
-      setLoading(false);
+      if (!signal.aborted) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchData(tradeType, period);
-  }, [tradeType, period, fetchData]);
+    const controller = new AbortController();
+    void fetchData(tradeType, controller.signal);
+    return () => controller.abort();
+  }, [tradeType, retryKey, fetchData]);
 
   // 모바일: 리스트 뷰 정렬
   const sortedRegions = data
@@ -74,7 +89,17 @@ function PriceMapContent() {
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>
             <ToggleGroup options={TRADE_OPTIONS} selected={tradeType} onChange={setTradeType} />
-            <ToggleGroup options={PERIOD_OPTIONS} selected={period} onChange={setPeriod} />
+            <div
+              aria-label="집계 주기: 월간"
+              style={{
+                display: 'inline-flex', alignItems: 'center', padding: '8px 18px',
+                borderRadius: '10px', border: '1px solid var(--border)',
+                backgroundColor: 'var(--accent)', color: '#FFFFFF',
+                fontSize: '13px', fontWeight: 600,
+              }}
+            >
+              월간
+            </div>
           </div>
         </div>
 
@@ -91,6 +116,30 @@ function PriceMapContent() {
         {loading && (
           <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-dim)', fontSize: '14px' }}>
             불러오는 중...
+          </div>
+        )}
+
+        {!loading && error && (
+          <div
+            role="alert"
+            style={{
+              marginTop: '20px', padding: '36px 20px', textAlign: 'center',
+              borderRadius: '14px', border: '1px solid var(--border)',
+              backgroundColor: 'var(--bg-card)', color: 'var(--text-muted)',
+            }}
+          >
+            <p style={{ marginBottom: '14px', fontSize: '14px' }}>{error}</p>
+            <button
+              type="button"
+              onClick={() => setRetryKey((key) => key + 1)}
+              style={{
+                padding: '9px 16px', borderRadius: '9px', border: 'none',
+                backgroundColor: 'var(--accent)', color: '#FFFFFF',
+                fontSize: '13px', fontWeight: 700, cursor: 'pointer',
+              }}
+            >
+              다시 시도
+            </button>
           </div>
         )}
 

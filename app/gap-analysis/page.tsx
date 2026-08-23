@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, Suspense } from 'react';
+import { useState, useCallback, Suspense, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import Header from '@/components/layout/Header';
 import Link from 'next/link';
@@ -17,26 +17,60 @@ function ComplexSearchInput({
   onDistrictChange,
   onSelect,
   selected,
+  selectedSize,
+  onSizeChange,
 }: {
   label: string;
   district: string;
   onDistrictChange: (d: string) => void;
   onSelect: (c: ComplexSearchResult | null) => void;
   selected: ComplexSearchResult | null;
+  selectedSize: number | null;
+  onSizeChange: (size: number | null) => void;
 }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ComplexSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const searchControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => () => searchControllerRef.current?.abort(), []);
 
   const search = useCallback(async (q: string, d: string) => {
-    if (q.length < 2) { setResults([]); return; }
+    searchControllerRef.current?.abort();
+    if (q.trim().length < 2) {
+      setResults([]);
+      setSearchError(null);
+      setLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    searchControllerRef.current = controller;
     setLoading(true);
+    setSearchError(null);
     try {
-      const res = await fetch(`/api/gap-analysis/search?q=${encodeURIComponent(q)}&district=${encodeURIComponent(d)}`);
+      const res = await fetch(`/api/gap-analysis/search?q=${encodeURIComponent(q)}&district=${encodeURIComponent(d)}`, {
+        signal: controller.signal,
+      });
       const json = await res.json();
-      setResults(json.results || []);
-    } catch { setResults([]); }
-    finally { setLoading(false); }
+      if (
+        !res.ok
+        || (json?.status !== 'ok' && json?.status !== 'partial')
+        || !Array.isArray(json?.results)
+      ) {
+        throw new Error(typeof json?.error === 'string' ? json.error : '단지 검색 결과를 확인하지 못했습니다.');
+      }
+      setResults(json.results);
+      if (json.status === 'partial') {
+        setSearchError(typeof json.note === 'string' ? json.note : '일부 월에서만 검색했습니다.');
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      setResults([]);
+      setSearchError(error instanceof Error ? error.message : '단지 검색에 실패했습니다.');
+    } finally {
+      if (!controller.signal.aborted) setLoading(false);
+    }
   }, []);
 
   return (
@@ -48,8 +82,21 @@ function ComplexSearchInput({
           <div>
             <p style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-strong)' }}>{selected.name}</p>
             <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>{selected.district} {selected.dong}</p>
+            {selected.sizes.length > 0 && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: '7px', marginTop: '9px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                전용면적
+                <select
+                  aria-label={`${label} 전용면적`}
+                  value={selectedSize ?? ''}
+                  onChange={(event) => onSizeChange(Number(event.target.value))}
+                  style={{ padding: '6px 8px', borderRadius: '7px', backgroundColor: 'var(--btn-bg)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+                >
+                  {selected.sizes.map((size) => <option key={size} value={size}>{size.toFixed(1)}㎡</option>)}
+                </select>
+              </label>
+            )}
           </div>
-          <button onClick={() => { onSelect(null); setQuery(''); setResults([]); }}
+          <button type="button" onClick={() => { onSelect(null); onSizeChange(null); setQuery(''); setResults([]); }}
             style={{ fontSize: '12px', color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer' }}>
             변경
           </button>
@@ -78,10 +125,11 @@ function ComplexSearchInput({
             </div>
           </div>
           {loading && <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>검색 중...</p>}
+          {searchError && <p role="alert" style={{ fontSize: '12px', color: 'var(--danger-text, #C92F2F)' }}>{searchError}</p>}
           {results.length > 0 && (
             <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
               {results.map((r) => (
-                <button key={r.id} onClick={() => onSelect(r)}
+                <button key={r.id} type="button" onClick={() => { onSelect(r); onSizeChange(r.sizes[0] ?? null); }}
                   style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px', borderRadius: '8px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-light)', cursor: 'pointer' }}>
                   <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{r.name}</p>
                   <p style={{ fontSize: '11px', color: 'var(--text-dim)' }}>{r.dong} · {r.sizes.map((s) => `${Math.round(s)}㎡`).join(', ')}</p>
@@ -100,35 +148,67 @@ function GapContent() {
   const [districtB, setDistrictB] = useState('강남구');
   const [complexA, setComplexA] = useState<ComplexSearchResult | null>(null);
   const [complexB, setComplexB] = useState<ComplexSearchResult | null>(null);
+  const [sizeA, setSizeA] = useState<number | null>(null);
+  const [sizeB, setSizeB] = useState<number | null>(null);
   const [result, setResult] = useState<GapResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const analyzeControllerRef = useRef<AbortController | null>(null);
+  const analyzeSequenceRef = useRef(0);
+
+  useEffect(() => () => analyzeControllerRef.current?.abort(), []);
 
   const analyze = async () => {
     if (!complexA) return;
+    analyzeControllerRef.current?.abort();
+    const controller = new AbortController();
+    analyzeControllerRef.current = controller;
+    const sequence = ++analyzeSequenceRef.current;
     setLoading(true);
     setError(null);
+    setResult(null);
     try {
       const res = await fetch('/api/gap-analysis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
-          complexA: { district: districtA, name: complexA.name },
-          complexB: complexB ? { district: districtB, name: complexB.name } : undefined,
-          period: 24,
+          complexA: { district: districtA, name: complexA.name, dong: complexA.dong, size: sizeA ?? undefined },
+          complexB: complexB
+            ? { district: districtB, name: complexB.name, dong: complexB.dong, size: sizeB ?? undefined }
+            : undefined,
+          period: 12,
         }),
       });
       const json = await res.json();
-      if (json.error) setError(json.error);
-      else setResult(json);
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
-    finally { setLoading(false); }
+      if (sequence !== analyzeSequenceRef.current) return;
+      if (!res.ok) {
+        throw new Error(typeof json?.error === 'string' ? json.error : `갭 분석 요청 실패 (HTTP ${res.status})`);
+      }
+      if (
+        (json?.status !== 'ok' && json?.status !== 'partial')
+        || !Array.isArray(json?.complexA?.prices)
+        || !Array.isArray(json?.monthlyGap)
+        || typeof json?.method !== 'string'
+      ) {
+        throw new Error('갭 분석 응답 형식을 확인하지 못했습니다.');
+      }
+      setResult(json as GapResult);
+    } catch (caught) {
+      if (caught instanceof DOMException && caught.name === 'AbortError') return;
+      if (sequence === analyzeSequenceRef.current) {
+        setError(caught instanceof Error ? caught.message : String(caught));
+      }
+    } finally {
+      if (sequence === analyzeSequenceRef.current && !controller.signal.aborted) setLoading(false);
+    }
   };
 
   const signalConfig = {
-    undervalued: { label: '저평가', color: 'var(--success-text, #2E7A4C)', bg: 'var(--success-bg, #E9F6EE)', icon: TrendingUp },
-    overvalued: { label: '고평가', color: 'var(--danger-text, #C92F2F)', bg: 'var(--danger-bg, #FDECEC)', icon: TrendingDown },
-    normal: { label: '정상', color: 'var(--text-muted)', bg: 'var(--btn-bg)', icon: Minus },
+    below_baseline: { label: '과거 기준보다 낮음', color: 'var(--success-text, #2E7A4C)', bg: 'var(--success-bg, #E9F6EE)', icon: TrendingDown },
+    above_baseline: { label: '과거 기준보다 높음', color: 'var(--danger-text, #C92F2F)', bg: 'var(--danger-bg, #FDECEC)', icon: TrendingUp },
+    near_baseline: { label: '과거 기준 범위', color: 'var(--text-muted)', bg: 'var(--btn-bg)', icon: Minus },
+    insufficient: { label: '판정 보류', color: 'var(--warning-text, #8A6A1F)', bg: 'var(--warning-bg, #FBF3DC)', icon: AlertTriangle },
   };
 
   return (
@@ -139,7 +219,7 @@ function GapContent() {
         </h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
           <p style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
-            매매가와 전세가의 차이를 분석하여 투자 가치를 판단합니다. 출처: 국토교통부
+            선택한 동·전용면적의 취소 제외 실거래 평균을 비교합니다. 출처: 국토교통부
           </p>
           <Link href="/gap-guide" style={{
             display: 'inline-flex', alignItems: 'center', gap: '8px',
@@ -156,8 +236,24 @@ function GapContent() {
 
         {/* 단지 선택 */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 350px), 1fr))', gap: '16px', marginBottom: '20px' }}>
-          <ComplexSearchInput label="기준 단지 (A)" district={districtA} onDistrictChange={setDistrictA} onSelect={setComplexA} selected={complexA} />
-          <ComplexSearchInput label="비교 단지 (B) — 선택" district={districtB} onDistrictChange={setDistrictB} onSelect={setComplexB} selected={complexB} />
+          <ComplexSearchInput
+            label="기준 단지 (A)"
+            district={districtA}
+            onDistrictChange={(district) => { setDistrictA(district); setComplexA(null); setSizeA(null); setResult(null); }}
+            onSelect={(complex) => { setComplexA(complex); setResult(null); }}
+            selected={complexA}
+            selectedSize={sizeA}
+            onSizeChange={(size) => { setSizeA(size); setResult(null); }}
+          />
+          <ComplexSearchInput
+            label="비교 단지 (B) — 선택"
+            district={districtB}
+            onDistrictChange={(district) => { setDistrictB(district); setComplexB(null); setSizeB(null); setResult(null); }}
+            onSelect={(complex) => { setComplexB(complex); setResult(null); }}
+            selected={complexB}
+            selectedSize={sizeB}
+            onSizeChange={(size) => { setSizeB(size); setResult(null); }}
+          />
         </div>
 
         {/* 분석 버튼 */}
@@ -185,11 +281,11 @@ function GapContent() {
         {result && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-            {/* 갭투자 시뮬레이션 카드 */}
-            {result.latestPrice && result.rentAvg && (
+            {/* 매매·전세 단순 갭 카드 */}
+            {result.latestPrice != null && result.rentAvg != null && result.rentRatio != null && result.investmentGap != null && (
               <div style={{ padding: '24px', borderRadius: '14px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)' }}>
                 <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-strong)', marginBottom: '16px' }}>
-                  {result.complexA.name} 갭투자 분석
+                  {result.complexA.name} 실거래 기준 단순 갭
                 </h3>
 
                 {/* 핵심 수치 */}
@@ -197,8 +293,8 @@ function GapContent() {
                   {[
                     { label: '매매가', value: `${(result.latestPrice / 10000).toFixed(1)}억`, color: 'var(--text-strong)' },
                     { label: '전세가', value: `${(result.rentAvg / 10000).toFixed(1)}억`, color: 'var(--accent)' },
-                    { label: '갭 (투자금)', value: `${((result.investmentGap || 0) / 10000).toFixed(1)}억`, color: '#EBC15C' },
-                    { label: '전세가율', value: `${result.rentRatio}%`, color: (result.rentRatio || 0) >= 70 ? 'var(--success-text, #2E7A4C)' : 'var(--danger-text, #C92F2F)' },
+                    { label: '매매−전세 평균', value: `${(result.investmentGap / 10000).toFixed(1)}억`, color: '#A97912' },
+                    { label: '전세가율', value: `${result.rentRatio}%`, color: 'var(--text-strong)' },
                   ].map((item) => (
                     <div key={item.label} style={{ padding: '14px', borderRadius: '12px', backgroundColor: 'var(--btn-bg)', textAlign: 'center' }}>
                       <p style={{ fontSize: '12px', color: 'var(--text-dim)', marginBottom: '4px' }}>{item.label}</p>
@@ -207,41 +303,11 @@ function GapContent() {
                   ))}
                 </div>
 
-                {/* 수익률 시뮬레이션 */}
-                <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '10px' }}>매매가 상승 시 수익률 시뮬레이션</p>
-                <div style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border)' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', padding: '8px 14px', backgroundColor: 'var(--btn-bg)', borderBottom: '1px solid var(--border)' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-dim)' }}>상승액</span>
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-dim)', textAlign: 'center' }}>매도 시 시세</span>
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-dim)', textAlign: 'right' }}>수익률</span>
-                  </div>
-                  {[5000, 10000, 15000, 20000, 30000].map((rise) => {
-                    const gap = result.investmentGap || 1;
-                    const roi = ((rise / gap) * 100);
-                    return (
-                      <div key={rise} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', padding: '10px 14px', borderBottom: '1px solid var(--border-light)' }}>
-                        <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>+{(rise / 10000).toFixed(1)}억</span>
-                        <span style={{ fontSize: '13px', color: 'var(--text-primary)', textAlign: 'center', fontFamily: 'Roboto Mono, monospace' }}>
-                          {((result.latestPrice! + rise) / 10000).toFixed(1)}억
-                        </span>
-                        <span style={{ fontSize: '14px', fontWeight: 700, textAlign: 'right', fontFamily: 'Roboto Mono, monospace', color: roi > 0 ? 'var(--up-color)' : 'var(--down-color)' }}>
-                          {roi > 0 ? '+' : ''}{roi.toFixed(0)}%
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* 전세가율 판정 */}
-                <div style={{ marginTop: '16px', padding: '12px 16px', borderRadius: '10px', backgroundColor: (result.rentRatio || 0) >= 70 ? 'var(--success-bg, #E9F6EE)' : 'var(--danger-bg, #FDECEC)', fontSize: '13px' }}>
-                  {(result.rentRatio || 0) >= 70
-                    ? <span style={{ color: 'var(--success-text, #2E7A4C)' }}>전세가율 {result.rentRatio}% — 갭투자 적합 구간 (투자금 {((result.investmentGap || 0) / 10000).toFixed(1)}억)</span>
-                    : <span style={{ color: 'var(--danger-text, #C92F2F)' }}>전세가율 {result.rentRatio}% — 갭이 커서 높은 투자금 필요 ({((result.investmentGap || 0) / 10000).toFixed(1)}억)</span>
-                  }
-                </div>
-
                 <p style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '10px' }}>
-                  매매 {result.tradeCount}건 · 전세 {result.rentCount}건 기준 (최근 6개월)
+                  매매 {result.tradeCount}건 · 최근 전세 표본 {result.rentCount}건 · {result.complexA.dong || '선택 지역'} · {result.complexA.size?.toFixed(1) ?? '전체'}㎡
+                </p>
+                <p style={{ fontSize: '11px', color: 'var(--text-dim)', margin: '5px 0 0', lineHeight: 1.55 }}>
+                  세금·중개보수·대출비용·보증금 변동은 반영하지 않은 실거래 평균 차이이며 투자금이나 수익률을 뜻하지 않습니다.
                 </p>
               </div>
             )}
@@ -258,7 +324,8 @@ function GapContent() {
                   <div>
                     <p style={{ fontSize: '20px', fontWeight: 800, color: sc.color }}>{sc.label}</p>
                     <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                      현재 갭 {(result.currentGap / 10000).toFixed(1)}억 · 역사 평균 {(result.historicalAvgGap / 10000).toFixed(1)}억 · 마진 {(result.margin / 10000).toFixed(1)}억 (Z={result.zScore})
+                      최근 공통월 평균 차이 {(result.currentGap / 10000).toFixed(1)}억 · 이전 구간 평균 {(result.historicalAvgGap / 10000).toFixed(1)}억 · 차이 {(result.margin / 10000).toFixed(1)}억
+                      {result.zScore === null ? '' : ` · 표준화값 ${result.zScore}`}
                     </p>
                   </div>
                 </div>
@@ -272,6 +339,13 @@ function GapContent() {
                 {result.dataWarning}
               </div>
             )}
+
+            <div style={{ padding: '12px 14px', borderRadius: '10px', backgroundColor: 'var(--btn-bg)', fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.65 }}>
+              <p style={{ margin: 0 }}>{result.method}</p>
+              <p style={{ margin: '4px 0 0' }}>
+                요청 {result.coverage.requestedMonths.length}개월 · 매매 원본 확인 {result.coverage.saleA.successfulMonths.length}개월 · 전세 원본 확인 {result.coverage.rentA.successfulMonths.length}개월
+              </p>
+            </div>
 
             {/* 차트 */}
             <div style={{ padding: '20px', borderRadius: '14px', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)' }}>

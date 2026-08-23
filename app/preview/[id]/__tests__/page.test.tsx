@@ -26,9 +26,9 @@ vi.mock('next/navigation', () => ({
   },
 }));
 
-// Cache Components(PPR) 대응으로 동적 본문은 PreviewContent 로 분리됨.
-// 보안 게이트·DB 조회 로직이 PreviewContent 에 있으므로 테스트는 이를 직접 호출한다.
-import { PreviewContent, metadata } from '../page';
+// 라우트가 허용되지 않는 임의 named export를 만들지 않도록 기본 페이지가
+// Suspense 안에 구성한 PreviewContent 엘리먼트를 통해 보안 게이트를 검증한다.
+import PublicPreviewPage, { metadata } from '../page';
 import { createPreviewToken } from '@/lib/blog/preview-token';
 
 const SECRET = 'preview-secret';
@@ -52,10 +52,15 @@ function collectText(node: unknown, acc: string[] = []): string[] {
 }
 
 function renderPage(id: string, token: string | undefined) {
-  return PreviewContent({
+  const page = PublicPreviewPage({
     params: Promise.resolve({ id }),
     searchParams: Promise.resolve({ token }),
   });
+  const previewElement = (page.props as { children: {
+    type: (props: unknown) => Promise<unknown>;
+    props: unknown;
+  } }).children;
+  return previewElement.type(previewElement.props);
 }
 
 beforeEach(() => {

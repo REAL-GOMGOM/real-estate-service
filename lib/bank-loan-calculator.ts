@@ -166,10 +166,10 @@ export function simulateBankLoan(input: BankLoanInput): BankLoanResult {
     : 0;
 
   if (dsr > 40) {
-    warnings.push(`일반 DSR ${dsr}% — 40% 초과로 대출 불가능할 수 있습니다`);
+    rejectReasons.push(`일반 DSR ${dsr}% > 40%: 시뮬레이터의 일반 한도를 초과했습니다.`);
   }
   if (input.rateType === 'variable' && stressedDsr > 40) {
-    warnings.push(`스트레스 DSR ${stressedDsr}% — 변동금리 규제 초과`);
+    rejectReasons.push(`스트레스 DSR ${stressedDsr}% > 40%: 변동금리 심사 기준을 초과했습니다.`);
   }
 
   // DTI 계산 (보조 지표 — 시중은행 가이드 한도 40%, 현행 심사는 DSR 우선)

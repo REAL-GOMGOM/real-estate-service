@@ -4,9 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import ExchangeRateBanner from '@/components/dollar/ExchangeRateBanner';
 import ApartmentSearch    from '@/components/dollar/ApartmentSearch';
 import ApartmentDollarTable from '@/components/dollar/ApartmentDollarTable';
-import { getStaticRate } from '@/lib/exchange-rate';
 import CryptoTicker from '@/components/dollar/CryptoTicker';
-import type { ApartmentEntry, DollarApiResult } from '@/lib/types';
+import type { ApartmentEntry, DollarApiResult, DollarQuoteProvenance } from '@/lib/types';
 
 // ────────────────────────────────────────────────
 // 인기 단지 초기 목록
@@ -36,9 +35,6 @@ export default function DollarPageClient() {
   const [baseYear,    setBaseYear]    = useState(2020);
   // 기본 비교 연도 = 현재 연도 (연중 시세) — 2026-07-12 최신화
   const [compareYear, setCompareYear] = useState(() => new Date().getFullYear());
-  // 현재 시세 — 티커 표시용 (table BTC/금 열은 entry.data의 역사적 시세 사용)
-  const [, setBtcKrw]         = useState<number | null>(null);
-  const [, setGoldKrwPerGram] = useState<number | null>(null);
   const [entries,     setEntries]     = useState<ApartmentEntry[]>(() =>
     POPULAR_APARTMENTS.map((a) => ({
       id: makeId(a.district, a.aptName), aptName: a.aptName,
@@ -134,10 +130,11 @@ export default function DollarPageClient() {
     setEntries((prev) => prev.map((e) => e.id === id ? { ...e, loading: false, data, error } : e));
   }
 
-  // 환율 — 데이터 로드 전에는 정적 테이블 값 사용 (하드코딩 방지)
+  // API 출처가 확인되기 전에는 임의/정적 값을 먼저 정상값처럼 표시하지 않는다.
   const rateEntry = entries.find((e) => e.data);
-  const baseRate    = rateEntry?.data?.baseExchangeRate    ?? getStaticRate(baseYear);
-  const compareRate = rateEntry?.data?.compareExchangeRate ?? getStaticRate(compareYear);
+  const baseRate    = rateEntry?.data?.baseExchangeRate    ?? null;
+  const compareRate = rateEntry?.data?.compareExchangeRate ?? null;
+  const provenance  = rateEntry?.data?.provenance;
 
   const isAnyLoading = entries.some((e) => e.loading);
 
@@ -151,7 +148,7 @@ export default function DollarPageClient() {
             실질 가치 비교
           </h1>
           <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
-            아파트 매매가를 달러, 비트코인, 금으로 환산하여 실질 가치 변동을 분석합니다. 출처: 국토교통부, 한국은행
+            국토교통부 실거래 표본을 달러·비트코인·금 기준으로 다시 봅니다. 각 환산값의 실제 출처와 표본 수를 함께 확인하세요.
           </p>
         </div>
 
@@ -177,8 +174,8 @@ export default function DollarPageClient() {
           baseRate={baseRate}
           compareYear={compareYear}
           compareRate={compareRate}
-          onBtcKrw={setBtcKrw}
-          onGoldKrwPerGram={setGoldKrwPerGram}
+          baseSource={provenance?.exchangeRate.base}
+          compareSource={provenance?.exchangeRate.compare}
         />
 
         {/* 연도 선택 배너 */}
@@ -208,16 +205,74 @@ export default function DollarPageClient() {
           onAreaChange={handleAreaChange}
         />
 
-        {/* 데이터 출처 */}
-        <p style={{
-          marginTop: '32px', fontSize: '11px', color: 'var(--text-dim)', lineHeight: 1.8,
-        }}>
-          ※ 아파트 가격: 국토교통부 실거래가 — 과거 연도는 Q4(10~12월) 평균, 올해는 최근 3개월 신고분 평균(연중) &nbsp;|&nbsp;
-          환율: {rateEntry ? '한국은행 ECOS' : '정적 연간 평균 (한국은행 키 미설정)'} &nbsp;|&nbsp;
-          BTC·금: CoinGecko 실시간 (PAX Gold 추적) &nbsp;|&nbsp;
-          ₿·Au 환산은 현재 시세 기준으로 과거 연도에 적용되어 참고용입니다.
-        </p>
+        <DataDisclosure data={rateEntry?.data ?? null} />
       </div>
     </main>
+  );
+}
+
+function sourceLine(label: string, base: DollarQuoteProvenance, compare: DollarQuoteProvenance) {
+  const format = (quote: DollarQuoteProvenance) => {
+    const asOf = quote.asOf
+      ? ` · ${new Date(quote.asOf).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })} 조회`
+      : '';
+    return `${quote.period} ${quote.source}${asOf} — ${quote.note}`;
+  };
+  return `${label}: ${format(base)} / ${format(compare)}`;
+}
+
+function DataDisclosure({ data }: { data: DollarApiResult | null }) {
+  if (!data) {
+    return (
+      <p style={{ marginTop: '32px', fontSize: '11.5px', color: 'var(--text-dim)' }}>
+        데이터 출처와 표본 범위를 확인하는 중입니다.
+      </p>
+    );
+  }
+
+  const { transactions, exchangeRate, bitcoin, gold } = data.provenance;
+  const formatMonths = (months: string[]) => months.length > 0
+    ? months.map((month) => `${month.slice(0, 4)}-${month.slice(4)}`).join(', ')
+    : '일치 거래 없음';
+  const formatWindow = (window: typeof transactions.base) => {
+    const failed = window.failedMonths.length > 0
+      ? ` · 실패월 ${formatMonths(window.failedMonths)}`
+      : '';
+    const expanded = window.fallbackUsed ? ' · 연도 내 추가 월 조회' : '';
+    return `${window.sampleCount}건 · 일치월 ${formatMonths(window.matchedMonths)} · 조회성공 ${window.successfulMonths.length}/${window.requestedMonths.length}개월${failed}${expanded}`;
+  };
+
+  return (
+    <section style={{
+      marginTop: '32px', padding: '18px 20px', borderRadius: '14px',
+      border: '1px solid var(--border)', backgroundColor: 'var(--bg-card)',
+      color: 'var(--text-dim)', fontSize: '11.5px', lineHeight: 1.75,
+    }} aria-labelledby="dollar-data-source-title">
+      <h2 id="dollar-data-source-title" style={{
+        margin: '0 0 8px', color: 'var(--text-secondary)', fontSize: '13px', fontWeight: 750,
+      }}>
+        데이터 기준과 한계
+      </h2>
+      <p style={{ margin: 0 }}>
+        아파트: {transactions.source} · {transactions.matchMethod} · 거래 해제 제외 · {transactions.aggregation}
+      </p>
+      <p style={{ margin: 0 }}>
+        표시 단지 “{data.aptName}” · {data.baseYear}년 {formatWindow(transactions.base)}
+      </p>
+      <p style={{ margin: 0 }}>
+        표시 단지 “{data.aptName}” · {data.compareYear}년 {formatWindow(transactions.compare)}
+      </p>
+      <p style={{ margin: '5px 0 0' }}>{sourceLine('환율', exchangeRate.base, exchangeRate.compare)}</p>
+      <p style={{ margin: 0 }}>{sourceLine('비트코인', bitcoin.base, bitcoin.compare)}</p>
+      <p style={{ margin: 0 }}>{sourceLine('금', gold.base, gold.compare)}</p>
+      <p style={{ margin: '5px 0 0' }}>
+        현재 호가는 연평균이 아니며, PAXG 환산 금값은 실물 금 고시가격이 아닙니다. 정적 참고 추정치는 원자료 기준일·산출 근거가 검증되지 않았습니다.
+      </p>
+      {data.warnings.length > 0 && (
+        <ul style={{ margin: '8px 0 0', paddingLeft: '18px', color: '#B7791F' }}>
+          {data.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+        </ul>
+      )}
+    </section>
   );
 }
