@@ -10,7 +10,7 @@ beforeEach(() => {
   vi.stubEnv('DATABASE_URL', 'postgresql://example.test/db');
   mocks.neon.mockReset();
   mocks.query.mockReset();
-  mocks.neon.mockReturnValue(mocks.query);
+  mocks.neon.mockReturnValue(Object.assign(mocks.query, { query: mocks.query }));
   mocks.query
     .mockResolvedValueOnce([{ transactionCount: 10, districtCount: 2, firstDealDate: '2026-07-01', lastDealDate: '2026-08-01' }])
     .mockResolvedValueOnce([])
@@ -36,10 +36,15 @@ describe('fetchRankingTradeStats', () => {
 
     expect(result.coverage.districtCount).toBe(2);
     expect(mocks.query).toHaveBeenCalledTimes(4);
-    const sqlTexts = mocks.query.mock.calls.map(([strings]) =>
-      Array.from(strings as TemplateStringsArray).join('?'),
-    );
+    const sqlTexts = mocks.query.mock.calls.map(([text]) => String(text));
+    for (const [, values] of mocks.query.mock.calls) {
+      expect(values).toEqual(['2026-05-09', '2026-08-10', '84']);
+    }
     for (const queryText of sqlTexts) expect(queryText).toContain('is_canceled = false');
+    for (const queryText of sqlTexts.slice(0, 3)) {
+      expect(queryText).toContain("right(deal_date, 2) <> '00'");
+    }
+    expect(sqlTexts[3].match(/right\([^)]*deal_date, 2\) <> '00'/g)).toHaveLength(2);
     expect(sqlTexts[0]).toContain("area_m2 >= 82 AND area_m2 < 87");
     expect(sqlTexts[0]).toContain("area_m2 >= 57 AND area_m2 < 62");
     expect(sqlTexts[0]).toContain("area_m2 >= 87");

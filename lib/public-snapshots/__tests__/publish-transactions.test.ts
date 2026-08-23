@@ -6,6 +6,13 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import { DISTRICT_CODE } from '../../district-codes';
+import {
+  RANKING_COVERAGE_SELECT,
+  RANKING_NEW_HIGH_SELECT,
+  RANKING_TOP_PRICE_SELECT,
+  RANKING_VOLUME_SELECT,
+  rankingWindow,
+} from '../../ranking-queries';
 import { assertMacLocalDatabaseUrl } from '../../local-postgres-url';
 import type { PublicSnapshotObjectStore, PublicSnapshotPutInput } from '../object-store';
 import {
@@ -27,6 +34,7 @@ import {
   MARKET_LIVE_SELECT,
   PRESALE_SUMMARY_SELECT,
   PRODUCTION_COMPLETENESS_THRESHOLDS,
+  PRODUCTION_RANKING_12_MONTH_FLOORS,
   PRODUCTION_RECENCY_THRESHOLDS,
   RENT_SUMMARY_SELECT,
   SALE_SUMMARY_SELECT,
@@ -52,6 +60,12 @@ import {
   buildRolling30MarketLiveArtifact,
   buildRolling30SummaryArtifacts,
 } from '../serving-artifacts';
+import { buildRolling30DistrictsArtifact } from '../district-artifact';
+import {
+  RANKING_AREAS,
+  RANKING_PERIOD_MONTHS,
+  buildRankingTradeStatsArtifact,
+} from '../ranking-artifact';
 import { MARKET_LIVE_REGIONS } from '../../market-live';
 import {
   createPublicTransactionSnapshot,
@@ -189,8 +203,8 @@ function positiveNamedArtifacts() {
   return [
     ...buildRolling30SummaryArtifacts({
       generatedAt,
-      from: '2026-07-12',
-      to: '2026-08-11',
+      from: '2026-07-13',
+      to: '2026-08-12',
       buy: [saleAggregate],
       jeonse: [rentAggregate],
       monthly: [rentAggregate],
@@ -235,6 +249,49 @@ function positiveNamedArtifacts() {
     buildRolling30MarketLiveArtifact({
       generatedAt,
       aggregates: emptyMarketLiveAggregates(),
+    }),
+    buildRolling30DistrictsArtifact({
+      generatedAt,
+      from: '2026-07-13',
+      to: '2026-08-12',
+      buy: [saleAggregate],
+    }),
+    buildRankingTradeStatsArtifact({
+      generatedAt,
+      variants: RANKING_PERIOD_MONTHS.flatMap((periodMonths) => (
+        RANKING_AREAS.map((area) => {
+          const window = rankingWindow(periodMonths, new Date(generatedAt));
+          const floor = PRODUCTION_RANKING_12_MONTH_FLOORS[area];
+          return {
+            periodMonths,
+            area,
+            window,
+            coverage: periodMonths === 12 ? {
+              transactionCount: floor.transactionCount,
+              districtCount: floor.districtCount,
+              firstDealDate: window.from,
+              lastDealDate: window.asOf,
+            } : {
+              transactionCount: 1,
+              districtCount: 1,
+              firstDealDate: '2026-08-10',
+              lastDealDate: '2026-08-10',
+            },
+            topPrice: [{
+              regionCode: 'ALL', rank: 1, aptName: '완전성 아파트', district: '강남구', dong: '역삼동',
+              price: 150_000, area: 84, floor: 10, dealDate: '2026-08-10',
+            }],
+            volume: [{
+              regionCode: 'ALL', rank: 1, aptName: '완전성 아파트', district: '강남구', dong: '역삼동',
+              count: 1, avgPrice: 150_000,
+            }],
+            newHigh: [{
+              regionCode: 'ALL', rank: 1, aptName: '완전성 아파트', district: '강남구', dong: '역삼동',
+              price: 150_000, prevHigh: 140_000, diff: 10_000, diffPercent: 7.1,
+            }],
+          };
+        })
+      )),
     }),
     buildApartmentIndexArtifact([{
       id: 'apt-1',
@@ -569,6 +626,34 @@ describe('local PostgreSQL public transaction publisher', () => {
       rentMaxAgeDays: 14,
       presaleMaxAgeDays: 30,
     });
+    expect(PRODUCTION_RANKING_12_MONTH_FLOORS).toEqual({
+      all: { transactionCount: 100_000, districtCount: 200 },
+      '59': { transactionCount: 20_000, districtCount: 120 },
+      '84': { transactionCount: 30_000, districtCount: 120 },
+      large: { transactionCount: 10_000, districtCount: 100 },
+    });
+
+    const truncatedRanking = namedArtifacts.map((artifact) => {
+      if (artifact.name !== 'ranking/trade-stats') return artifact;
+      const data = structuredClone(artifact.data) as {
+        variants: Array<{
+          periodMonths: number;
+          area: string;
+          coverage: { transactionCount: number; districtCount: number; firstDealDate: string | null };
+        }>;
+      };
+      const annualAll = data.variants.find((variant) => (
+        variant.periodMonths === 12 && variant.area === 'all'
+      ))!;
+      annualAll.coverage.transactionCount = 1;
+      annualAll.coverage.districtCount = 1;
+      annualAll.coverage.firstDealDate = '2026-08-10';
+      return { ...artifact, data };
+    });
+    expect(() => assertPublicTransactionReleaseCompleteness({
+      snapshots: nonzeroSnapshots,
+      namedArtifacts: truncatedRanking,
+    })).toThrow('ranking 12-month coverage failed for all');
     expect(() => assertPublicTransactionReleaseCompleteness({
       snapshots: nonzeroSnapshots,
       namedArtifacts,
@@ -622,11 +707,11 @@ describe('local PostgreSQL public transaction publisher', () => {
         rentRecords: 1,
         presaleRecords: 1,
       },
-    })).toThrow('summary/raw parity mismatch');
+    })).toThrow('parity mismatch');
     expect(() => assertPublicTransactionReleaseCompleteness({
       snapshots: nonzeroSnapshots,
       namedArtifacts: namedArtifacts.filter((artifact) => artifact.name !== 'summary/rolling30/buy'),
-    })).toThrow('expected exactly seven named artifacts');
+    })).toThrow('expected exactly nine named artifacts');
     expect(() => assertPublicTransactionReleaseCompleteness({
       snapshots: [],
       namedArtifacts: [],
@@ -663,7 +748,7 @@ describe('local PostgreSQL public transaction publisher', () => {
     }, { forceDryRun: false }).mode).toBe('r2');
   });
 
-  it('publishes an authoritative zero-row district and all seven named artifacts', async () => {
+  it('publishes an authoritative zero-row district and all nine named artifacts', async () => {
     const client = new EmptyLedgerClient();
     const store = new MemoryStore();
     const result = await publishPublicTransactionsFromClient(client, store, {
@@ -678,22 +763,24 @@ describe('local PostgreSQL public transaction publisher', () => {
       latestDealDate: null,
     });
     expect(result.manifest.shards).toHaveLength(24);
-    expect(result.manifest.namedArtifacts).toHaveLength(7);
+    expect(result.manifest.namedArtifacts).toHaveLength(9);
     expect(result.manifest.namedArtifacts.map(({ name }) => name).sort()).toEqual([
       'apartment-index',
+      'districts/rolling30',
       'highlights/rolling30',
       'market-live/rolling30',
+      'ranking/trade-stats',
       'summary/rolling30/bunyang',
       'summary/rolling30/buy',
       'summary/rolling30/jeonse',
       'summary/rolling30/monthly',
     ]);
-    expect(result.uploads).toHaveLength(33);
+    expect(result.uploads).toHaveLength(35);
     expect(new Set(result.manifest.districts.map(({ lawdCd }) => lawdCd)).size).toBe(248);
     expect(new Set(result.manifest.districts.map(({ shardId }) => shardId)).size).toBe(24);
     expect(store.writes.slice(0, 24).every(({ key }) => key.includes('/shards/'))).toBe(true);
-    expect(store.writes.slice(24, 31).every(({ key }) => key.includes('/artifacts/'))).toBe(true);
-    expect(store.writes.slice(31).every(({ key }) => key.endsWith('/manifest.json'))).toBe(true);
+    expect(store.writes.slice(24, 33).every(({ key }) => key.includes('/artifacts/'))).toBe(true);
+    expect(store.writes.slice(33).every(({ key }) => key.endsWith('/manifest.json'))).toBe(true);
     expect(client.calls).toContain('COMMIT');
     expect(store.writes.at(-1)?.immutable).toBe(false);
   });
@@ -717,6 +804,10 @@ describe('local PostgreSQL public transaction publisher', () => {
     HIGHLIGHTS_SURGES_SELECT,
     HIGHLIGHTS_PYEONG84_SELECT,
     MARKET_LIVE_SELECT,
+    RANKING_COVERAGE_SELECT,
+    RANKING_TOP_PRICE_SELECT,
+    RANKING_VOLUME_SELECT,
+    RANKING_NEW_HIGH_SELECT,
   ])('rolls back and stores zero objects when a new serving SELECT fails', async (failedSelect) => {
     const client = new EmptyLedgerClient();
     client.failOnSelect = failedSelect;

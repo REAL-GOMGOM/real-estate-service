@@ -7,8 +7,22 @@ import {
   type RankingArea,
   type RankingNewHighRow,
   type RankingTopPriceRow,
+  type RankingTradeStats,
   type RankingVolumeRow,
 } from '@/lib/ranking-queries';
+import {
+  createPublicSnapshotRuntimeFromEnv,
+  isPublicSnapshotConfigured,
+} from '@/lib/public-snapshots/runtime';
+import {
+  RANKING_TRADE_STATS_ARTIFACT_NAME,
+  assertRankingTradeStatsEnvelope,
+  findRankingTradeStatsVariant,
+} from '@/lib/public-snapshots/ranking-artifact';
+import {
+  TRANSACTION_SNAPSHOT_MAX_AGE_MS,
+  isServingArtifactFresh,
+} from '@/lib/public-snapshots/serving-artifacts';
 
 const RONE_URL = 'https://www.reb.or.kr/r-one/openapi/SttsApiTblData.do';
 const RONE_STAT_TABLE = 'A_2024_00045';
@@ -199,10 +213,50 @@ export async function GET(request: NextRequest) {
 
   const periodMonths = Number(periodParam) as 3 | 12;
   const area = areaParam as RankingArea;
-  const window = rankingWindow(periodMonths);
+  const requestedWindow = rankingWindow(periodMonths);
 
   try {
-    const tradeStats = await fetchRankingTradeStats(window.from, window.toExclusive, area);
+    let tradeStats: RankingTradeStats | undefined;
+    let servedWindow = requestedWindow;
+    let updatedAt = new Date().toISOString();
+    let snapshotHeaders: Record<string, string> = {};
+    const snapshot = await createPublicSnapshotRuntimeFromEnv()
+      .getNamedArtifact(RANKING_TRADE_STATS_ARTIFACT_NAME);
+    if (snapshot.status === 'success') {
+      try {
+        assertRankingTradeStatsEnvelope(snapshot.data);
+        const variant = findRankingTradeStatsVariant(snapshot.data.data, periodMonths, area);
+        if (variant
+          && variant.window.toExclusive <= requestedWindow.toExclusive
+          && isServingArtifactFresh(snapshot.data.generatedAt, {
+            maxAgeMs: TRANSACTION_SNAPSHOT_MAX_AGE_MS,
+          })) {
+          tradeStats = variant;
+          servedWindow = variant.window;
+          updatedAt = snapshot.data.generatedAt;
+          snapshotHeaders = {
+            'X-Naezip-Data-Source': 'snapshot',
+            'X-Naezip-Snapshot-Generated-At': snapshot.data.generatedAt,
+          };
+        }
+      } catch {
+        // Invalid ranking artifacts are unavailable, never authoritative.
+      }
+    }
+
+    if (!tradeStats) {
+      if (isPublicSnapshotConfigured()) {
+        return NextResponse.json(
+          { status: 'degraded', error: '랭킹 데이터를 잠시 불러올 수 없습니다.' },
+          { status: 503, headers: { 'Cache-Control': 'no-store' } },
+        );
+      }
+      tradeStats = await fetchRankingTradeStats(
+        requestedWindow.from,
+        requestedWindow.toExclusive,
+        area,
+      );
+    }
     const roneKey = process.env.REALESTATE_STAT_API_KEY;
     const priceChange = roneKey
       ? await fetchPriceChange(roneKey).catch(() => null)
@@ -214,13 +268,13 @@ export async function GET(request: NextRequest) {
       note: partial ? '한국부동산원 월간 상승률을 잠시 불러오지 못했습니다.' : undefined,
       period: periodMonths === 3 ? '최근 3개월' : '최근 1년',
       area,
-      updatedAt: new Date().toISOString(),
+      updatedAt,
       coverage: {
         source: '국토교통부 공개자료를 적재한 내집 실거래 원장',
         districtCount: Number(tradeStats.coverage.districtCount),
         transactionCount: Number(tradeStats.coverage.transactionCount),
-        from: window.from,
-        toExclusive: window.toExclusive,
+        from: servedWindow.from,
+        toExclusive: servedWindow.toExclusive,
         firstDealDate: tradeStats.coverage.firstDealDate,
         lastDealDate: tradeStats.coverage.lastDealDate,
         label: `${RANKING_TOTAL_LABEL} · ${Number(tradeStats.coverage.districtCount)}개 시군구`,
@@ -231,7 +285,10 @@ export async function GET(request: NextRequest) {
       newHigh: mapNewHigh(tradeStats.newHigh),
       priceChange: priceChange ?? { period: null, regions: [], seoulDistricts: [] },
     }, {
-      headers: { 'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=21600' },
+      headers: {
+        'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=21600',
+        ...snapshotHeaders,
+      },
     });
   } catch (error) {
     console.error('[ranking API]', error instanceof Error ? error.message : error);

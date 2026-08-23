@@ -2,7 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { DISTRICT_GROUPS } from '@/lib/district-groups';
 import { resolveAggWindow, kstCurrentYyyymm } from '@/lib/agg-window';
 import { fetchDistrictAggs } from '@/lib/agg-queries';
-import { isPublicSnapshotConfigured } from '@/lib/public-snapshots/runtime';
+import {
+  createPublicSnapshotRuntimeFromEnv,
+  isPublicSnapshotConfigured,
+} from '@/lib/public-snapshots/runtime';
+import {
+  DISTRICT_ROLLING30_ARTIFACT_NAME,
+  assertRolling30DistrictsEnvelope,
+} from '@/lib/public-snapshots/district-artifact';
+import {
+  TRANSACTION_SNAPSHOT_MAX_AGE_MS,
+  isServingArtifactFresh,
+} from '@/lib/public-snapshots/serving-artifacts';
 
 /**
  * 구별 거래 현황 API — SQL 푸시다운 전환 (2026-08-02).
@@ -32,9 +43,49 @@ export async function GET(req: NextRequest) {
   }
   const yyyymm = window.type === 'month' ? window.yyyymm! : kstCurrentYyyymm();
 
-  // District aggregate artifacts are not published yet. In configured serving
-  // mode, do not present an older Neon aggregate as current truth.
-  if (isPublicSnapshotConfigured()) {
+  const servingMode = isPublicSnapshotConfigured();
+  if (window.type === 'rolling30') {
+    try {
+      const snapshot = await createPublicSnapshotRuntimeFromEnv()
+        .getNamedArtifact(DISTRICT_ROLLING30_ARTIFACT_NAME);
+      if (snapshot.status === 'success') {
+        try {
+          assertRolling30DistrictsEnvelope(snapshot.data);
+          if (snapshot.data.data.window.to <= window.to
+            && isServingArtifactFresh(snapshot.data.generatedAt, {
+              maxAgeMs: TRANSACTION_SNAPSHOT_MAX_AGE_MS,
+            })) {
+            const districtSet = new Set(group.districts);
+            const districts = snapshot.data.data.districts
+              .filter((row) => districtSet.has(row.district))
+              .sort((left, right) => right.count - left.count || left.district.localeCompare(right.district));
+            return NextResponse.json(
+              {
+                group: group.label,
+                month: snapshot.data.data.month,
+                window: snapshot.data.data.window,
+                districts,
+              },
+              {
+                headers: {
+                  'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
+                  'X-Naezip-Data-Source': 'snapshot',
+                  'X-Naezip-Snapshot-Generated-At': snapshot.data.generatedAt,
+                },
+              },
+            );
+          }
+        } catch {
+          // Invalid artifacts are unavailable, never authoritative.
+        }
+      }
+    } catch {
+      // Runtime failures use the configured fail-closed response below.
+    }
+  }
+
+  // In configured serving mode, do not present an older Neon aggregate as current truth.
+  if (servingMode) {
     return NextResponse.json(
       {
         group: group.label,

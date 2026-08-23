@@ -37,6 +37,7 @@ const RELEASE_SHARD_PATTERN = new RegExp(
 const RELEASE_ARTIFACT_PATTERN = new RegExp(
   `^${RELEASES_PREFIX}${RELEASE_ID_SOURCE}/artifacts/(`
     + 'apartment-index|highlights/rolling30|market-live/rolling30'
+    + '|districts/rolling30|ranking/trade-stats'
     + '|summary/rolling30/(?:buy|jeonse|monthly|bunyang)'
     + ')\\.json\\.gz$',
 );
@@ -57,9 +58,15 @@ const CURRENT_ARTIFACT_NAMES = [
   'summary/rolling30/jeonse',
   'summary/rolling30/monthly',
 ] as const;
+const EXTENDED_ARTIFACT_NAMES = [
+  ...CURRENT_ARTIFACT_NAMES,
+  'districts/rolling30',
+  'ranking/trade-stats',
+] as const;
 const SUPPORTED_ARTIFACT_NAME_SETS: readonly (readonly string[])[] = [
   LEGACY_ARTIFACT_NAMES,
   CURRENT_ARTIFACT_NAMES,
+  EXTENDED_ARTIFACT_NAMES,
 ];
 
 function isExactSupportedArtifactSet(names: readonly string[]): boolean {

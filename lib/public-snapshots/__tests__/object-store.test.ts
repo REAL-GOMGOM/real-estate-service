@@ -666,6 +666,8 @@ describe('public snapshot object stores', () => {
       `${RELEASE_PREFIX}artifacts/apartment-index.json.gz`,
       `${RELEASE_PREFIX}artifacts/highlights/rolling30.json.gz`,
       `${RELEASE_PREFIX}artifacts/market-live/rolling30.json.gz`,
+      `${RELEASE_PREFIX}artifacts/districts/rolling30.json.gz`,
+      `${RELEASE_PREFIX}artifacts/ranking/trade-stats.json.gz`,
     ];
 
     await store.deleteRetentionObjects(pathnames);
@@ -695,6 +697,8 @@ describe('public snapshot object stores', () => {
       `${RELEASE_PREFIX}artifacts/future-index.json.gz`,
       `${RELEASE_PREFIX}artifacts/highlights/rolling30/extra.json.gz`,
       `${RELEASE_PREFIX}artifacts/market-live/rolling31.json.gz`,
+      `${RELEASE_PREFIX}artifacts/districts/rolling31.json.gz`,
+      `${RELEASE_PREFIX}artifacts/ranking/trade-stats/extra.json.gz`,
       `${RELEASE_PREFIX}unknown.json.gz`,
       `${RELEASES_PREFIX}not-a-release/shards/00.json.gz`,
     ]) {

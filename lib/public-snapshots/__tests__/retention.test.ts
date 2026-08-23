@@ -43,6 +43,11 @@ const CURRENT_ARTIFACT_NAMES = [
   'summary/rolling30/jeonse',
   'summary/rolling30/monthly',
 ] as const;
+const EXTENDED_ARTIFACT_NAMES = [
+  ...CURRENT_ARTIFACT_NAMES,
+  'districts/rolling30',
+  'ranking/trade-stats',
+] as const;
 
 interface ReleaseFixture {
   releaseId: string;
@@ -253,10 +258,11 @@ describe('public snapshot retention planner', () => {
     expect(PUBLIC_SNAPSHOT_RETENTION_DEFAULT_MAX_OBJECTS).toBe(10_000);
   });
 
-  it('accepts complete legacy five-artifact and current seven-artifact releases', async () => {
+  it('accepts complete legacy five, current seven, and extended nine-artifact releases', async () => {
     const variants = [
       { label: 'legacy', artifactNames: LEGACY_ARTIFACT_NAMES },
       { label: 'current', artifactNames: CURRENT_ARTIFACT_NAMES },
+      { label: 'extended', artifactNames: EXTENDED_ARTIFACT_NAMES },
     ] as const;
 
     for (const { label, artifactNames } of variants) {

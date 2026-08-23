@@ -8,6 +8,11 @@ import { DISTRICT_CODE } from '../lib/district-codes';
 import { DISTRICT_GROUPS } from '../lib/district-groups';
 import { assertMacLocalDatabaseUrl } from '../lib/local-postgres-url';
 import { MARKET_LIVE_REGIONS, marketLiveWindows } from '../lib/market-live';
+import {
+  fetchRankingTradeStatsWithExecutor,
+  rankingWindow,
+  type RankingArea,
+} from '../lib/ranking-queries';
 import type { PublicTransactionRecord, PublicTransactionSnapshot } from '../lib/public-snapshots/contract';
 import { PUBLIC_TRANSACTION_SNAPSHOT_MONTHS } from '../lib/public-snapshots/coverage-policy';
 import { createPublicSnapshotStoreFromEnv } from '../lib/public-snapshots/object-store';
@@ -17,10 +22,25 @@ import {
 } from '../lib/public-snapshots/publish-health';
 import { withPublicSnapshotPublicationLock } from '../lib/public-snapshots/publication-lock';
 import {
+  DISTRICT_ROLLING30_ARTIFACT_NAME,
+  DISTRICT_ROLLING30_SCHEMA,
+  assertRolling30DistrictsData,
+  buildRolling30DistrictsArtifact,
+} from '../lib/public-snapshots/district-artifact';
+import {
   publishPublicSnapshotRelease,
   type PublicNamedArtifactInput,
   type PublishPublicSnapshotReleaseResult,
 } from '../lib/public-snapshots/publisher';
+import {
+  RANKING_AREAS,
+  RANKING_PERIOD_MONTHS,
+  RANKING_TRADE_STATS_ARTIFACT_NAME,
+  RANKING_TRADE_STATS_SCHEMA,
+  assertRankingTradeStatsData,
+  buildRankingTradeStatsArtifact,
+  type RankingTradeStatsVariant,
+} from '../lib/public-snapshots/ranking-artifact';
 import {
   createPublicTransactionSnapshot,
   toPublicPresaleTransaction,
@@ -741,6 +761,16 @@ export const PRODUCTION_RECENCY_THRESHOLDS: Readonly<PublicTransactionRecencyThr
   presaleMaxAgeDays: 30,
 });
 
+export const PRODUCTION_RANKING_12_MONTH_FLOORS: Readonly<Record<
+  RankingArea,
+  { transactionCount: number; districtCount: number }
+>> = Object.freeze({
+  all: { transactionCount: 100_000, districtCount: 200 },
+  '59': { transactionCount: 20_000, districtCount: 120 },
+  '84': { transactionCount: 30_000, districtCount: 120 },
+  large: { transactionCount: 10_000, districtCount: 100 },
+});
+
 export class PublicTransactionCompletenessError extends Error {
   constructor(message: string) {
     super(message);
@@ -753,6 +783,8 @@ const EXPECTED_NAMED_ARTIFACTS = Object.freeze([
   HIGHLIGHTS_ROLLING30_ARTIFACT_NAME,
   MARKET_LIVE_ROLLING30_ARTIFACT_NAME,
   APARTMENT_INDEX_ARTIFACT_NAME,
+  DISTRICT_ROLLING30_ARTIFACT_NAME,
+  RANKING_TRADE_STATS_ARTIFACT_NAME,
 ].sort());
 
 function artifactValidationFailure(name: string, error: unknown): PublicTransactionCompletenessError {
@@ -795,7 +827,7 @@ export function assertPublicTransactionReleaseCompleteness(
   if (actualArtifactNames.length !== EXPECTED_NAMED_ARTIFACTS.length
     || actualArtifactNames.some((name, index) => name !== EXPECTED_NAMED_ARTIFACTS[index])) {
     throw new PublicTransactionCompletenessError(
-      `release completeness failed: expected exactly seven named artifacts (${EXPECTED_NAMED_ARTIFACTS.join(', ')})`,
+      `release completeness failed: expected exactly nine named artifacts (${EXPECTED_NAMED_ARTIFACTS.join(', ')})`,
     );
   }
 
@@ -855,6 +887,40 @@ export function assertPublicTransactionReleaseCompleteness(
     );
   }
 
+  const districts = artifactsByName.get(DISTRICT_ROLLING30_ARTIFACT_NAME)!;
+  if (districts.schema !== DISTRICT_ROLLING30_SCHEMA) {
+    throw new PublicTransactionCompletenessError(
+      `release completeness failed: invalid schema for ${DISTRICT_ROLLING30_ARTIFACT_NAME}`,
+    );
+  }
+  try {
+    assertRolling30DistrictsData(districts.data);
+  } catch (error) {
+    throw artifactValidationFailure(DISTRICT_ROLLING30_ARTIFACT_NAME, error);
+  }
+  if (districts.itemCount !== districts.data.districts.length) {
+    throw new PublicTransactionCompletenessError(
+      `release completeness failed: itemCount mismatch for ${DISTRICT_ROLLING30_ARTIFACT_NAME}`,
+    );
+  }
+
+  const ranking = artifactsByName.get(RANKING_TRADE_STATS_ARTIFACT_NAME)!;
+  if (ranking.schema !== RANKING_TRADE_STATS_SCHEMA) {
+    throw new PublicTransactionCompletenessError(
+      `release completeness failed: invalid schema for ${RANKING_TRADE_STATS_ARTIFACT_NAME}`,
+    );
+  }
+  try {
+    assertRankingTradeStatsData(ranking.data);
+  } catch (error) {
+    throw artifactValidationFailure(RANKING_TRADE_STATS_ARTIFACT_NAME, error);
+  }
+  if (ranking.itemCount !== ranking.data.variants.length) {
+    throw new PublicTransactionCompletenessError(
+      `release completeness failed: itemCount mismatch for ${RANKING_TRADE_STATS_ARTIFACT_NAME}`,
+    );
+  }
+
   const summaryDataByType = new Map<SummaryDealType, Rolling30SummaryData>();
   for (const dealType of Object.keys(ROLLING30_SUMMARY_ARTIFACT_NAMES) as SummaryDealType[]) {
     const artifactName = ROLLING30_SUMMARY_ARTIFACT_NAMES[dealType];
@@ -884,6 +950,80 @@ export function assertPublicTransactionReleaseCompleteness(
       );
     }
     summaryDataByType.set(dealType, artifact.data);
+  }
+
+  const buySummary = summaryDataByType.get('buy')!;
+  if (districts.data.window.from !== buySummary.window.from
+    || districts.data.window.to !== buySummary.window.to) {
+    throw new PublicTransactionCompletenessError(
+      'release completeness failed: district/summary windows disagree',
+    );
+  }
+  const districtsByName = new Map(
+    districts.data.districts.map((row) => [row.district, row]),
+  );
+  for (const summaryRow of buySummary.summary) {
+    const group = DISTRICT_GROUPS.find((candidate) => candidate.label === summaryRow.label)!;
+    const expected = group.districts.reduce(
+      (totals, district) => {
+        const row = districtsByName.get(district);
+        return {
+          count: totals.count + (row?.count ?? 0),
+          newHighs: totals.newHighs + (row?.newHighs ?? 0),
+        };
+      },
+      { count: 0, newHighs: 0 },
+    );
+    if (summaryRow.estimatedCount !== expected.count || summaryRow.newHighs !== expected.newHighs) {
+      throw new PublicTransactionCompletenessError(
+        `release completeness failed: district/summary parity mismatch for ${summaryRow.label}`,
+      );
+    }
+  }
+
+  for (const variant of ranking.data.variants) {
+    if (variant.coverage.transactionCount <= 0
+      || variant.coverage.districtCount <= 0
+      || variant.topPrice.length === 0
+      || variant.volume.length === 0) {
+      throw new PublicTransactionCompletenessError(
+        `release completeness failed: ranking coverage is empty for ${variant.periodMonths}/${variant.area}`,
+      );
+    }
+  }
+
+  // Reduced fixtures opt into their own small thresholds. Production must prove
+  // that the local ledger really spans the advertised year, not merely the two
+  // calendar months covered by the latest sync health marker.
+  if (!options.thresholdsForTest) {
+    for (const area of RANKING_AREAS) {
+      const short = ranking.data.variants.find((variant) => (
+        variant.periodMonths === 3 && variant.area === area
+      ))!;
+      const annual = ranking.data.variants.find((variant) => (
+        variant.periodMonths === 12 && variant.area === area
+      ))!;
+      const floor = PRODUCTION_RANKING_12_MONTH_FLOORS[area];
+      const latestAllowedStart = shiftDays(annual.window.from, 31);
+      const earliestAllowedEnd = shiftDays(annual.window.asOf, -30);
+      const failures = [
+        annual.coverage.transactionCount < floor.transactionCount
+          ? `transactions=${annual.coverage.transactionCount}<${floor.transactionCount}` : null,
+        annual.coverage.districtCount < floor.districtCount
+          ? `districts=${annual.coverage.districtCount}<${floor.districtCount}` : null,
+        !annual.coverage.firstDealDate || annual.coverage.firstDealDate > latestAllowedStart
+          ? `firstDealDate=${annual.coverage.firstDealDate ?? 'missing'}>${latestAllowedStart}` : null,
+        !annual.coverage.lastDealDate || annual.coverage.lastDealDate < earliestAllowedEnd
+          ? `lastDealDate=${annual.coverage.lastDealDate ?? 'missing'}<${earliestAllowedEnd}` : null,
+        annual.coverage.transactionCount < short.coverage.transactionCount * 2
+          ? `annual/quarter ratio=${annual.coverage.transactionCount}/${short.coverage.transactionCount}` : null,
+      ].filter((failure): failure is string => failure !== null);
+      if (failures.length > 0) {
+        throw new PublicTransactionCompletenessError(
+          `release completeness failed: ranking 12-month coverage failed for ${area}: ${failures.join(', ')}`,
+        );
+      }
+    }
   }
 
   const counts = { total: 0, sale: 0, rent: 0, presale: 0, nonemptyDistricts: 0 };
@@ -1077,12 +1217,31 @@ export async function collectPublicTransactionRelease(
     marketWindows.recent.toExclusive,
   ]);
 
+  const executeRankingQuery = async <Row>(text: string, values: readonly unknown[]) => (
+    await client.query<Row>(text, values)
+  ).rows;
+  const rankingVariants: RankingTradeStatsVariant[] = [];
+  for (const periodMonths of RANKING_PERIOD_MONTHS) {
+    const window = rankingWindow(periodMonths, now);
+    for (const area of RANKING_AREAS) {
+      const stats = await fetchRankingTradeStatsWithExecutor(
+        executeRankingQuery,
+        window.from,
+        window.toExclusive,
+        area,
+      );
+      rankingVariants.push({ periodMonths, area, window, ...stats });
+    }
+  }
+
+  const buyAggregates = buyRows.rows.map((row) => saleAggregate(row, 'buy'));
+
   const namedArtifacts: PublicNamedArtifactInput[] = [
     ...buildRolling30SummaryArtifacts({
       generatedAt: publishedAt,
       from: windows.rolling30.from,
       to: windows.rolling30.to,
-      buy: buyRows.rows.map((row) => saleAggregate(row, 'buy')),
+      buy: buyAggregates,
       jeonse: jeonseRows.rows.map((row) => rentAggregate(row, 'jeonse')),
       monthly: monthlyRows.rows.map((row) => rentAggregate(row, 'monthly')),
       bunyang: bunyangRows.rows.map((row) => saleAggregate(row, 'bunyang')),
@@ -1097,6 +1256,16 @@ export async function collectPublicTransactionRelease(
     buildRolling30MarketLiveArtifact({
       generatedAt: publishedAt,
       aggregates: marketRows.rows.map(marketLiveAggregate),
+    }),
+    buildRolling30DistrictsArtifact({
+      generatedAt: publishedAt,
+      from: windows.rolling30.from,
+      to: windows.rolling30.to,
+      buy: buyAggregates,
+    }),
+    buildRankingTradeStatsArtifact({
+      generatedAt: publishedAt,
+      variants: rankingVariants,
     }),
     buildApartmentIndexArtifact(apartmentSources),
   ];

@@ -98,29 +98,27 @@ export function rankingWindow(periodMonths: 3 | 12, now = new Date()) {
   };
 }
 
-/** 취소 거래를 제외한 자체 실거래 원장에서 랭킹용 소량 집계행만 가져온다. */
-export async function fetchRankingTradeStats(
-  from: string,
-  toExclusive: string,
-  area: RankingArea,
-): Promise<RankingTradeStats> {
-  const sql = sqlClient();
+export type RankingQueryExecutor = <Row>(
+  text: string,
+  values: readonly unknown[],
+) => Promise<readonly Row[]>;
 
-  const coverageQ = sql`
+export const RANKING_COVERAGE_SELECT = `
     SELECT count(*)::int AS "transactionCount",
            count(DISTINCT lawd_cd)::int AS "districtCount",
            min(deal_date) AS "firstDealDate",
            max(deal_date) AS "lastDealDate"
       FROM transactions
-     WHERE deal_date >= ${from} AND deal_date < ${toExclusive}
+     WHERE deal_date >= $1 AND deal_date < $2
        AND is_canceled = false
-       AND (${area} = 'all'
-         OR (${area} = '59' AND area_m2 >= 57 AND area_m2 < 62)
-         OR (${area} = '84' AND area_m2 >= 82 AND area_m2 < 87)
-         OR (${area} = 'large' AND area_m2 >= 87))
-  `;
+       AND right(deal_date, 2) <> '00'
+       AND ($3 = 'all'
+         OR ($3 = '59' AND area_m2 >= 57 AND area_m2 < 62)
+         OR ($3 = '84' AND area_m2 >= 82 AND area_m2 < 87)
+         OR ($3 = 'large' AND area_m2 >= 87))
+`;
 
-  const topPriceQ = sql`
+export const RANKING_TOP_PRICE_SELECT = `
     WITH filtered AS (
       SELECT CASE
                WHEN left(lawd_cd, 2) IN ('29')
@@ -132,12 +130,13 @@ export async function fetchRankingTradeStats(
              END AS region_code,
              sigungu, umd_nm, apt_name, deal_amount, area_m2, floor, deal_date
         FROM transactions
-       WHERE deal_date >= ${from} AND deal_date < ${toExclusive}
+       WHERE deal_date >= $1 AND deal_date < $2
          AND is_canceled = false
-         AND (${area} = 'all'
-           OR (${area} = '59' AND area_m2 >= 57 AND area_m2 < 62)
-           OR (${area} = '84' AND area_m2 >= 82 AND area_m2 < 87)
-           OR (${area} = 'large' AND area_m2 >= 87))
+         AND right(deal_date, 2) <> '00'
+         AND ($3 = 'all'
+           OR ($3 = '59' AND area_m2 >= 57 AND area_m2 < 62)
+           OR ($3 = '84' AND area_m2 >= 82 AND area_m2 < 87)
+           OR ($3 = 'large' AND area_m2 >= 87))
     ), expanded AS (
       SELECT * FROM filtered
       UNION ALL
@@ -152,12 +151,12 @@ export async function fetchRankingTradeStats(
     SELECT region_code AS "regionCode", rn::int AS rank,
            apt_name AS "aptName", sigungu AS district, umd_nm AS dong,
            deal_amount AS price, area_m2 AS area, floor, deal_date AS "dealDate"
-      FROM ranked
+     FROM ranked
      WHERE rn <= 5
      ORDER BY region_code, rn
-  `;
+`;
 
-  const volumeQ = sql`
+export const RANKING_VOLUME_SELECT = `
     WITH filtered AS (
       SELECT CASE
                WHEN left(lawd_cd, 2) IN ('29')
@@ -169,12 +168,13 @@ export async function fetchRankingTradeStats(
              END AS region_code,
              sigungu, umd_nm, apt_name, deal_amount
         FROM transactions
-       WHERE deal_date >= ${from} AND deal_date < ${toExclusive}
+       WHERE deal_date >= $1 AND deal_date < $2
          AND is_canceled = false
-         AND (${area} = 'all'
-           OR (${area} = '59' AND area_m2 >= 57 AND area_m2 < 62)
-           OR (${area} = '84' AND area_m2 >= 82 AND area_m2 < 87)
-           OR (${area} = 'large' AND area_m2 >= 87))
+         AND right(deal_date, 2) <> '00'
+         AND ($3 = 'all'
+           OR ($3 = '59' AND area_m2 >= 57 AND area_m2 < 62)
+           OR ($3 = '84' AND area_m2 >= 82 AND area_m2 < 87)
+           OR ($3 = 'large' AND area_m2 >= 87))
     ), expanded AS (
       SELECT * FROM filtered
       UNION ALL
@@ -194,12 +194,12 @@ export async function fetchRankingTradeStats(
     SELECT region_code AS "regionCode", rn::int AS rank,
            apt_name AS "aptName", sigungu AS district, umd_nm AS dong,
            tx_count AS count, avg_price AS "avgPrice"
-      FROM ranked
+     FROM ranked
      WHERE rn <= 5
      ORDER BY region_code, rn
-  `;
+`;
 
-  const newHighQ = sql`
+export const RANKING_NEW_HIGH_SELECT = `
     WITH latest AS (
       SELECT DISTINCT ON (lawd_cd, sigungu, umd_nm, apt_name, area_r)
              CASE
@@ -215,12 +215,13 @@ export async function fetchRankingTradeStats(
           SELECT lawd_cd, sigungu, umd_nm, apt_name, round(area_m2::numeric)::int AS area_r,
                  deal_amount, deal_date
             FROM transactions
-           WHERE deal_date >= ${from} AND deal_date < ${toExclusive}
+           WHERE deal_date >= $1 AND deal_date < $2
              AND is_canceled = false
-             AND (${area} = 'all'
-               OR (${area} = '59' AND area_m2 >= 57 AND area_m2 < 62)
-               OR (${area} = '84' AND area_m2 >= 82 AND area_m2 < 87)
-               OR (${area} = 'large' AND area_m2 >= 87))
+             AND right(deal_date, 2) <> '00'
+             AND ($3 = 'all'
+               OR ($3 = '59' AND area_m2 >= 57 AND area_m2 < 62)
+               OR ($3 = '84' AND area_m2 >= 82 AND area_m2 < 87)
+               OR ($3 = 'large' AND area_m2 >= 87))
         ) recent
        ORDER BY lawd_cd, sigungu, umd_nm, apt_name, area_r, deal_date DESC, deal_amount DESC
     ), with_prior AS (
@@ -234,6 +235,7 @@ export async function fetchRankingTradeStats(
          AND t.apt_name = l.apt_name
          AND round(t.area_m2::numeric)::int = l.area_r
          AND t.is_canceled = false
+         AND right(t.deal_date, 2) <> '00'
          AND t.deal_date < l.deal_date
        GROUP BY l.region_code, l.lawd_cd, l.sigungu, l.umd_nm, l.apt_name, l.area_r, l.deal_amount, l.deal_date
     ), highs AS (
@@ -257,17 +259,29 @@ export async function fetchRankingTradeStats(
            apt_name AS "aptName", sigungu AS district, umd_nm AS dong,
            deal_amount AS price, prev_high AS "prevHigh", diff,
            round(diff_pct::numeric, 1)::float8 AS "diffPercent"
-      FROM ranked
+     FROM ranked
      WHERE rn <= 5
      ORDER BY region_code, rn
-  `;
+`;
 
-  const [coverageRows, topPrice, volume, newHigh] = await Promise.all([
-    coverageQ,
-    topPriceQ,
-    volumeQ,
-    newHighQ,
-  ]);
+/**
+ * 취소 거래를 제외한 자체 실거래 원장에서 랭킹용 소량 집계행만 가져온다.
+ * HTTP Neon과 Mac mini의 pg client가 같은 SQL 의미론을 공유하도록 executor를 주입한다.
+ */
+export async function fetchRankingTradeStatsWithExecutor(
+  execute: RankingQueryExecutor,
+  from: string,
+  toExclusive: string,
+  area: RankingArea,
+): Promise<RankingTradeStats> {
+  const values = [from, toExclusive, area] as const;
+
+  // A publisher runs these reads inside one repeatable-read pg transaction.
+  // Keep them sequential so a single pg client never receives overlapping queries.
+  const coverageRows = await execute<RankingCoverageRow>(RANKING_COVERAGE_SELECT, values);
+  const topPrice = await execute<RankingTopPriceRow>(RANKING_TOP_PRICE_SELECT, values);
+  const volume = await execute<RankingVolumeRow>(RANKING_VOLUME_SELECT, values);
+  const newHigh = await execute<RankingNewHighRow>(RANKING_NEW_HIGH_SELECT, values);
 
   const coverage = (coverageRows[0] ?? {
     transactionCount: 0,
@@ -278,8 +292,24 @@ export async function fetchRankingTradeStats(
 
   return {
     coverage,
-    topPrice: topPrice as unknown as RankingTopPriceRow[],
-    volume: volume as unknown as RankingVolumeRow[],
-    newHigh: newHigh as unknown as RankingNewHighRow[],
+    topPrice: [...topPrice],
+    volume: [...volume],
+    newHigh: [...newHigh],
   };
+}
+
+export async function fetchRankingTradeStats(
+  from: string,
+  toExclusive: string,
+  area: RankingArea,
+): Promise<RankingTradeStats> {
+  const sql = sqlClient();
+  return fetchRankingTradeStatsWithExecutor(
+    async <Row>(text: string, values: readonly unknown[]) => (
+      await sql.query(text, [...values]) as unknown as Row[]
+    ),
+    from,
+    toExclusive,
+    area,
+  );
 }

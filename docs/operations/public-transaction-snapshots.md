@@ -38,7 +38,7 @@ public-transactions/v2/releases/{YYYYMMDDTHHMMSSZ-hash12}/manifest.json
 ```
 
 publisher는 248개 snapshot, 24개 shard body, descriptor, manifest의 one-to-one mapping을 첫
-PUT 전에 모두 검증한다. 실제 PUT 순서는 shard 24개 → named artifact 7개 → immutable release
+PUT 전에 모두 검증한다. 실제 PUT 순서는 shard 24개 → named artifact 9개 → immutable release
 manifest → 고정 discovery manifest다. 앞 단계 하나라도 실패하면 discovery manifest를 쓰지 않으므로 독자는
 완성되지 않은 release를 발견하지 않는다. 버전 객체는 `max-age=31536000, immutable`, 고정
 manifest는 짧은 재검증 캐시를 사용한다. Vercel Blob adapter는 모든 pathname에
@@ -51,9 +51,10 @@ manifest의 `shards`는 정확히 24개 descriptor와 각 shard의 district/reco
 `districts`는 정확히 248개 district의 shard ID·기간·유형별 건수·최신 계약일을 담는다.
 현재 publisher는 `summary/rolling30/buy`, `summary/rolling30/jeonse`,
 `summary/rolling30/monthly`, `summary/rolling30/bunyang`, `apartment-index`,
-`highlights/rolling30`, `market-live/rolling30` 일곱 named artifact를 함께 발행한다.
-마지막 두 artifact는 전체 이력이 필요한 신고가와 60일 시장 집계를 Mac mini에서 미리 계산해
-홈 요청이 Neon을 다시 조회하지 않게 한다. 모든 named artifact는 아래 envelope로 감싸며
+`highlights/rolling30`, `market-live/rolling30`, `districts/rolling30`,
+`ranking/trade-stats` 아홉 named artifact를 함께 발행한다. 마지막 네 artifact는 전체 이력이
+필요한 신고가·60일 시장 집계·164개 등록 시군구 집계·3/12개월 거래 랭킹을 Mac mini에서 미리
+계산해 공개 요청이 Neon을 다시 조회하지 않게 한다. 모든 named artifact는 아래 envelope로 감싸며
 스키마와 건수를 descriptor와 대조한다.
 
 ```ts
@@ -361,8 +362,8 @@ npm run snapshot:retention
 
 계획은 현재 discovery release, 최신 complete rollback release, 최신 complete 30개, 최근 30일
 complete release를 합집합으로 보호한다. 삭제 후보는 strict manifest와 정확한 24 shards에 더해
-legacy 5개 또는 current 7개 serving artifact의 exact 집합이 검증되고 `publishedAt`과 모든 객체
-`uploadedAt`이 보존 경계보다 오래된 complete release뿐이다. 6개 혼합이나 알 수 없는 artifact는
+legacy 5개, 이전 7개 또는 current 9개 serving artifact의 exact 집합이 검증되고 `publishedAt`과 모든 객체
+`uploadedAt`이 보존 경계보다 오래된 complete release뿐이다. 중간 혼합이나 알 수 없는 artifact는
 거부한다. root manifest가 없는 알려진 payload는 72시간 grace 뒤에만 orphan 후보가 된다.
 알 수 없는 pathname, 비정상 manifest, 중복/역순 pagination, inventory 상한 초과는 전체 계획을
 0 delete로 중단한다.
@@ -402,7 +403,7 @@ discovery 없이 release inventory가 하나라도 있으면 seed 가능으로 �
 3. 전용 Blob token과 public origin을 대조한 뒤 기본 plan을 실행한다.
 4. `seedEligible=true`만 확인하고 멈춘다. retention apply는 seed 명령이 아니다.
 5. 독립 코드 검토와 격리 store 검증 승인을 받은 뒤에만 별도 publisher 수동 최초 seed 절차로 간다.
-6. seed 뒤 district shard와 7개 named artifact를 다시 다운로드·검증하기 전에는 Preview/Production
+6. seed 뒤 district shard와 9개 named artifact를 다시 다운로드·검증하기 전에는 Preview/Production
    route나 LaunchAgent의 `--dry-run`을 변경하지 않는다.
 
 ## LaunchAgent 교체 runbook
@@ -457,7 +458,8 @@ new label을 동시에 bootstrap하지 않는다.
 
 publisher는 모든 allowlist `SELECT`를 하나의 read-only repeatable-read transaction에서
 완료한 뒤에만 generic publication core를 호출한다. district, summary, highlights,
-market-live, apartment index 중 하나라도 조회나 검증에 실패하면 discovery manifest를 교체하지 않는다.
+market-live, apartment index, district aggregate, ranking 중 하나라도 조회나 검증에 실패하면
+discovery manifest를 교체하지 않는다.
 운영 release는 추가로 `DISTRICT_CODE` 전체 248개 파티션이 정확히 존재하는지 검사한다.
 대폭 감소 사고를 막는 production absolute floor는 검증된 2개 calendar month 전국 합계 10,000건,
 데이터가 있는 지역 100개, 매매 1,000건, 전월세 1,000건, 분양권 10건,
@@ -468,8 +470,15 @@ market-live, apartment index 중 하나라도 조회나 검증에 실패하면 d
 threshold 허용 옵션은 단위 테스트 fixture 전용이며 CLI에서
 노출하지 않는다.
 
-네 rolling summary, `highlights/rolling30`, `market-live/rolling30`, `apartment-index`는
-정확히 일곱 개여야 하며 각각 strict schema와 `itemCount`를 다시 검증한다. summary UI의
+12개월 랭킹은 별도 장기 원장 gate를 통과해야 한다. 전체/59㎡/84㎡/대형 면적별 최소
+거래 건수는 각각 100,000/20,000/30,000/10,000건, 최소 시군구 수는
+200/120/120/100개다. 첫 거래일은 선언한 12개월 시작 후 31일 이내, 마지막 거래일은 기준일
+30일 이내여야 하며 같은 면적의 3개월 건수보다 최소 2배 많아야 한다. 따라서 최신 sync marker가
+정상이어도 장기 원장이 최근 두 달만 남은 축소 상태라면 discovery manifest를 교체하지 않는다.
+
+네 rolling summary, `highlights/rolling30`, `market-live/rolling30`, `apartment-index`,
+`districts/rolling30`, `ranking/trade-stats`는 정확히 아홉 개여야 하며 각각 strict schema와
+`itemCount`를 다시 검증한다. summary UI의
 등록 범위는 전체 248개 중 `DISTRICT_GROUPS`에
 등록된 164개 시군구다. 따라서 각 artifact의 `[from,to)`·정확 계약일·거래유형 조건으로 같은
 164개 raw record를 다시 세어 `estimatedCount` 합계와 정확히 일치해야 한다. 네 유형 중 하나가
@@ -544,8 +553,8 @@ node --import tsx scripts/bootstrap-local-apt-scores.ts --execute
    publication이며, 248개 파티션·totals·index 건수를 확인한다.
 6. 단위 테스트와 TypeScript/ESLint를 통과시킨다.
 7. 별도 public Blob store와 정확한 origin을 준비하고 Vercel Usage에서 plan/Advanced Operations
-   예산을 확인한다. 현재 release는 24 shards + 7 artifacts + 2 manifests = **33 PUT**이다.
-   향후 하루 1회 발행 기준 30일에 약 990 Advanced Operations로 Hobby 포함 2,000 안에 머문다.
+   예산을 확인한다. 현재 release는 24 shards + 9 artifacts + 2 manifests = **35 PUT**이다.
+   향후 하루 1회 발행 기준 30일에 약 1,050 Advanced Operations로 Hobby 포함 2,000 안에 머문다.
    수동 재발행·dashboard 탐색·블로그 업로드도 같은 quota를 쓰므로 여유를 모니터링한다.
 8. snapshot 전용 Blob read-write token을 Mac mini에만 설정한다.
 9. retention 도구의 독립 검토·격리 저장소 검증과 별도 승인을 마친 뒤 수동 최초 seed를 실행하고, reader로 district와
