@@ -1,5 +1,16 @@
 # 공개 실거래 serving snapshot 운영 계약
 
+## 현재 운영 상태 (2026-08-23)
+
+- `com.gomgom.naezip-sync-and-publish`가 장기 운영 clone
+  `/Users/bangjoohan/naezip-production/real-estate-service`에서 매일 KST 05:00 실행된다.
+- 설치된 Production LaunchAgent는 `--dry-run` 없이 Blob에 발행하며, Mac→Neon cache write는
+  `NAEZIP_ENABLE_NEON_CACHE_WRITE=0`으로 계속 비활성화한다.
+- v2 reader와 248개 district shard, 9개 named artifact가 Production에서 활성화되어 있다.
+- 저장소의 plist 예시는 신규 설치·복구를 안전하게 시작하도록 의도적으로 `--dry-run`을 유지한다.
+  운영 승격은 아래 LaunchAgent runbook의 별도 staging·검증 단계를 거친다.
+- retention은 여전히 월 1회 수동 plan/apply이며 정기 LaunchAgent에 연결하지 않는다.
+
 이 모듈은 Mac mini의 로컬 원장을 공개 조회용 district snapshot으로 변환하고 24개 shard에 담은 뒤,
 검증된 JSON 산출물만 객체 저장소에 발행하기 위한 코어다. DB 조회/export 자체와 기존 API
 route 전환은 별도 단계다.
@@ -344,9 +355,8 @@ owner token은 로그나 환경파일에 복사하지 않는다.
 ## Blob retention 수동 runbook
 
 `scripts/retain-public-transactions.ts`는 publisher와 같은 exclusive lock 안에서만 동작한다.
-현재는 wrapper·LaunchAgent에 연결하지 않은 **수동 도구**이며, 아래 구현만으로 최초 seed나
-Production 정기 발행이 승인된 것은 아니다. 독립 코드 검토와 격리된 저장소 검증이 끝날 때까지
-설치된 plist의 `--dry-run`을 유지한다.
+현재는 wrapper·LaunchAgent에 연결하지 않은 **수동 도구**다. Production 정기 publisher 활성화와
+retention 삭제 승인은 별개이며, retention plan/apply는 아래 월 1회 수동 절차만 사용한다.
 
 기본 실행은 원격 Blob을 list/HEAD/GET해 새 계획을 만드는 read-only plan이다. 삭제 API는 호출하지
 않지만 Blob Advanced Operations는 소비한다. snapshot 전용 token과 정확한 public origin을 가진
@@ -392,7 +402,7 @@ immutable root manifest를 조건부 tombstone한 뒤 payload를 최대 10개씩
 convergence remains unverified`로 fail closed한다. 부분 실패 시 다음 release로 진행하지 않으며 검증까지
 끝난 release ID/객체 개수만 보고한다.
 
-### 최초 seed 사전 점검
+### 신규 store 최초 seed 사전 점검
 
 아직 객체가 하나도 없는 전용 store에서는 기본 plan이 `seedEligible=true` 한 줄만 출력해야 한다.
 discovery 없이 release inventory가 하나라도 있으면 seed 가능으로 보지 않고 실패한다. 빈 store에서
@@ -403,15 +413,15 @@ discovery 없이 release inventory가 하나라도 있으면 seed 가능으로 �
 3. 전용 Blob token과 public origin을 대조한 뒤 기본 plan을 실행한다.
 4. `seedEligible=true`만 확인하고 멈춘다. retention apply는 seed 명령이 아니다.
 5. 독립 코드 검토와 격리 store 검증 승인을 받은 뒤에만 별도 publisher 수동 최초 seed 절차로 간다.
-6. seed 뒤 district shard와 9개 named artifact를 다시 다운로드·검증하기 전에는 Preview/Production
-   route나 LaunchAgent의 `--dry-run`을 변경하지 않는다.
+6. seed 뒤 district shard와 9개 named artifact를 다시 다운로드·검증하기 전에는 새 store를
+   Preview/Production route에 연결하거나 LaunchAgent를 Production 모드로 승격하지 않는다.
 
 ## LaunchAgent 교체 runbook
 
-현재 로드된 과거 `com.gomgom.naezip-sync`는 `macmini-sync.ts`를 직접 실행해 marker·lock·publisher
-계약을 우회하므로 그대로 두면 안 된다. 새 예시는
-`scripts/launchd/com.gomgom.naezip-sync-and-publish.plist.example`이다. 이 저장소 작업은 실제
-LaunchAgent를 수정하거나 등록하지 않는다.
+초기 교체나 재설치 때 과거 `com.gomgom.naezip-sync`를 함께 로드하면 marker·lock·publisher 계약을
+우회하므로 반드시 비활성화한다. 안전한 신규 설치 예시는
+`scripts/launchd/com.gomgom.naezip-sync-and-publish.plist.example`이다. 예시는 dry-run staging용이며,
+현재 운영 설치본은 아래 Production 승격 단계를 마친 별도 사본이다.
 
 1. 검증된 RC commit을 날짜가 붙은 Codex worktree가 아닌 장기 경로(예:
    `/Users/bangjoohan/Services/naezip-real-estate-service`)의 clone으로 승격한다.
@@ -423,6 +433,10 @@ LaunchAgent를 수정하거나 등록하지 않는다.
 5. 예시의 `--dry-run`을 유지한 채 `plutil -lint` 후 old agent를 bootout하고 새 agent를 bootstrap한다.
 6. actual sync + local publication kickstart의 exit/log/marker를 확인하되, 이 단계에서는 plist의
    `--dry-run`을 제거하지 않는다.
+7. 수동 Blob publish, 248개 district·9개 named artifact 재다운로드, Preview reader 검증이 모두
+   통과한 경우에만 staging 사본에서 `--dry-run` 한 줄을 제거하고 다시 `plutil -lint`한다.
+8. 기존 설치본을 날짜가 붙은 복구 사본으로 보존한 뒤 검증한 Production 사본을 `install -m 600`하고
+   bootstrap한다. 첫 실행의 publication outcome marker와 원격 manifest를 즉시 대조한다.
 
 ```bash
 launchctl print gui/$(id -u)/com.gomgom.naezip-sync
@@ -449,12 +463,11 @@ launchctl kickstart -k gui/$(id -u)/com.gomgom.naezip-sync-and-publish
 launchctl print gui/$(id -u)/com.gomgom.naezip-sync-and-publish
 ```
 
-실제 Blob 최초 seed와 Preview 검증은 retention 도구의 독립 검토·격리 검증과 별도 운영 승인을 받은 뒤
-수동 1회 명령으로만 수행한다. 현재 runbook은 production 정기 발행을 허가하지 않으며 설치된
-plist의 `--dry-run`을 제거하지 않는다. 추후 정기 발행 승인을 받을 때도 설치된 plist를 즉석
-수정하지 않고 staging 사본에서 변경·`plutil -lint`·재검증해야 한다. `print-disabled`에서 old
-sync/mirror 두 label이 disabled이고 기존 plist가 보관 경로로 이동된 것을 확인하며, old label과
-new label을 동시에 bootstrap하지 않는다.
+실제 Blob 최초 seed와 Preview 검증은 수동 1회 절차로 수행한다. 현재 운영 환경은 이 절차를 마치고
+Production 정기 발행이 활성화된 상태다. 재설치·store 이전 때도 설치된 plist를 즉석 수정하지 않고
+staging 사본에서 변경·`plutil -lint`·재검증한다. `print-disabled`에서 old sync/mirror 두 label이
+disabled이고 기존 plist가 보관 경로로 이동된 것을 확인하며, old label과 new label을 동시에
+bootstrap하지 않는다.
 
 publisher는 모든 allowlist `SELECT`를 하나의 read-only repeatable-read transaction에서
 완료한 뒤에만 generic publication core를 호출한다. district, summary, highlights,
@@ -557,13 +570,14 @@ node --import tsx scripts/bootstrap-local-apt-scores.ts --execute
    향후 하루 1회 발행 기준 30일에 약 1,050 Advanced Operations로 Hobby 포함 2,000 안에 머문다.
    수동 재발행·dashboard 탐색·블로그 업로드도 같은 quota를 쓰므로 여유를 모니터링한다.
 8. snapshot 전용 Blob read-write token을 Mac mini에만 설정한다.
-9. retention 도구의 독립 검토·격리 저장소 검증과 별도 승인을 마친 뒤 수동 최초 seed를 실행하고, reader로 district와
-   named artifact를 다시 다운로드해 검증한다. launchd production 발행은 아직 켜지 않는다.
-10. Preview route를 snapshot 우선, 기존 DB를 제한적 fallback으로 전환한 뒤 운영 반영한다.
+9. retention 도구의 독립 검토·격리 저장소 검증과 별도 승인을 마친 뒤 수동 최초 seed를 실행하고,
+   reader로 district와 named artifact를 다시 다운로드해 검증한다.
+10. Preview route를 snapshot 우선, 기존 DB를 제한적 fallback으로 전환해 검증한 뒤 Production에
+    반영하고 위 LaunchAgent Production 승격 절차를 수행한다.
 
 ### Blob 비용·보존·지연 계약
 
-정기 발행이 별도로 승인된 뒤에는 48시간 freshness를 지키기 위해 하루 1회만 수행한다. 실패한
+현재 정기 발행은 48시간 freshness를 지키기 위해 하루 1회만 수행한다. 실패한
 작업을 무한 재시도하지 않고 다음 healthy sync 또는 운영자 확인 뒤 재실행한다. 실제 로컬 백업 표본에서 2개월 거래
 shard 총량은 약 4.0MB(24개 평균 약 167KB)였고, apartment index를 포함한 release는 약 4.5MB다.
 요청 district는 shard 하나만 내려받으므로 district 단독 객체보다 transfer가 늘지만, 이 크기는
@@ -571,7 +585,7 @@ shard 총량은 약 4.0MB(24개 평균 약 167KB)였고, apartment index를 포�
 route 총 지연을 측정한 후 Production으로 올린다.
 
 immutable release를 영구 보존하면 하루 약 4.5MB 기준 약 7개월 후 1GB에 접근한다. retention은
-위 수동 plan/apply 도구로만 구현되어 있고 정기 자동화·운영 apply는 아직 승인되지 않았다. 따라서
-Vercel Usage를 계속 모니터링하고 독립 검증 전에는 수동 삭제도 실행하지 않는다. 현재 discovery와
+위 수동 plan/apply 도구로만 구현되어 있고 정기 자동화는 승인되지 않았다. 따라서 Vercel Usage를
+계속 모니터링하고 월 1회 계획 검토·명시 승인 없이 삭제를 실행하지 않는다. 현재 discovery와
 직전 rollback, 최신 30개와 최근 30일 release 보호 계약을 유지하며, Mac mini 원장/백업이 source of
 truth라는 원칙도 유지한다.
