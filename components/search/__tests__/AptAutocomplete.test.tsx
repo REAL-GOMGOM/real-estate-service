@@ -57,6 +57,81 @@ afterEach(async () => {
 });
 
 describe('AptAutocomplete request ordering', () => {
+  it('검색 결과는 pointer down 중 사라지지 않고 완전한 click에서 선택한다', async () => {
+    const onSelect = vi.fn();
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => {
+      root!.render(<AptAutocomplete onSelect={onSelect} />);
+    });
+
+    const input = host.querySelector('input')!;
+    await type(input, '은하마을');
+    await act(async () => {
+      vi.advanceTimersByTime(180);
+      await settle();
+    });
+    const apartment = {
+      id: 'A42084804',
+      name: '중동은하마을주공1단지',
+      sido: '경기도',
+      sigungu: '부천원미구',
+      dong: '중동',
+      lawdCd: '41192',
+    };
+    await act(async () => {
+      pending[0].resolve({
+        ok: true,
+        json: async () => ({ results: [apartment] }),
+      });
+      await settle();
+    });
+
+    const option = host.querySelector('[role="option"]') as HTMLElement;
+    await act(async () => {
+      option.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      await settle();
+    });
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(host.querySelector('[role="option"]')).toBe(option);
+
+    await act(async () => {
+      option.click();
+      await settle();
+    });
+    expect(onSelect).toHaveBeenCalledWith(apartment);
+    expect(host.querySelector('[role="option"]')).toBeNull();
+  });
+
+  it('검색어 지우기를 외부 선택 상태에도 알린다', async () => {
+    const onClear = vi.fn();
+    host = document.createElement('div');
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => {
+      root!.render(
+        <AptAutocomplete
+          initialValue="잠실엘스"
+          onClear={onClear}
+          onSelect={() => undefined}
+        />,
+      );
+    });
+
+    const input = host.querySelector('input')!;
+    const clear = host.querySelector('button[aria-label="검색어 지우기"]') as HTMLButtonElement;
+    expect(input.value).toBe('잠실엘스');
+    await act(async () => {
+      clear.click();
+      await settle();
+    });
+
+    expect(input.value).toBe('');
+    expect(onClear).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(input);
+  });
+
   it('입력이 바뀌면 debounce 전에도 직전 요청을 취소하고 늦은 응답을 무시한다', async () => {
     host = document.createElement('div');
     document.body.appendChild(host);

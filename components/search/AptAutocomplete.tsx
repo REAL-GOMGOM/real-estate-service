@@ -31,6 +31,7 @@ export interface ApartmentSearchResult {
 
 interface AptAutocompleteProps {
   onSelect:     (apt: ApartmentSearchResult) => void;
+  onClear?:      () => void;
   placeholder?: string;
   initialValue?: string;
   className?:   string;
@@ -48,6 +49,7 @@ type FetchState =
 
 export function AptAutocomplete({
   onSelect,
+  onClear,
   placeholder = '단지명 입력 (예: 잠실엘스)',
   initialValue = '',
   className,
@@ -202,6 +204,7 @@ export function AptAutocomplete({
     setFocusIdx(-1);
     if (abortRef.current) abortRef.current.abort();
     abortRef.current = null;
+    onClear?.();
     inputRef.current?.focus();
   }
 
@@ -304,7 +307,7 @@ export function AptAutocomplete({
                 id={`${listboxId}-opt-${i}`}
                 role="option"
                 aria-selected={isFocused}
-                onMouseDown={(e) => { e.preventDefault(); pick(apt); }}
+                onClick={() => pick(apt)}
                 onMouseEnter={() => {
                   setFocusIdx(i);
                   onResultIntent?.(apt);

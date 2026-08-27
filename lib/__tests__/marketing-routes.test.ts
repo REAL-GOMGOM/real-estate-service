@@ -10,8 +10,14 @@ describe('marketing route policy', () => {
     expect(shouldShowFooterCoupang('/schools')).toBe(false);
     expect(shouldShowFooterCoupang('/transactions')).toBe(false);
     expect(shouldShowFooterCoupang('/blog/seoul-apartment')).toBe(false);
+    expect(shouldShowFooterCoupang('/apt/A100')).toBe(false);
+    expect(shouldShowFooterCoupang('/loan')).toBe(false);
+    expect(shouldShowFooterCoupang('/privacy')).toBe(false);
+    expect(shouldShowFooterCoupang('/admin/posts')).toBe(false);
+    expect(shouldShowFooterCoupang('/preview/draft')).toBe(false);
     expect(shouldShowFooterCoupang('/blog')).toBe(true);
     expect(shouldShowFooterCoupang('/blog/category/market')).toBe(true);
+    expect(shouldShowFooterCoupang('/region/seoul')).toBe(true);
   });
 
   it('텔레그램 중복·법적·관리자·입력 집중 경로에서는 FAB를 숨긴다', () => {

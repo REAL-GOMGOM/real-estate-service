@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { TxErrorState, TxEmptyState } from '@/components/shared/TxStates';
 import { AnalysisPromoBar } from '@/components/shared/AnalysisPromoBar';
 import { findDistrictByLawdCd } from '@/lib/district-codes';
 import { DISTRICT_GROUPS } from '@/lib/district-groups';
 import { matchesQuery } from '@/lib/search-utils';
 import { matchesApartmentIdentity } from '@/lib/transaction-identity';
+import { trackAnalyticsEvent } from '@/lib/cookie-consent';
 import Header from '@/components/layout/Header';
 import { AptAutocomplete, type ApartmentSearchResult } from '@/components/search/AptAutocomplete';
 import { type AptGroup, type DistrictStat, detectNewHigh } from './types';
@@ -93,6 +94,31 @@ const AREA_OPTIONS: { key: string; label: string }[] = [
   { key: '84',  label: '84㎡' },
 ];
 
+const VALID_MONTHS = [2, 3, 6, 12, 24, 36] as const;
+
+function isValidMonths(value: number): value is (typeof VALID_MONTHS)[number] {
+  return VALID_MONTHS.some((candidate) => candidate === value);
+}
+
+function dealTypeFromParam(value: string | null): DealType {
+  return value === 'jeonse' || value === 'monthly' || value === 'bunyang'
+    ? value
+    : 'buy';
+}
+
+function applyDealTypeParam(params: URLSearchParams, value: DealType): void {
+  if (value === 'buy') params.delete('dealType');
+  else params.set('dealType', value);
+}
+
+function clearApartmentParams(params: URLSearchParams): void {
+  params.delete('q');
+  params.delete('aptId');
+  params.delete('aptDong');
+  params.delete('tx');
+  params.delete('rtx');
+}
+
 // 전월세 정렬 (전월세 v2) — monthlyOnly 는 월세 탭에서만 노출
 const RENT_SORT_OPTIONS: { key: RentSortKey; label: string; monthlyOnly?: boolean }[] = [
   { key: 'volume',  label: '거래많은순' },
@@ -102,6 +128,7 @@ const RENT_SORT_OPTIONS: { key: RentSortKey; label: string; monthlyOnly?: boolea
 ];
 
 export default function TransactionsClient() {
+  const router = useRouter();
   const searchParams  = useSearchParams();
   const districtParam = searchParams.get('district');
   const queryParam    = searchParams.get('q');
@@ -112,6 +139,21 @@ export default function TransactionsClient() {
   const rtxParam      = searchParams.get('rtx');       // 전월세 계약 건 (전월세 대칭)
   const dealTypeParam = searchParams.get('dealType');  // 탭 복원 (jeonse|monthly|bunyang)
   const monthsParam   = parseInt(searchParams.get('months') ?? '', 10);
+  const initialParamsString = searchParams.toString();
+  // router.replace가 화면에 반영되기 전의 연속 입력도 직전 URL 변경 위에 합성한다.
+  const latestParamsRef = useRef(initialParamsString);
+  const observedParamsRef = useRef(initialParamsString);
+  const pendingParamsRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const observed = searchParams.toString();
+    if (observed === observedParamsRef.current) return;
+    observedParamsRef.current = observed;
+
+    if (pendingParamsRef.current && observed !== pendingParamsRef.current) return;
+    latestParamsRef.current = observed;
+    pendingParamsRef.current = null;
+  }, [searchParams]);
 
   const [today, setToday] = useState(new Date(0));
   useEffect(() => { setToday(new Date()); }, []);
@@ -120,7 +162,7 @@ export default function TransactionsClient() {
   const [groupIdx,  setGroupIdx]  = useState(() => Math.max(0, findGroupIndexOfDistrict(districtParam || '강남구')));
   // 딥링크의 months 를 복원해야 공유된 계약 건이 조회 범위에 들어온다
   const [months,    setMonths]    = useState<number>(
-    [2, 3, 6, 12, 24, 36].includes(monthsParam) ? monthsParam : 2,
+    isValidMonths(monthsParam) ? monthsParam : 2,
   );
   const [query,     setQuery]     = useState(queryParam ?? '');
   const [groups,    setGroups]    = useState<AptGroup[]>([]);
@@ -148,9 +190,7 @@ export default function TransactionsClient() {
   // 거래 유형 (사이클 II) — 전월세는 별도 데이터·카드 경로
   // 딥링크의 dealType 을 복원해야 전월세 공유가 해당 탭으로 착지한다
   const [dealType, setDealType] = useState<DealType>(
-    dealTypeParam === 'jeonse' || dealTypeParam === 'monthly' || dealTypeParam === 'bunyang'
-      ? dealTypeParam
-      : 'buy',
+    dealTypeFromParam(dealTypeParam),
   );
   const [rentGroups,  setRentGroups]  = useState<RentAptGroup[]>([]);
   const [rentLoading, setRentLoading] = useState(false);
@@ -186,12 +226,14 @@ export default function TransactionsClient() {
   const [newHighOnly, setNewHighOnly] = useState(false);
   const [areaFilter,  setAreaFilter]  = useState('all');
 
-  // 딥링크 — district(+q) 로 바로 detail 진입
+  // URL을 공유·새로고침 가능한 단일 진실로 사용한다.
   useEffect(() => {
+    setMonths(isValidMonths(monthsParam) ? monthsParam : 2);
+    setDealType(dealTypeFromParam(dealTypeParam));
+    setQuery(queryParam ?? '');
     if (districtParam) {
       setDistrict(districtParam);
       setGroupIdx(Math.max(0, findGroupIndexOfDistrict(districtParam)));
-      if (queryParam) setQuery(queryParam);
       setSelectedApt(
         aptIdParam && queryParam
           ? {
@@ -205,9 +247,12 @@ export default function TransactionsClient() {
           : null,
       );
       setViewMode('detail');
-      setFetched('');
+    } else {
+      setSelectedApt(null);
+      setViewMode('summary');
     }
-  }, [districtParam, queryParam, aptIdParam, aptDongParam]);
+    setFetched('');
+  }, [districtParam, queryParam, aptIdParam, aptDongParam, monthsParam, dealTypeParam]);
 
   // 계약 건 딥링크 — 로드 완료 후 대상 단지 모달 자동 오픈 (1회, 정확명 우선)
   const autoOpenedRef = useRef(false);
@@ -492,7 +537,26 @@ export default function TransactionsClient() {
   const rentSorted   = sortRentGroups(rentFiltered, rentSortKey);
   const rentTotalTx  = rentFiltered.reduce((s, g) => s + (g.txCount ?? g.transactions.length), 0);
 
-  const enterDistrict = (d: string) => {
+  const silvVisibleGroups = useMemo(() => {
+    if (selectedApt) {
+      return silvGroups.filter((group) => groupMatchesSelectedApartment(group, selectedApt));
+    }
+    if (query.trim()) {
+      return silvGroups
+        .filter((group) => matchesQuery(group.name, query.trim()))
+        .filter((group) => !aptDongParam || group.dong === aptDongParam);
+    }
+    return silvGroups;
+  }, [aptDongParam, query, selectedApt, silvGroups]);
+
+  const replaceParams = useCallback((params: URLSearchParams) => {
+    const nextQuery = params.toString();
+    latestParamsRef.current = nextQuery;
+    pendingParamsRef.current = nextQuery === observedParamsRef.current ? null : nextQuery;
+    router.replace(nextQuery ? `/transactions?${nextQuery}` : '/transactions', { scroll: false });
+  }, [router]);
+
+  const enterDistrict = useCallback((d: string) => {
     setGroupIdx(Math.max(0, findGroupIndexOfDistrict(d)));
     setDistrict(d);
     setSelectedApt(null);   // 지역 바꾸면 이전 단지 선택·검색 초기화
@@ -500,7 +564,128 @@ export default function TransactionsClient() {
     setViewMode('detail');
     setFetched('');
     setPicker(null);
-  };
+    setActiveApt(null);
+    setActiveRent(null);
+
+    const params = new URLSearchParams(latestParamsRef.current);
+    clearApartmentParams(params);
+    params.set('district', d);
+    params.set('months', String(months));
+    applyDealTypeParam(params, dealType);
+    replaceParams(params);
+  }, [dealType, months, replaceParams]);
+
+  const showSummary = useCallback(() => {
+    setViewMode('summary');
+    setSelectedApt(null);
+    setQuery('');
+    setActiveApt(null);
+    setActiveRent(null);
+
+    const params = new URLSearchParams(latestParamsRef.current);
+    clearApartmentParams(params);
+    params.delete('district');
+    params.set('months', String(months));
+    applyDealTypeParam(params, dealType);
+    replaceParams(params);
+  }, [dealType, months, replaceParams]);
+
+  const changeDealType = useCallback((nextDealType: DealType) => {
+    setDealType(nextDealType);
+    if (nextDealType !== 'monthly' && rentSortKey === 'monthly') setRentSortKey('volume');
+    setActiveApt(null);
+    setActiveRent(null);
+
+    const params = new URLSearchParams(latestParamsRef.current);
+    applyDealTypeParam(params, nextDealType);
+    params.delete('tx');
+    params.delete('rtx');
+    replaceParams(params);
+  }, [rentSortKey, replaceParams]);
+
+  const changeMonths = useCallback((nextMonths: number) => {
+    setMonths(nextMonths);
+    setFetched('');
+    setActiveApt(null);
+    setActiveRent(null);
+
+    const params = new URLSearchParams(latestParamsRef.current);
+    params.set('months', String(nextMonths));
+    params.delete('tx');
+    params.delete('rtx');
+    replaceParams(params);
+  }, [replaceParams]);
+
+  const apartmentHref = useCallback((apartment: ApartmentSearchResult) => {
+    const districtLabel = findDistrictByLawdCd(apartment.lawdCd) ?? apartment.sigungu;
+    const params = new URLSearchParams(latestParamsRef.current);
+    params.set('district', districtLabel);
+    params.set('q', apartment.name);
+    params.set('aptId', apartment.id);
+    params.set('months', String(months));
+    if (apartment.dong) params.set('aptDong', apartment.dong);
+    else params.delete('aptDong');
+    applyDealTypeParam(params, dealType);
+    params.delete('tx');
+    params.delete('rtx');
+    return `/transactions?${params.toString()}`;
+  }, [dealType, months]);
+
+  const selectApartment = useCallback((apartment: ApartmentSearchResult) => {
+    const districtLabel = findDistrictByLawdCd(apartment.lawdCd) ?? apartment.sigungu;
+    const matched = findGroupIndexOfDistrict(districtLabel);
+    if (matched >= 0) setGroupIdx(matched);
+    setDistrict(districtLabel);
+    setSelectedApt(apartment);
+    setQuery(apartment.name);
+    setViewMode('detail');
+    setFetched('');
+    setPicker(null);
+    setActiveApt(null);
+    setActiveRent(null);
+    trackAnalyticsEvent('transaction_apartment_search_select', {
+      apartment_id: apartment.id,
+      district: districtLabel,
+      source: 'transactions_top',
+    });
+    router.replace(apartmentHref(apartment), { scroll: false });
+  }, [apartmentHref, router]);
+
+  const clearApartmentSearch = useCallback(() => {
+    setSelectedApt(null);
+    setQuery('');
+    setFetched('');
+    setActiveApt(null);
+    setActiveRent(null);
+
+    const params = new URLSearchParams(latestParamsRef.current);
+    clearApartmentParams(params);
+    if (viewMode === 'detail') params.set('district', district);
+    else params.delete('district');
+    params.set('months', String(months));
+    applyDealTypeParam(params, dealType);
+    replaceParams(params);
+  }, [dealType, district, months, replaceParams, viewMode]);
+
+  const resetDetailFilters = useCallback(() => {
+    setSelectedApt(null);
+    setQuery('');
+    setNewHighOnly(false);
+    setAreaFilter('all');
+    setMonths(6);
+    setFetched('');
+    setRentFetched('');
+    setSilvFetched('');
+    setActiveApt(null);
+    setActiveRent(null);
+
+    const params = new URLSearchParams(latestParamsRef.current);
+    clearApartmentParams(params);
+    params.set('district', district);
+    params.set('months', '6');
+    applyDealTypeParam(params, dealType);
+    replaceParams(params);
+  }, [dealType, district, replaceParams]);
 
   return (
     <>
@@ -593,6 +778,41 @@ export default function TransactionsClient() {
           </div>
         )}
 
+        <section
+          aria-labelledby="transactions-apartment-search-title"
+          style={{
+            position: 'relative', zIndex: 20,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            gap: '18px', flexWrap: 'wrap',
+            margin: '20px 0 24px', padding: '18px 20px',
+            borderRadius: '16px', border: '1px solid var(--border)',
+            background: 'var(--bg-card)',
+          }}
+        >
+          <div style={{ minWidth: '210px', flex: '1 1 260px' }}>
+            <h2
+              id="transactions-apartment-search-title"
+              style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}
+            >
+              우리 아파트 바로 찾기
+            </h2>
+            <p style={{ margin: '5px 0 0', fontSize: '12.5px', color: 'var(--text-dim)', lineHeight: 1.5 }}>
+              전국 단지명을 검색하면 해당 단지의 실거래만 정확히 보여드려요.
+            </p>
+          </div>
+          <div role="search" style={{ flex: '2 1 360px', maxWidth: '620px', width: '100%' }}>
+            <AptAutocomplete
+              key={selectedApt?.id ?? (query ? `query:${query}` : 'transactions-global-search')}
+              ariaLabel="전국 아파트 단지 검색"
+              placeholder="단지명 검색 (예: 잠실엘스)"
+              initialValue={selectedApt?.name ?? query}
+              onClear={clearApartmentSearch}
+              onResultIntent={(apartment) => router.prefetch(apartmentHref(apartment))}
+              onSelect={selectApartment}
+            />
+          </div>
+        </section>
+
         {/* 시도별 요약 카드 뷰 */}
         {viewMode === 'summary' && (
           <>
@@ -607,7 +827,7 @@ export default function TransactionsClient() {
                   key={key}
                   type="button"
                   aria-pressed={dealType === key}
-                  onClick={() => setDealType(key)}
+                  onClick={() => changeDealType(key)}
                   style={{
                     backgroundColor: dealType === key ? 'var(--accent)' : 'var(--bg-tertiary)',
                     color: dealType === key ? '#FFFFFF' : 'var(--text-dim)',
@@ -790,6 +1010,10 @@ export default function TransactionsClient() {
                   {sumDealType === 'monthly' ? ' · 금액은 평균 보증금/평균 월세' : sumDealType === 'jeonse' ? ' · 금액은 평균 보증금' : ''} · 지역을 클릭해 구를 선택하면 상세 거래를 확인할 수 있습니다.
                 </p>
 
+                {!summaryLoading && summaryData.length > 0 && (
+                  <CoupangBanner variant="inline" subId="tx-summary" />
+                )}
+
                 {/* 조회를 넘어 분석까지 — 내집만의 기능 프로모 */}
                 <AnalysisPromoBar />
               </>
@@ -801,7 +1025,7 @@ export default function TransactionsClient() {
         {viewMode === 'detail' && (
           <>
         <button
-          onClick={() => setViewMode('summary')}
+          onClick={showSummary}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: '4px',
             fontSize: '13px', fontWeight: 600, color: 'var(--accent)',
@@ -819,11 +1043,7 @@ export default function TransactionsClient() {
               key={key}
               type="button"
               aria-pressed={dealType === key}
-              onClick={() => {
-                setDealType(key);
-                // 전세 탭엔 월세 축이 없음 — 월세 정렬 상태면 기본으로 리셋
-                if (key !== 'monthly' && rentSortKey === 'monthly') setRentSortKey('volume');
-              }}
+              onClick={() => changeDealType(key)}
               style={{
                 padding: '12px 4px', marginRight: '24px', fontSize: '15px', fontWeight: 700,
                 color: dealType === key ? 'var(--text-primary)' : 'var(--text-dim)',
@@ -842,7 +1062,7 @@ export default function TransactionsClient() {
           districts={DISTRICT_GROUPS[groupIdx]?.districts ?? []}
           stats={districtStats[groupLabel] ?? null}
           active={district}
-          onPick={(d) => { setDistrict(d); setSelectedApt(null); setQuery(''); setFetched(''); }}
+          onPick={enterDistrict}
         />
 
         {/* 통계 바 + 정렬·필터 (매매) */}
@@ -934,7 +1154,7 @@ export default function TransactionsClient() {
         </div>
         )}
 
-        {/* 기간 필터 + 검색 */}
+        {/* 기간 필터 */}
         <div style={{ display: 'flex', gap: '10px', marginBottom: '28px', flexWrap: 'wrap', alignItems: 'center' }}>
           {([
             { label: '2개월',  value: 2  },
@@ -948,7 +1168,7 @@ export default function TransactionsClient() {
               key={value}
               type="button"
               aria-pressed={months === value}
-              onClick={() => { setMonths(value); setFetched(''); }}
+              onClick={() => changeMonths(value)}
               style={{
                 padding: '10px 18px', borderRadius: '10px', fontSize: '13px', fontWeight: 600,
                 backgroundColor: months === value ? 'var(--accent)' : 'var(--bg-card)',
@@ -961,20 +1181,6 @@ export default function TransactionsClient() {
             </button>
           ))}
 
-          <div style={{ flex: 1, minWidth: '220px' }}>
-            <AptAutocomplete
-              placeholder="단지명 입력 (예: 잠실엘스)"
-              onSelect={(apt: ApartmentSearchResult) => {
-                const districtLabel = findDistrictByLawdCd(apt.lawdCd) ?? apt.sigungu;
-                const matched = findGroupIndexOfDistrict(districtLabel);
-                if (matched >= 0) setGroupIdx(matched);
-                setDistrict(districtLabel);
-                setSelectedApt(apt);   // 정확 매칭 경로 (퍼지 필터 회피)
-                setQuery(apt.name);
-                setFetched('');
-              }}
-            />
-          </div>
         </div>
 
         {/* 매매 — 에러·스켈레톤·카드 그리드 */}
@@ -1017,7 +1223,7 @@ export default function TransactionsClient() {
                   </p>
                   <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
                     <button
-                      onClick={() => { setMonths(36); setFetched(''); }}
+                      onClick={() => changeMonths(36)}
                       style={{
                         padding: '9px 16px', borderRadius: '10px', fontSize: '13px', fontWeight: 700,
                         backgroundColor: 'var(--accent)', color: '#FFFFFF', border: 'none', cursor: 'pointer',
@@ -1026,7 +1232,7 @@ export default function TransactionsClient() {
                       기간 3년으로 넓히기
                     </button>
                     <button
-                      onClick={() => { setSelectedApt(null); setQuery(''); }}
+                      onClick={clearApartmentSearch}
                       style={{
                         padding: '9px 16px', borderRadius: '10px', fontSize: '13px', fontWeight: 600,
                         backgroundColor: 'var(--bg-card)', color: 'var(--text-muted)',
@@ -1039,7 +1245,7 @@ export default function TransactionsClient() {
                 </div>
               ) : (
                 <TxEmptyState
-                  onReset={() => { setSelectedApt(null); setQuery(''); setNewHighOnly(false); setAreaFilter('all'); setMonths(6); setFetched(''); }}
+                  onReset={resetDetailFilters}
                 />
               )
             ) : (
@@ -1050,7 +1256,6 @@ export default function TransactionsClient() {
                     <AptCard key={apt.id} apt={apt} months={months} onClick={() => setActiveApt(apt)} />
                   ))}
                 </div>
-                <CoupangBanner variant="inline" subId="tx-feed" />
                 {filtered.length > 6 && (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px', marginTop: '12px' }}>
                     {filtered.slice(6).map((apt) => (
@@ -1090,7 +1295,7 @@ export default function TransactionsClient() {
               </>
             ) : (() => {
               if (rentSorted.length === 0 && !rentError) {
-                return <TxEmptyState onReset={() => { setQuery(''); setMonths(6); setRentFetched(''); }} />;
+                return <TxEmptyState onReset={resetDetailFilters} />;
               }
               return (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
@@ -1129,24 +1334,26 @@ export default function TransactionsClient() {
                 <style>{`@keyframes pulse{0%,100%{opacity:.3}50%{opacity:.6}}`}</style>
               </>
             ) : (() => {
-              const list = selectedApt
-                ? silvGroups.filter((group) => groupMatchesSelectedApartment(group, selectedApt))
-                : query.trim()
-                  ? silvGroups.filter((g) => matchesQuery(g.name, query.trim()))
-                    .filter((g) => !aptDongParam || g.dong === aptDongParam)
-                  : silvGroups;
-              if (list.length === 0 && !silvError) {
-                return <TxEmptyState onReset={() => { setQuery(''); setMonths(6); setSilvFetched(''); }} />;
+              if (silvVisibleGroups.length === 0 && !silvError) {
+                return <TxEmptyState onReset={resetDetailFilters} />;
               }
               return (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
-                  {list.map((apt) => (
+                  {silvVisibleGroups.map((apt) => (
                     <AptCard key={apt.id} apt={apt} months={months} onClick={() => setActiveApt(apt)} />
                   ))}
                 </div>
               );
             })()}
           </>
+        )}
+
+        {(
+          (dealType === 'buy' && !loading && !error && filtered.length > 0)
+          || ((dealType === 'jeonse' || dealType === 'monthly') && !rentLoading && !rentError && rentSorted.length > 0)
+          || (dealType === 'bunyang' && !silvLoading && !silvError && silvVisibleGroups.length > 0)
+        ) && (
+          <CoupangBanner variant="inline" subId={`tx-${dealType}-feed`} />
         )}
 
         <p style={{ marginTop: '24px', fontSize: '11px', color: 'var(--text-dim)', lineHeight: 1.8 }}>

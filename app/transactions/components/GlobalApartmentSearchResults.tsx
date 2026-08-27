@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, Search } from 'lucide-react';
 import { findDistrictByLawdCd } from '@/lib/district-codes';
+import { trackAnalyticsEvent } from '@/lib/cookie-consent';
 import type { ApartmentSearchResult } from '@/components/search/AptAutocomplete';
 
 type SearchState =
@@ -14,6 +15,7 @@ type SearchState =
 
 export default function GlobalApartmentSearchResults({ query }: { query: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [retryKey, setRetryKey] = useState(0);
   const [state, setState] = useState<SearchState>(() =>
     query.trim().length < 2 ? { kind: 'empty' } : { kind: 'loading' },
@@ -62,13 +64,20 @@ export default function GlobalApartmentSearchResults({ query }: { query: string 
   function selectApartment(apartment: ApartmentSearchResult) {
     const district =
       findDistrictByLawdCd(apartment.lawdCd) ?? apartment.sigungu;
-    const params = new URLSearchParams({
-      district,
-      q: apartment.name,
-      aptId: apartment.id,
-    });
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('district', district);
+    params.set('q', apartment.name);
+    params.set('aptId', apartment.id);
     if (apartment.dong) params.set('aptDong', apartment.dong);
-    router.replace(`/transactions?${params.toString()}`);
+    else params.delete('aptDong');
+    params.delete('tx');
+    params.delete('rtx');
+    trackAnalyticsEvent('transaction_apartment_search_select', {
+      apartment_id: apartment.id,
+      district,
+      source: 'transactions_query_results',
+    });
+    router.replace(`/transactions?${params.toString()}`, { scroll: false });
   }
 
   return (

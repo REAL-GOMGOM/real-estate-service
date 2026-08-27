@@ -1,4 +1,9 @@
 import type { RegionDetail } from '@/lib/types';
+import {
+  buildRegionTransactionsHref,
+  resolveRegionTransactionDistrict,
+} from '@/lib/region-transactions-link';
+import { RegionTransactionsLink } from './RegionTransactionsLink';
 
 interface Props {
   region: RegionDetail;
@@ -14,6 +19,8 @@ function getScoreLevel(score: number): { label: string; color: string } {
 
 export function RegionHero({ region }: Props) {
   const level = getScoreLevel(region.score);
+  const transactionsHref = buildRegionTransactionsHref(region);
+  const hasResolvedDistrict = resolveRegionTransactionDistrict(region) !== null;
 
   return (
     <section className="mx-auto max-w-5xl px-4 md:px-6 py-8 md:py-12">
@@ -63,6 +70,25 @@ export function RegionHero({ region }: Props) {
             데이터셋 메모: {region.specialNote}
           </p>
         )}
+
+        <div className="pt-3">
+          <RegionTransactionsLink
+            href={transactionsHref}
+            ariaLabel={hasResolvedDistrict
+              ? `${region.name} 실거래 보기`
+              : `${region.name} 실거래 지역 선택하기`}
+            regionId={region.id}
+            placement="hero"
+            className="inline-flex min-h-12 items-center justify-center rounded-xl px-5 py-3 text-base font-semibold text-white shadow-sm transition-opacity hover:opacity-90 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+            style={{
+              backgroundColor: 'var(--accent)',
+              color: '#FFFFFF',
+              '--tw-ring-color': 'var(--accent)',
+            } as React.CSSProperties}
+          >
+            {hasResolvedDistrict ? '이 지역 실거래 보기' : '지역 선택 후 실거래 보기'} →
+          </RegionTransactionsLink>
+        </div>
       </div>
     </section>
   );

@@ -1,5 +1,10 @@
 import { BRAND } from '@/lib/design-tokens';
 import type { RegionDetail } from '@/lib/types';
+import {
+  buildRegionTransactionsHref,
+  resolveRegionTransactionDistrict,
+} from '@/lib/region-transactions-link';
+import { RegionTransactionsLink } from './RegionTransactionsLink';
 
 interface Props {
   region: RegionDetail;
@@ -41,6 +46,8 @@ function getPopulationColor(value: number | null | undefined): string {
 
 export function RegionMarketMetrics({ region }: Props) {
   const { metrics } = region;
+  const transactionsHref = buildRegionTransactionsHref(region);
+  const hasResolvedDistrict = resolveRegionTransactionDistrict(region) !== null;
 
   const cards = [
     {
@@ -134,6 +141,22 @@ export function RegionMarketMetrics({ region }: Props) {
         데이터셋 버전 {region.month}. 카드별 실제 관측일과 출처 주기가 달라 현재 실시간
         시세로 해석할 수 없습니다. 최신 계약은 실거래 조회에서 별도로 확인하세요.
       </p>
+      <RegionTransactionsLink
+        href={transactionsHref}
+        ariaLabel={hasResolvedDistrict
+          ? `${region.name} 실거래 보기`
+          : `${region.name} 실거래 지역 선택하기`}
+        regionId={region.id}
+        placement="metrics"
+        className="mt-5 inline-flex min-h-11 items-center rounded-lg border px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--bg-tertiary)] motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+        style={{
+          borderColor: 'var(--border)',
+          color: 'var(--accent)',
+          '--tw-ring-color': 'var(--accent)',
+        } as React.CSSProperties}
+      >
+        {hasResolvedDistrict ? '이 지역 실거래 보기' : '지역 선택 후 실거래 보기'} →
+      </RegionTransactionsLink>
     </section>
   );
 }

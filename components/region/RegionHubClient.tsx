@@ -15,11 +15,27 @@ interface Props {
 
 export function RegionHubClient({ initialData }: Props) {
   const searchParams = useSearchParams();
-  const initialQuery = searchParams?.get('q') ?? '';
+  const initialQuery = searchParams?.get('q')?.trim() ?? '';
+
+  return (
+    <RegionHubResults
+      key={initialQuery}
+      initialData={initialData}
+      initialQuery={initialQuery}
+    />
+  );
+}
+
+interface ResultsProps extends Props {
+  initialQuery: string;
+}
+
+function RegionHubResults({ initialData, initialQuery }: ResultsProps) {
   const [query, setQuery] = useState(initialQuery);
   const [selectedRegion, setSelectedRegion] = useState('전체');
   const [sortBy, setSortBy] = useState<SortBy>('score');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const searchTerm = query.trim();
 
   const counts = useMemo(() => {
     const result: Record<string, number> = { '전체': initialData.length };
@@ -36,8 +52,8 @@ export function RegionHubClient({ initialData }: Props) {
       result = result.filter((item) => item.region === selectedRegion);
     }
 
-    if (query) {
-      const q = query.toLowerCase();
+    if (searchTerm) {
+      const q = searchTerm.toLowerCase();
       result = result.filter(
         (item) =>
           item.name.toLowerCase().includes(q) ||
@@ -60,12 +76,12 @@ export function RegionHubClient({ initialData }: Props) {
     });
 
     return result;
-  }, [initialData, selectedRegion, query, sortBy, sortDir]);
+  }, [initialData, selectedRegion, searchTerm, sortBy, sortDir]);
 
   return (
     <div className="mx-auto max-w-6xl px-4 md:px-6 py-8">
       <div className="mb-6">
-        <RegionHubSearch onChange={setQuery} />
+        <RegionHubSearch value={query} onChange={setQuery} />
       </div>
 
       <div className="mb-4">
@@ -90,7 +106,11 @@ export function RegionHubClient({ initialData }: Props) {
         />
       </div>
 
-      <RegionHubGrid items={filteredSorted} query={query} onQueryChange={setQuery} />
+      <RegionHubGrid
+        items={filteredSorted}
+        query={searchTerm}
+        onQueryChange={setQuery}
+      />
     </div>
   );
 }

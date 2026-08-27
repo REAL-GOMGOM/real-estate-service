@@ -4,10 +4,25 @@ function normalisePathname(pathname: string): string {
   return withoutQuery.replace(/\/+$/, '');
 }
 
-/** 인라인 쿠팡 배너가 이미 있는 경로에서는 푸터 배너를 숨긴다. */
+const COUPANG_FOOTER_HIDDEN_EXACT = new Set([
+  '/',
+  '/contact',
+  '/loan',
+  '/privacy',
+  '/schools',
+  '/telegram',
+  '/terms',
+  '/transactions',
+]);
+
+/** 인라인 지면이 있거나 광고 문맥이 부적절한 경로에서는 푸터 배너를 숨긴다. */
 export function shouldShowFooterCoupang(pathname: string): boolean {
   const path = normalisePathname(pathname);
-  if (path === '/schools' || path === '/transactions') return false;
+  if (COUPANG_FOOTER_HIDDEN_EXACT.has(path)) return false;
+
+  if (path === '/admin' || path.startsWith('/admin/')) return false;
+  if (path === '/preview' || path.startsWith('/preview/')) return false;
+  if (path.startsWith('/apt/')) return false;
 
   const segments = path.split('/').filter(Boolean);
   const isBlogDetail = segments[0] === 'blog' && segments.length === 2;
