@@ -136,18 +136,19 @@ export default function AptDetailModal({ apt, onClose, months, initialTx }: AptD
   // 건별 텍스트 공유 — 딥링크 포함 (받은 사람이 이 계약으로 정확히 착지)
   const shareTxText = async (tx: Transaction) => {
     const d = txDerived(tx);
+    const url = deepLinkUrl(tx);
     const text = buildTxShareText({
       aptName: apt.name,
       location: `${apt.district}${apt.dong ? ' ' + apt.dong : ''}`,
+      url,
       price: tx.price, areaM2: tx.area, floor: tx.floor, date: tx.date,
       peakLine: d.peakLine, fmt: fmtPrice, fmtDate: fmtContractDate,
     });
-    const url = deepLinkUrl(tx);
     try {
       if (navigator.share) {
-        await navigator.share({ title: apt.name, text, url });
+        await navigator.share({ title: apt.name, text });
       } else {
-        await navigator.clipboard.writeText(`${text}\n${url}`);
+        await navigator.clipboard.writeText(text);
         setTxCopied(true);
         setTimeout(() => setTxCopied(false), 1500);
       }
@@ -175,15 +176,16 @@ export default function AptDetailModal({ apt, onClose, months, initialTx }: AptD
       ? buildTxShareText({
           aptName: apt.name,
           location: `${apt.district}${apt.dong ? ' ' + apt.dong : ''}`,
+          url,
           price: latest.price, areaM2: latest.area, floor: latest.floor, date: latest.date,
           peakLine: txDerived(latest).peakLine, fmt: fmtPrice, fmtDate: fmtContractDate,
         })
-      : `${apt.name} · 내집 My.ZIP`;
+      : `🏠 ${apt.name} 실거래\n\n🔎 거래 자세히 보기\n${url}\n— 내집 My.ZIP`;
     try {
       if (navigator.share) {
-        await navigator.share({ title: apt.name, text, url });
+        await navigator.share({ title: apt.name, text });
       } else {
-        await navigator.clipboard.writeText(`${text}\n${url}`);
+        await navigator.clipboard.writeText(text);
         setShareCopied(true);
         setTimeout(() => setShareCopied(false), 1500);
       }

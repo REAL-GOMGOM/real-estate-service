@@ -93,17 +93,18 @@ export default function AptTxTable({
 
   const shareTxText = async (tx: Transaction) => {
     const d = txDerived(tx);
+    const url = deepLinkUrl(tx);
     const text = buildTxShareText({
       aptName, location,
+      url,
       price: tx.price, areaM2: tx.area, floor: tx.floor, date: tx.date,
       peakLine: d.peakLine, fmt: fmtPrice, fmtDate: fmtContractDate,
     });
-    const url = deepLinkUrl(tx);
     try {
       if (navigator.share) {
-        await navigator.share({ title: aptName, text, url });
+        await navigator.share({ title: aptName, text });
       } else {
-        await navigator.clipboard.writeText(`${text}\n${url}`);
+        await navigator.clipboard.writeText(text);
         setTxCopied(true);
         setTimeout(() => setTxCopied(false), 1500);
       }

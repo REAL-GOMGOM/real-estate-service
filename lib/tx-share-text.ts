@@ -51,6 +51,7 @@ export function buildPeakLine({ price, peak, prevPeak, months, fmt }: PeakLineIn
 export interface TxShareTextInput {
   aptName:  string;
   location: string;              // "용인시 수지구 성복동"
+  url:      string;              // 계약 건 딥링크
   price:    number;              // 만원
   areaM2:   number;              // 반올림 ㎡
   floor:    number;
@@ -60,14 +61,37 @@ export interface TxShareTextInput {
   fmtDate:  (d: string) => string;
 }
 
-/** 텍스트 공유 본문 — 평당가·전고점(기간 캡션) 포함 */
+/** 공유 앱에서 한눈에 읽히도록 전고점 비교 문구를 자연어로 다듬는다. */
+function readablePeakLine(peakLine: string): string {
+  const belowPeak = peakLine.match(/^(.*?) 대비 -(.+)$/);
+  if (belowPeak) return `📊 ${belowPeak[1]}보다 ${belowPeak[2]} 낮음`;
+
+  const newPeak = peakLine.match(/^(.*?) · 종전 (.+?) \+(.+)$/);
+  if (newPeak) return `🔥 ${newPeak[1]} · 종전 ${newPeak[2]}보다 ${newPeak[3]} 높음`;
+
+  return peakLine ? `🔥 ${peakLine}` : '';
+}
+
+/** 텍스트 공유 본문 — 가격·계약 정보·비교·딥링크를 여러 줄로 분리 */
 export function buildTxShareText(i: TxShareTextInput): string {
   const py    = Math.round(i.areaM2 / PY_PER_M2);
   const perPy = pricePerPyeong(i.price, i.areaM2);
-  let s = `${i.aptName} 실거래 ${i.fmt(i.price)} (${i.areaM2}㎡·${py}평·${i.floor}층·${i.fmtDate(i.date)} 계약)`;
-  s += ` · 평당 ${i.fmt(perPy)}`;
-  if (i.peakLine) s += ` · ${i.peakLine}`;
-  return `${s} · ${i.location} — 내집 My.ZIP`;
+  const lines = [
+    `🏠 ${i.aptName} 실거래`,
+    `💰 ${i.fmt(i.price)} · 평당 ${i.fmt(perPy)}`,
+    `📐 ${i.areaM2}㎡ (${py}평) · ${i.floor}층`,
+    `📅 ${i.fmtDate(i.date)} 계약`,
+  ];
+  const peak = readablePeakLine(i.peakLine);
+  if (peak) lines.push(peak);
+  lines.push(
+    `📍 ${i.location}`,
+    '',
+    '🔎 거래 자세히 보기',
+    i.url,
+    '— 내집 My.ZIP',
+  );
+  return lines.join('\n');
 }
 
 /**

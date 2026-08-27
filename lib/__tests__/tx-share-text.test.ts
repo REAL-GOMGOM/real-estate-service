@@ -52,18 +52,38 @@ describe('buildPeakLine — 기간 캡션 필수', () => {
 });
 
 describe('buildTxShareText', () => {
-  it('평당가·기간 캡션·위치 포함', () => {
+  it('가격·계약 정보·비교·위치·딥링크를 읽기 쉬운 여러 줄로 만든다', () => {
     const s = buildTxShareText({
       aptName: '성동마을엘지빌리지2차', location: '용인시 수지구 성복동',
+      url: 'https://www.naezipkorea.com/transactions?aptId=A41465108&tx=2026-07-08_134_9_155000',
       price: 155000, areaM2: 134, floor: 9, date: '2026-07-08',
       peakLine: '3년 내 최고가 · 종전 14.9억 +6,000만',
       fmt: fmtPrice, fmtDate: (d) => d.slice(2).replace(/-/g, '.'),
     });
-    expect(s).toContain('15.5억');
-    expect(s).toContain('134㎡·41평·9층');
-    expect(s).toContain('평당 3,824만');
-    expect(s).toContain('3년 내 최고가');
-    expect(s).toContain('용인시 수지구 성복동');
+    expect(s).toBe([
+      '🏠 성동마을엘지빌리지2차 실거래',
+      '💰 15.5억 · 평당 3,824만',
+      '📐 134㎡ (41평) · 9층',
+      '📅 26.07.08 계약',
+      '🔥 3년 내 최고가 · 종전 14.9억보다 6,000만 높음',
+      '📍 용인시 수지구 성복동',
+      '',
+      '🔎 거래 자세히 보기',
+      'https://www.naezipkorea.com/transactions?aptId=A41465108&tx=2026-07-08_134_9_155000',
+      '— 내집 My.ZIP',
+    ].join('\n'));
+  });
+
+  it('최고가 미달 비교에서 음수 기호 대신 낮은 금액을 설명한다', () => {
+    const s = buildTxShareText({
+      aptName: '까치마을', location: '강남구 수서동',
+      url: 'https://www.naezipkorea.com/transactions?aptId=A123',
+      price: 154500, areaM2: 34, floor: 14, date: '2026-07-28',
+      peakLine: '2개월 내 최고 16.6억 대비 -1.1억',
+      fmt: fmtPrice, fmtDate: (d) => d.slice(2).replace(/-/g, '.'),
+    });
+    expect(s).toContain('📊 2개월 내 최고 16.6억보다 1.1억 낮음');
+    expect(s).not.toContain('대비 -');
   });
 });
 

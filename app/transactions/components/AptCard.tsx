@@ -153,15 +153,16 @@ export default function AptCard({ apt, onClick, months }: AptCardProps) {
     const text = buildTxShareText({
       aptName: apt.name,
       location: apt.dong ? `${apt.district} ${apt.dong}` : apt.district,
+      url,
       price: latest.price, areaM2: latest.area, floor: latest.floor, date: latest.date,
       peakLine: sharePeakLine, fmt: fmtPrice, fmtDate: fmtContractDate,
     });
     try {
       if (navigator.share) {
-        await navigator.share({ title: apt.name, text, url });
+        await navigator.share({ title: apt.name, text });
         setShareOpen(false);
       } else {
-        await navigator.clipboard.writeText(`${text}\n${url}`);
+        await navigator.clipboard.writeText(text);
         setCopied(true);
         setTimeout(() => { setCopied(false); setShareOpen(false); }, 1400);
       }
