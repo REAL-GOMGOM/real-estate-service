@@ -93,6 +93,12 @@ export default function PrivacyPage() {
                 <code>naezip.cookie-consent</code>를 저장합니다.
               </li>
               <li>
+                편의 기능 저장소: 이용자가 본 단지를 다시 찾고 관심 단지를 직접
+                저장할 수 있도록 단지 식별자·이름·지역과 저장 시각을 이 기기의
+                로컬 저장소에 보관합니다. 이 정보는 서버로 전송하지 않으며 브라우저
+                사이트 데이터 삭제로 언제든 지울 수 있습니다.
+              </li>
+              <li>
                 방문 분석: 동의한 경우에만 Google Analytics를 불러오고 자체
                 순방문자 근사 집계에 참여시킵니다. 자체 집계는 IP 주소를 서버에서
                 비밀키 기반 HMAC-SHA256 가명값으로 즉시 변환하며, 원본 IP 주소는
@@ -273,7 +279,7 @@ export default function PrivacyPage() {
             className="border-t pt-6 text-sm"
             style={{ borderColor: 'var(--border)', color: 'var(--text-dim)' }}
           >
-            공고·시행일: 2026년 8월 16일 · 버전 2.2
+            공고·시행일: 2026년 8월 27일 · 버전 2.3
           </p>
         </div>
       </main>

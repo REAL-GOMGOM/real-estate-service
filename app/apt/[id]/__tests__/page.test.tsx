@@ -20,6 +20,8 @@ vi.mock('@/lib/apt-detail', () => ({
 vi.mock('@/components/layout/Header', () => ({ default: () => null }));
 vi.mock('@/components/layout/Footer', () => ({ default: () => null }));
 vi.mock('@/components/apt/PriceComboChart', () => ({ default: () => null }));
+vi.mock('@/components/apt/ApartmentRetentionActions', () => ({ default: () => null }));
+vi.mock('@/components/ads/CoupangBanner', () => ({ default: () => null }));
 vi.mock('@/components/shared/AnalysisPromoBar', () => ({ AnalysisPromoBar: () => null }));
 vi.mock('../AptShareActions', () => ({ default: () => null }));
 vi.mock('../AptTxTable', () => ({ default: () => null }));

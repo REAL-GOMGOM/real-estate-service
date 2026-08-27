@@ -6,6 +6,8 @@ import { connection } from 'next/server';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import PriceComboChart from '@/components/apt/PriceComboChart';
+import ApartmentRetentionActions from '@/components/apt/ApartmentRetentionActions';
+import CoupangBanner from '@/components/ads/CoupangBanner';
 import { AnalysisPromoBar } from '@/components/shared/AnalysisPromoBar';
 import {
   AptPageDataUnavailableError,
@@ -344,6 +346,13 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
         {master.totalDongs ? ` · ${master.totalDongs}개동` : ''}
       </p>
 
+      <ApartmentRetentionActions
+        id={master.id}
+        name={group.name}
+        district={district}
+        dong={group.dong ?? null}
+      />
+
       {sorted.length === 0 ? (
         <>
           {transactionsStatus === 'error' ? (
@@ -520,6 +529,9 @@ async function AptContent({ params }: { params: Promise<{ id: string }> }) {
           </p>
 
           <AnalysisPromoBar />
+          <div style={{ marginTop: '20px' }}>
+            <CoupangBanner variant="inline" subId="apt-detail-move" />
+          </div>
         </>
       )}
     </div>

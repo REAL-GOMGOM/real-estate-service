@@ -8,6 +8,7 @@ import { AdSenseLoader } from '@/components/shared/AdSenseLoader';
 import { CookieSettingsButton } from '@/components/layout/CookieSettingsButton';
 import { SITE_NAME, SITE_URL } from '@/lib/site';
 import { SkipToContent } from '@/components/layout/SkipToContent';
+import MobileBottomNav from '@/components/layout/MobileBottomNav';
 import { Suspense } from 'react';
 
 export const metadata: Metadata = {
@@ -93,6 +94,9 @@ export default function RootLayout({
           }}
         />
         {children}
+        <Suspense fallback={null}>
+          <MobileBottomNav />
+        </Suspense>
         <Suspense fallback={null}>
           <TelegramFloatingButton />
         </Suspense>

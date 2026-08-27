@@ -21,7 +21,7 @@ const FOOTER_LINKS = {
 export default function Footer() {
   return (
     <>
-    {/* 쿠팡 파트너스 배너 — 전역 "골고루" 노출을 푸터 상단 1곳으로 통일 (관리 포인트 최소화) */}
+    {/* 별도 인라인 광고가 없는 정보 페이지에서만 노출하는 문맥형 푸터 지면 */}
     <CoupangBanner subId="footer" />
     <footer style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)', padding: '48px 24px', borderTop: '1px solid var(--border)' }}>
       <div style={{ maxWidth: '1280px', margin: '0 auto' }}>

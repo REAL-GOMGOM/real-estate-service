@@ -13,6 +13,7 @@ import { findDistrictByLawdCd } from '@/lib/district-codes';
 import type { AptPriceSummary } from '@/lib/apt-price-summary';
 import { resolveLoanApartmentPrice } from '@/lib/loan-apartment-price';
 import { AptAutocomplete, type ApartmentSearchResult } from '@/components/search/AptAutocomplete';
+import CoupangBanner from '@/components/ads/CoupangBanner';
 import RateTrendCard from './RateTrendCard';
 import {
   DTI_LIMIT_POLICY,
@@ -926,6 +927,8 @@ export default function LoanSimulator() {
             )}
           </div>
         )}
+
+        <CoupangBanner variant="inline" subId="loan-result" />
 
         {/* 면책 문구 */}
         <p style={{ fontSize: 11, color: 'var(--text-dim)', textAlign: 'center', lineHeight: 1.7, padding: '0 8px' }}>

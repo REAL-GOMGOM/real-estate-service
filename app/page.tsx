@@ -7,13 +7,14 @@ import {
 } from 'lucide-react';
 import MarketLive from '@/components/landing/MarketLive';
 import MobileNav from '@/components/landing/MobileNav';
-import MobileTabBar from '@/components/landing/MobileTabBar';
 import RecentDealsCard from '@/components/landing/RecentDealsCard';
 import NotableDealsCard from '@/components/landing/NotableDealsCard';
 import HomeCalculator from '@/components/landing/HomeCalculator';
 import NewsCard from '@/components/landing/NewsCard';
 import RealValueCard from '@/components/landing/RealValueCard';
 import AddToHomeCta from '@/components/landing/AddToHomeCta';
+import SavedApartmentsCard from '@/components/landing/SavedApartmentsCard';
+import CoupangBanner from '@/components/ads/CoupangBanner';
 import { toSubscription } from '@/lib/adapters';
 import { fetchSubscriptions } from '@/lib/subscription-api';
 import type { SubscriptionItem } from '@/lib/types';
@@ -130,12 +131,6 @@ async function SubscriptionScheduleCard() {
     }}>
       <CardHeader title="주요 청약 일정" moreHref="/subscription" />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
-        {subscriptionStatus === 'partial' && (
-          <div role="status" style={{ border: '1px solid #E9D39C', borderRadius: 12, padding: 12, background: '#FFF9EC' }}>
-            <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: '#71551C' }}>현재 수집된 일부 공고만 표시합니다.</p>
-            <p style={{ margin: '4px 0 0', fontSize: 11, lineHeight: 1.5, color: MUTED }}>{subscriptionNote ?? '일부 청약홈 자료가 응답하지 않았습니다.'}</p>
-          </div>
-        )}
         {subscriptionStatus === 'degraded' ? (
           <div role="status" style={{ border: '1px solid #F2D7D5', borderRadius: 12, padding: 16, background: '#FFF8F7' }}>
             <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#8A2C25' }}>청약 데이터를 잠시 불러오지 못했습니다.</p>
@@ -170,6 +165,12 @@ async function SubscriptionScheduleCard() {
               </div>
             );
           })
+        )}
+        {subscriptionStatus === 'partial' && (
+          <p role="status" style={{ margin: '2px 2px 0', fontSize: 10.5, lineHeight: 1.5, color: MUTED }}>
+            현재 확인 가능한 공고 기준 · 최신 상태는 전체 일정에서 확인하세요.
+            <span className="sr-only"> {subscriptionNote ?? '일부 청약홈 자료가 응답하지 않았습니다.'}</span>
+          </p>
         )}
       </div>
     </div>
@@ -233,7 +234,6 @@ export default function HomePage() {
           .nz-chip:hover{background:transparent}
           .nz-chipicon{width:48px;height:48px;border-radius:14px;background:#EEF2FE}
           .nz-chiplabel{font-size:10.5px;font-weight:600;color:#3A4453;text-align:center;line-height:1.2}
-          .nz-main{padding-bottom:74px}
         }
       `}</style>
 
@@ -388,6 +388,8 @@ export default function HomePage() {
             </div>
           </details>
 
+          <CoupangBanner variant="inline" subId="home-move" />
+
           {/* 밴드 3 — 청약 · 뉴스 (빈 칼럼 카드는 홈에서 제외) */}
           <div className="nz-band nz-band3">
             {/* 청약 일정 */}
@@ -400,6 +402,9 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* 로컬 저장값은 수화 뒤 읽으므로 첫 화면 레이아웃에 영향을 주지 않게 본문 아래에 둡니다. */}
+      <SavedApartmentsCard />
 
       {/* ── 홈 화면 바로가기 CTA (2026-07-12) — 미지원·이미 설치 시 자동 숨김 ── */}
       <AddToHomeCta />
@@ -448,9 +453,6 @@ export default function HomePage() {
           </p>
         </div>
       </footer>
-
-      {/* 모바일 하단 탭바 */}
-      <MobileTabBar />
     </main>
   );
 }

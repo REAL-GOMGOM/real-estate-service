@@ -71,7 +71,7 @@ export default function SubscriptionDetailModal({ item, onClose }: Props) {
           position: 'fixed', inset: 0,
           backgroundColor: 'rgba(0,0,0,0.7)',
           backdropFilter: 'blur(4px)',
-          zIndex: 50,
+          zIndex: 110,
         }}
       />
 
@@ -80,6 +80,7 @@ export default function SubscriptionDetailModal({ item, onClose }: Props) {
         role="dialog"
         aria-modal="true"
         aria-label={item.name}
+        data-mobile-nav-obscures="true"
         style={{
           position: 'fixed',
           top: '50%', left: '50%',
@@ -90,7 +91,7 @@ export default function SubscriptionDetailModal({ item, onClose }: Props) {
           backgroundColor: 'var(--bg-card)',
           border: '1px solid var(--border)',
           borderRadius: '20px',
-          zIndex: 51,
+          zIndex: 111,
           padding: '28px',
         }}
       >

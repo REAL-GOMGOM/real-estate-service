@@ -249,18 +249,24 @@ export default function SubscriptionCalendar({ items, onSelect }: Props) {
             onClick={() => setExpandedDate(null)}
             style={{
               position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)',
-              zIndex: 40,
+              zIndex: 110,
             }}
           />
-          <div style={{
-            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-            width: 'min(360px, calc(100vw - 32px))', maxHeight: 'calc(100vh - 64px)',
-            overflowY: 'auto', backgroundColor: 'var(--bg-card)',
-            border: '1px solid var(--border)', borderRadius: '16px',
-            padding: '20px', zIndex: 41,
-          }}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="subscription-expanded-date-title"
+            data-mobile-nav-obscures="true"
+            style={{
+              position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+              width: 'min(360px, calc(100vw - 32px))', maxHeight: 'calc(100vh - 64px)',
+              overflowY: 'auto', backgroundColor: 'var(--bg-card)',
+              border: '1px solid var(--border)', borderRadius: '16px',
+              padding: '20px', zIndex: 111,
+            }}
+          >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h4 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>
+              <h4 id="subscription-expanded-date-title" style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>
                 {expandedDate}
               </h4>
               <button

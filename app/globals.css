@@ -178,3 +178,146 @@ a:hover { color: var(--accent-hover); }
 .rounded-scroll::-webkit-scrollbar { width: 5px; }
 .rounded-scroll::-webkit-scrollbar-track { background: transparent; margin: 20px 0; }
 .rounded-scroll::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 99px; }
+
+/* 전역 모바일 하단 내비게이션 — 공개 페이지에서만 컴포넌트와 여백을 함께 렌더링한다. */
+.nz-mobile-bottom-nav,
+.nz-mobile-bottom-nav-spacer,
+.nz-mobile-bottom-nav-backdrop,
+.nz-mobile-more-panel {
+  display: none;
+}
+
+.nz-mobile-bottom-nav-root {
+  --nz-mobile-bottom-nav-height: calc(68px + env(safe-area-inset-bottom));
+}
+
+@media (max-width: 720px) {
+  .nz-mobile-bottom-nav-spacer {
+    display: block;
+    height: var(--nz-mobile-bottom-nav-height);
+  }
+
+  .nz-mobile-bottom-nav {
+    position: fixed;
+    z-index: 90;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-around;
+    height: var(--nz-mobile-bottom-nav-height);
+    padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border-light);
+    background: rgba(255, 255, 255, 0.97);
+    box-shadow: 0 -8px 28px rgba(20, 33, 61, 0.08);
+    backdrop-filter: blur(14px);
+  }
+
+  .nz-mobile-bottom-nav-item {
+    display: flex;
+    min-width: 52px;
+    min-height: 44px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 2px 5px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text-dim);
+    font: inherit;
+    font-size: 10.5px;
+    font-weight: 650;
+    line-height: 1.2;
+    text-decoration: none;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  .nz-mobile-bottom-nav-item:hover,
+  .nz-mobile-bottom-nav-item:focus-visible,
+  .nz-mobile-bottom-nav-item[data-active='true'] {
+    color: var(--accent);
+  }
+
+  .nz-mobile-bottom-nav-item:focus-visible,
+  .nz-mobile-more-link:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .nz-mobile-bottom-nav-backdrop {
+    position: fixed;
+    z-index: 80;
+    top: 0;
+    right: 0;
+    bottom: var(--nz-mobile-bottom-nav-height);
+    left: 0;
+    display: block;
+    width: 100%;
+    border: 0;
+    background: rgba(14, 24, 48, 0.34);
+    cursor: default;
+  }
+
+  .nz-mobile-more-panel {
+    position: fixed;
+    z-index: 91;
+    right: 12px;
+    bottom: calc(var(--nz-mobile-bottom-nav-height) + 8px);
+    left: 12px;
+    display: block;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: var(--bg-card);
+    box-shadow: 0 18px 48px rgba(14, 24, 48, 0.22);
+  }
+
+  .nz-mobile-more-title {
+    margin: 0 0 12px;
+    color: var(--text-strong);
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.3;
+  }
+
+  .nz-mobile-more-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .nz-mobile-more-link {
+    display: flex;
+    min-height: 46px;
+    align-items: center;
+    gap: 9px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  .nz-mobile-more-link:hover,
+  .nz-mobile-more-link[aria-current='page'] {
+    background: var(--accent-bg);
+    color: var(--accent);
+  }
+
+  /* 모달·시트가 열리면 가려진 내비가 탭 순서나 포인터 입력을 받지 않도록 한다. */
+  body:has([aria-modal='true']) .nz-mobile-bottom-nav,
+  body:has([aria-modal='true']) .nz-mobile-bottom-nav-backdrop,
+  body:has([aria-modal='true']) .nz-mobile-more-panel,
+  body:has([data-mobile-nav-obscures='true']) .nz-mobile-bottom-nav,
+  body:has([data-mobile-nav-obscures='true']) .nz-mobile-bottom-nav-backdrop,
+  body:has([data-mobile-nav-obscures='true']) .nz-mobile-more-panel {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}

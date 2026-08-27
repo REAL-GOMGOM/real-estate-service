@@ -57,7 +57,7 @@ export default function BottomSheet({ isOpen, onClose, children }: BottomSheetPr
       <div
         onClick={onClose}
         style={{
-          position: 'fixed', inset: 0, zIndex: 99,
+          position: 'fixed', inset: 0, zIndex: 110,
           backgroundColor: height > 50 ? 'rgba(0,0,0,0.3)' : 'transparent',
           transition: dragging ? 'none' : 'background-color 0.3s',
           pointerEvents: height > 50 ? 'auto' : 'none',
@@ -67,11 +67,14 @@ export default function BottomSheet({ isOpen, onClose, children }: BottomSheetPr
       {/* 시트 */}
       <div
         ref={sheetRef}
+        role="dialog"
+        aria-label="상세 정보"
+        data-mobile-nav-obscures="true"
         style={{
           position: 'fixed',
           bottom: 0, left: 0, right: 0,
           height: `${height}vh`,
-          zIndex: 100,
+          zIndex: 111,
           backgroundColor: 'var(--bg-card)',
           borderRadius: '20px 20px 0 0',
           border: '1px solid var(--border)',
@@ -107,7 +110,7 @@ export default function BottomSheet({ isOpen, onClose, children }: BottomSheetPr
         <div style={{
           flex: 1,
           overflowY: 'auto',
-          padding: '0 20px 20px',
+          padding: '0 20px calc(20px + env(safe-area-inset-bottom))',
           WebkitOverflowScrolling: 'touch',
         }}>
           {children}
