@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   findApartmentIdentity,
   matchesApartmentIdentity,
+  normalizeTransactionGroupName,
   transactionGroupKey,
   type ApartmentIdentity,
 } from '@/lib/transaction-identity';
@@ -16,6 +17,31 @@ describe('transaction identity', () => {
     expect(transactionGroupKey('현대', '압구정동')).not.toBe(
       transactionGroupKey('현대', '대치동'),
     );
+  });
+
+  it('괄호 속 단지 구분은 보존하고 건물 동 표기만 제거한다', () => {
+    expect(normalizeTransactionGroupName('은하마을(주공1)')).toBe('은하마을(주공1)');
+    expect(normalizeTransactionGroupName('은하마을(주공2)')).toBe('은하마을(주공2)');
+    expect(normalizeTransactionGroupName('쌍용스위닷홈(201동)')).toBe('쌍용스위닷홈');
+    expect(transactionGroupKey('은하마을(주공1)', '중동')).not.toBe(
+      transactionGroupKey('은하마을(주공2)', '중동'),
+    );
+  });
+
+  it('법정동 접두사와 단지·차수 표기 차이를 같은 단지로 연결한다', () => {
+    const eunhaMasters: ApartmentIdentity[] = [
+      { id: 'A42084801', name: '중동은하마을주공2차', aliases: [], dong: '중동' },
+      { id: 'A42084804', name: '중동은하마을주공1단지', aliases: [], dong: '중동' },
+    ];
+
+    expect(findApartmentIdentity(
+      { aptName: '은하마을(주공1)', dong: '중동' },
+      eunhaMasters,
+    )?.id).toBe('A42084804');
+    expect(findApartmentIdentity(
+      { aptName: '은하마을(주공2)', dong: '중동' },
+      eunhaMasters,
+    )?.id).toBe('A42084801');
   });
 
   it('마스터 ID가 있으면 이름보다 정확한 ID를 우선한다', () => {

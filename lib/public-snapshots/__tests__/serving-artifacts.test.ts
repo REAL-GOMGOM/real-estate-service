@@ -231,6 +231,93 @@ describe('raw district snapshot response builders', () => {
     });
   });
 
+  it('connects K-apt names to MOLIT variants without merging neighboring complexes', () => {
+    const now = new Date('2026-08-27T03:00:00.000Z');
+    const index: ApartmentIndexItem[] = [
+      {
+        ...apartmentIndex[0],
+        id: 'A42084801',
+        name: '중동은하마을주공2차',
+        aliases: [],
+        dong: '중동',
+        lawdCd: '41192',
+        sigungu: '부천원미구',
+      },
+      {
+        ...apartmentIndex[0],
+        id: 'A42084804',
+        name: '중동은하마을주공1단지',
+        aliases: [],
+        dong: '중동',
+        lawdCd: '41192',
+        sigungu: '부천원미구',
+      },
+    ];
+    const snapshot = createPublicTransactionSnapshot({
+      lawdCd: '41192',
+      district: '부천시 원미구',
+      period: { from: '2026-07-01', through: '2026-08-27' },
+      generatedAt: now.toISOString(),
+      records: [
+        { key: 'eunha-1-high', aptName: '은하마을(주공1)', amount: 67_000, area: 49.69, floor: 8, date: '2026-08-12' },
+        { key: 'eunha-1-small', aptName: '은하마을(주공1)', amount: 42_200, area: 39.87, floor: 12, date: '2026-08-12' },
+        { key: 'eunha-2', aptName: '은하마을(주공2)', amount: 61_500, area: 47.4, floor: 8, date: '2026-07-31' },
+        { key: 'eunha-daewoo', aptName: '은하마을(대우)', amount: 105_700, area: 101.8, floor: 14, date: '2026-08-18' },
+      ].map((row) => toPublicSaleTransaction({
+        dedupeKey: row.key,
+        masterId: null,
+        aptName: row.aptName,
+        sigungu: '부천시 원미구',
+        umdNm: '중동',
+        areaM2: row.area,
+        floor: row.floor,
+        dealAmount: row.amount,
+        dealDate: row.date,
+        buildYear: 1995,
+        isCanceled: false,
+      })),
+    });
+
+    const selected = buildBuyResponseFromSnapshot(snapshot, {
+      months: 2,
+      limit: 60,
+      aptId: 'A42084804',
+      apartmentIndex: index,
+      now,
+    });
+    expect(selected).toMatchObject({
+      hit: true,
+      body: {
+        selectedAptId: 'A42084804',
+        total: 2,
+        data: [{ masterId: 'A42084804' }],
+      },
+    });
+    if (selected.hit) {
+      expect(selected.body.data[0].transactions).toEqual(expect.arrayContaining([
+        expect.objectContaining({ aptName: '은하마을(주공1)', price: 67_000, floor: 8 }),
+      ]));
+    }
+
+    const district = buildBuyResponseFromSnapshot(snapshot, {
+      months: 2,
+      limit: 60,
+      apartmentIndex: index,
+      now,
+    });
+    expect(district.hit).toBe(true);
+    if (district.hit) {
+      expect(district.body.total).toBe(4);
+      expect(district.body.data.map((group) => group.name).sort()).toEqual([
+        '은하마을(대우)',
+        '은하마을(주공1)',
+        '은하마을(주공2)',
+      ]);
+      expect(district.body.data.find((group) => group.name === '은하마을(주공1)')?.transactions)
+        .toHaveLength(2);
+    }
+  });
+
   it('builds current rent and presale bodies from the same raw partition', () => {
     const rent = buildRentResponseFromSnapshot(fixtureSnapshot(), {
       months: 2,

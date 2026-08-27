@@ -6,9 +6,12 @@ import {
   marketLiveWindows,
   type MarketLiveRow,
 } from '../market-live';
-import { normalizeMLTMName } from '../normalize-mltm-name';
 import { matchesQuery } from '../search-utils';
-import { transactionGroupKey } from '../transaction-identity';
+import {
+  findApartmentIdentity,
+  matchesApartmentIdentity,
+  transactionGroupKey,
+} from '../transaction-identity';
 import type {
   PublicNamedArtifactEnvelope,
   PublicTransactionRecord,
@@ -1073,15 +1076,11 @@ function snapshotCoversMonths(snapshot: PublicTransactionSnapshot, monthKeys: re
     && snapshot.period.through.slice(0, 7) >= newest;
 }
 
-function normalizeDong(value: string | null | undefined): string {
-  return (value ?? '').replace(/\s+/g, '').trim();
-}
-
 function recordMatchesApartment(record: PublicTransactionRecord, apartment: ApartmentIndexItem): boolean {
-  if (record.apartmentId) return record.apartmentId === apartment.id;
-  const names = new Set([apartment.name, ...apartment.aliases].map(normalizeMLTMName).filter(Boolean));
-  if (!names.has(normalizeMLTMName(record.aptName))) return false;
-  return Boolean(apartment.dong) && normalizeDong(record.dong) === normalizeDong(apartment.dong);
+  return matchesApartmentIdentity(
+    { aptName: record.aptName, dong: record.dong, masterId: record.apartmentId },
+    apartment,
+  );
 }
 
 interface PreparedSnapshotQuery {
@@ -1138,21 +1137,16 @@ function recordsForQuery(
 
 function apartmentLookup(index: readonly ApartmentIndexItem[], lawdCd: string): {
   byId: Map<string, ApartmentIndexItem>;
-  byNameAndDong: Map<string, ApartmentIndexItem | null>;
+  apartments: ApartmentIndexItem[];
 } {
   const byId = new Map<string, ApartmentIndexItem>();
-  const byNameAndDong = new Map<string, ApartmentIndexItem | null>();
+  const apartments: ApartmentIndexItem[] = [];
   for (const apartment of index) {
     if (apartment.lawdCd !== lawdCd) continue;
     byId.set(apartment.id, apartment);
-    for (const name of [apartment.name, ...apartment.aliases]) {
-      const key = `${normalizeMLTMName(name)}\u0000${normalizeDong(apartment.dong)}`;
-      if (byNameAndDong.has(key) && byNameAndDong.get(key) === null) continue;
-      const existing = byNameAndDong.get(key);
-      byNameAndDong.set(key, existing && existing.id !== apartment.id ? null : apartment);
-    }
+    apartments.push(apartment);
   }
-  return { byId, byNameAndDong };
+  return { byId, apartments };
 }
 
 function findApartmentForRecord(
@@ -1160,7 +1154,10 @@ function findApartmentForRecord(
   lookup: ReturnType<typeof apartmentLookup>,
 ): ApartmentIndexItem | null {
   if (record.apartmentId) return lookup.byId.get(record.apartmentId) ?? null;
-  return lookup.byNameAndDong.get(`${normalizeMLTMName(record.aptName)}\u0000${normalizeDong(record.dong)}`) ?? null;
+  return findApartmentIdentity(
+    { aptName: record.aptName, dong: record.dong },
+    lookup.apartments,
+  );
 }
 
 export function buildBuyResponseFromSnapshot(
