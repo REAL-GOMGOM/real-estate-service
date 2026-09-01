@@ -52,4 +52,5 @@ Vercel의 민감 자격정보를 꺼낼 수 없는 경우 preview 전용 `/api/o
 - 데스크톱 및 모바일 390px 뷰포트에서 확인했으며 가로 넘침은 없었다. 실제 제보 카드는 테스트 fixture로만 검증했고 공개 저장소에 예시 데이터를 쓰지 않았다.
 - 연결된 Free Upstash의 격리된 smoke namespace에서 실제 Redis Lua를 실행했다. 동시 중복방지, pending 비공개, 90일 TTL/KEEPTTL, 승인·공개 DTO whitelist, 신고·숨김·재공개 차단, 반려·30일 만료·stale index, IP/전체 요청 제한과 정확 키 정리를 모두 통과했다. 관리 저장소의 밀리초 단위 PTTL 감소는 5초 이내의 좁은 허용 오차로 검증한다.
 - Preview 브랜치에 `visitors` 저장소를 명시 연결하고 접수를 활성화했다. 점검 플래그와 토큰은 제거했으며, 점검에 사용한 immutable deployment도 삭제한다. 프로덕션 환경변수와 운영 도메인은 변경하지 않았다.
-- **출시 전 남은 확인:** 실제 관리자 계정으로 Preview에서 일반 제보 1건을 접수해 승인→메인 공개→숨김 UI를 확인하고 즉시 숨김 처리한다. 이후 별도의 production 빌드에 동일한 저장소 source·salt·활성화 값을 설정한다.
+- 2026-09-01 Production에 기존 Free 방문자 Redis를 명시 연결하고 별도 production namespace·전용 IP salt로 접수를 활성화했다. 배포 `dpl_9soGUjSydLQG9ZuKnQEKm9SUeaui`가 Ready 상태로 `www.naezipkorea.com`에 연결됐으며, 공개 API는 `status=ok`·`submissionsEnabled=true`, 점검 route는 404, 초기 공개 제보는 0건임을 확인했다. 검증을 위해 가상 제보를 생성하지 않았다.
+- **운영 후 남은 수동 확인:** 실제 이용자의 정상 제보가 접수되면 관리자 계정으로 승인→메인 공개→숨김 UI를 확인한다. 테스트만을 위한 가상 운영 제보는 만들지 않는다.
