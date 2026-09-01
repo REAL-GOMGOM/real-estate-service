@@ -5,6 +5,14 @@
 node_modules/
 coverage/
 *.log
+.local/
+*.tsbuildinfo
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/raw/
+data/processed/
+scripts/backup/
 
 # Local research, handover notes, and recoverable working copies
 analysis/

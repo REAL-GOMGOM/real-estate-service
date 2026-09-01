@@ -28,6 +28,9 @@ export function AdminHeader({ email }: { email: string }) {
             <Link href="/admin/categories" className="text-slate-600 hover:text-slate-900">
               카테고리
             </Link>
+            <Link href="/admin/field-reports" className="text-slate-600 hover:text-slate-900">
+              제보 검수
+            </Link>
           </nav>
         </div>
         <div className="flex items-center gap-3">

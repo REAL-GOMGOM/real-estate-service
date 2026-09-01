@@ -60,6 +60,7 @@ export const authConfig = {
      */
     async session({ session, token }) {
       if (session.user) {
+        session.user.id = token.sub ?? '';
         session.user.email = (token.email as string) ?? session.user.email;
         (session.user as { role?: string }).role = token.role as string;
       }

@@ -24,6 +24,7 @@ import { DISTRICT_CODE } from '@/lib/district-codes';
 import HomeApartmentSearch from '@/components/search/HomeApartmentSearch';
 import { createPageMetadata } from '@/lib/metadata';
 import { TrackedTelegramLink } from '@/components/shared/TrackedTelegramLink';
+import FieldReportsHome from '@/components/field-reports/FieldReportsHome';
 
 export const metadata = createPageMetadata({
   title: '내집(My.ZIP) | 실거래가·입지분석·청약·내집마련 도구',
@@ -286,7 +287,7 @@ export default function HomePage() {
               margin: 0, fontSize: 'clamp(24px, 4vw, 30px)', lineHeight: 1.15,
               letterSpacing: '-0.03em', fontWeight: 800, color: INK,
             }}>
-              우리 아파트, 얼마에 거래됐을까?
+              부동산의 모든 답을, 한 곳에 압축하다
             </h1>
             <p style={{ margin: '11px 0 0', maxWidth: 520, fontSize: 14, lineHeight: 1.55, color: NAV }}>
               단지명을 검색하면 최근 실거래와 가격 흐름을 바로 확인할 수 있어요.
@@ -318,6 +319,8 @@ export default function HomePage() {
           ))}
         </div>
       </section>
+
+      <FieldReportsHome />
 
       {/* ── 벤토 그리드 ── */}
       <section style={{ background: '#F5F6FA' }}>
