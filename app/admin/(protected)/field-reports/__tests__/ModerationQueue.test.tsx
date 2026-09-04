@@ -44,7 +44,7 @@ describe('moderation queue rendering', () => {
     expect(html).toContain('신고된 단지');
     expect(html).not.toContain('이미 게시한 단지');
     expect(html).toContain('개인정보 포함');
-    expect(html).toContain('자기 기재');
+    expect(html).toContain('소식 출처 (직접 선택)');
     expect(html).toContain('미확인 현장 제보');
     expect(html).toContain('신고된 제보는 확인 후 숨김 처리할 수 있습니다.');
   });
@@ -62,6 +62,14 @@ describe('moderation queue rendering', () => {
     const publicationButton = html.match(/<button[^>]*value="published"[^>]*>/)?.[0];
     expect(publicationButton).toBeDefined();
     expect(publicationButton).not.toContain('disabled=""');
+  });
+
+  it.each([
+    ['anonymous', '익명'],
+    ['field_news', '현장소식'],
+  ] as const)('renders the new self-described source %s as %s', (source, label) => {
+    const html = renderToStaticMarkup(<ModerationQueue checkedAt={CHECKED_AT} reports={[reportFixture({ source })]} />);
+    expect(html).toContain(label);
   });
 
   it('renders a genuine empty state without example transactions', () => {

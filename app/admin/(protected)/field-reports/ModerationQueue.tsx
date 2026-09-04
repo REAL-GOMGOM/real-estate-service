@@ -117,7 +117,7 @@ export function ModerationQueue({
 
                   <dl className="mt-5 grid grid-cols-1 gap-x-5 gap-y-3 text-sm sm:grid-cols-2">
                     <div><dt className="text-xs text-slate-500">계약일 (제보 기준)</dt><dd className="mt-1 text-slate-800">{report.contractDate}</dd></div>
-                    <div><dt className="text-xs text-slate-500">제보자 구분 (자기 기재)</dt><dd className="mt-1 text-slate-800">{FIELD_REPORT_SOURCE_LABELS[report.source]}</dd></div>
+                    <div><dt className="text-xs text-slate-500">소식 출처 (직접 선택)</dt><dd className="mt-1 text-slate-800">{FIELD_REPORT_SOURCE_LABELS[report.source]}</dd></div>
                     <div><dt className="text-xs text-slate-500">접수 시각</dt><dd className="mt-1 text-slate-800">{formatTimestamp(report.createdAt)}</dd></div>
                     <div><dt className="text-xs text-slate-500">공개 만료 시각</dt><dd className="mt-1 text-slate-800">{formatTimestamp(report.expiresAt)}</dd></div>
                   </dl>

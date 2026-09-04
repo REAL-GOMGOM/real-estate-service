@@ -21,7 +21,7 @@ vi.mock('@/components/search/AptAutocomplete', () => ({
 }));
 
 import FieldReportsHome from '../FieldReportsHome';
-import { contractDateBounds, formatReportAmount, isPublicFieldReport } from '../presentation';
+import { contractDateBounds, formatReportAmount, formatReportArea, isPublicFieldReport } from '../presentation';
 
 const fetchMock = vi.fn();
 let root: Root | null = null;
@@ -73,10 +73,9 @@ async function change(name: string, value: string) {
 async function fillReport() {
   await click('가격 제보하기');
   await click('검색 결과 선택');
-  await change('area', '84.95');
-  await change('price', '105000');
+  await change('areaPyeong', '25.7');
+  await change('priceEok', '10.5');
   await change('contractDate', host.querySelector<HTMLInputElement>('[name="contractDate"]')!.max);
-  await change('source', 'participant');
   await act(async () => {
     host.querySelector<HTMLInputElement>('[name="consent"]')!.click();
     host.querySelector<HTMLInputElement>('[name="confirmContracted"]')!.click();
@@ -170,12 +169,12 @@ describe('현장 제보가격 공개 UI', () => {
   it('제보 열기·접기에서 포커스를 이동하고 단지 변경 시 오래된 선택을 제거한다', async () => {
     await renderPanel();
     await click('가격 제보하기');
-    expect(document.activeElement?.textContent).toBe('계약 소식 제보하기');
+    expect(document.activeElement?.textContent).toBe('계약 소식 제보');
     expect(button('제보 접수하기').disabled).toBe(true);
     await click('검색 결과 선택');
     expect(host.querySelector('[role="combobox"]')).toBeNull();
     expect(host.querySelector<HTMLInputElement>('[name="apartmentId"]')?.value).toBe('apt-one');
-    expect(document.activeElement?.getAttribute('name')).toBe('area');
+    expect(document.activeElement?.getAttribute('name')).toBe('areaPyeong');
     await click('단지 변경');
     expect(host.querySelector<HTMLInputElement>('[name="apartmentId"]')?.value).toBe('');
     expect(document.activeElement?.getAttribute('role')).toBe('combobox');
@@ -191,23 +190,37 @@ describe('현장 제보가격 공개 UI', () => {
     expect(host.querySelector('[name="monthlyRent"]')).toBeNull();
     await change('tradeType', 'monthly');
     expect(host.querySelector<HTMLInputElement>('[name="monthlyRent"]')?.min).toBe('1');
-    expect(host.querySelector<HTMLInputElement>('[name="price"]')?.min).toBe('0');
+    expect(host.querySelector<HTMLInputElement>('[name="priceEok"]')?.min).toBe('0');
     await change('tradeType', 'jeonse');
     expect(host.querySelector('[name="monthlyRent"]')).toBeNull();
-    expect(host.querySelector<HTMLInputElement>('[name="price"]')?.min).toBe('1');
+    expect(host.querySelector<HTMLInputElement>('[name="priceEok"]')?.min).toBe('0.01');
     for (const name of ['name', 'email', 'phone', 'unit', 'memo', 'attachment']) expect(host.querySelector(`[name="${name}"]`)).toBeNull();
     expect(host.querySelector<HTMLInputElement>('[name="website"]')?.tabIndex).toBe(-1);
+  });
+
+  it('평·억원 입력을 즉시 환산하고 익명 출처를 기본으로 제공한다', async () => {
+    await renderPanel();
+    await click('가격 제보하기');
+    expect(host.querySelector<HTMLSelectElement>('[name="source"]')?.value).toBe('anonymous');
+    expect([...host.querySelectorAll<HTMLSelectElement>('[name="source"] option')].map((option) => option.value)).toEqual([
+      'anonymous', 'field_news', 'participant', 'agent', 'neighbor',
+    ]);
+    await change('areaPyeong', '25.7');
+    await change('priceEok', '10.5');
+    expect(host.textContent).toContain('공급 평형이 아닌 전용면적 기준');
+    expect(host.textContent).toContain('전용 84.96㎡로 저장됩니다.');
+    expect(host.textContent).toContain('10억 5,000만원으로 저장됩니다.');
   });
 
   it('서버 거절 메시지와 입력값을 유지하고 오류로 포커스한다', async () => {
     submitMock.mockResolvedValue({ status: 'error', message: '계약 정보를 다시 확인해주세요.' });
     await renderPanel();
     await fillReport();
-    expect(host.querySelector<HTMLInputElement>('[name="area"]')?.value).toBe('84.95');
+    expect(host.querySelector<HTMLInputElement>('[name="areaPyeong"]')?.value).toBe('25.7');
     await act(async () => { host.querySelector('form')!.requestSubmit(); await settle(); });
     expect(submitMock).toHaveBeenCalledTimes(1);
-    expect(host.querySelector<HTMLInputElement>('[name="area"]')?.value).toBe('84.95');
-    expect(host.querySelector<HTMLInputElement>('[name="price"]')?.value).toBe('105000');
+    expect(host.querySelector<HTMLInputElement>('[name="areaPyeong"]')?.value).toBe('25.7');
+    expect(host.querySelector<HTMLInputElement>('[name="priceEok"]')?.value).toBe('10.5');
     expect(host.querySelector('[role="alert"]')?.textContent).toContain('계약 정보를 다시 확인해주세요');
     expect(document.activeElement).toBe(host.querySelector('[role="alert"]'));
   });
@@ -219,6 +232,11 @@ describe('현장 제보가격 공개 UI', () => {
     await act(async () => { host.querySelector('form')!.requestSubmit(); await settle(); });
     const submittedData = submitMock.mock.calls[0][1] as FormData;
     expect(submittedData.get('apartmentId')).toBe('apt-one');
+    expect(submittedData.get('areaPyeong')).toBe('25.7');
+    expect(submittedData.get('priceEok')).toBe('10.5');
+    expect(submittedData.get('area')).toBeNull();
+    expect(submittedData.get('price')).toBeNull();
+    expect(submittedData.get('source')).toBe('anonymous');
     expect(submittedData.get('consent')).toBe('on');
     expect(submittedData.get('confirmContracted')).toBe('on');
     expect(submittedData.has('monthlyRent')).toBe(false);
@@ -256,5 +274,11 @@ describe('제보 표시 형식', () => {
     expect(formatReportAmount(10000)).toBe('1억원');
     expect(isPublicFieldReport(report({ tradeType: 'monthly', price: 0, monthlyRent: 100 }))).toBe(true);
     expect(isPublicFieldReport(report({ price: -1 }))).toBe(false);
+  });
+  it('공개 면적은 평을 우선하고 저장 ㎡를 병기한다', () => {
+    expect(formatReportArea(84.95)).toEqual({ pyeong: '25.7평', squareMeters: '84.95㎡' });
+  });
+  it.each(['anonymous', 'field_news'] as const)('새 출처 %s를 유효한 공개 DTO로 받는다', (source) => {
+    expect(isPublicFieldReport(report({ source }))).toBe(true);
   });
 });

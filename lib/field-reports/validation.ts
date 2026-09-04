@@ -1,4 +1,5 @@
-import type { FieldReportFlagReason, FieldReportSource, FieldReportTradeType } from './types';
+import { isFieldReportSource, type FieldReportFlagReason, type FieldReportSource, type FieldReportTradeType } from './types';
+import { eokToManwon, pyeongToSquareMeters } from './units';
 
 export const REPORT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DAY_MS = 86_400_000;
@@ -18,7 +19,7 @@ export interface FieldReportInput {
 
 /** Whitelist only: free text, names, contact details and attachments are not accepted. */
 export function parseFieldReportForm(form: FormData, now = new Date()): FieldReportInput | { error: string } {
-  const allowed = new Set(['apartmentId', 'area', 'tradeType', 'price', 'monthlyRent', 'contractDate', 'source', 'consent', 'confirmContracted', 'website']);
+  const allowed = new Set(['apartmentId', 'area', 'price', 'areaPyeong', 'priceEok', 'tradeType', 'monthlyRent', 'contractDate', 'source', 'consent', 'confirmContracted', 'website']);
   for (const [key, value] of form.entries()) {
     // React's own action metadata is not application input.
     if (key.startsWith('$ACTION_')) continue;
@@ -35,17 +36,38 @@ export function parseFieldReportForm(form: FormData, now = new Date()): FieldRep
   if (!apartmentId || apartmentId.length > 160 || /[\x00-\x1f<>]/.test(apartmentId)) {
     return { error: '검색 결과에서 아파트 단지를 선택해 주세요.' };
   }
-  const areaText = value('area');
-  const area = Number(areaText);
-  if (!/^\d{1,3}(\.\d{1,2})?$/.test(areaText) || area < 10 || area > 500) {
-    return { error: '전용면적은 10~500㎡, 소수점 둘째 자리까지 입력해 주세요.' };
-  }
   const tradeType = value('tradeType');
   if (tradeType !== 'sale' && tradeType !== 'jeonse' && tradeType !== 'monthly') return { error: '거래 유형을 선택해 주세요.' };
-  const priceText = value('price');
-  const price = Number(priceText);
-  if (!/^\d{1,7}$/.test(priceText) || price > 5_000_000 || price < (tradeType === 'monthly' ? 0 : 1)) {
-    return { error: '금액을 만원 단위 정수로 확인해 주세요. 최대 500억원까지 입력할 수 있습니다.' };
+  const hasNewArea = form.has('areaPyeong');
+  const hasNewPrice = form.has('priceEok');
+  const hasLegacyArea = form.has('area');
+  const hasLegacyPrice = form.has('price');
+  const usesNewFields = hasNewArea && hasNewPrice;
+  const usesLegacyFields = hasLegacyArea && hasLegacyPrice;
+  if ((hasNewArea !== hasNewPrice) || (hasLegacyArea !== hasLegacyPrice) || usesNewFields === usesLegacyFields) {
+    return { error: '면적과 금액 입력 형식을 다시 확인해 주세요.' };
+  }
+
+  let area: number;
+  let price: number;
+  if (usesNewFields) {
+    const parsedArea = pyeongToSquareMeters(value('areaPyeong'));
+    if (parsedArea === null) return { error: '전용면적은 10~500㎡ 범위의 평 단위로, 소수점 첫째 자리까지 입력해 주세요.' };
+    const parsedPrice = eokToManwon(value('priceEok'), tradeType === 'monthly');
+    if (parsedPrice === null) return { error: '금액은 최대 500억원, 소수점 둘째 자리까지 입력해 주세요.' };
+    area = parsedArea;
+    price = parsedPrice;
+  } else {
+    const areaText = value('area');
+    area = Number(areaText);
+    if (!/^\d{1,3}(\.\d{1,2})?$/.test(areaText) || area < 10 || area > 500) {
+      return { error: '전용면적은 10~500㎡, 소수점 둘째 자리까지 입력해 주세요.' };
+    }
+    const priceText = value('price');
+    price = Number(priceText);
+    if (!/^\d{1,7}$/.test(priceText) || price > 5_000_000 || price < (tradeType === 'monthly' ? 0 : 1)) {
+      return { error: '금액을 만원 단위 정수로 확인해 주세요. 최대 500억원까지 입력할 수 있습니다.' };
+    }
   }
   const rentText = value('monthlyRent');
   const rent = Number(rentText);
@@ -61,7 +83,7 @@ export function parseFieldReportForm(form: FormData, now = new Date()): FieldRep
     return { error: '계약일은 오늘부터 최근 90일 이내의 실제 날짜로 입력해 주세요.' };
   }
   const source = value('source');
-  if (source !== 'participant' && source !== 'agent' && source !== 'neighbor') return { error: '제보 출처를 선택해 주세요.' };
+  if (!isFieldReportSource(source)) return { error: '제보 출처를 선택해 주세요.' };
   return { apartmentId, area, tradeType, price, monthlyRent: tradeType === 'monthly' ? rent : null, contractDate, source };
 }
 

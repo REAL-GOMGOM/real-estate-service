@@ -4,8 +4,9 @@ import Link from 'next/link';
 import { useActionState, useEffect, useId, useRef, useState } from 'react';
 import { submitFieldReport } from '@/app/field-reports/actions';
 import { AptAutocomplete, type ApartmentSearchResult } from '@/components/search/AptAutocomplete';
-import type { FieldReportActionState, PublicFieldReport } from '@/lib/field-reports/types';
-import { contractDateBounds } from './presentation';
+import type { FieldReportActionState, FieldReportSource, PublicFieldReport } from '@/lib/field-reports/types';
+import { eokToManwon, pyeongToSquareMeters } from '@/lib/field-reports/units';
+import { contractDateBounds, formatReportAmount } from './presentation';
 import { usePreserveFormDraft } from './usePreserveFormDraft';
 import styles from './FieldReports.module.css';
 
@@ -16,11 +17,11 @@ export default function FieldReportForm({ id, onClose }: { id: string; onClose: 
   const [state, formAction, pending] = useActionState(submitFieldReport, INITIAL_STATE);
   const [apartment, setApartment] = useState<ApartmentSearchResult | null>(null);
   const [tradeType, setTradeType] = useState<PublicFieldReport['tradeType']>('sale');
-  const [area, setArea] = useState('');
-  const [price, setPrice] = useState('');
+  const [areaPyeong, setAreaPyeong] = useState('');
+  const [priceEok, setPriceEok] = useState('');
   const [monthlyRent, setMonthlyRent] = useState('');
   const [contractDate, setContractDate] = useState('');
-  const [source, setSource] = useState('');
+  const [source, setSource] = useState<FieldReportSource>('anonymous');
   const [consent, setConsent] = useState(false);
   const [confirmContracted, setConfirmContracted] = useState(false);
   const [dateBounds] = useState(() => contractDateBounds());
@@ -29,6 +30,8 @@ export default function FieldReportForm({ id, onClose }: { id: string; onClose: 
   const searchRef = useRef<HTMLDivElement>(null);
   const areaRef = useRef<HTMLInputElement>(null);
   const formRef = usePreserveFormDraft();
+  const convertedArea = pyeongToSquareMeters(areaPyeong);
+  const convertedPrice = eokToManwon(priceEok, tradeType === 'monthly');
 
   useEffect(() => {
     if (apartment) areaRef.current?.focus();
@@ -44,8 +47,8 @@ export default function FieldReportForm({ id, onClose }: { id: string; onClose: 
     <section id={id} className={styles.formPanel} aria-labelledby={`${prefix}-heading`}>
       <div className={styles.formHeader}>
         <div>
-          <h3 id={`${prefix}-heading`} ref={headingRef} tabIndex={-1}>계약 소식 제보하기</h3>
-          <p>실제로 체결된 계약만 알려주세요. 호가·매물 광고는 받지 않습니다.</p>
+          <h3 id={`${prefix}-heading`} ref={headingRef} tabIndex={-1}>계약 소식 제보</h3>
+          <p>최근 실제 계약의 면적과 금액만 간단히 알려주세요.</p>
         </div>
         <button type="button" className={styles.quietButton} disabled={pending} onClick={onClose}>제보 접기</button>
       </div>
@@ -84,8 +87,9 @@ export default function FieldReportForm({ id, onClose }: { id: string; onClose: 
 
             <div className={styles.formGrid}>
               <label htmlFor={`${prefix}-area`} className={styles.field}>
-                <span>전용면적 (㎡)</span>
-                <input ref={areaRef} id={`${prefix}-area`} name="area" type="number" inputMode="decimal" min="10" max="500" step="0.01" required value={area} onChange={(event) => setArea(event.target.value)} placeholder="예: 84.95" />
+                <span>전용면적 (평)</span>
+                <input ref={areaRef} id={`${prefix}-area`} name="areaPyeong" type="number" inputMode="decimal" min="3.1" max="151.2" step="0.1" required value={areaPyeong} onChange={(event) => setAreaPyeong(event.target.value)} placeholder="예: 25.7" aria-describedby={`${prefix}-area-hint`} />
+                <small id={`${prefix}-area-hint`}>공급 평형이 아닌 전용면적 기준 · <span aria-live="polite">{convertedArea === null ? '3.1~151.2평' : `전용 ${convertedArea.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}㎡로 저장됩니다.`}</span></small>
               </label>
               <label htmlFor={`${prefix}-type`} className={styles.field}>
                 <span>거래 유형</span>
@@ -94,8 +98,9 @@ export default function FieldReportForm({ id, onClose }: { id: string; onClose: 
                 </select>
               </label>
               <label htmlFor={`${prefix}-price`} className={styles.field}>
-                <span>{tradeType === 'sale' ? '매매가격' : '보증금'} (만원)</span>
-                <input id={`${prefix}-price`} name="price" type="number" inputMode="numeric" min={tradeType === 'monthly' ? 0 : 1} max="5000000" step="1" required value={price} onChange={(event) => setPrice(event.target.value)} placeholder="만원 단위로 입력" />
+                <span>{tradeType === 'sale' ? '매매가' : '보증금'} (억원)</span>
+                <input id={`${prefix}-price`} name="priceEok" type="number" inputMode="decimal" min={tradeType === 'monthly' ? 0 : 0.01} max="500" step="0.01" required value={priceEok} onChange={(event) => setPriceEok(event.target.value)} placeholder="예: 10.5" aria-describedby={`${prefix}-price-hint`} />
+                <small id={`${prefix}-price-hint`} aria-live="polite">{convertedPrice === null ? '최대 500억원 · 소수점 둘째 자리까지' : `${formatReportAmount(convertedPrice)}으로 저장됩니다.`}</small>
               </label>
               {tradeType === 'monthly' ? (
                 <label htmlFor={`${prefix}-rent`} className={styles.field}>
@@ -109,10 +114,9 @@ export default function FieldReportForm({ id, onClose }: { id: string; onClose: 
                 <small id={`${prefix}-date-hint`}>한국 날짜 기준 최근 90일 이내</small>
               </label>
               <label htmlFor={`${prefix}-source`} className={styles.field}>
-                <span>제보자 구분</span>
-                <select id={`${prefix}-source`} name="source" required value={source} onChange={(event) => setSource(event.target.value)}>
-                  <option value="" disabled>선택해주세요</option>
-                  <option value="participant">계약 당사자</option><option value="agent">중개업 종사자</option><option value="neighbor">이웃</option>
+                <span>소식 출처</span>
+                <select id={`${prefix}-source`} name="source" required value={source} onChange={(event) => setSource(event.target.value as FieldReportSource)}>
+                  <option value="anonymous">익명</option><option value="field_news">현장소식</option><option value="participant">계약 당사자</option><option value="agent">중개업 종사자</option><option value="neighbor">이웃</option>
                 </select>
               </label>
             </div>
@@ -121,8 +125,8 @@ export default function FieldReportForm({ id, onClose }: { id: string; onClose: 
               이름·연락처·동호수·계약서 등 개인정보와 증빙은 수집하지 않습니다. 단지명 외 개인정보는 입력하지 마세요. 제보 내용은 접수 후 최대 90일 보관됩니다.
             </div>
             <div className={styles.consentFields}>
-              <label><input type="checkbox" name="confirmContracted" required checked={confirmContracted} onChange={(event) => setConfirmContracted(event.target.checked)} /><span>호가나 광고가 아닌, 실제 체결된 계약에 대한 제보입니다. (필수)</span></label>
-              <label><input type="checkbox" name="consent" required checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span>미확인 정보로 검수 후 공개될 수 있음과 <Link href="/terms#field-reports">제보 이용 기준</Link>·<Link href="/privacy#field-reports">개인정보 처리 안내</Link>를 확인했습니다. (필수)</span></label>
+              <label><input type="checkbox" name="confirmContracted" required checked={confirmContracted} onChange={(event) => setConfirmContracted(event.target.checked)} /><span>실제로 체결된 계약입니다. (필수)</span></label>
+              <label><input type="checkbox" name="consent" required checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span>미확인 제보 공개와 <Link href="/terms#field-reports">이용 기준</Link>·<Link href="/privacy#field-reports">정보 처리 안내</Link>에 동의합니다. (필수)</span></label>
             </div>
             <div className={styles.visuallyHidden} aria-hidden="true">
               <label htmlFor={`${prefix}-website`}>웹사이트</label>

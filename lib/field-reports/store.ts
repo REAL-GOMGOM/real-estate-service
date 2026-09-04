@@ -1,7 +1,7 @@
 import 'server-only';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
 import type { Redis } from '@upstash/redis';
-import { FIELD_REPORT_PUBLIC_DAYS, FIELD_REPORT_RETENTION_DAYS, type AdminFieldReport, type FieldReportFlagReason, type PublicFieldReport } from './types';
+import { FIELD_REPORT_PUBLIC_DAYS, FIELD_REPORT_RETENTION_DAYS, isFieldReportSource, type AdminFieldReport, type FieldReportFlagReason, type PublicFieldReport } from './types';
 import type { FieldReportInput } from './validation';
 import { REPORT_ID_PATTERN, kstDate } from './validation';
 
@@ -90,7 +90,7 @@ function parseStored(value: unknown): AdminFieldReport | null {
   if (!REPORT_ID_PATTERN.test(item.id) || !['pending', 'published', 'rejected', 'hidden'].includes(item.status)) return null;
   if (typeof item.apartmentName !== 'string' || typeof item.apartmentId !== 'string' || typeof item.sido !== 'string' || typeof item.sigungu !== 'string') return null;
   if (typeof item.area !== 'number' || !Number.isFinite(item.area) || typeof item.price !== 'number' || !Number.isSafeInteger(item.price)) return null;
-  if (!['sale', 'jeonse', 'monthly'].includes(item.tradeType) || !['participant', 'agent', 'neighbor'].includes(item.source)) return null;
+  if (!['sale', 'jeonse', 'monthly'].includes(item.tradeType) || !isFieldReportSource(item.source)) return null;
   if (![item.createdAt, item.expiresAt].every((date) => typeof date === 'string' && Number.isFinite(Date.parse(date)))) return null;
   return item;
 }

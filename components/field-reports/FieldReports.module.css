@@ -137,6 +137,7 @@
 .reportDetails div { display: flex; gap: 6px; font-size: 11px; line-height: 1.6; }
 .reportDetails dt { color: #64708a; }
 .reportDetails dd { margin: 0; color: #34415c; font-weight: 650; }
+.reportDetails dd small { color: #64708a; font-size: 0.86em; font-weight: 500; }
 .cardFooter { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 13px; padding-top: 11px; border-top: 1px solid #f0eadd; }
 .cardFooter > span { display: flex; flex-wrap: wrap; gap: 3px 8px; color: #64708a; font-size: 10.5px; }
 .cardFooter small { color: #64708a; font-size: inherit; }
@@ -226,7 +227,7 @@
   .formHeader h3 { font-size: 15px; }
   .formHeader p { font-size: 11px; }
   .formHeader button { padding: 6px; font-size: 11px; }
-  .formGrid { gap: 14px 10px; }
+  .formGrid { grid-template-columns: minmax(0, 1fr); gap: 14px; }
   .field input,
   .field select { padding: 10px 8px; font-size: 16px; }
   .submitRow { align-items: stretch; flex-direction: column; gap: 12px; }

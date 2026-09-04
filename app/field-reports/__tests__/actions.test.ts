@@ -9,7 +9,12 @@ import { submitFieldReport, reportFieldReport } from '../actions';
 import { kstDate } from '@/lib/field-reports/validation';
 
 const id = '323b6412-58ad-4de9-98ab-9fd9c9d38a9d';
-function form() { const data = new FormData(); Object.entries({ apartmentId: 'valid-apt', area: '84.95', tradeType: 'sale', price: '83000', contractDate: kstDate(), source: 'participant', consent: 'on', confirmContracted: 'on' }).forEach(([k, v]) => data.set(k, v)); return data; }
+function form(mode: 'new' | 'legacy' = 'new') {
+  const data = new FormData();
+  const units = mode === 'new' ? { areaPyeong: '25.7', priceEok: '8.3' } : { area: '84.95', price: '83000' };
+  Object.entries({ apartmentId: 'valid-apt', ...units, tradeType: 'sale', contractDate: kstDate(), source: 'anonymous', consent: 'on', confirmContracted: 'on' }).forEach(([k, v]) => data.set(k, v));
+  return data;
+}
 beforeEach(() => {
   vi.clearAllMocks(); mocks.config.mockReturnValue({ submissionsEnabled: true, flagsEnabled: true, salt: 'a'.repeat(32) });
   mocks.headers.mockResolvedValue(new Headers({ 'x-vercel-forwarded-for': '192.0.2.10' }));
@@ -21,7 +26,14 @@ describe('public field report actions', () => {
     const result = await submitFieldReport({ status: 'idle' }, form());
     expect(result).toMatchObject({ status: 'success', receipt: id });
     expect(mocks.create.mock.calls[0][1].name).toBe('서버 단지');
+    expect(mocks.create.mock.calls[0][0]).toMatchObject({ area: 84.96, price: 83000, source: 'anonymous' });
+    expect(mocks.create.mock.calls[0][0]).not.toHaveProperty('areaPyeong');
+    expect(mocks.create.mock.calls[0][0]).not.toHaveProperty('priceEok');
     expect(mocks.create.mock.calls[0][0]).not.toHaveProperty('status');
+  });
+  it('accepts a complete legacy form without changing its internal units', async () => {
+    expect((await submitFieldReport({ status: 'idle' }, form('legacy'))).status).toBe('success');
+    expect(mocks.create.mock.calls[0][0]).toMatchObject({ area: 84.95, price: 83000 });
   });
   it('does not accept forged public/moderation fields', async () => {
     const data = form(); data.set('status', 'published');

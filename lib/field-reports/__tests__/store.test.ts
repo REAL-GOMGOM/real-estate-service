@@ -30,6 +30,11 @@ describe('private moderated field report store', () => {
     redis.mget.mockResolvedValue([{ ...item, status: 'pending' }, { ...item, status: 'hidden' }, null, 'corrupt']);
     expect(await store.listPublic(now)).toEqual([]);
   });
+  it.each(['participant', 'agent', 'neighbor', 'anonymous', 'field_news'] as const)('reads the supported persisted source %s', async (source) => {
+    const { redis, store } = fake();
+    redis.mget.mockResolvedValue([{ ...item, source }]);
+    expect((await store.listPublic(now))[0]?.source).toBe(source);
+  });
   it('inserts an immutable pending record with 90-day TTL via one atomic operation', async () => {
     const { redis, store } = fake(); redis.eval.mockResolvedValue(id);
     expect(await store.create(input, { name: '서버가 확인한 단지', sido: '서울', sigungu: '강남구', dong: null }, now)).toBe(id);
@@ -46,6 +51,7 @@ describe('private moderated field report store', () => {
   });
   it('dedupes identical contracts independently of self-described source', () => {
     expect(reportDeduplicationKey(input)).toBe(reportDeduplicationKey({ ...input, source: 'agent' }));
+    expect(reportDeduplicationKey(input)).toBe(reportDeduplicationKey({ ...input, source: 'anonymous' }));
     expect(reportDeduplicationKey(input)).not.toBe(reportDeduplicationKey({ ...input, price: 84000 }));
   });
   it('only sends HMAC identifiers to the rate-limit store', async () => {

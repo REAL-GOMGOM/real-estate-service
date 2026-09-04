@@ -6,7 +6,7 @@ import { ArrowRight, Flag, MessageSquareText, Plus, TriangleAlert } from 'lucide
 import { reportFieldReport } from '@/app/field-reports/actions';
 import type { FieldReportFlagState, PublicFieldReport } from '@/lib/field-reports/types';
 import FieldReportForm from './FieldReportForm';
-import { formatReportAmount, formatReportPublishedDate, isPublicFieldReport, SOURCE_LABELS, TRADE_LABELS } from './presentation';
+import { formatReportAmount, formatReportArea, formatReportPublishedDate, isPublicFieldReport, SOURCE_LABELS, TRADE_LABELS } from './presentation';
 import { usePreserveFormDraft } from './usePreserveFormDraft';
 import styles from './FieldReports.module.css';
 
@@ -57,6 +57,7 @@ function ReportCard({ report }: { report: PublicFieldReport }) {
   const [flagOpen, setFlagOpen] = useState(false);
   const flagButtonRef = useRef<HTMLButtonElement>(null);
   const flagId = useId();
+  const formattedArea = formatReportArea(report.area);
 
   return (
     <article className={styles.reportCard} aria-label={`${report.apartmentName} ${TRADE_LABELS[report.tradeType]} 미확인 제보`}>
@@ -69,7 +70,7 @@ function ReportCard({ report }: { report: PublicFieldReport }) {
         {report.tradeType === 'monthly' && report.monthlyRent !== null ? <p>월세 <b>{formatReportAmount(report.monthlyRent)}</b> / 월</p> : null}
       </div>
       <dl className={styles.reportDetails}>
-        <div><dt>전용면적</dt><dd>{report.area.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}㎡</dd></div>
+        <div><dt>전용면적</dt><dd>{formattedArea.pyeong} <small>({formattedArea.squareMeters})</small></dd></div>
         <div><dt>제보 계약일</dt><dd><time dateTime={report.contractDate}>{report.contractDate.replaceAll('-', '.')}</time></dd></div>
       </dl>
       <div className={styles.cardFooter}>
@@ -164,7 +165,7 @@ export default function FieldReportsHome({ expanded = false }: { expanded?: bool
           </>
         )}
         <div className={styles.sectionFooter}>
-          <p>제보자 구분은 본인이 선택한 정보입니다. 제보는 접수 후 30일이 지나면 공개 목록에서 제외됩니다.<br />허위·중복·개인정보 포함 제보는 신고해주세요.</p>
+          <p>소식 출처는 제보자가 직접 선택한 정보입니다. 제보는 접수 후 30일이 지나면 공개 목록에서 제외됩니다.<br />허위·중복·개인정보 포함 제보는 신고해주세요.</p>
           <div><Link href="/terms#field-reports">제보 이용 기준</Link><Link href="/privacy#field-reports">개인정보 처리 안내</Link></div>
         </div>
       </div>

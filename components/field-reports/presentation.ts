@@ -1,11 +1,14 @@
-import type { PublicFieldReport } from '@/lib/field-reports/types';
+import { isFieldReportSource, type FieldReportSource, type PublicFieldReport } from '@/lib/field-reports/types';
+import { squareMetersToPyeong } from '@/lib/field-reports/units';
 
 export const TRADE_LABELS = { sale: '매매', jeonse: '전세', monthly: '월세' } as const;
 export const SOURCE_LABELS = {
   participant: '계약 당사자 제보',
   agent: '중개업 종사자 제보',
   neighbor: '이웃 제보',
-} as const;
+  anonymous: '익명 제보',
+  field_news: '현장소식 제보',
+} as const satisfies Record<FieldReportSource, string>;
 
 export function formatReportAmount(amount: number): string {
   const hundredMillion = Math.floor(amount / 10_000);
@@ -13,6 +16,13 @@ export function formatReportAmount(amount: number): string {
   if (hundredMillion === 0) return `${remainder.toLocaleString('ko-KR')}만원`;
   if (remainder === 0) return `${hundredMillion.toLocaleString('ko-KR')}억원`;
   return `${hundredMillion.toLocaleString('ko-KR')}억 ${remainder.toLocaleString('ko-KR')}만원`;
+}
+
+export function formatReportArea(area: number): { pyeong: string; squareMeters: string } {
+  return {
+    pyeong: `${squareMetersToPyeong(area).toLocaleString('ko-KR', { maximumFractionDigits: 1 })}평`,
+    squareMeters: `${area.toLocaleString('ko-KR', { maximumFractionDigits: 2 })}㎡`,
+  };
 }
 
 /** Keep browser date constraints aligned to Korean calendar days, not the visitor's timezone. */
@@ -48,7 +58,7 @@ export function isPublicFieldReport(value: unknown): value is PublicFieldReport 
         && report.monthlyRent >= 1 && report.monthlyRent <= 10_000
       : report.monthlyRent === null)
     && typeof report.contractDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(report.contractDate)
-    && (report.source === 'participant' || report.source === 'agent' || report.source === 'neighbor')
+    && isFieldReportSource(report.source)
     && typeof report.createdAt === 'string' && Number.isFinite(Date.parse(report.createdAt))
     && typeof report.publishedAt === 'string' && Number.isFinite(Date.parse(report.publishedAt));
 }
