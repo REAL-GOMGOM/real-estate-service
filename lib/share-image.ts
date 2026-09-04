@@ -468,19 +468,75 @@ function wrapText(
 
 /**
  * 공유 이미지 배포 공통 헬퍼 — navigator.share(files) 지원 시 네이티브 공유,
- * 아니면 a[download] 다운로드 폴백. (DealFeed·랭킹·주요거래 공용)
+ * 아니면 클립보드 복사를 시도한 뒤 다운로드 폴백. (DealFeed·랭킹·주요거래 공용)
  */
-export async function shareOrDownloadImage(blob: Blob, filename: string, title: string): Promise<void> {
-  const file = new File([blob], filename, { type: 'image/png' });
-  if (navigator.canShare?.({ files: [file] })) {
-    await navigator.share({ files: [file], title });
-  } else {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(a.href);
+export function safePngFilename(filename: string): string {
+  let base = filename.trim().replace(/\.png$/i, '');
+  base = base
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
+    .replace(/[ .]+$/g, '');
+  if (!base) base = 'naezip-image';
+  // Windows reserves these device names even when an extension is present.
+  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(base)) base = `_${base}`;
+  // Leave ample room for the extension and filesystem byte-length differences.
+  base = base.slice(0, 180).replace(/[ .]+$/g, '') || 'naezip-image';
+  return `${base}.png`;
+}
+
+function isAbortError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'name' in error
+    && (error as { name?: unknown }).name === 'AbortError';
+}
+
+async function tryCopyPng(blob: Blob): Promise<void> {
+  if (typeof ClipboardItem === 'undefined' || typeof navigator.clipboard?.write !== 'function') return;
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+  } catch {
+    // Clipboard permission/support differs by desktop browser. Download remains
+    // the reliable final fallback, so a copy failure is intentionally nonfatal.
   }
+}
+
+function downloadPng(blob: Blob, filename: string): void {
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objectUrl;
+  a.download = filename;
+  a.style.display = 'none';
+  const parent = document.body ?? document.documentElement;
+  parent.appendChild(a);
+  try {
+    a.click();
+  } finally {
+    a.remove();
+    // Revoking synchronously can race a desktop browser starting the download.
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000);
+  }
+}
+
+export async function shareOrDownloadImage(blob: Blob, filename: string, title: string): Promise<void> {
+  const safeFilename = safePngFilename(filename);
+  if (typeof File !== 'undefined' && typeof navigator.share === 'function' && typeof navigator.canShare === 'function') {
+    try {
+      const file = new File([blob], safeFilename, { type: 'image/png' });
+      if (navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title });
+          return;
+        } catch (error) {
+          // A cancelled native share must not surprise the user with a download.
+          if (isAbortError(error)) return;
+        }
+      }
+    } catch {
+      // File construction/canShare may themselves be unsupported. Continue to
+      // clipboard + download instead of leaving desktop users with no result.
+    }
+  }
+
+  await tryCopyPng(blob);
+  downloadPng(blob, safeFilename);
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
