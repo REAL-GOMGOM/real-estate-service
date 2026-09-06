@@ -26,4 +26,10 @@
 ## 배포
 
 - 반영 전 복귀 기준: `dpl_MZtvCV2Wy2v7hkdEVPnosSkuk12H` / `real-estate-service-2jcggk7l2-real-gomgoms-projects.vercel.app`.
-- 운영 설정으로 별도 원격 빌드한 뒤 실제 RSS/feed 응답의 최종 캐시 헤더와 화면을 확인하고 승격한다. 최종 결과는 배포 후 이 문서에 기록한다.
+- 운영 URL: [www.naezipkorea.com](https://www.naezipkorea.com/). 2026-09-06 운영 반영 완료.
+- 배포: [o029uf34c](https://real-estate-service-o029uf34c-real-gomgoms-projects.vercel.app/), ID `dpl_J6ZvFrAfkUq6yzLu8WBSFe796db2`, 상태 `READY`, 코드 커밋 `3bded46`, Next.js 16.2.11. 원격 빌드 시작부터 준비 완료까지 약 105초.
+- 운영 설정 원격 빌드 → `--skip-domain` 별도 검증 → 승격 순서로 반영했다. 승격 직전까지 `www`가 이전 배포를 가리키고, 이후 새 배포를 가리키는지 Vercel 조회로 각각 확인했다.
+- RSS/feed는 Vercel에서 `PRERENDER`로 생성되어도 실제 HTTP 응답에 `Cache-Control: no-store`가 유지됨을 별도 검증 URL과 인증 없는 운영 URL 양쪽에서 확인했다. RSS 항목/발행시각 없음, feed `paused`/빈 배열 유지.
+- 운영 공개 GET: 칼럼 인덱스·상세·카테고리 307 홈 이동, OG 307 기본 이미지 이동, sitemap 칼럼 URL 0건. 은마 매매 4건·가람 전세 2건 모두 200, 현장 제보 피드 200/`status:ok`/`submissionsEnabled:true` 유지.
+- 운영 PC·모바일 화면에서 칼럼 링크 0건, 하단 더보기 목록 정상, 기존 홈 소개 문구·실거래·제보 버튼 유지, 모바일 가로 넘침 및 브라우저 오류 없음을 확인했다. 임시 브라우저 탭을 닫고 viewport를 원복했다.
+- 새 배포를 지정한 최근 1시간 `error`/`fatal` 런타임 로그 조회 결과 없음. 점검 범위의 결과이며 지속 감시나 사이트 전체 무오류를 보장하지 않는다. 로그 drain 설정은 이번에 변경하거나 감사하지 않았다.
