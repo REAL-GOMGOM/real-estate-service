@@ -6,6 +6,8 @@ import { getBlogDb } from '@/lib/db/client';
 import { apartments, aptScores, transactions as transactionsTable } from '@/lib/db/schema';
 import { normalizeMLTMName } from '@/lib/normalize-mltm-name';
 import { getMonthList, fetchTradeMonthAllPages, revalidateForMonth } from '@/lib/molit-months';
+import { fetchWebMolitMonths } from '@/lib/molit-web-query';
+import { MolitRequestStoppedError, throwIfMolitAborted } from '@/lib/molit-request-control';
 import { txSource } from '@/lib/tx-source';
 import { molitItemToTransaction, parseTradeXml } from '@/lib/molit-trade-parse';
 import {
@@ -33,6 +35,8 @@ import {
 
 const APT_NAME_MAX_LEN = 50;
 const BUY_CACHE_CONTROL = 'public, s-maxage=3600, stale-while-revalidate=86400';
+// Live I/O has a 45s request budget; leave room for parsing and the final response.
+export const maxDuration = 60;
 
 interface TxRow {
   aptName:      string;
@@ -81,13 +85,15 @@ async function fetchLiveTxRows(
   lawdCd: string,
   district: string,
   months: number,
+  query: { signal: AbortSignal; startedAt: number },
 ): Promise<TxRow[]> {
   const monthList = getMonthList(months);
-  const responses = await Promise.all(
-    monthList.map((yyyymm) =>
-      fetchTradeMonthAllPages(apiKey, lawdCd, yyyymm, revalidateForMonth(yyyymm)),
-    ),
+  const settled = await fetchWebMolitMonths(
+    monthList,
+    (yyyymm, options) => fetchTradeMonthAllPages(apiKey, lawdCd, yyyymm, revalidateForMonth(yyyymm), options),
+    { ...query, allowPartial: false },
   );
+  const responses = settled.flatMap((result) => result.status === 'fulfilled' ? [result.value] : []);
 
   // 국토부는 같은 물리 거래의 정상 원거래와 해제 통보를 별도 item으로
   // 함께 내려줄 수 있다. 해제 item만 버리면 원거래가 남으므로 적재와 같은
@@ -491,6 +497,7 @@ async function trySnapshotFirst(input: {
 }
 
 export async function GET(req: NextRequest) {
+  const startedAt = Date.now();
   const { searchParams } = req.nextUrl;
   const aptIdParam   = (searchParams.get('aptId')?.trim() ?? '').slice(0, 200);
   const aptNameParam = (searchParams.get('aptName') ?? searchParams.get('q') ?? '').trim().slice(0, APT_NAME_MAX_LEN);
@@ -522,6 +529,9 @@ export async function GET(req: NextRequest) {
     directLawdCd,
     months,
     limit,
+  });
+  if (req.signal.aborted) return NextResponse.json({ error: '거래 조회가 취소되었습니다' }, {
+    status: 503, headers: { 'Cache-Control': 'no-store' },
   });
   if (snapshotAttempt.response) return snapshotAttempt.response;
 
@@ -616,6 +626,7 @@ export async function GET(req: NextRequest) {
   const source = servingMode ? 'live' : txSource();
 
   try {
+    throwIfMolitAborted(req.signal);
     let txRows: TxRow[];
 
     if (source === 'db') {
@@ -636,7 +647,7 @@ export async function GET(req: NextRequest) {
           );
         }
         console.warn(`[transactions API] DB 미적재/실패(${district}/${lawdCd}) — live 폴백`);
-        txRows = await fetchLiveTxRows(apiKey, lawdCd, district, months);
+        txRows = await fetchLiveTxRows(apiKey, lawdCd, district, months, { signal: req.signal, startedAt });
       }
     } else {
       // 'live' | 'shadow' — 국토부 조회가 응답 소스
@@ -647,7 +658,7 @@ export async function GET(req: NextRequest) {
           { status: servingMode ? 503 : 500, headers: servingMode ? { 'Cache-Control': 'no-store' } : undefined },
         );
       }
-      txRows = await fetchLiveTxRows(apiKey, lawdCd, district, months);
+      txRows = await fetchLiveTxRows(apiKey, lawdCd, district, months, { signal: req.signal, startedAt });
 
       // shadow: db 도 조회해 건수 차이만 로깅 (응답은 live 그대로)
       if (source === 'shadow') {
@@ -662,6 +673,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    throwIfMolitAborted(req.signal);
     if (selectedApartment) {
       txRows = txRows.filter((row) => matchesApartmentIdentity(row, selectedApartment!));
     }
@@ -680,7 +692,7 @@ export async function GET(req: NextRequest) {
     console.error('공공API 호출 실패:', error);
     return NextResponse.json(
       { error: '데이터 조회 실패' },
-      { status: servingMode ? 503 : 500, headers: servingMode ? { 'Cache-Control': 'no-store' } : undefined },
+      { status: servingMode || error instanceof MolitRequestStoppedError ? 503 : 500, headers: { 'Cache-Control': 'no-store' } },
     );
   }
 }

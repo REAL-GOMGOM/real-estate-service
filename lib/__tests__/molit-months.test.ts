@@ -8,6 +8,18 @@ import { fetchTradeMonthAllPages, getMonthList, revalidateForMonth } from '@/lib
 describe('fetchTradeMonthAllPages', () => {
   beforeEach(() => fetchMolitXml.mockReset());
 
+  it('첫 페이지 응답 직후 취소되면 추가 페이지를 시작하지 않는다', async () => {
+    const controller = new AbortController();
+    fetchMolitXml.mockImplementationOnce(async () => {
+      controller.abort();
+      return '<response><totalCount>5001</totalCount></response>';
+    });
+    await expect(fetchTradeMonthAllPages('key', '11680', '202608', 60, {
+      signal: controller.signal, pageConcurrency: 2,
+    })).rejects.toMatchObject({ reason: 'aborted' });
+    expect(fetchMolitXml).toHaveBeenCalledTimes(1);
+  });
+
   it('3,000건을 넘더라도 마지막 페이지까지 수집한다', async () => {
     fetchMolitXml
       .mockResolvedValueOnce('<response><totalCount>3501</totalCount><page>1</page></response>')

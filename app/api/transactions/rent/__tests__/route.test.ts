@@ -74,6 +74,38 @@ function snapshot(records: unknown[] = [{
 }
 
 describe('GET /api/transactions/rent partial contract', () => {
+  it.each(['abort', 'budget'])('웹 %s는 일부 성공분이 있어도 503 no-store이며 DB로 우회하지 않는다', async (stop) => {
+    mocks.isPublicSnapshotConfigured.mockReturnValue(true);
+    mocks.txSource.mockReturnValue('db');
+    // Snapshot/identity overhead must consume, not reset, the GET's 45s budget.
+    mocks.getDistrictSnapshot.mockImplementationOnce(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5_000));
+      return { status: 'unavailable', reason: 'network-error' };
+    });
+    mocks.fetchRentMonthAllPages.mockResolvedValueOnce(XML).mockImplementation(() => new Promise(() => {}));
+    const controller = new AbortController();
+    const pending = GET(new NextRequest('http://localhost/api/transactions/rent?district=강남구&months=36&rentType=jeonse', {
+      signal: controller.signal,
+    }));
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(mocks.fetchRentMonthAllPages).toHaveBeenCalledTimes(2);
+    const options = mocks.fetchRentMonthAllPages.mock.calls[1][4];
+    expect(options).toMatchObject({ timeoutMs: 8_000, pageConcurrency: 2 });
+    if (stop === 'abort') controller.abort('serviceKey=secret');
+    else await vi.advanceTimersByTimeAsync(40_000);
+    const response = await pending;
+    expect(response.status).toBe(503);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    const body = await response.json();
+    expect(body.error).toBeTruthy();
+    expect(body).not.toHaveProperty('data');
+    expect(body).not.toHaveProperty('status', 'partial');
+    expect(JSON.stringify(body)).not.toContain('secret');
+    expect(options.signal.aborted).toBe(true);
+    expect(mocks.getBlogDb).not.toHaveBeenCalled();
+    expect(mocks.txSource).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();

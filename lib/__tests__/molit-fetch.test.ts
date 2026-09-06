@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createMolitRequestGate,
@@ -10,6 +10,8 @@ import {
 const validXml = (totalCount = 1, resultCode = '000') =>
   `<response><header><resultCode>${resultCode}</resultCode><resultMsg>OK</resultMsg></header><body><totalCount>${totalCount}</totalCount></body></response>`;
 
+afterEach(() => vi.useRealTimers());
+
 function fetchMock(...responses: Array<Response | Error>): MolitFetchImplementation {
   return vi.fn(async () => {
     const response = responses.shift();
@@ -20,6 +22,85 @@ function fetchMock(...responses: Array<Response | Error>): MolitFetchImplementat
 }
 
 describe('fetchMolitXml', () => {
+  it('웹 옵션 없는 Mac 배치 4회 재시도와 공유 gate는 기존 fetch 옵션을 유지한다', async () => {
+    const fetchImpl = fetchMock(
+      new Response('', { status: 503 }), new Response('', { status: 503 }),
+      new Response('', { status: 503 }), new Response(validXml(1)),
+    );
+    const gate = createMolitRequestGate({ maxInFlight: 1, minStartIntervalMs: 0 });
+    await expect(fetchMolitXml('https://example.test/', 60, {
+      maxAttempts: 4, baseDelayMs: 0, pageConcurrency: 1, requestGate: gate,
+      fetchImpl, sleep: async () => undefined,
+    })).resolves.toContain('<totalCount>1</totalCount>');
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
+    expect(fetchImpl).toHaveBeenNthCalledWith(1, expect.any(String), { next: { revalidate: 60 } });
+    expect(fetchImpl).toHaveBeenNthCalledWith(4, expect.any(String), { cache: 'no-store' });
+  });
+
+  it.each(['fetch', 'body'])('웹 timeout은 멈춘 %s를 중단하고 재시도 상한 뒤 안전하게 실패한다', async (stage) => {
+    vi.useFakeTimers();
+    const signals: AbortSignal[] = [];
+    const fetchImpl: MolitFetchImplementation = vi.fn((_url, init) => {
+      signals.push(init.signal!);
+      return stage === 'fetch' ? new Promise<Response>(() => {})
+        : Promise.resolve({ ok: true, status: 200, text: () => new Promise<string>(() => {}) } as Response);
+    });
+    const result = fetchMolitXml('https://example.test/?serviceKey=secret', 60, {
+      fetchImpl, timeoutMs: 10, maxAttempts: 2, baseDelayMs: 0, random: () => 0,
+    }).catch((error: unknown) => error);
+    await vi.runAllTimersAsync();
+    expect(await result).toMatchObject({ reason: 'attempt-timeout', message: 'MOLIT 요청 시간 초과' });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(signals.every((signal) => signal.aborted)).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('이미 취소된 웹 요청은 API 호출과 재시도를 시작하지 않는다', async () => {
+    const controller = new AbortController();
+    controller.abort(new Error('serviceKey=secret'));
+    const fetchImpl = vi.fn();
+    await expect(fetchMolitXml('https://example.test/', 60, { signal: controller.signal, fetchImpl }))
+      .rejects.toMatchObject({ reason: 'aborted', message: 'MOLIT 조회 취소' });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('재시도 backoff와 gate cooldown 대기 중 취소되면 타이머와 후속 통신을 중단한다', async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    const gate = createMolitRequestGate({ maxInFlight: 1, minStartIntervalMs: 0, signal: controller.signal });
+    const fetchImpl = fetchMock(new Response('', { status: 429, headers: { 'Retry-After': '10' } }));
+    const options = { signal: controller.signal, timeoutMs: 8_000, requestGate: gate, fetchImpl };
+    const first = fetchMolitXml('https://example.test/', 60, options).catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(0);
+    const queued = fetchMolitXml('https://example.test/', 60, options).catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(0);
+    controller.abort();
+    expect(await first).toMatchObject({ reason: 'aborted' });
+    expect(await queued).toMatchObject({ reason: 'aborted' });
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('진행 중 fetch에 caller signal을 전달하고 취소 이유의 비밀을 노출하지 않는다', async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    let receivedSignal: AbortSignal | undefined;
+    const fetchImpl: MolitFetchImplementation = vi.fn((_url, init) => {
+      receivedSignal = init.signal!;
+      return new Promise<Response>(() => {});
+    });
+    const pending = fetchMolitXml('https://example.test/?serviceKey=secret', 60, {
+      signal: controller.signal, timeoutMs: 8_000, fetchImpl,
+    }).catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(0);
+    controller.abort('serviceKey=secret');
+    expect(await pending).toMatchObject({ reason: 'aborted', message: 'MOLIT 조회 취소' });
+    expect(receivedSignal?.aborted).toBe(true);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('정상 첫 요청은 기존 Next revalidate 캐시를 그대로 사용한다', async () => {
     const fetchImpl = fetchMock(new Response(validXml(3)));
     const sleep = vi.fn(async (_delayMs: number) => undefined);

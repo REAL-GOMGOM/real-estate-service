@@ -1,3 +1,5 @@
+import { createMolitRequestScope, molitSleep, MolitRequestStoppedError, runMolitAbortable, throwIfMolitAborted } from './molit-request-control';
+
 /**
  * MOLIT 실거래 API fetch 헬퍼.
  *
@@ -17,6 +19,10 @@ export type MolitFetchImplementation = (
 ) => Promise<Response>;
 
 export interface MolitFetchOptions {
+  /** Web queries opt in; omitted for compatibility with the Mac batch. */
+  signal?: AbortSignal;
+  /** Per attempt, including response body. Omitted preserves the existing batch behavior. */
+  timeoutMs?: number;
   /** 최초 요청을 포함한 총 시도 횟수. */
   maxAttempts?: number;
   /** 첫 재시도 전 기본 지연. */
@@ -74,6 +80,8 @@ export interface MolitRequestGateOptions {
   /** 단위 테스트용 시계·sleep 주입. */
   now?: () => number;
   sleep?: (delayMs: number) => Promise<void>;
+  /** Optional query-wide cancellation, including queued requests and cooldown waits. */
+  signal?: AbortSignal;
 }
 
 // Web routes fail over to snapshot/DB paths, so keep their worst-case latency low.
@@ -209,14 +217,12 @@ function retryDelayMs(
   return Math.min(maxDelayMs, Math.round(baseDelayMs * 2 ** retryIndex + jitter));
 }
 
-const defaultSleep = (delayMs: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, delayMs));
-
 export function createMolitRequestGate({
   maxInFlight,
   minStartIntervalMs,
   now = Date.now,
-  sleep = defaultSleep,
+  sleep,
+  signal,
 }: MolitRequestGateOptions): MolitRequestGate {
   const concurrency = boundedInteger(maxInFlight, 1, 1, 16);
   const intervalMs = boundedInteger(minStartIntervalMs, 0, 0, 60_000);
@@ -227,7 +233,7 @@ export function createMolitRequestGate({
   let draining = false;
   const queue: Array<{
     resolve: (release: () => void) => void;
-    reject: (error: MolitCircuitOpenError) => void;
+    reject: (error: Error) => void;
   }> = [];
 
   const drain = async () => {
@@ -235,10 +241,11 @@ export function createMolitRequestGate({
     draining = true;
     try {
       while (!circuitError && active < concurrency && queue.length > 0) {
+        throwIfMolitAborted(signal);
         const waitUntil = Math.max(cooldownUntil, lastStartAt + intervalMs);
         const delayMs = Math.max(0, waitUntil - now());
         if (delayMs > 0) {
-          await sleep(delayMs);
+          await molitSleep(delayMs, signal, sleep);
           continue;
         }
         const waiter = queue.shift()!;
@@ -252,20 +259,24 @@ export function createMolitRequestGate({
           void drain();
         });
       }
+    } catch (error) {
+      for (const waiter of queue.splice(0)) waiter.reject(error as Error);
     } finally {
       draining = false;
-      if (!circuitError && active < concurrency && queue.length > 0) void drain();
+      if (!signal?.aborted && !circuitError && active < concurrency && queue.length > 0) void drain();
     }
   };
 
   return {
     async run<T>(request: () => Promise<T>): Promise<T> {
+      throwIfMolitAborted(signal);
       if (circuitError) throw circuitError;
-      const release = await new Promise<() => void>((resolve, reject) => {
+      const release = await runMolitAbortable(() => new Promise<() => void>((resolve, reject) => {
         queue.push({ resolve, reject });
         void drain();
-      });
+      }), signal);
       try {
+        throwIfMolitAborted(signal);
         return await request();
       } finally {
         release();
@@ -321,7 +332,7 @@ export async function fetchMolitXml(
     ),
   );
   const fetchImpl = options.fetchImpl ?? (fetch as MolitFetchImplementation);
-  const sleep = options.sleep ?? defaultSleep;
+  const sleep = options.sleep;
   const random = options.random ?? Math.random;
   const requestGate = options.requestGate;
 
@@ -330,41 +341,57 @@ export async function fetchMolitXml(
     retryable: true,
   };
   let attemptsUsed = 0;
+  let timedOut = false;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    throwIfMolitAborted(options.signal);
     attemptsUsed = attempt + 1;
     try {
       const executeAttempt = async () => {
-        const response = await fetchImpl(
-          url,
-          attempt === 0
-            ? { next: { revalidate } }
-            : { cache: 'no-store' },
-        );
-        const xml = await response.text();
-        const failure = inspectMolitResponse(response.status, response.ok, xml);
-        if (failure?.kind === 'rate-limit') {
-          requestGate?.noteCooldown(retryAfterMs(response));
-        } else if (failure?.kind === 'service-disabled' || failure?.kind === 'daily-quota') {
-          const error = new MolitCircuitOpenError(failure.kind, failure.circuitCode!);
-          requestGate?.trip(error);
-          throw error;
+        throwIfMolitAborted(options.signal);
+        const timeoutMs = options.timeoutMs === undefined ? undefined
+          : boundedInteger(options.timeoutMs, 8_000, 1, 60_000);
+        const scope = options.signal || timeoutMs !== undefined
+          ? createMolitRequestScope(options.signal, timeoutMs, 'attempt-timeout') : null;
+        try {
+          const response = await runMolitAbortable(() => fetchImpl(
+            url,
+            { ...(attempt === 0
+              ? { next: { revalidate } }
+              : { cache: 'no-store' as const }), ...(scope ? { signal: scope.signal } : {}) },
+          ), scope?.signal);
+          const xml = await runMolitAbortable(() => response.text(), scope?.signal);
+          throwIfMolitAborted(scope?.signal);
+          const failure = inspectMolitResponse(response.status, response.ok, xml);
+          if (failure?.kind === 'rate-limit') {
+            requestGate?.noteCooldown(retryAfterMs(response));
+          } else if (failure?.kind === 'service-disabled' || failure?.kind === 'daily-quota') {
+            const error = new MolitCircuitOpenError(failure.kind, failure.circuitCode!);
+            requestGate?.trip(error);
+            throw error;
+          }
+          return { xml, failure };
+        } finally {
+          scope?.dispose();
         }
-        return { xml, failure };
       };
       const { xml, failure } = requestGate
-        ? await requestGate.run(executeAttempt)
+        ? await runMolitAbortable(() => requestGate.run(executeAttempt), options.signal)
         : await executeAttempt();
       if (!failure) return xml;
+      timedOut = false;
       lastFailure = failure;
     } catch (error) {
+      throwIfMolitAborted(options.signal);
       if (isMolitCircuitOpenError(error)) throw error;
+      if (error instanceof MolitRequestStoppedError && error.reason !== 'attempt-timeout') throw error;
+      timedOut = error instanceof MolitRequestStoppedError && error.reason === 'attempt-timeout';
       // fetch/본문 읽기 오류 메시지는 URL(serviceKey)을 포함할 수 있어 버린다.
       lastFailure = { message: 'MOLIT 네트워크 오류', retryable: true };
     }
 
     if (!lastFailure.retryable || attempt === maxAttempts - 1) break;
-    await sleep(retryDelayMs(attempt, baseDelayMs, maxDelayMs, random));
+    await molitSleep(retryDelayMs(attempt, baseDelayMs, maxDelayMs, random), options.signal, sleep);
   }
 
   if (lastFailure.kind === 'rate-limit' && requestGate) {
@@ -376,5 +403,6 @@ export async function fetchMolitXml(
     throw error;
   }
 
+  if (timedOut) throw new MolitRequestStoppedError('attempt-timeout');
   throw new Error(`${lastFailure.message} (${attemptsUsed}회 시도 후 실패)`);
 }

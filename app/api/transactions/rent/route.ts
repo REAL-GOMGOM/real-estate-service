@@ -3,6 +3,8 @@ import { eq, and, gte, desc, sql } from 'drizzle-orm';
 import { DISTRICT_CODE } from '@/lib/district-codes';
 import { matchesQuery } from '@/lib/search-utils';
 import { getMonthList, fetchRentMonthAllPages, revalidateForMonth } from '@/lib/molit-months';
+import { fetchWebMolitMonths } from '@/lib/molit-web-query';
+import { MolitRequestStoppedError, throwIfMolitAborted } from '@/lib/molit-request-control';
 import { parseRentXml, groupRentTransactions, isJeonse, type RentTransaction } from '@/lib/rent-shared';
 import { getBlogDb } from '@/lib/db/client';
 import { rentTransactions } from '@/lib/db/schema';
@@ -192,7 +194,10 @@ async function fetchDbRentTx(lawdCd: string, district: string, months: number): 
   }));
 }
 
+export const maxDuration = 60;
+
 export async function GET(req: NextRequest) {
+  const startedAt = Date.now();
   const { searchParams } = req.nextUrl;
   let district = searchParams.get('district')?.trim() || '강남구';
   const parsedMonths = parseInt(searchParams.get('months') ?? '3', 10);
@@ -232,6 +237,9 @@ export async function GET(req: NextRequest) {
   // 없거나 손상됐거나 요청 기간을 커버하지 못할 때만 기존 DB/live 경로로 폴백한다.
   try {
     const snapshot = await runtime.getDistrictSnapshot(lawdCd);
+    if (req.signal.aborted) return NextResponse.json({ error: '전월세 조회가 취소되었습니다' }, {
+      status: 503, headers: { 'Cache-Control': 'no-store' },
+    });
     if (snapshot.status === 'success' && snapshot.data.partition.lawdCd === lawdCd) {
       const served = buildRentResponseFromSnapshot(snapshot.data, {
         months,
@@ -260,6 +268,7 @@ export async function GET(req: NextRequest) {
   const source = servingMode ? 'live' : txSource();
 
   try {
+    throwIfMolitAborted(req.signal);
     // 고속 경로 — 검색어 없는 목록 조회는 SQL 집계 푸시다운 (실패 시 아래 행 경로로)
     if (source === 'db' && !aptName && !aptDong && !selectedApartment) {
       const fast = await fetchDbRentGroupsFast(lawdCd, district, months, rentType, limit)
@@ -295,14 +304,14 @@ export async function GET(req: NextRequest) {
         console.error('[transactions/rent API] DB 미적재 + PUBLIC_DATA_API_KEY 미설정');
         return NextResponse.json(
           { error: '전월세 데이터를 불러올 수 없습니다' },
-          { status: 503 },
+          { status: 503, headers: { 'Cache-Control': 'no-store' } },
         );
       }
       const monthList = getMonthList(months);
-      const settled = await Promise.allSettled(
-        monthList.map((yyyymm) =>
-          fetchRentMonthAllPages(apiKey, lawdCd, yyyymm, revalidateForMonth(yyyymm))
-        )
+      const settled = await fetchWebMolitMonths(
+        monthList,
+        (yyyymm, options) => fetchRentMonthAllPages(apiKey, lawdCd, yyyymm, revalidateForMonth(yyyymm), options),
+        { signal: req.signal, startedAt, allowPartial: true },
       );
       failedMonths = monthList.filter((_, index) => settled[index].status === 'rejected');
       const xmls = settled.flatMap((result) => result.status === 'fulfilled' ? [result.value] : []);
@@ -310,6 +319,7 @@ export async function GET(req: NextRequest) {
       transactions = xmls.flatMap((xml) => parseRentXml(xml, district));
     }
 
+    throwIfMolitAborted(req.signal);
     if (rentType === 'jeonse')  transactions = transactions.filter(isJeonse);
     if (rentType === 'monthly') transactions = transactions.filter((t) => !isJeonse(t));
     if (selectedApartment) {
@@ -358,7 +368,7 @@ export async function GET(req: NextRequest) {
     console.error('[transactions/rent API] 조회 실패:', error);
     return NextResponse.json(
       { error: '전월세 조회 실패' },
-      { status: servingMode ? 503 : 500, headers: servingMode ? { 'Cache-Control': 'no-store' } : undefined },
+      { status: servingMode || error instanceof MolitRequestStoppedError ? 503 : 500, headers: { 'Cache-Control': 'no-store' } },
     );
   }
 }

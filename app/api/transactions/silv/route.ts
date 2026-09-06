@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { DISTRICT_CODE } from '@/lib/district-codes';
 import { matchesQuery } from '@/lib/search-utils';
 import { getMonthList, fetchSilvMonthAllPages, revalidateForMonth } from '@/lib/molit-months';
+import { fetchWebMolitMonths } from '@/lib/molit-web-query';
+import { MolitRequestStoppedError, throwIfMolitAborted } from '@/lib/molit-request-control';
 import { parseSilvXml, groupSilvTransactions } from '@/lib/silv-shared';
 import { createPublicSnapshotRuntimeFromEnv, isPublicSnapshotConfigured } from '@/lib/public-snapshots/runtime';
 import { buildPresaleResponseFromSnapshot, type ApartmentIndexItem } from '@/lib/public-snapshots/serving-artifacts';
@@ -17,8 +19,10 @@ import { resolveTransactionApartmentSelection } from '@/lib/transaction-apartmen
  */
 
 const APT_NAME_MAX_LEN = 50;
+export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
+  const startedAt = Date.now();
   const { searchParams } = req.nextUrl;
   let district = searchParams.get('district')?.trim() || '강남구';
   const parsedMonths = parseInt(searchParams.get('months') ?? '3', 10);
@@ -53,6 +57,9 @@ export async function GET(req: NextRequest) {
   // 공공 API 장애·한도 중에도 직전 검증본을 계속 제공할 수 있다.
   try {
     const snapshot = await runtime.getDistrictSnapshot(lawdCd);
+    if (req.signal.aborted) return NextResponse.json({ error: '분양권 조회가 취소되었습니다' }, {
+      status: 503, headers: { 'Cache-Control': 'no-store' },
+    });
     if (snapshot.status === 'success' && snapshot.data.partition.lawdCd === lawdCd) {
       const served = buildPresaleResponseFromSnapshot(snapshot.data, {
         months, limit, aptName, aptDong,
@@ -82,12 +89,14 @@ export async function GET(req: NextRequest) {
   const apiKey = decodeURIComponent(rawKey);
 
   try {
+    throwIfMolitAborted(req.signal);
     const monthList = getMonthList(months);
-    const settled = await Promise.allSettled(
-      monthList.map((yyyymm) =>
-        fetchSilvMonthAllPages(apiKey, lawdCd, yyyymm, revalidateForMonth(yyyymm))
-      )
+    const settled = await fetchWebMolitMonths(
+      monthList,
+      (yyyymm, options) => fetchSilvMonthAllPages(apiKey, lawdCd, yyyymm, revalidateForMonth(yyyymm), options),
+      { signal: req.signal, startedAt, allowPartial: true },
     );
+    throwIfMolitAborted(req.signal);
     const failedMonths = monthList.filter((_, index) => settled[index].status === 'rejected');
     const xmls = settled.flatMap((result) => result.status === 'fulfilled' ? [result.value] : []);
     if (xmls.length === 0) throw new Error('all presale month requests failed');
@@ -132,7 +141,7 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     console.error('[transactions/silv API] 조회 실패:', error);
     return NextResponse.json({ error: '분양권 조회 실패' }, {
-      status: servingMode ? 503 : 500, headers: { 'Cache-Control': 'no-store' },
+      status: servingMode || error instanceof MolitRequestStoppedError ? 503 : 500, headers: { 'Cache-Control': 'no-store' },
     });
   }
 }

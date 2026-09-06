@@ -147,6 +147,41 @@ function compiledWhere(query: ReturnType<typeof queryResult>) {
 }
 
 describe('GET /api/transactions live data truth', () => {
+  it.each(['abort', 'budget'])('웹 %s는 503 no-store로 끝나며 stale DB fallback을 하지 않는다', async (stop) => {
+    vi.useFakeTimers();
+    try {
+      mocks.isPublicSnapshotConfigured.mockReturnValue(true);
+      mocks.txSource.mockReturnValue('db');
+      mocks.getDistrictSnapshot.mockImplementationOnce(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 5_000));
+        return { status: 'unavailable', reason: 'network-error' };
+      });
+      mocks.fetchTradeMonthAllPages.mockImplementation(() => new Promise(() => {}));
+      const controller = new AbortController();
+      const pending = GET(new NextRequest('http://localhost/api/transactions?district=강남구&months=36', {
+        signal: controller.signal,
+      }));
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(mocks.fetchTradeMonthAllPages).toHaveBeenCalledTimes(1);
+      const options = mocks.fetchTradeMonthAllPages.mock.calls[0][4];
+      expect(options).toMatchObject({ timeoutMs: 8_000, pageConcurrency: 2 });
+      if (stop === 'abort') controller.abort('serviceKey=secret');
+      else await vi.advanceTimersByTimeAsync(40_000);
+      const response = await pending;
+      expect(response.status).toBe(503);
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      const body = await response.json();
+      expect(body.error).toBeTruthy();
+      expect(body).not.toHaveProperty('data');
+      expect(JSON.stringify(body)).not.toContain('secret');
+      expect(options.signal.aborted).toBe(true);
+      expect(mocks.getBlogDb).not.toHaveBeenCalled();
+      expect(mocks.txSource).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.txSource.mockReturnValue('live');

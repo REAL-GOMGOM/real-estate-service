@@ -1,4 +1,5 @@
 import { fetchMolitXml, type MolitFetchOptions } from '@/lib/molit-fetch';
+import { throwIfMolitAborted } from './molit-request-control';
 
 /**
  * MOLIT 월 목록·페이지네이션 공용 — 사이클 DD.
@@ -47,11 +48,13 @@ async function fetchMonthAllPages(
   revalidate: number,
   fetchOptions?: MolitFetchOptions,
 ): Promise<string> {
+  throwIfMolitAborted(fetchOptions?.signal);
   const firstPage = await fetchMolitXml(
     buildMonthUrl(baseUrl, apiKey, lawdCd, yyyymm, 1),
     revalidate,
     fetchOptions,
   );
+  throwIfMolitAborted(fetchOptions?.signal);
   const totalCount = readTotalCount(firstPage, `${lawdCd}/${yyyymm}/1페이지`);
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
   if (totalPages <= 1) return firstPage;
@@ -65,12 +68,14 @@ async function fetchMonthAllPages(
     ? Math.min(PAGE_BATCH_SIZE, Math.max(1, Math.trunc(configuredPageConcurrency!)))
     : PAGE_BATCH_SIZE;
   for (let first = 2; first <= totalPages; first += pageConcurrency) {
+    throwIfMolitAborted(fetchOptions?.signal);
     const pageNumbers = Array.from(
       { length: Math.min(pageConcurrency, totalPages - first + 1) },
       (_, index) => first + index,
     );
     const batch = await Promise.all(
       pageNumbers.map(async (pageNo) => {
+        throwIfMolitAborted(fetchOptions?.signal);
         const xml = await fetchMolitXml(
           buildMonthUrl(baseUrl, apiKey, lawdCd, yyyymm, pageNo),
           revalidate,
@@ -80,6 +85,7 @@ async function fetchMonthAllPages(
         return xml;
       }),
     );
+    throwIfMolitAborted(fetchOptions?.signal);
     documents.push(...batch);
   }
   return documents.join('\n');

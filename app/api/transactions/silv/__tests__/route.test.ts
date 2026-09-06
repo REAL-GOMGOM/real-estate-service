@@ -64,6 +64,34 @@ function snapshot(records: unknown[] = [{
 }
 
 describe('GET /api/transactions/silv partial contract', () => {
+  it.each(['abort', 'budget'])('웹 %s는 일부 월 성공 후에도 partial/0건이 아닌 503 no-store다', async (stop) => {
+    mocks.isPublicSnapshotConfigured.mockReturnValue(true);
+    mocks.getDistrictSnapshot.mockImplementationOnce(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5_000));
+      return { status: 'unavailable', reason: 'network-error' };
+    });
+    mocks.fetchSilvMonthAllPages.mockResolvedValueOnce(XML).mockImplementation(() => new Promise(() => {}));
+    const controller = new AbortController();
+    const pending = GET(new NextRequest('http://localhost/api/transactions/silv?district=강남구&months=36', {
+      signal: controller.signal,
+    }));
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(mocks.fetchSilvMonthAllPages).toHaveBeenCalledTimes(2);
+    const options = mocks.fetchSilvMonthAllPages.mock.calls[1][4];
+    expect(options).toMatchObject({ timeoutMs: 8_000, pageConcurrency: 2 });
+    if (stop === 'abort') controller.abort('serviceKey=secret');
+    else await vi.advanceTimersByTimeAsync(40_000);
+    const response = await pending;
+    expect(response.status).toBe(503);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    const body = await response.json();
+    expect(body.error).toBeTruthy();
+    expect(body).not.toHaveProperty('data');
+    expect(body).not.toHaveProperty('status', 'partial');
+    expect(JSON.stringify(body)).not.toContain('secret');
+    expect(options.signal.aborted).toBe(true);
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
