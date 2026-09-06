@@ -193,6 +193,38 @@ describe('serving named artifacts', () => {
 });
 
 describe('raw district snapshot response builders', () => {
+  it.each([buildBuyResponseFromSnapshot, buildRentResponseFromSnapshot, buildPresaleResponseFromSnapshot])(
+    'counts matching transactions after name/dong filtering and before group or recent-contract limits',
+    (build) => {
+      const fixture = fixtureSnapshot();
+      const seeds = fixture.records.filter((record) => record.kind !== 'sale' || record.apartmentId !== null);
+      const records = Array.from({ length: 37 }, (_, index) => seeds.map((record, kindIndex) => ({
+        ...record,
+        id: (index * seeds.length + kindIndex).toString(16).padStart(24, '0'),
+        apartmentId: null,
+        aptName: index < 35 ? '다른단지' : '가람',
+        dong: '일원동',
+      }))).flat();
+      const snapshot = { ...fixture, records, recordCount: records.length };
+      const query = { months: 2, limit: 60, now: NOW };
+
+      const selected = build(snapshot, { ...query, aptName: '가람', aptDong: '일원동' });
+      expect(selected).toMatchObject({ hit: true, body: { total: 2, data: [{ name: '가람' }] } });
+      if (selected.hit) expect(selected.body.data).toHaveLength(1);
+
+      const district = build(snapshot, query);
+      expect(district).toMatchObject({ hit: true, body: { total: 37 } });
+      if (district.hit) expect(district.body.data).toHaveLength(2);
+
+      const limited = build(snapshot, { ...query, limit: 1 });
+      expect(limited).toMatchObject({ hit: true, body: { total: 37, data: [{ name: '다른단지' }] } });
+      if (limited.hit) {
+        expect(limited.body.data).toHaveLength(1);
+        expect(limited.body.data[0].transactions).toHaveLength(build === buildBuyResponseFromSnapshot ? 35 : 10);
+      }
+    },
+  );
+
   it('preserves YYYY-MM, serves newest transactions first, and enriches buy groups', () => {
     const result = buildBuyResponseFromSnapshot(fixtureSnapshot(), {
       months: 2,

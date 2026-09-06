@@ -313,7 +313,7 @@ async function buildGroupedResponse(
 
   const aptName = resolvedAptName;
 
-  const result = Object.values(grouped)
+  const matchingGroups = Object.values(grouped)
     .filter((apt) => apt.transactions.length >= 1)
     .filter((apt) => selectedApartment
       ? matchesApartmentIdentity(
@@ -321,7 +321,9 @@ async function buildGroupedResponse(
           selectedApartment,
         )
       : !aptName || matchesQuery(apt.name, aptName))
-    .filter((apt) => selectedApartment || !opts.aptDong || apt.dong === opts.aptDong)
+    .filter((apt) => selectedApartment || !opts.aptDong || apt.dong === opts.aptDong);
+  const total = matchingGroups.reduce((sum, apt) => sum + apt.transactions.length, 0);
+  const result = matchingGroups
     .sort((a, b) => b.transactions.length - a.transactions.length)
     .slice(0, aptName ? 100 : limit);
 
@@ -330,7 +332,7 @@ async function buildGroupedResponse(
       data: result,
       district,
       months,
-      total: result.reduce((sum, apt) => sum + apt.transactions.length, 0),
+      total,
       ...(selectedApartment ? { selectedAptId: selectedApartment.id } : {}),
     },
     // CDN 캐시 — 같은 지역·기간 요청은 엣지에서 즉시 응답

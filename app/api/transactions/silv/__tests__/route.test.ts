@@ -82,6 +82,29 @@ describe('GET /api/transactions/silv partial contract', () => {
     delete process.env.PUBLIC_DATA_API_KEY;
   });
 
+  it('이름·동 검색 total은 matching 거래만 세고 지역 목록 limit/최근10건 축약 전 합계를 유지한다', async () => {
+    const xml = Array.from({ length: 37 }, (_, index) => XML
+      .replace('분양단지', index < 35 ? '다른단지' : '가람')
+      .replace('삼성동', '일원동')
+      .replace('<floor>10', `<floor>${index + 1}`)).join('');
+    mocks.fetchSilvMonthAllPages.mockImplementation((_key, _lawdCd, month) => Promise.resolve(month === '202607' ? xml : ''));
+
+    const searched = await GET(new NextRequest('http://localhost/api/transactions/silv?district=강남구&q=가람&aptDong=일원동&months=2'));
+    const selected = await searched.json();
+    expect(selected.total).toBe(2);
+    expect(selected.data).toHaveLength(1);
+    expect(selected.data[0]).toMatchObject({ name: '가람', dong: '일원동', txCount: 2 });
+
+    const all = await GET(new NextRequest('http://localhost/api/transactions/silv?district=강남구&months=2'));
+    expect(await all.json()).toMatchObject({ total: 37 });
+    const limited = await GET(new NextRequest('http://localhost/api/transactions/silv?district=강남구&months=2&limit=1'));
+    const body = await limited.json();
+    expect(body.total).toBe(37);
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0]).toMatchObject({ name: '다른단지', txCount: 35 });
+    expect(body.data[0].transactions).toHaveLength(10);
+  });
+
   it('검증된 스냅샷 hit는 공공 API key 없이도 반환한다', async () => {
     delete process.env.PUBLIC_DATA_API_KEY;
     mocks.getDistrictSnapshot.mockResolvedValue({ status: 'success', data: snapshot() });

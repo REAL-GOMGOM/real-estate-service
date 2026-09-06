@@ -97,8 +97,10 @@ export async function GET(req: NextRequest) {
         ? matchesApartmentIdentity(transaction, selectedApartment)
         : !aptDong || (transaction.dong ?? '').replace(/\s+/g, '') === aptDong);
 
-    const result = groupSilvTransactions(transactions)
-      .filter((g) => Boolean(selectedApartment) || !aptName || matchesQuery(g.name, aptName))
+    const matchingGroups = groupSilvTransactions(transactions)
+      .filter((g) => Boolean(selectedApartment) || !aptName || matchesQuery(g.name, aptName));
+    const total = matchingGroups.reduce((sum, group) => sum + group.transactions.length, 0);
+    const result = matchingGroups
       .map((g) => {
         g.transactions.sort((a, b) => b.date.localeCompare(a.date));
         g.areas.sort((a, b) => a - b);
@@ -120,7 +122,7 @@ export async function GET(req: NextRequest) {
         data: result,
         district,
         months,
-        total: transactions.length,
+        total,
         ...(selectedApartment ? { selectedAptId: selectedApartment.id } : {}),
         status: isPartial ? 'partial' : 'ok',
         ...(isPartial ? { failedMonths } : {}),

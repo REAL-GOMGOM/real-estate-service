@@ -176,6 +176,28 @@ describe('GET /api/transactions live data truth', () => {
     vi.restoreAllMocks();
   });
 
+  it('매매도 이름·동 필터 후 목록 limit 전 전체 matching 거래 수를 반환한다', async () => {
+    mocks.isPublicSnapshotConfigured.mockReturnValue(true);
+    mocks.fetchTradeMonthAllPages.mockResolvedValue(Array.from({ length: 37 }, (_, index) => item({
+      ...BASE, aptNm: index < 35 ? '다른단지' : '가람', umdNm: '일원동', floor: String(index + 1), cdealType: '',
+    })).join(''));
+
+    const searched = await GET(new NextRequest('http://localhost/api/transactions?district=강남구&q=가람&aptDong=일원동&months=2'));
+    const selected = await searched.json();
+    expect(selected.total).toBe(2);
+    expect(selected.data).toHaveLength(1);
+    expect(selected.data[0].name).toBe('가람');
+
+    const all = await GET(new NextRequest('http://localhost/api/transactions?district=강남구&months=2'));
+    expect(await all.json()).toMatchObject({ total: 37 });
+    const limited = await GET(new NextRequest('http://localhost/api/transactions?district=강남구&months=2&limit=1'));
+    const body = await limited.json();
+    expect(body.total).toBe(37);
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].name).toBe('다른단지');
+    expect(body.data[0].transactions).toHaveLength(35);
+  });
+
   it('정상 원거래와 해제 item이 함께 온 거래는 전체 제외하고 동명 단지는 법정동별로 나눈다', async () => {
     mocks.fetchTradeMonthAllPages.mockResolvedValue(
       item({ ...BASE, aptNm: '취소단지', umdNm: '삼성동', cdealType: '' }) +

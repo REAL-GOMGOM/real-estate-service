@@ -1219,8 +1219,10 @@ export function buildBuyResponseFromSnapshot(
     if (!group.buildYear && tx.buildYear) group.buildYear = tx.buildYear;
   }
 
-  const data = [...grouped.values()]
-    .filter((group) => !prepared.aptName || matchesQuery(group.name, prepared.aptName))
+  const matchingGroups = [...grouped.values()]
+    .filter((group) => !prepared.aptName || matchesQuery(group.name, prepared.aptName));
+  const total = matchingGroups.reduce((sum, group) => sum + group.transactions.length, 0);
+  const data = matchingGroups
     .sort((left, right) => right.transactions.length - left.transactions.length)
     .slice(0, prepared.aptName ? 100 : prepared.limit);
   return {
@@ -1229,7 +1231,7 @@ export function buildBuyResponseFromSnapshot(
       data,
       district: snapshot.partition.district,
       months: prepared.months,
-      total: data.reduce((sum, group) => sum + group.transactions.length, 0),
+      total,
       ...(prepared.selectedApartment ? { selectedAptId: prepared.selectedApartment.id } : {}),
     },
   };
@@ -1292,8 +1294,10 @@ export function buildRentResponseFromSnapshot(
     if (!group.areas.includes(tx.area)) group.areas.push(tx.area);
     if (!group.buildYear && tx.buildYear) group.buildYear = tx.buildYear;
   }
-  const data = [...grouped.values()]
-    .filter((group) => !prepared.aptName || matchesQuery(group.name, prepared.aptName))
+  const matchingGroups = [...grouped.values()]
+    .filter((group) => !prepared.aptName || matchesQuery(group.name, prepared.aptName));
+  const total = matchingGroups.reduce((sum, group) => sum + group.txCount, 0);
+  const data = matchingGroups
     .map((group) => ({ ...group, areas: [...group.areas].sort((a, b) => a - b) }))
     .sort((left, right) => right.txCount - left.txCount)
     .slice(0, prepared.aptName ? 100 : prepared.limit)
@@ -1309,7 +1313,7 @@ export function buildRentResponseFromSnapshot(
       district: snapshot.partition.district,
       months: prepared.months,
       rentType,
-      total: records.length,
+      total,
       status: 'ok',
       ...(prepared.selectedApartment ? { selectedAptId: prepared.selectedApartment.id } : {}),
     },
@@ -1360,8 +1364,10 @@ export function buildPresaleResponseFromSnapshot(
     if (!group.areas.includes(tx.area)) group.areas.push(tx.area);
     if (!group.buildYear && tx.buildYear) group.buildYear = tx.buildYear;
   }
-  const data = [...grouped.values()]
-    .filter((group) => !prepared.aptName || matchesQuery(group.name, prepared.aptName))
+  const matchingGroups = [...grouped.values()]
+    .filter((group) => !prepared.aptName || matchesQuery(group.name, prepared.aptName));
+  const total = matchingGroups.reduce((sum, group) => sum + group.txCount, 0);
+  const data = matchingGroups
     .map((group) => ({ ...group, areas: [...group.areas].sort((a, b) => a - b) }))
     .sort((left, right) => right.txCount - left.txCount)
     .slice(0, prepared.aptName ? 100 : prepared.limit)
@@ -1376,7 +1382,7 @@ export function buildPresaleResponseFromSnapshot(
       data,
       district: snapshot.partition.district,
       months: prepared.months,
-      total: records.length,
+      total,
       status: 'ok',
       ...(prepared.selectedApartment ? { selectedAptId: prepared.selectedApartment.id } : {}),
     },

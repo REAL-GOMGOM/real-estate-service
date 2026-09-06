@@ -23,6 +23,9 @@ import AptDetailModal from './components/AptDetailModal';
 import RegionPickerModal from './components/RegionPickerModal';
 import DistrictChips from './components/DistrictChips';
 import GlobalApartmentSearchResults from './components/GlobalApartmentSearchResults';
+import DataFreshness from './components/DataFreshness';
+import { readTransactionFreshness, type TransactionFreshness, type TransactionFreshnessResult } from '@/lib/transaction-freshness';
+import { kstTodayIso } from '@/lib/agg-window';
 
 /**
  * 실거래 조회 클라이언트 — 사이클 W (아실형 개편)
@@ -45,23 +48,17 @@ function groupMatchesSelectedApartment(
   );
 }
 
-function todayLabel(d: Date) {
-  const day = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
-  return `${d.getMonth() + 1}.${d.getDate()}(${day})`;
-}
-
-/** 11a 타이틀 밴드용 — 2026.07.05(일) 형식 */
-function fullDateLabel(d: Date) {
-  const day = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}.${mm}.${dd}(${day})`;
-}
-
 type SortKey = 'volume' | 'date' | 'price';
 
 /** 거래 유형 탭 — 사이클 II (전세·월세), 분양권 추가 */
 type DealType = 'buy' | 'jeonse' | 'monthly' | 'bunyang';
+
+interface TransactionResultCache<T> {
+  requestKey: string;
+  groups: T[];
+  partial?: boolean;
+  freshness: TransactionFreshness | null;
+}
 
 function apartmentQueryString(aptId: string | null | undefined, name: string, dong: string | null) {
   const params = new URLSearchParams();
@@ -201,6 +198,11 @@ export default function TransactionsClient() {
       : null,
   );
   const buyAbortRef = useRef<AbortController | null>(null);
+  // Restore records, status and provenance atomically when returning from a
+  // different query that is still pending or failed. A fetched key alone is not a cache.
+  const buyCacheRef = useRef<TransactionResultCache<AptGroup> | null>(null);
+  const rentCacheRef = useRef<TransactionResultCache<RentAptGroup> | null>(null);
+  const silvCacheRef = useRef<TransactionResultCache<AptGroup> | null>(null);
 
   const [viewMode, setViewMode] = useState<'summary' | 'detail'>(districtParam ? 'detail' : 'summary');
 
@@ -231,6 +233,8 @@ export default function TransactionsClient() {
   const [summaryRetryKey, setSummaryRetryKey] = useState(0);
   // 집계 윈도우 (2026-08-02 월초 공백 해소) — 'today'(봇 공개분) | 'rolling30' | 'YYYYMM'
   const [sumWindow, setSumWindow] = useState<string>('today');
+  const [detailFreshness, setDetailFreshness] = useState<Partial<Record<DealType, TransactionFreshnessResult>>>({});
+  const [summaryFreshness, setSummaryFreshness] = useState<TransactionFreshnessResult>();
 
   // 구 선택 모달 (아실형) — 열려 있으면 해당 시도 그룹
   const [picker, setPicker] = useState<{ label: string; districts: string[] } | null>(null);
@@ -268,7 +272,6 @@ export default function TransactionsClient() {
       setSelectedApt(null);
       setViewMode('summary');
     }
-    setFetched('');
   }, [districtParam, queryParam, aptIdParam, aptDongParam, monthsParam, dealTypeParam]);
 
   // URL이 바뀐 첫 렌더에는 이전 요청의 groups가 남아 있을 수 있다.
@@ -338,6 +341,7 @@ export default function TransactionsClient() {
     () => apartmentQueryString(selectedApt?.id, query, aptDongParam),
     [selectedApt?.id, query, aptDongParam],
   );
+  const activeDetailRequestKey = transactionRequestKey(district, months, dealType, apartmentRequestQuery);
 
   const load = useCallback(async (
     d: string,
@@ -346,12 +350,24 @@ export default function TransactionsClient() {
     force = false,
   ) => {
     const key = transactionRequestKey(d, m, 'buy', apartmentQuery);
-    if (!force && fetched === key) return;
     buyAbortRef.current?.abort();
+    const cached = buyCacheRef.current;
+    if (!force && cached?.requestKey === key) {
+      buyAbortRef.current = null;
+      setGroups(cached.groups);
+      setFetched(key);
+      setLoading(false);
+      setError(null);
+      setDetailFreshness((previous) => ({ ...previous, buy: {
+        requestKey: key, status: 'ready', value: cached.freshness,
+      } }));
+      return;
+    }
     const controller = new AbortController();
     buyAbortRef.current = controller;
     setLoading(true);
     setError(null);
+    setDetailFreshness((previous) => ({ ...previous, buy: { requestKey: key, status: 'loading' } }));
     try {
       const params = new URLSearchParams({ months: String(m) });
       const selection = new URLSearchParams(apartmentQuery);
@@ -365,17 +381,23 @@ export default function TransactionsClient() {
         throw new Error(json.error || 'transactions unavailable');
       }
       if (buyAbortRef.current !== controller) return;
+      const freshness = readTransactionFreshness(res.headers);
+      buyCacheRef.current = { requestKey: key, groups: json.data, freshness };
       setGroups(json.data);
       setFetched(key);
+      setDetailFreshness((previous) => ({ ...previous, buy: {
+        requestKey: key, status: 'ready', value: freshness,
+      } }));
     } catch (loadError: unknown) {
       if ((loadError as { name?: string }).name === 'AbortError') return;
       if (buyAbortRef.current !== controller) return;
       setGroups([]);
       setError('데이터 조회에 실패했습니다');
+      setDetailFreshness((previous) => ({ ...previous, buy: { requestKey: key, status: 'error' } }));
     } finally {
       if (buyAbortRef.current === controller) setLoading(false);
     }
-  }, [fetched]);
+  }, []);
 
   useEffect(() => {
     if (viewMode === 'detail' && dealType === 'buy') {
@@ -392,12 +414,24 @@ export default function TransactionsClient() {
       (dealType !== 'jeonse' && dealType !== 'monthly')
     ) return;
     const key = transactionRequestKey(district, months, dealType, apartmentRequestQuery);
-    if (rentFetched === key) return;
+    const cached = rentCacheRef.current;
+    if (cached?.requestKey === key) {
+      setRentGroups(cached.groups);
+      setRentPartial(cached.partial ?? false);
+      setRentFetched(key);
+      setRentLoading(false);
+      setRentError(false);
+      setDetailFreshness((previous) => ({ ...previous, [dealType]: {
+        requestKey: key, status: 'ready', value: cached.freshness,
+      } }));
+      return;
+    }
     let cancelled = false;
     const controller = new AbortController();
     setRentLoading(true);
     setRentError(false);
     setRentPartial(false);
+    setDetailFreshness((previous) => ({ ...previous, [dealType]: { requestKey: key, status: 'loading' } }));
     const params = new URLSearchParams({ district, months: String(months), rentType: dealType });
     new URLSearchParams(apartmentRequestQuery).forEach((value, name) => params.set(name, value));
     fetch(`/api/transactions/rent?${params.toString()}`, {
@@ -408,14 +442,18 @@ export default function TransactionsClient() {
         if (!response.ok || json.error || !Array.isArray(json.data)) {
           throw new Error(json.error || 'rent transactions unavailable');
         }
-        return json;
+        return { json, freshness: readTransactionFreshness(response.headers) };
       })
-      .then((json) => {
+      .then(({ json, freshness }) => {
         if (cancelled) return;
+        rentCacheRef.current = { requestKey: key, groups: json.data, partial: json.status === 'partial', freshness };
         setRentGroups(json.data);
         setRentPartial(json.status === 'partial');
         setRentFetched(key);
         setRentLoading(false);
+        setDetailFreshness((previous) => ({ ...previous, [dealType]: {
+          requestKey: key, status: 'ready', value: freshness,
+        } }));
       })
       .catch((loadError: unknown) => {
         if (cancelled || (loadError as { name?: string }).name === 'AbortError') return;
@@ -423,23 +461,36 @@ export default function TransactionsClient() {
         setRentPartial(false);
         setRentError(true);
         setRentLoading(false);
+        setDetailFreshness((previous) => ({ ...previous, [dealType]: { requestKey: key, status: 'error' } }));
       });
     return () => {
       cancelled = true;
       controller.abort();
     };
-  }, [viewMode, dealType, district, months, apartmentRequestQuery, rentFetched, rentRetryKey]);
+  }, [viewMode, dealType, district, months, apartmentRequestQuery, rentRetryKey]);
 
   // 분양권 조회 — 매매/전월세와 별개 키 (silv 라우트)
   useEffect(() => {
     if (viewMode !== 'detail' || dealType !== 'bunyang') return;
     const key = transactionRequestKey(district, months, 'bunyang', apartmentRequestQuery);
-    if (silvFetched === key) return;
+    const cached = silvCacheRef.current;
+    if (cached?.requestKey === key) {
+      setSilvGroups(cached.groups);
+      setSilvPartial(cached.partial ?? false);
+      setSilvFetched(key);
+      setSilvLoading(false);
+      setSilvError(false);
+      setDetailFreshness((previous) => ({ ...previous, bunyang: {
+        requestKey: key, status: 'ready', value: cached.freshness,
+      } }));
+      return;
+    }
     let cancelled = false;
     const controller = new AbortController();
     setSilvLoading(true);
     setSilvError(false);
     setSilvPartial(false);
+    setDetailFreshness((previous) => ({ ...previous, bunyang: { requestKey: key, status: 'loading' } }));
     const params = new URLSearchParams({ district, months: String(months) });
     new URLSearchParams(apartmentRequestQuery).forEach((value, name) => params.set(name, value));
     fetch(`/api/transactions/silv?${params.toString()}`, {
@@ -450,14 +501,18 @@ export default function TransactionsClient() {
         if (!response.ok || json.error || !Array.isArray(json.data)) {
           throw new Error(json.error || 'presale transactions unavailable');
         }
-        return json;
+        return { json, freshness: readTransactionFreshness(response.headers) };
       })
-      .then((json) => {
+      .then(({ json, freshness }) => {
         if (cancelled) return;
+        silvCacheRef.current = { requestKey: key, groups: json.data, partial: json.status === 'partial', freshness };
         setSilvGroups(json.data);
         setSilvPartial(json.status === 'partial');
         setSilvFetched(key);
         setSilvLoading(false);
+        setDetailFreshness((previous) => ({ ...previous, bunyang: {
+          requestKey: key, status: 'ready', value: freshness,
+        } }));
       })
       .catch((loadError: unknown) => {
         if (cancelled || (loadError as { name?: string }).name === 'AbortError') return;
@@ -465,12 +520,13 @@ export default function TransactionsClient() {
         setSilvPartial(false);
         setSilvError(true);
         setSilvLoading(false);
+        setDetailFreshness((previous) => ({ ...previous, bunyang: { requestKey: key, status: 'error' } }));
       });
     return () => {
       cancelled = true;
       controller.abort();
     };
-  }, [viewMode, dealType, district, months, apartmentRequestQuery, silvFetched, silvRetryKey]);
+  }, [viewMode, dealType, district, months, apartmentRequestQuery, silvRetryKey]);
 
   // 시도별 요약 — 윈도우·유형 선택 반영.
   // 'today'와 'rolling30'은 같은 서버 기본(최근 30일) 응답을 공유하므로
@@ -478,11 +534,13 @@ export default function TransactionsClient() {
   // 유형별 집계: 전세·월세=rent 원장, 분양권=silv 원장 (2026-08-02 신설).
   const sumFetchKey = /^\d{6}$/.test(sumWindow) ? sumWindow : 'default';
   const sumDealType: DealType = dealType;
+  const summaryRequestKey = JSON.stringify([sumFetchKey, sumDealType]);
   useEffect(() => {
     if (viewMode !== 'summary') return;
     const controller = new AbortController();
     setSummaryLoading(true);
     setSummaryError(null);
+    setSummaryFreshness({ requestKey: summaryRequestKey, status: 'loading' });
     const params = new URLSearchParams();
     if (sumFetchKey !== 'default') params.set('window', sumFetchKey);
     if (sumDealType !== 'buy') params.set('dealType', sumDealType);
@@ -500,36 +558,41 @@ export default function TransactionsClient() {
         ) {
           throw new Error(json.note || json.error || 'summary unavailable');
         }
-        return json;
+        return { json, freshness: readTransactionFreshness(response.headers, { aggregateUpdatedAt: json.updatedAt }) };
       })
-      .then(json => {
+      .then(({ json, freshness }) => {
+        if (controller.signal.aborted) return;
         setSummaryData(json.summary);
         setDailyMeta(json.daily ?? null);
+        setSummaryFreshness({ requestKey: summaryRequestKey, status: 'ready', value: freshness });
         // 봇 공개분이 없는 날(또는 전월세 탭)은 '오늘 공개' 탭 무의미 — 최근 30일로 자동 전환
         if (!json.daily) setSumWindow((w) => (w === 'today' ? 'rolling30' : w));
         setSummaryLoading(false);
       })
       .catch((error: unknown) => {
-        if ((error as { name?: string }).name === 'AbortError') return;
+        if (controller.signal.aborted || (error as { name?: string }).name === 'AbortError') return;
         setSummaryData([]);
         setDailyMeta(null);
         setSummaryError('집계 데이터를 불러오지 못했습니다');
         setSummaryLoading(false);
+        setSummaryFreshness({ requestKey: summaryRequestKey, status: 'error' });
       });
     return () => controller.abort();
-  }, [viewMode, sumFetchKey, sumDealType, summaryRetryKey]);
+  }, [viewMode, sumFetchKey, sumDealType, summaryRetryKey, summaryRequestKey]);
 
-  // 월 탭 옵션 — 당월·전월 (클라이언트 로컬 = KST 사용자 기준)
+  // 월 탭 옵션에만 현재 달력을 사용한다. 데이터 기준 시각과는 별개다.
   const windowMonths = useMemo(() => {
     if (today.getFullYear() < 2001) return [];
-    const cur  = new Date(today.getFullYear(), today.getMonth(), 1);
-    const prev = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    const key  = (d: Date) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const kst = new Date(`${kstTodayIso(today)}T00:00:00Z`);
+    const cur = new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), 1));
+    const prev = new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth() - 1, 1));
+    const key = (d: Date) => `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
     return [
-      { key: key(cur),  label: `${cur.getMonth() + 1}월` },
-      { key: key(prev), label: `${prev.getMonth() + 1}월` },
+      { key: key(cur),  label: `${cur.getUTCMonth() + 1}월` },
+      { key: key(prev), label: `${prev.getUTCMonth() + 1}월` },
     ];
   }, [today]);
+  const dailyIsToday = dailyMeta?.date === kstTodayIso(today);
 
   // 구별 칩 통계 — detail 진입 시 그룹 단위로 1회 조회
   const groupLabel = DISTRICT_GROUPS[groupIdx]?.label ?? '';
@@ -618,7 +681,6 @@ export default function TransactionsClient() {
     setSelectedApt(null);   // 지역 바꾸면 이전 단지 선택·검색 초기화
     setQuery('');
     setViewMode('detail');
-    setFetched('');
     setPicker(null);
     setActiveApt(null);
     setActiveRent(null);
@@ -661,7 +723,6 @@ export default function TransactionsClient() {
 
   const changeMonths = useCallback((nextMonths: number) => {
     setMonths(nextMonths);
-    setFetched('');
     setActiveApt(null);
     setActiveRent(null);
 
@@ -695,7 +756,6 @@ export default function TransactionsClient() {
     setSelectedApt(apartment);
     setQuery(apartment.name);
     setViewMode('detail');
-    setFetched('');
     setPicker(null);
     setActiveApt(null);
     setActiveRent(null);
@@ -710,7 +770,6 @@ export default function TransactionsClient() {
   const clearApartmentSearch = useCallback(() => {
     setSelectedApt(null);
     setQuery('');
-    setFetched('');
     setActiveApt(null);
     setActiveRent(null);
 
@@ -729,9 +788,6 @@ export default function TransactionsClient() {
     setNewHighOnly(false);
     setAreaFilter('all');
     setMonths(6);
-    setFetched('');
-    setRentFetched('');
-    setSilvFetched('');
     setActiveApt(null);
     setActiveRent(null);
 
@@ -761,20 +817,21 @@ export default function TransactionsClient() {
               }}>
                 <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#E23B3B', display: 'inline-block' }} />
                 {sumWindow === 'today' && dailyMeta
-                  ? '오늘 아침 공개'
+                  ? (dailyIsToday ? '오늘 아침 공개' : `${dailyMeta.date} 공개분`)
                   : /^\d{6}$/.test(sumWindow)
                     ? `${parseInt(sumWindow.slice(4, 6), 10)}월 신고 집계`
                     : '최근 30일 신고 집계'}
               </div>
               <h1 style={{ margin: '0 0 6px', fontSize: 'clamp(22px, 3vw, 29px)', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.6px' }}>
                 {sumWindow === 'today' && dailyMeta
-                  ? '오늘 공개된 최신 실거래'
+                  ? (dailyIsToday ? '오늘 공개된 최신 실거래' : '최근 공개된 실거래')
                   : /^\d{6}$/.test(sumWindow)
                     ? `${parseInt(sumWindow.slice(4, 6), 10)}월 실거래`
                     : '최근 30일 실거래'}
               </h1>
               <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-muted)' }}>
-                {today.getFullYear() > 2000 ? fullDateLabel(today) : '—'} · 국토교통부 실거래가 공개시스템 기준
+                <DataFreshness result={summaryFreshness} requestKey={dealType === dealTypeFromParam(dealTypeParam) ? summaryRequestKey : ''} />
+                {' · 국토교통부 실거래가 공개시스템 기준'}
               </p>
             </div>
             {!summaryLoading && summaryData.length > 0 && (
@@ -822,13 +879,7 @@ export default function TransactionsClient() {
               </button>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-muted)' }}>최신 실거래</span>
-              <span style={{
-                padding: '3px 10px', borderRadius: '8px', fontSize: '12.5px', fontWeight: 600,
-                backgroundColor: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-muted)',
-              }}>
-                {today.getFullYear() > 2000 ? todayLabel(today) : '—'}
-              </span>
+              <DataFreshness result={detailFreshness[dealType]} requestKey={activeDetailRequestKey === urlRequestKey ? urlRequestKey : ''} />
               <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>· 출처: 국토교통부 실거래가 공개시스템</span>
             </div>
           </div>
@@ -903,7 +954,7 @@ export default function TransactionsClient() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', gap: '4px', padding: '3px', borderRadius: '10px', backgroundColor: 'var(--border-light)' }}>
                   {[
-                    ...(dailyMeta && sumDealType === 'buy' ? [{ key: 'today', label: '오늘 공개' }] : []),
+                    ...(dailyMeta && sumDealType === 'buy' ? [{ key: 'today', label: dailyIsToday ? '오늘 공개' : '최근 공개분' }] : []),
                     { key: 'rolling30', label: '최근 30일' },
                     ...windowMonths,
                   ].map(({ key, label }) => (

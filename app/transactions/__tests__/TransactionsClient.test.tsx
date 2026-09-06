@@ -120,8 +120,11 @@ async function renderClient(query: string) {
   return host;
 }
 
-function response(ok: boolean, body: unknown) {
-  return Promise.resolve({ ok, json: async () => body });
+function response(ok: boolean, body: unknown, generatedAt?: string) {
+  return Promise.resolve({ ok, json: async () => body, headers: new Headers(generatedAt ? {
+    'X-Naezip-Data-Source': 'snapshot',
+    'X-Naezip-Snapshot-Generated-At': generatedAt,
+  } : undefined) });
 }
 
 function findButton(page: HTMLElement, label: string) {
@@ -162,6 +165,135 @@ afterEach(async () => {
   host = null;
   document.body.innerHTML = '';
   vi.unstubAllGlobals();
+});
+
+describe('TransactionsClient data freshness', () => {
+  const oldSnapshot = '2026-08-15T20:17:00Z';
+  const nextSnapshot = '2026-08-16T20:20:00Z';
+  const label = (page: HTMLElement) => page.querySelector('[aria-label="데이터 갱신 정보"]')!;
+
+  it.each(['buy', 'jeonse', 'monthly', 'bunyang'])(
+    '%s displays the successful response timestamp, even for an empty result', async (dealType) => {
+      fetchMock.mockImplementation((input) => String(input).startsWith('/api/transactions/districts')
+        ? response(true, { districts: [] }) : response(true, { data: [] }, oldSnapshot));
+      const page = await renderClient(`district=강남구&dealType=${dealType}`);
+      expect(label(page).textContent).toBe('데이터 기준 2026.08.16 05:17 (한국시간)');
+      expect(label(page).querySelector('time')?.dateTime).toBe('2026-08-15T20:17:00.000Z');
+      expect(page.textContent).not.toContain('최신 실거래');
+    },
+  );
+
+  it('never substitutes the current day for missing metadata or an error', async () => {
+    fetchMock.mockImplementation((input) => String(input).startsWith('/api/transactions/districts')
+      ? response(true, { districts: [] }) : response(true, { data: [] }));
+    const page = await renderClient('district=강남구');
+    expect(label(page).textContent).toBe('데이터 기준 시각 확인 불가');
+    fetchMock.mockImplementation((input) => String(input).startsWith('/api/transactions/districts')
+      ? response(true, { districts: [] }) : response(false, { error: 'unavailable' }, oldSnapshot));
+    routeQuery.value = 'district=서초구';
+    await act(async () => { root!.render(<TransactionsClient />); await settle(); });
+    expect(label(page).textContent).toBe('데이터 기준 시각 확인 불가');
+    expect(label(page).querySelector('time')).toBeNull();
+  });
+
+  it('hides previous apartment metadata while a new URL request is pending or fails', async () => {
+    let finish: ((value: Awaited<ReturnType<typeof response>>) => void) | undefined;
+    fetchMock.mockImplementation((input) => {
+      if (String(input).includes('aptId=NEW')) return new Promise((resolve) => { finish = resolve; });
+      return String(input).startsWith('/api/transactions/districts')
+        ? response(true, { districts: [] }) : response(true, { data: [] }, oldSnapshot);
+    });
+    const page = await renderClient('district=강남구&q=이전단지&aptId=OLD');
+    expect(label(page).textContent).toContain('2026.08.16');
+    routeQuery.value = 'district=강남구&q=새단지&aptId=NEW';
+    await act(async () => { root!.render(<TransactionsClient />); await settle(); });
+    expect(label(page).textContent).toBe('데이터 기준 시각 확인 중');
+    expect(label(page).querySelector('time')).toBeNull();
+    await act(async () => { finish!(await response(false, { error: 'not found' }, nextSnapshot)); await settle(); });
+    expect(label(page).textContent).toBe('데이터 기준 시각 확인 불가');
+  });
+
+  it('switches rent market/period metadata and preserves the matching cached metadata', async () => {
+    fetchMock.mockImplementation((input) => {
+      const url = String(input);
+      if (url.startsWith('/api/transactions/districts')) return response(true, { districts: [] });
+      return response(true, { data: [] }, url.includes('months=6') ? nextSnapshot : oldSnapshot);
+    });
+    const page = await renderClient('district=강남구&dealType=jeonse');
+    expect(label(page).textContent).toContain('2026.08.16 05:17');
+    routeQuery.value = 'district=강남구&dealType=monthly&months=6';
+    await act(async () => { root!.render(<TransactionsClient />); await settle(); });
+    expect(label(page).textContent).toContain('2026.08.17 05:20');
+    routeQuery.value = 'district=강남구&dealType=buy&months=6';
+    await act(async () => { root!.render(<TransactionsClient />); await settle(); });
+    const rentRequests = () => fetchMock.mock.calls.filter(([input]) => String(input).startsWith('/api/transactions/rent')).length;
+    const count = rentRequests();
+    routeQuery.value = 'district=강남구&dealType=monthly&months=6';
+    await act(async () => { root!.render(<TransactionsClient />); await settle(); });
+    expect(rentRequests()).toBe(count);
+    expect(label(page).textContent).toContain('2026.08.17 05:20');
+  });
+
+  it('summary uses snapshot metadata and does not call an older daily batch today', async () => {
+    fetchMock.mockImplementation(() => response(true, {
+      summary: [{ label: '서울', estimatedCount: 1, newHighs: 0, avg59: null, avg84: null, firstDistrict: '강남구' }],
+      daily: { date: '2026-08-15', totalCount: 1, totalNewHighs: 0 },
+      updatedAt: nextSnapshot,
+    }, oldSnapshot));
+    const page = await renderClient('');
+    expect(label(page).textContent).toBe('데이터 기준 2026.08.16 05:17 (한국시간)');
+    expect(page.textContent).toContain('2026-08-15 공개분');
+    expect(page.textContent).not.toContain('오늘 공개');
+  });
+
+  it.each([
+    ['buy', false], ['buy', true], ['jeonse', false], ['jeonse', true], ['bunyang', false], ['bunyang', true],
+  ] as const)('%s restores records and freshness together after another request (failed=%s)', async (dealType, failed) => {
+    let finish: ((value: Awaited<ReturnType<typeof response>>) => void) | undefined;
+    const firstGroup = dealType === 'jeonse' ? rentGroup : {
+      id: 'cached-apt', name: '보존할 매매 단지', district: '강남구', dong: '대치동', areas: [84],
+      transactions: [{ date: '2026-08-15', area: 84, floor: 10, price: 90000 }],
+    };
+    fetchMock.mockImplementation((input) => {
+      const url = String(input);
+      if (url.startsWith('/api/transactions/districts')) return response(true, { districts: [] });
+      if (url.includes('months=6')) return new Promise((resolve) => { finish = resolve; });
+      return response(true, { data: [firstGroup] }, oldSnapshot);
+    });
+    const firstQuery = `district=강남구&dealType=${dealType}&months=2`;
+    const page = await renderClient(firstQuery);
+    routeQuery.value = `district=강남구&dealType=${dealType === 'jeonse' ? 'monthly' : dealType}&months=6`;
+    await act(async () => { root!.render(<TransactionsClient />); await settle(); });
+    expect(label(page).textContent).toBe('데이터 기준 시각 확인 중');
+    if (failed) {
+      await act(async () => { finish!(await response(false, { error: 'unavailable' })); await settle(); });
+      expect(label(page).textContent).toBe('데이터 기준 시각 확인 불가');
+    }
+    routeQuery.value = firstQuery;
+    await act(async () => { root!.render(<TransactionsClient />); await settle(); });
+    expect(label(page).textContent).toContain('2026.08.16 05:17');
+    expect(page.querySelector('[data-testid="apt-card"], [data-testid="rent-card"]')?.textContent).toBe(firstGroup.name);
+    expect(page.querySelector('[role="alert"]')).toBeNull();
+    if (!failed) {
+      await act(async () => { finish!(await response(true, { data: [] }, nextSnapshot)); await settle(); });
+      expect(label(page).textContent).toContain('2026.08.16 05:17');
+      expect(page.querySelector('[data-testid="apt-card"], [data-testid="rent-card"]')?.textContent).toBe(firstGroup.name);
+    }
+  });
+
+  it('ignores a superseded summary response even when fetch does not honor cancellation', async () => {
+    let finish: ((value: Awaited<ReturnType<typeof response>>) => void) | undefined;
+    const summary = [{ label: '서울', estimatedCount: 1, newHighs: 0, avg59: null, avg84: null, firstDistrict: '강남구' }];
+    fetchMock.mockImplementation((input) => String(input).includes('dealType=jeonse')
+      ? response(true, { summary }, nextSnapshot)
+      : new Promise((resolve) => { finish = resolve; }));
+    const page = await renderClient('');
+    routeQuery.value = 'dealType=jeonse';
+    await act(async () => { root!.render(<TransactionsClient />); await settle(); });
+    expect(label(page).textContent).toContain('2026.08.17 05:20');
+    await act(async () => { finish!(await response(true, { summary }, oldSnapshot)); await settle(); });
+    expect(label(page).textContent).toContain('2026.08.17 05:20');
+  });
 });
 
 describe('TransactionsClient retry behavior', () => {
@@ -314,6 +446,61 @@ describe('TransactionsClient retry behavior', () => {
 });
 
 describe('TransactionsClient apartment search', () => {
+  it('매매 응답 뒤 지연된 URL이 반영되어도 같은 조건의 계약 딥링크를 연다', async () => {
+    const historicalTx = '2025-10-01_84_10_80000';
+    const makeGroup = (date: string) => ({
+      ...rentGroup, masterId: 'A-GARAM', name: '가람', dong: '일원동',
+      transactions: [{ ...rentGroup.transactions[0], price: 80_000, date }],
+    });
+    fetchMock.mockImplementation((input: string | URL | Request) => {
+      const url = String(input);
+      if (url.startsWith('/api/transactions?')) {
+        const months = new URL(url, 'http://localhost').searchParams.get('months');
+        return response(true, {
+          data: [makeGroup(months === '12' ? '2025-10-01' : '2026-09-05')],
+        }, '2026-09-05T20:00:00Z');
+      }
+      if (url.startsWith('/api/transactions/districts?')) return response(true, { districts: [] });
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    const originalQuery = 'district=강남구&q=가람&aptId=A-GARAM&aptDong=일원동&months=2';
+    const page = await renderClient(originalQuery);
+    const buyRequests = () => fetchMock.mock.calls.filter(([input]) => String(input).startsWith('/api/transactions?')).length;
+    let pendingHref = '';
+    // The optimistic period and successful records arrive before useSearchParams changes.
+    routerReplace.mockImplementation((href: string) => { pendingHref = href; });
+    await act(async () => {
+      findButton(page, '1년')!.click();
+      await settle();
+    });
+    expect(routeQuery.value).toBe(originalQuery);
+    expect(findButton(page, '1년')?.getAttribute('aria-pressed')).toBe('true');
+    expect(new URL(pendingHref, 'http://localhost').searchParams.get('months')).toBe('12');
+    expect(buyRequests()).toBe(2);
+    expect(page.querySelector('[data-testid="apt-card"]')?.textContent).toBe('가람');
+
+    await act(async () => {
+      routeQuery.value = pendingHref.slice(pendingHref.indexOf('?') + 1);
+      root!.render(<TransactionsClient />);
+      await settle();
+    });
+    expect(buyRequests()).toBe(2);
+    expect(page.querySelector('[data-testid="buy-modal"]')).toBeNull();
+
+    // Only tx changes: the already-successful request must remain eligible to open.
+    await act(async () => {
+      const params = new URLSearchParams(routeQuery.value);
+      params.set('tx', historicalTx);
+      routeQuery.value = params.toString();
+      root!.render(<TransactionsClient />);
+      await settle();
+    });
+    const modal = page.querySelector('[data-testid="buy-modal"]');
+    expect(modal?.getAttribute('data-contract-dates')).toBe('2025-10-01');
+    expect(modal?.getAttribute('data-tx')).toBe(historicalTx);
+    expect(buyRequests()).toBe(2);
+  });
+
   it.each(['buy', 'jeonse', 'monthly', 'bunyang'])(
     '%s 새 기간의 공유 링크는 기존 모달을 닫고 해당 요청의 과거 계약 응답을 기다린다',
     async (dealType) => {
