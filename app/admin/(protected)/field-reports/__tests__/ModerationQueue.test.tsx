@@ -69,7 +69,8 @@ describe('moderation queue rendering', () => {
     expect(html).not.toContain('이미 게시한 단지');
     expect(html).toContain('개인정보 포함');
     expect(html).toContain('소식 출처 (직접 선택)');
-    expect(html).toContain('미확인 현장 제보');
+    expect(html).toContain('현장 제보');
+    expect(html).not.toContain('미확인 현장 제보');
     expect(html).toContain('신고된 제보는 확인 후 숨김 처리할 수 있습니다.');
   });
 
@@ -182,5 +183,25 @@ describe('moderation queue rendering', () => {
   it('does not allow rejection to be bypassed by hiding and then republishing', async () => {
     const content = await renderAllReports([reportFixture({ status: 'rejected' })]);
     expect(content.querySelector<HTMLButtonElement>('button[value="hidden"]')!.disabled).toBe(true);
+  });
+
+  it('keeps the field-report name separate from an actual received complaint', async () => {
+    const content = await renderAllReports([
+      reportFixture({ id: 'ordinary', apartmentName: '일반 제보 단지', status: 'published' }),
+      reportFixture({ id: 'flagged', apartmentName: '실제 신고 단지', status: 'published', flaggedAt: '2026-08-31T01:00:00.000Z', flagReason: 'personal_information' }),
+    ]);
+    const ordinary = content.querySelector('article[aria-labelledby="report-ordinary"]')!;
+    const flagged = content.querySelector('article[aria-labelledby="report-flagged"]')!;
+    for (const card of [ordinary, flagged]) {
+      expect([...card.querySelectorAll('span')].some((span) => span.textContent === '현장 제보')).toBe(true);
+      expect(card.textContent).not.toContain('미확인 현장 제보');
+    }
+    expect(ordinary.textContent).not.toContain('신고 접수');
+    expect(ordinary.textContent).not.toContain('신고 사유:');
+    expect(flagged.textContent).toContain('신고 접수');
+    expect(flagged.textContent).toContain('신고 사유: 개인정보 포함');
+    expect(flagged.textContent).toContain('신고 시각:');
+    expect(flagged.querySelector<HTMLButtonElement>('button[value="published"]')!.disabled).toBe(true);
+    expect(flagged.querySelector<HTMLButtonElement>('button[value="hidden"]')!.disabled).toBe(false);
   });
 });

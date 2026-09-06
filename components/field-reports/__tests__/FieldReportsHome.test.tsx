@@ -145,7 +145,7 @@ describe('현장 제보가격 공개 UI', () => {
     });
     expect(url.searchParams.has('tx')).toBe(false);
     expect(url.searchParams.has('rtx')).toBe(false);
-    expect(host.querySelector('article')?.textContent).toContain('미확인 제보');
+    expect(host.querySelector('article')?.textContent).toContain('현장 제보');
   });
 
   it('이름이 같은 단지의 ID와 동을 섞지 않는다', async () => {
@@ -212,11 +212,20 @@ describe('현장 제보가격 공개 UI', () => {
     expect(button('가격 제보하기').disabled).toBe(true);
   });
 
-  it('서버 데이터만 최대 6건 표시하고 모든 카드에 미확인 문구를 붙인다', async () => {
+  it('서버 데이터만 최대 6건 표시하고 현장 제보 명칭과 신고 기능을 구별한다', async () => {
     fetchMock.mockResolvedValue(response({ status: 'ok', submissionsEnabled: true, reports: Array.from({ length: 8 }, (_, index) => report({ id: `report-${index}` })) }));
     await renderPanel();
     expect(host.querySelectorAll('article')).toHaveLength(6);
-    expect([...host.querySelectorAll('article')].every((card) => card.textContent?.includes('미확인 제보'))).toBe(true);
+    for (const card of host.querySelectorAll('article')) {
+      expect(card.querySelector(`.${styles.unverifiedBadge}`)?.textContent).toBe('현장 제보');
+      expect(card.getAttribute('aria-label')).toBe('테스트 단지 매매 현장 제보');
+      expect(card.textContent).not.toContain('미확인 제보');
+      expect(card.textContent).not.toContain('신고 접수');
+      const flagButton = card.querySelector<HTMLButtonElement>('button[aria-label="테스트 단지 제보 신고"]');
+      expect(flagButton?.textContent).toBe('신고');
+      expect(flagButton?.disabled).toBe(false);
+      expect(flagButton?.getAttribute('aria-expanded')).toBe('false');
+    }
     expect(host.textContent).toContain('공식 실거래와 별개인 미확인 정보');
     expect(host.textContent).toContain('10억 5,000만원');
     expect(host.textContent).toContain('8. 21.');
@@ -254,6 +263,21 @@ describe('현장 제보가격 공개 UI', () => {
     await click('제보 접기');
     expect(host.querySelector('form')).toBeNull();
     expect(document.activeElement).toBe(button('가격 제보하기'));
+  });
+
+  it('동의문은 현장 제보로 명명하고 관리자 승인 후 공개 안내를 유지한다', async () => {
+    await renderPanel();
+    await click('가격 제보하기');
+    const form = host.querySelector('form')!;
+    const consent = form.querySelector<HTMLInputElement>('[name="consent"]')!;
+    expect(consent.required).toBe(true);
+    expect(consent.checked).toBe(false);
+    expect(consent.closest('label')?.textContent).toContain('현장 제보 공개와');
+    expect(consent.closest('label')?.textContent).not.toContain('미확인 제보');
+    expect(form.textContent).toContain('관리자 승인 후');
+    expect(form.textContent).toContain('공식 실거래와 별개');
+    expect(form.querySelector('a[href="/terms#field-reports"]')).not.toBeNull();
+    expect(form.querySelector('a[href="/privacy#field-reports"]')).not.toBeNull();
   });
 
   it('월세 필드는 월세 선택 시에만 전송하고 개인정보 필드를 만들지 않는다', async () => {

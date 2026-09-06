@@ -74,8 +74,8 @@ function ReportCard({ report }: { report: PublicFieldReport }) {
   }));
 
   return (
-    <article className={styles.reportCard} aria-label={`${report.apartmentName} ${TRADE_LABELS[report.tradeType]} 미확인 제보`}>
-      <div className={styles.cardTop}><span className={styles.unverifiedBadge}>미확인 제보</span><span className={styles.tradeBadge}>{TRADE_LABELS[report.tradeType]}</span></div>
+    <article className={styles.reportCard} aria-label={`${report.apartmentName} ${TRADE_LABELS[report.tradeType]} 현장 제보`}>
+      <div className={styles.cardTop}><span className={styles.unverifiedBadge}>현장 제보</span><span className={styles.tradeBadge}>{TRADE_LABELS[report.tradeType]}</span></div>
       <h3>{report.apartmentName}</h3>
       <p className={styles.location}>{report.sido} {report.sigungu} {report.dong}</p>
       <div className={styles.reportPrice}>
@@ -188,7 +188,7 @@ export default function FieldReportsHome({ expanded = false }: { expanded?: bool
             {feed.reports.length === 0 ? (
               <div className={styles.emptyState} role="status">
                 {!compact ? <span className={styles.emptyIcon}><MessageSquareText size={23} aria-hidden="true" /></span> : null}
-                <div><strong>아직 공개된 제보가 없습니다.</strong><p>{feed.submissionsEnabled ? (compact ? '계약 소식을 알려주시면 검수 후 공개합니다.' : '최근 체결된 계약 소식을 알려주시면, 검수 후 미확인 제보로 공개합니다.') : '제보가 접수되면 검수 후 이곳에 공개합니다.'}</p></div>
+                <div><strong>아직 공개된 제보가 없습니다.</strong><p>{feed.submissionsEnabled ? (compact ? '계약 소식을 알려주시면 검수 후 공개합니다.' : '최근 체결된 계약 소식을 알려주시면, 검수 후 현장 제보로 공개합니다.') : '제보가 접수되면 검수 후 이곳에 공개합니다.'}</p></div>
               </div>
             ) : (
               <div className={styles.reportGrid}>{feed.reports.slice(0, expanded ? 20 : 6).map((report) => <ReportCard key={report.id} report={report} />)}</div>

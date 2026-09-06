@@ -126,7 +126,7 @@ export default function FieldReportForm({ id, onClose }: { id: string; onClose: 
             </div>
             <div className={styles.consentFields}>
               <label><input type="checkbox" name="confirmContracted" required checked={confirmContracted} onChange={(event) => setConfirmContracted(event.target.checked)} /><span>실제로 체결된 계약입니다. (필수)</span></label>
-              <label><input type="checkbox" name="consent" required checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span>미확인 제보 공개와 <Link href="/terms#field-reports">이용 기준</Link>·<Link href="/privacy#field-reports">정보 처리 안내</Link>에 동의합니다. (필수)</span></label>
+              <label><input type="checkbox" name="consent" required checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span>현장 제보 공개와 <Link href="/terms#field-reports">이용 기준</Link>·<Link href="/privacy#field-reports">정보 처리 안내</Link>에 동의합니다. (필수)</span></label>
             </div>
             <div className={styles.visuallyHidden} aria-hidden="true">
               <label htmlFor={`${prefix}-website`}>웹사이트</label>
@@ -136,7 +136,7 @@ export default function FieldReportForm({ id, onClose }: { id: string; onClose: 
               <div className={styles.errorMessage} ref={statusRef} role="alert" tabIndex={-1}>{state.message}</div>
             ) : null}
             <div className={styles.submitRow}>
-              <p>제보는 바로 공개되지 않습니다. 공개 후에도 공식 실거래와 별개의 미확인 정보로 표시됩니다.</p>
+              <p>제보는 관리자 승인 후 공개됩니다. 공식 실거래와 별개인 현장 제보로 표시됩니다.</p>
               <button type="submit" className={styles.primaryButton} disabled={pending || !apartment}>{pending ? '접수 중…' : '제보 접수하기'}</button>
             </div>
           </fieldset>

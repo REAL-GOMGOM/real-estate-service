@@ -104,7 +104,7 @@ export function ModerationQueue({
                     <div>
                       <div className="flex flex-wrap items-center gap-2 text-xs">
                         <span className="rounded-md bg-slate-100 px-2 py-1 font-medium text-slate-700">{STATUS_LABELS[report.status]}</span>
-                        <span className="text-slate-500">미확인 현장 제보</span>
+                        <span className="text-slate-500">현장 제보</span>
                         {flagged && <span className="rounded-md bg-red-50 px-2 py-1 font-medium text-red-700">신고 접수</span>}
                         {expired && <span className="rounded-md bg-slate-100 px-2 py-1 text-slate-500">공개 기한 만료</span>}
                       </div>
