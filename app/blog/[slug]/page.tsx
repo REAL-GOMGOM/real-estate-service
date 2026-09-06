@@ -1,7 +1,7 @@
 import { cache, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { MDXRemote } from 'next-mdx-remote/rsc';
 import remarkGfm from 'remark-gfm';
 import Header from '@/components/layout/Header';
@@ -13,6 +13,8 @@ import { SITE_URL, SITE_NAME } from '@/lib/site';
 import { mdxComponents } from '../components/mdx-components';
 import CoupangBanner from '@/components/ads/CoupangBanner';
 import { BlogServiceUnavailable } from '../components/BlogServiceUnavailable';
+import { isPublicBlogEnabled } from '@/lib/public-features';
+import { PUBLIC_BLOG_PAUSED_METADATA } from '@/lib/blog/public-pause';
 
 const SLUG_PATTERN = /^[a-z0-9-]{1,200}$/;
 
@@ -39,6 +41,7 @@ const getCachedPublishedPost = cache(async (slug: string): Promise<CachedPostRes
 });
 
 export async function generateMetadata({ params }: { params: Params }) {
+  if (!isPublicBlogEnabled()) return PUBLIC_BLOG_PAUSED_METADATA;
   const { slug } = await params;
   if (!SLUG_PATTERN.test(slug)) {
     return { title: `칼럼 — ${SITE_NAME}` };
@@ -92,6 +95,7 @@ export async function generateMetadata({ params }: { params: Params }) {
 }
 
 export default function PostDetailPage({ params }: { params: Params }) {
+  if (!isPublicBlogEnabled()) redirect('/');
   return (
     <>
       <Suspense fallback={null}>

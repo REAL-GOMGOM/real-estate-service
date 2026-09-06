@@ -2,7 +2,9 @@ import { ImageResponse } from 'next/og';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { getPublishedPostBySlug } from '@/lib/blog/queries';
-import { SITE_NAME } from '@/lib/site';
+import { SITE_NAME, SITE_URL } from '@/lib/site';
+import { isPublicBlogEnabled } from '@/lib/public-features';
+import { PUBLIC_BLOG_PAUSED_HEADERS } from '@/lib/blog/public-pause';
 
 export const alt = '내집(My.ZIP) 칼럼';
 export const size = { width: 1200, height: 630 };
@@ -36,6 +38,12 @@ async function loadPretendard(): Promise<ArrayBuffer> {
 type ImageParams = Promise<{ slug: string }>;
 
 export default async function OpengraphImage({ params }: { params: ImageParams }) {
+  if (!isPublicBlogEnabled()) {
+    return new Response(null, {
+      status: 307,
+      headers: { ...PUBLIC_BLOG_PAUSED_HEADERS, Location: `${SITE_URL}/opengraph-image` },
+    });
+  }
   const { slug } = await params;
   let post: Awaited<ReturnType<typeof getPublishedPostBySlug>> = null;
   try {

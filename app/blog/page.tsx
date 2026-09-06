@@ -1,4 +1,6 @@
 import { Suspense } from 'react';
+import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { getPublishedPosts, getAllCategories } from '@/lib/blog/queries';
@@ -7,8 +9,10 @@ import { PostCard } from './components/PostCard';
 import { CategoryTabs } from './components/CategoryTabs';
 import { Pagination } from './components/Pagination';
 import { BlogServiceUnavailable } from './components/BlogServiceUnavailable';
+import { isPublicBlogEnabled } from '@/lib/public-features';
+import { PUBLIC_BLOG_PAUSED_METADATA } from '@/lib/blog/public-pause';
 
-export const metadata = {
+const enabledMetadata: Metadata = {
   title: `칼럼 — ${SITE_NAME}`,
   description: '부동산 시장·청약·대출·세금·정책에 대한 인사이트와 가이드.',
   alternates: {
@@ -36,6 +40,10 @@ export const metadata = {
   },
 };
 
+export function generateMetadata() {
+  return isPublicBlogEnabled() ? enabledMetadata : PUBLIC_BLOG_PAUSED_METADATA;
+}
+
 type SearchParams = Promise<{ page?: string; q?: string }>;
 
 export default function BlogIndexPage({
@@ -43,6 +51,7 @@ export default function BlogIndexPage({
 }: {
   searchParams: SearchParams;
 }) {
+  if (!isPublicBlogEnabled()) redirect('/');
   return (
     <>
       <Suspense fallback={null}>

@@ -1,8 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import nextConfig from '@/next.config';
 import RootOpenGraphImage from '@/app/opengraph-image';
 import RegionOpenGraphImage from '@/app/region/[id]/opengraph-image';
 import BlogOpenGraphImage from '@/app/blog/[slug]/opengraph-image';
+import { isPublicBlogEnabled } from '@/lib/public-features';
+import { getPublishedPostBySlug } from '@/lib/blog/queries';
+import { SITE_URL } from '@/lib/site';
+
+vi.mock('@/lib/public-features', () => ({ isPublicBlogEnabled: vi.fn() }));
 
 vi.mock('@/lib/blog/queries', () => ({
   getPublishedPostBySlug: vi.fn().mockResolvedValue({
@@ -24,6 +29,20 @@ async function expectPng(response: Response) {
 }
 
 describe('Open Graph images', () => {
+  beforeEach(() => {
+    vi.mocked(isPublicBlogEnabled).mockReturnValue(true);
+    vi.mocked(getPublishedPostBySlug).mockClear();
+  });
+
+  it('paused blog OG redirects temporarily without querying the post', async () => {
+    vi.mocked(isPublicBlogEnabled).mockReturnValue(false);
+    const response = await BlogOpenGraphImage({ params: Promise.resolve({ slug: 'saved-column' }) });
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe(`${SITE_URL}/opengraph-image`);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('x-naezip-data-status')).toBe('paused');
+    expect(getPublishedPostBySlug).not.toHaveBeenCalled();
+  });
   it('includes the local Pretendard font in every OG server trace', () => {
     expect(nextConfig.outputFileTracingIncludes).toMatchObject({
       '/opengraph-image': ['./public/fonts/Pretendard-Bold.otf'],

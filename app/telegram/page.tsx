@@ -3,6 +3,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { SITE_URL } from '@/lib/site';
 import { TrackedTelegramLink } from '@/components/shared/TrackedTelegramLink';
+import { isPublicBlogEnabled } from '@/lib/public-features';
 
 /**
  * 텔레그램 채널 경유 랜딩 — /telegram (2026-07-12)
@@ -18,12 +19,16 @@ const CHANNEL_URL = process.env.NEXT_PUBLIC_TELEGRAM_CHANNEL_URL || 'https://t.m
 
 export const metadata: Metadata = {
   title: '내집 텔레그램 채널 — 실거래 신고가·시장 분석 알림',
-  description: '주요 실거래 다이제스트, 신고가 알림, 새 칼럼 소식을 선별해 전하는 내집(My.ZIP) 공식 텔레그램 채널입니다.',
+  description: isPublicBlogEnabled()
+    ? '주요 실거래 다이제스트, 신고가 알림, 새 칼럼 소식을 선별해 전하는 내집(My.ZIP) 공식 텔레그램 채널입니다.'
+    : '주요 실거래 다이제스트, 신고가 알림, 부동산 뉴스를 선별해 전하는 내집(My.ZIP) 공식 텔레그램 채널입니다.',
   alternates: { canonical: `${SITE_URL}/telegram` },
   robots: { index: false, follow: true },
   openGraph: {
     title: '내집 텔레그램 채널',
-    description: '실거래 신고가 · 시장 분석 · 새 칼럼 소식을 선별해 전달합니다',
+    description: isPublicBlogEnabled()
+      ? '실거래 신고가 · 시장 분석 · 새 칼럼 소식을 선별해 전달합니다'
+      : '실거래 신고가 · 시장 분석 · 부동산 뉴스를 선별해 전달합니다',
     url: `${SITE_URL}/telegram`,
     siteName: '내집(My.ZIP)',
     locale: 'ko_KR',
@@ -41,6 +46,7 @@ const PERKS = [
 ];
 
 export default function TelegramLandingPage() {
+  const visiblePerks = PERKS.filter((perk) => perk.title !== '새 칼럼 소식' || isPublicBlogEnabled());
   return (
     <main style={{
       minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -53,7 +59,7 @@ export default function TelegramLandingPage() {
           내집 텔레그램 채널
         </h1>
         <p style={{ margin: 0, fontSize: 14, color: '#5B6472', lineHeight: 1.6 }}>
-          실거래 신고가 · 시장 분석 · 새 칼럼 소식을<br />운영 일정에 따라 선별해 받아보세요
+          실거래 신고가 · 시장 분석 · {isPublicBlogEnabled() ? '새 칼럼 소식을' : '부동산 뉴스를'}<br />운영 일정에 따라 선별해 받아보세요
         </p>
 
         {/* 혜택 */}
@@ -61,10 +67,10 @@ export default function TelegramLandingPage() {
           margin: '28px 0', padding: '6px 20px', borderRadius: 16,
           background: '#FFFFFF', border: '1px solid #E7EAF0', textAlign: 'left',
         }}>
-          {PERKS.map((p, i) => (
+          {visiblePerks.map((p, i) => (
             <div key={p.title} style={{
               display: 'flex', gap: 12, alignItems: 'flex-start', padding: '13px 0',
-              borderBottom: i < PERKS.length - 1 ? '1px solid #F1F3F7' : 'none',
+              borderBottom: i < visiblePerks.length - 1 ? '1px solid #F1F3F7' : 'none',
             }}>
               <span style={{ fontSize: 18, flexShrink: 0 }}>{p.icon}</span>
               <span>

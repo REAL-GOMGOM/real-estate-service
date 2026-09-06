@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { connection, getRecentPublishedPostsForFeed } = vi.hoisted(() => ({
+const { connection, getRecentPublishedPostsForFeed, isPublicBlogEnabled } = vi.hoisted(() => ({
   connection: vi.fn().mockResolvedValue(undefined),
   getRecentPublishedPostsForFeed: vi.fn(),
+  isPublicBlogEnabled: vi.fn(),
 }));
+
+vi.mock('@/lib/public-features', () => ({ isPublicBlogEnabled }));
 
 vi.mock('next/server', () => ({ connection }));
 vi.mock('@/lib/blog/queries', () => ({ getRecentPublishedPostsForFeed }));
@@ -12,9 +15,23 @@ import { GET } from '../route';
 
 describe('GET /api/blog/feed', () => {
   beforeEach(() => {
+    isPublicBlogEnabled.mockReturnValue(true);
     connection.mockClear();
     getRecentPublishedPostsForFeed.mockReset();
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  });
+
+  it('발행 pause는 장애나 정상 빈 목록과 구별하고 자료를 조회하지 않는다', async () => {
+    isPublicBlogEnabled.mockReturnValue(false);
+    const response = await GET();
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: 'paused', data: [] });
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('x-naezip-data-status')).toBe('paused');
+    expect(response.headers.get('x-robots-tag')).toBe('noindex');
+    expect(connection).not.toHaveBeenCalled();
+    expect(getRecentPublishedPostsForFeed).not.toHaveBeenCalled();
+    expect(console.error).not.toHaveBeenCalled();
   });
 
   afterEach(() => {

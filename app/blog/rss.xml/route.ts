@@ -1,5 +1,7 @@
 import { getRecentPublishedPostsForFeed } from '@/lib/blog/queries';
 import { SITE_URL, SITE_NAME } from '@/lib/site';
+import { isPublicBlogEnabled } from '@/lib/public-features';
+import { PUBLIC_BLOG_PAUSED_HEADERS } from '@/lib/blog/public-pause';
 
 const FEED_TITLE = `${SITE_NAME} 칼럼`;
 const FEED_DESCRIPTION =
@@ -34,6 +36,22 @@ function cdata(s: string): string {
 }
 
 export async function GET() {
+  if (!isPublicBlogEnabled()) {
+    // Do not fabricate a new publication time or an announcement <item>: bots
+    // must see an intentionally empty feed while all original posts stay saved.
+    return new Response(`<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>${cdata(FEED_TITLE)}</title>
+    <link>${SITE_URL}</link>
+    <atom:link href="${SITE_URL}/blog/rss.xml" rel="self" type="application/rss+xml" />
+    <description>${cdata('칼럼 발행을 잠시 쉬고 있습니다.')}</description>
+    <language>ko-KR</language>
+  </channel>
+</rss>`, {
+      headers: { ...PUBLIC_BLOG_PAUSED_HEADERS, 'Content-Type': 'application/xml; charset=utf-8' },
+    });
+  }
   let dataStatus: 'fresh' | 'degraded' = 'fresh';
   let items: Awaited<ReturnType<typeof getRecentPublishedPostsForFeed>> = [];
   try {

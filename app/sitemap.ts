@@ -2,9 +2,11 @@ import type { MetadataRoute } from 'next';
 import { getAllRegionIds } from '@/lib/region-data';
 import { getAllPublishedSlugs, getAllCategories } from '@/lib/blog/queries';
 import { SITE_URL } from '@/lib/site';
+import { isPublicBlogEnabled } from '@/lib/public-features';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = SITE_URL;
+  const publicBlogEnabled = isPublicBlogEnabled();
 
   // 변경 시각을 알 수 없는 정적 페이지에 요청 시각을 넣지 않는다.
   // 매 요청마다 갱신된 것처럼 보이면 검색엔진의 변경 신호가 오염된다.
@@ -29,14 +31,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${baseUrl}/privacy`, changeFrequency: 'yearly', priority: 0.3 },
     { url: `${baseUrl}/terms`, changeFrequency: 'yearly', priority: 0.3 },
     { url: `${baseUrl}/contact`, changeFrequency: 'yearly', priority: 0.3 },
-    { url: `${baseUrl}/blog`, changeFrequency: 'daily', priority: 0.8 },
   ];
+  if (publicBlogEnabled) {
+    staticPages.push({ url: `${baseUrl}/blog`, changeFrequency: 'daily', priority: 0.8 });
+  }
 
   // 블로그 DB가 중단돼도 정적·지역 URL은 계속 제공해야 한다.
   const [regionResult, categoryResult, postResult] = await Promise.allSettled([
     getAllRegionIds(),
-    getAllCategories(),
-    getAllPublishedSlugs(),
+    publicBlogEnabled ? getAllCategories() : Promise.resolve([]),
+    publicBlogEnabled ? getAllPublishedSlugs() : Promise.resolve([]),
   ]);
 
   if (regionResult.status === 'rejected') {

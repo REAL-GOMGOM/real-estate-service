@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import BlogBreadcrumb from '@/components/blog/BlogBreadcrumb';
@@ -12,6 +12,8 @@ import { PostCard } from '../../components/PostCard';
 import { CategoryTabs } from '../../components/CategoryTabs';
 import { Pagination } from '../../components/Pagination';
 import { BlogServiceUnavailable } from '../../components/BlogServiceUnavailable';
+import { isPublicBlogEnabled } from '@/lib/public-features';
+import { PUBLIC_BLOG_PAUSED_METADATA } from '@/lib/blog/public-pause';
 
 const SLUG_PATTERN = /^[a-z0-9-]{1,200}$/;
 
@@ -19,6 +21,7 @@ type Params = Promise<{ categorySlug: string }>;
 type SearchParams = Promise<{ page?: string }>;
 
 export async function generateMetadata({ params }: { params: Params }) {
+  if (!isPublicBlogEnabled()) return PUBLIC_BLOG_PAUSED_METADATA;
   const { categorySlug } = await params;
   if (!SLUG_PATTERN.test(categorySlug)) {
     return { title: `칼럼 — ${SITE_NAME}` };
@@ -73,6 +76,7 @@ export default function CategoryPage({
   params: Params;
   searchParams: SearchParams;
 }) {
+  if (!isPublicBlogEnabled()) redirect('/');
   return (
     <>
       <Suspense fallback={null}>

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import Image from 'next/image';
 import { Menu, X, ChevronDown } from 'lucide-react';
+import { isPublicBlogEnabled } from '@/lib/public-features';
 
 type NavChild = { label: string; href: string; desc?: string; emoji?: string };
 type NavItem =
@@ -54,6 +55,7 @@ export default function Header() {
   const [now, setNow] = useState<Date | null>(null);
   const dropdownButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const pathname = usePathname();
+  const visibleNavItems = NAV_ITEMS.filter((item) => item.href !== '/blog' || isPublicBlogEnabled());
 
   // hydration mismatch 방지 — mount 후 비동기 주입 (동기 setState 룰 회피)
   useEffect(() => {
@@ -85,7 +87,7 @@ export default function Header() {
 
           {/* 데스크탑 네비게이션 (중앙) */}
           <nav aria-label="주요 메뉴" style={{ alignItems: 'center', gap: '22px', position: 'absolute', left: '50%', transform: 'translateX(-50%)' }} className="hidden lg:flex">
-            {NAV_ITEMS.map((item, itemIndex) => {
+            {visibleNavItems.map((item, itemIndex) => {
               if (item.children) {
                 const groupActive = isChildActive(item.children, pathname);
                 const panelId = `desktop-nav-group-${itemIndex}`;
@@ -275,7 +277,7 @@ export default function Header() {
       {/* 모바일 드롭다운 메뉴 */}
       {isMenuOpen && (
         <div id="mobile-site-navigation" style={{ backgroundColor: 'var(--bg-primary)', padding: '8px 24px 16px', borderTop: '1px solid var(--border)' }} className="lg:hidden">
-          {NAV_ITEMS.map((item) => {
+          {visibleNavItems.map((item) => {
             if (item.children) {
               const isOpen = openAccordion === item.label;
               const groupActive = isChildActive(item.children, pathname);

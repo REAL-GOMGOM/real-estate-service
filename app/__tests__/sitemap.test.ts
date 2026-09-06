@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { getAllRegionIds, getAllCategories, getAllPublishedSlugs } = vi.hoisted(
+const { getAllRegionIds, getAllCategories, getAllPublishedSlugs, isPublicBlogEnabled } = vi.hoisted(
   () => ({
     getAllRegionIds: vi.fn(),
     getAllCategories: vi.fn(),
     getAllPublishedSlugs: vi.fn(),
+    isPublicBlogEnabled: vi.fn(),
   }),
 );
+
+vi.mock('@/lib/public-features', () => ({ isPublicBlogEnabled }));
 
 vi.mock('@/lib/region-data', () => ({ getAllRegionIds }));
 vi.mock('@/lib/blog/queries', () => ({
@@ -19,6 +22,7 @@ import { SITE_URL } from '@/lib/site';
 
 describe('sitemap', () => {
   beforeEach(() => {
+    isPublicBlogEnabled.mockReturnValue(true);
     getAllRegionIds.mockReset();
     getAllCategories.mockReset();
     getAllPublishedSlugs.mockReset();
@@ -34,6 +38,17 @@ describe('sitemap', () => {
       },
     ]);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  });
+
+  it('칼럼 pause 동안 칼럼 URL을 제외하고 공개 칼럼 자료를 아예 조회하지 않는다', async () => {
+    isPublicBlogEnabled.mockReturnValue(false);
+    const result = await sitemap();
+    expect(result.some((entry) => entry.url === SITE_URL)).toBe(true);
+    expect(result.some((entry) => entry.url === `${SITE_URL}/region/gangnam-gu`)).toBe(true);
+    expect(result.some((entry) => entry.url.startsWith(`${SITE_URL}/blog`))).toBe(false);
+    expect(getAllCategories).not.toHaveBeenCalled();
+    expect(getAllPublishedSlugs).not.toHaveBeenCalled();
+    expect(console.error).not.toHaveBeenCalled();
   });
 
   afterEach(() => {

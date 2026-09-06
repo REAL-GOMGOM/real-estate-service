@@ -4,6 +4,9 @@ import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const publicFeatures = vi.hoisted(() => ({ blog: true }));
+vi.mock('@/lib/public-features', () => ({ isPublicBlogEnabled: () => publicFeatures.blog }));
+
 vi.mock('next/link', () => ({
   default: ({ href, children }: { href: string; children: ReactNode }) => <a href={href}>{children}</a>,
 }));
@@ -38,6 +41,7 @@ function apiResponse(ok: boolean, body: unknown): Response {
 beforeEach(() => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   fetchMock.mockReset();
+  publicFeatures.blog = true;
   vi.stubGlobal('fetch', fetchMock);
 });
 
@@ -50,6 +54,13 @@ afterEach(async () => {
 });
 
 describe('HomeBlogFeed', () => {
+  it('일시 비공개에서는 빈 안내나 오류 없이 숨기고 API도 호출하지 않는다', async () => {
+    publicFeatures.blog = false;
+    const feed = await renderFeed();
+    expect(feed.innerHTML).toBe('');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('로딩 중 가짜 칼럼 제목을 노출하지 않는다', async () => {
     fetchMock.mockReturnValue(new Promise(() => {}));
     const feed = await renderFeed();

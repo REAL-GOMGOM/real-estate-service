@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
+import { isPublicBlogEnabled } from '@/lib/public-features';
 
 const BLUE = '#1B4DDB';
 const INK = '#0B1524';
@@ -45,6 +46,10 @@ function formatDate(value: string): string {
 }
 
 export default function HomeBlogFeed() {
+  return isPublicBlogEnabled() ? <EnabledHomeBlogFeed /> : null;
+}
+
+function EnabledHomeBlogFeed() {
   const [state, setState] = useState<FeedState>({ status: 'loading', items: [] });
   const [retryKey, setRetryKey] = useState(0);
 

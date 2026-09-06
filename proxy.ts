@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { readPublicBlogSnapshotFromEnv } from '@/lib/blog-snapshots/reader';
 import { getPublishedPostBySlugFromSnapshot } from '@/lib/blog-snapshots/projection';
+import { isPublicBlogEnabled } from '@/lib/public-features';
+import { PUBLIC_BLOG_PAUSED_HEADERS } from '@/lib/blog/public-pause';
 
 // ── In-memory rate limit store ──
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -66,6 +68,22 @@ function getClientIp(request: NextRequest): string {
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Pause public entry points before any snapshot preflight or React streaming.
+  // RSS keeps its machine-readable paused response instead of redirecting to HTML.
+  if (!isPublicBlogEnabled() && (pathname === '/blog' || pathname.startsWith('/blog/'))) {
+    if (pathname.replace(/\/+$/, '') === '/blog/rss.xml') return NextResponse.next();
+    const destination = request.nextUrl.clone();
+    destination.pathname = /^\/blog\/[^/]+\/opengraph-image(?:[-/.]|$)/.test(pathname)
+      ? '/opengraph-image'
+      : '/';
+    destination.search = '';
+    const response = NextResponse.redirect(destination, 307);
+    for (const [key, value] of Object.entries(PUBLIC_BLOG_PAUSED_HEADERS)) {
+      response.headers.set(key, value);
+    }
+    return response;
+  }
+
   const blogDetail = BLOG_DETAIL_PATH.exec(pathname);
   if (blogDetail) return gatePublicBlogDetail(request, blogDetail[1]);
 
@@ -115,5 +133,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/api/:path*', '/blog/:slug'],
+  matcher: ['/api/:path*', '/blog/:path*'],
 };

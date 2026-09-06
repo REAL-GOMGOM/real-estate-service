@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { isPublicBlogEnabled } from '@/lib/public-features';
 import {
   BarChart3,
   Building2,
@@ -124,7 +125,7 @@ function MobileBottomNavContent({ pathname }: { pathname: string }) {
           >
             <p className="nz-mobile-more-title">더 둘러보기</p>
             <div className="nz-mobile-more-grid">
-              {MORE_ITEMS.map(({ label, href, Icon }, index) => {
+              {MORE_ITEMS.filter((item) => item.href !== '/blog' || isPublicBlogEnabled()).map(({ label, href, Icon }, index) => {
                 const active = pathname === href || pathname.startsWith(`${href}/`);
                 return (
                   <Link

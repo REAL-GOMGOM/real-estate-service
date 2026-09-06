@@ -84,6 +84,8 @@ describe('MobileBottomNav', () => {
     expect(moreButton.getAttribute('aria-expanded')).toBe('true');
     expect(moreNav.textContent).toContain('주요 거래');
     expect(moreNav.textContent).toContain('대출 계산기');
+    expect(moreNav.querySelector('a[href="/blog"]')).toBeNull();
+    expect(moreNav.textContent).not.toContain('칼럼');
     expect(document.activeElement).toBe(firstLink);
     expect(backdrop.tabIndex).toBe(-1);
 

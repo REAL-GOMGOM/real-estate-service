@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { getRecentPublishedPostsForFeed } = vi.hoisted(() => ({
+const { getRecentPublishedPostsForFeed, isPublicBlogEnabled } = vi.hoisted(() => ({
   getRecentPublishedPostsForFeed: vi.fn(),
+  isPublicBlogEnabled: vi.fn(),
 }));
+
+vi.mock('@/lib/public-features', () => ({ isPublicBlogEnabled }));
 
 vi.mock('@/lib/blog/queries', () => ({ getRecentPublishedPostsForFeed }));
 
@@ -10,8 +13,24 @@ import { GET } from '../route';
 
 describe('GET /blog/rss.xml', () => {
   beforeEach(() => {
+    isPublicBlogEnabled.mockReturnValue(true);
     getRecentPublishedPostsForFeed.mockReset();
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  });
+
+  it('발행 pause 때 글·가짜 발행시각·외부 조회 없이 명시적인 빈 RSS를 반환한다', async () => {
+    isPublicBlogEnabled.mockReturnValue(false);
+    const response = await GET();
+    const xml = await response.text();
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('x-naezip-data-status')).toBe('paused');
+    expect(response.headers.get('x-robots-tag')).toBe('noindex');
+    expect(xml).toContain('<rss version="2.0"');
+    expect(xml).toContain('칼럼 발행을 잠시 쉬고 있습니다.');
+    expect(xml).not.toMatch(/<(item|pubDate|lastBuildDate)>/);
+    expect(getRecentPublishedPostsForFeed).not.toHaveBeenCalled();
+    expect(console.error).not.toHaveBeenCalled();
   });
 
   afterEach(() => {

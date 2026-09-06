@@ -1,7 +1,14 @@
 import { connection } from 'next/server';
 import { getRecentPublishedPostsForFeed } from '@/lib/blog/queries';
+import { isPublicBlogEnabled } from '@/lib/public-features';
+import { PUBLIC_BLOG_PAUSED_HEADERS } from '@/lib/blog/public-pause';
 
 export async function GET() {
+  if (!isPublicBlogEnabled()) {
+    return Response.json({ status: 'paused', data: [] }, {
+      headers: PUBLIC_BLOG_PAUSED_HEADERS,
+    });
+  }
   // 홈 빌드가 외부 DB 상태에 종속되지 않도록 실제 요청 시점에만 조회한다.
   await connection();
   try {

@@ -25,6 +25,7 @@ import HomeApartmentSearch from '@/components/search/HomeApartmentSearch';
 import { createPageMetadata } from '@/lib/metadata';
 import { TrackedTelegramLink } from '@/components/shared/TrackedTelegramLink';
 import FieldReportsHome from '@/components/field-reports/FieldReportsHome';
+import { isPublicBlogEnabled } from '@/lib/public-features';
 
 export const metadata = createPageMetadata({
   title: '내집(My.ZIP) | 실거래가·입지분석·청약·내집마련 도구',
@@ -256,7 +257,7 @@ export default function HomePage() {
           </Link>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 26 }} className="naezip-navlinks">
-            {NAV_LINKS.map((l) => (
+            {NAV_LINKS.filter((link) => link.href !== '/blog' || isPublicBlogEnabled()).map((l) => (
               <Link key={l.href + l.label} href={l.href} style={{ fontSize: 14.5, fontWeight: 500, color: NAV, textDecoration: 'none', whiteSpace: 'nowrap' }}>
                 {l.label}
               </Link>
@@ -422,7 +423,9 @@ export default function HomePage() {
             <h2 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#FFFFFF', letterSpacing: '-0.02em' }}>
               내집 텔레그램에서 주요 부동산 소식 받아보기
             </h2>
-            <p style={{ margin: '6px 0 0', fontSize: 13, color: '#CBD8FF' }}>실거래 신고가 · 시장 분석 · 새 칼럼 소식</p>
+            <p style={{ margin: '6px 0 0', fontSize: 13, color: '#CBD8FF' }}>
+              실거래 신고가 · 시장 분석 · {isPublicBlogEnabled() ? '새 칼럼 소식' : '부동산 뉴스'}
+            </p>
           </div>
           <TrackedTelegramLink
             href={process.env.NEXT_PUBLIC_TELEGRAM_CHANNEL_URL || 'https://t.me/realMyzip'}

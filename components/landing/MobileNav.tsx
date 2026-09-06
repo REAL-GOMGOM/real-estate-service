@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Menu, X } from 'lucide-react';
+import { isPublicBlogEnabled } from '@/lib/public-features';
 
 /**
  * 모바일 내비 — 랜딩 상단 햄버거 메뉴.
@@ -43,7 +44,7 @@ export default function MobileNav() {
           borderRadius: 14, boxShadow: '0 20px 50px -24px rgba(15,30,60,0.4)',
           padding: 8, display: 'flex', flexDirection: 'column',
         }}>
-          {LINKS.map((l) => (
+          {LINKS.filter((link) => link.href !== '/blog' || isPublicBlogEnabled()).map((l) => (
             <Link
               key={l.href + l.label}
               href={l.href}
