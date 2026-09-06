@@ -7,6 +7,7 @@ import { type RentAptGroup, type RentTransaction, fmtRentPrice, buildRentShareCa
 import { buildShareImage, shareOrDownloadImage } from '@/lib/share-image';
 import { pricePerPyeong } from '@/lib/tx-share-text';
 import { rentTxKey, buildRentPeakLine, buildRentTxShareText } from '@/lib/rent-share-text';
+import { buildTransactionShareUrl } from '@/lib/transaction-share-url';
 import PriceComboChart from '@/components/apt/PriceComboChart';
 
 /**
@@ -109,14 +110,11 @@ export default function RentAptDetailModal({ apt, onClose, months, initialTx }: 
     };
   };
 
-  const apartmentQuery = () =>
-    `district=${encodeURIComponent(apt.district)}` +
-    `&q=${encodeURIComponent(apt.name)}` +
-    (apt.dong ? `&aptDong=${encodeURIComponent(apt.dong)}` : '');
-
-  const deepLinkUrl = (tx: RentTransaction) =>
-    `${window.location.origin}/transactions?${apartmentQuery()}&months=${months}` +
-    `&dealType=${isJeonse(tx) ? 'jeonse' : 'monthly'}&rtx=${encodeURIComponent(rentTxKey(tx))}`;
+  const deepLinkUrl = (tx?: RentTransaction) => buildTransactionShareUrl({
+    origin: window.location.origin, apartment: apt, months,
+    dealType: tx && !isJeonse(tx) ? 'monthly' : 'jeonse',
+    tx: tx ? rentTxKey(tx) : undefined,
+  });
 
   // 건별 이미지 공유 — 그 계약 건을 헤드로 한 카드 (기존 buildRentShareCard 재사용)
   const shareTxImage = async (tx: RentTransaction) => {
@@ -135,7 +133,7 @@ export default function RentAptDetailModal({ apt, onClose, months, initialTx }: 
           pricePerPy: d.perPy ? `평당 보증금 ${fmtPrice(d.perPy)}` : undefined,
           peakLine:   d.peakLine || undefined,
         });
-        if (blob) await shareOrDownloadImage(blob, `${apt.name}-${tx.date}-전월세.png`, apt.name);
+        if (blob) await shareOrDownloadImage(blob, `${apt.name}-${tx.date}-전월세.png`, apt.name, deepLinkUrl(tx));
       }
     } catch { /* 공유 취소 무시 */ }
     setTxSaving(false);
@@ -195,7 +193,7 @@ export default function RentAptDetailModal({ apt, onClose, months, initialTx }: 
       });
       if (data) {
         const blob = await buildShareImage(data);
-        if (blob) await shareOrDownloadImage(blob, `${apt.name}-전월세.png`, apt.name);
+        if (blob) await shareOrDownloadImage(blob, `${apt.name}-전월세.png`, apt.name, deepLinkUrl(latest));
       }
     } catch { /* 공유 취소 무시 */ }
     setImageSaving(false);
@@ -494,9 +492,7 @@ export default function RentAptDetailModal({ apt, onClose, months, initialTx }: 
             </button>
             <button
               onClick={async () => {
-                const url = latest
-                  ? deepLinkUrl(latest)
-                  : `${window.location.origin}/transactions?${apartmentQuery()}`;
+                const url = deepLinkUrl(latest);
                 const text = latest
                   ? buildRentTxShareText({
                       aptName: apt.name,

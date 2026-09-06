@@ -426,6 +426,40 @@ describe('GET /api/transactions live data truth', () => {
     expect(mocks.fetchTradeMonthAllPages).not.toHaveBeenCalled();
   });
 
+  it('ID 없는 공유 링크는 q와 동으로 스냅샷을 선필터해 상위 100개 밖 거래도 반환한다', async () => {
+    const snapshot = saleSnapshot();
+    const target = { ...snapshot.records[0], id: '000000000000000000000001', aptName: '동명공유단지', dong: '일원동' };
+    snapshot.records = [
+      ...Array.from({ length: 105 }, (_, i) => ({
+        ...target, id: (i + 2).toString(16).padStart(24, '0'), dong: `다른${i}동`,
+      })),
+      target,
+    ];
+    snapshot.recordCount = snapshot.records.length;
+    mocks.getDistrictSnapshot.mockResolvedValue({ status: 'success', data: snapshot });
+    const params = new URLSearchParams({ district: '강남구', q: '동명공유단지', aptDong: '일원동', months: '1', limit: '1' });
+    const response = await GET(new NextRequest(`http://localhost/api/transactions?${params}`));
+    const body = await response.json();
+    expect(response.headers.get('x-naezip-data-source')).toBe('snapshot');
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].dong).toBe('일원동');
+    expect(body.total).toBe(1);
+    expect(mocks.fetchTradeMonthAllPages).not.toHaveBeenCalled();
+  });
+
+  it('ID 없는 공유 링크의 live 폴백도 같은 이름의 다른 동을 섞지 않는다', async () => {
+    mocks.fetchTradeMonthAllPages.mockResolvedValue(
+      item({ ...BASE, aptNm: '가람', umdNm: '일원동', cdealType: '' }) +
+      item({ ...BASE, aptNm: '가람', umdNm: '대치동', jibun: '2-1', cdealType: '' }),
+    );
+    const params = new URLSearchParams({ district: '강남구', aptName: '가람', aptDong: '일원동', months: '1' });
+    const response = await GET(new NextRequest(`http://localhost/api/transactions?${params}`));
+    const body = await response.json();
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].dong).toBe('일원동');
+    expect(body.total).toBe(1);
+  });
+
   it('직접 district snapshot hit는 apartment index·API key·DB·MOLIT 없이 즉시 반환한다', async () => {
     delete process.env.PUBLIC_DATA_API_KEY;
     mocks.getDistrictSnapshot.mockResolvedValue({ status: 'success', data: saleSnapshot() });

@@ -8,6 +8,8 @@ import { findDistrictByLawdCd } from '@/lib/district-codes';
 import { DISTRICT_GROUPS } from '@/lib/district-groups';
 import { matchesQuery } from '@/lib/search-utils';
 import { matchesApartmentIdentity } from '@/lib/transaction-identity';
+import { txKey } from '@/lib/tx-share-text';
+import { rentTxKey } from '@/lib/rent-share-text';
 import { trackAnalyticsEvent } from '@/lib/cookie-consent';
 import Header from '@/components/layout/Header';
 import { AptAutocomplete, type ApartmentSearchResult } from '@/components/search/AptAutocomplete';
@@ -60,6 +62,21 @@ type SortKey = 'volume' | 'date' | 'price';
 
 /** 거래 유형 탭 — 사이클 II (전세·월세), 분양권 추가 */
 type DealType = 'buy' | 'jeonse' | 'monthly' | 'bunyang';
+
+function apartmentQueryString(aptId: string | null | undefined, name: string, dong: string | null) {
+  const params = new URLSearchParams();
+  if (aptId) params.set('aptId', aptId);
+  else if (name.trim()) {
+    params.set('aptName', name.trim());
+    if (dong) params.set('aptDong', dong);
+  }
+  return params.toString();
+}
+
+function transactionRequestKey(district: string, months: number, type: DealType, apartmentQuery: string) {
+  return JSON.stringify([district, months, type, apartmentQuery]);
+}
+
 const DEAL_TYPE_TABS: { key: DealType; label: string }[] = [
   { key: 'buy',     label: '매매' },
   { key: 'jeonse',  label: '전세' },
@@ -254,47 +271,81 @@ export default function TransactionsClient() {
     setFetched('');
   }, [districtParam, queryParam, aptIdParam, aptDongParam, monthsParam, dealTypeParam]);
 
-  // 계약 건 딥링크 — 로드 완료 후 대상 단지 모달 자동 오픈 (1회, 정확명 우선)
-  const autoOpenedRef = useRef(false);
+  // URL이 바뀐 첫 렌더에는 이전 요청의 groups가 남아 있을 수 있다.
+  // 성공한 응답의 요청 키가 URL과 일치할 때만 공유 계약을 연다.
+  const urlRequestKey = transactionRequestKey(
+    districtParam ?? '강남구',
+    isValidMonths(monthsParam) ? monthsParam : 2,
+    dealTypeFromParam(dealTypeParam),
+    apartmentQueryString(aptIdParam && queryParam ? aptIdParam : null, queryParam ?? '', aptDongParam),
+  );
+  const routeSelectionKey = JSON.stringify([urlRequestKey, queryParam, aptDongParam, txParam, rtxParam]);
+  const autoOpenedRef = useRef('');
+  const rentAutoOpenedRef = useRef('');
   useEffect(() => {
-    if (autoOpenedRef.current || !txParam || !queryParam || loading) return;
-    if (groups.length === 0) return;
+    setActiveApt(null);
+    setActiveRent(null);
+    autoOpenedRef.current = '';
+    rentAutoOpenedRef.current = '';
+  }, [routeSelectionKey]);
+
+  // 계약 건 딥링크 — 같은 단지의 별칭 그룹 중 실제 공유 계약이 있는 그룹 우선.
+  useEffect(() => {
+    if ((dealType !== 'buy' && dealType !== 'bunyang') || !txParam || !queryParam) return;
+    if ((dealType === 'bunyang' ? silvFetched : fetched) !== urlRequestKey) return;
+    const key = routeSelectionKey;
+    if (autoOpenedRef.current === key || (dealType === 'bunyang' ? silvLoading : loading)) return;
+    const candidates = dealType === 'bunyang' ? silvGroups : groups;
+    if (candidates.length === 0) return;
     const q = queryParam.trim();
-    const target = groups.find(
+    const exact = aptIdParam ? candidates.filter((g) => g.masterId === aptIdParam) : candidates.filter(
       (g) => g.name === q && (!aptDongParam || g.dong === aptDongParam),
-    ) ?? groups.find(
+    );
+    const matching = aptIdParam || exact.length > 0 ? exact : candidates.filter(
       (g) => matchesQuery(g.name, q) && (!aptDongParam || g.dong === aptDongParam),
     );
+    const target = matching.find((g) => g.transactions.some((transaction) => txKey(transaction) === txParam)) ?? matching[0];
     if (target) {
       setActiveApt(target);
-      autoOpenedRef.current = true;
+      autoOpenedRef.current = key;
     }
-  }, [groups, loading, txParam, queryParam, aptDongParam]);
+  }, [groups, silvGroups, loading, silvLoading, fetched, silvFetched, urlRequestKey, routeSelectionKey, dealType, txParam, queryParam, aptIdParam, aptDongParam]);
 
   // 전월세 계약 건 딥링크 (전월세 대칭 2026-07-19) — rentGroups 로드 후 자동 오픈 (1회)
-  const rentAutoOpenedRef = useRef(false);
   useEffect(() => {
-    if (rentAutoOpenedRef.current || !rtxParam || !queryParam || rentLoading) return;
+    if ((dealType !== 'jeonse' && dealType !== 'monthly') || !rtxParam || !queryParam || rentLoading) return;
+    if (rentFetched !== urlRequestKey) return;
+    const key = routeSelectionKey;
+    if (rentAutoOpenedRef.current === key) return;
     if (rentGroups.length === 0) return;
     const q = queryParam.trim();
-    const target = rentGroups.find(
+    const exact = aptIdParam ? rentGroups.filter((g) => g.masterId === aptIdParam) : rentGroups.filter(
       (g) => g.name === q && (!aptDongParam || g.dong === aptDongParam),
-    ) ?? rentGroups.find(
+    );
+    const matching = aptIdParam || exact.length > 0 ? exact : rentGroups.filter(
       (g) => matchesQuery(g.name, q) && (!aptDongParam || g.dong === aptDongParam),
     );
+    const target = matching.find((g) => g.transactions.some((transaction) => rentTxKey(transaction) === rtxParam)) ?? matching[0];
     if (target) {
       setActiveRent(target);
-      rentAutoOpenedRef.current = true;
+      rentAutoOpenedRef.current = key;
     }
-  }, [rentGroups, rentLoading, rtxParam, queryParam, aptDongParam]);
+  }, [rentGroups, rentLoading, rentFetched, urlRequestKey, routeSelectionKey, dealType, rtxParam, queryParam, aptIdParam, aptDongParam]);
+
+  // 목록을 잘라 받은 뒤 검색하면 거래가 적은 단지가 누락된다.
+  // 정확 단지 ID 또는 기존 공유 링크의 이름·동을 모든 거래 API에 전달한다.
+  const apartmentRequestQuery = useMemo(
+    () => apartmentQueryString(selectedApt?.id, query, aptDongParam),
+    [selectedApt?.id, query, aptDongParam],
+  );
 
   const load = useCallback(async (
     d: string,
     m: number,
-    exactAptId = '',
+    apartmentQuery = '',
     force = false,
   ) => {
-    const key = `${d}-${m}-${exactAptId || 'district'}`;
+    const key = transactionRequestKey(d, m, 'buy', apartmentQuery);
     if (!force && fetched === key) return;
     buyAbortRef.current?.abort();
     const controller = new AbortController();
@@ -303,8 +354,9 @@ export default function TransactionsClient() {
     setError(null);
     try {
       const params = new URLSearchParams({ months: String(m) });
-      if (exactAptId) params.set('aptId', exactAptId);
-      else params.set('district', d);
+      const selection = new URLSearchParams(apartmentQuery);
+      if (!selection.has('aptId')) params.set('district', d);
+      selection.forEach((value, name) => params.set(name, value));
       const res  = await fetch(`/api/transactions?${params.toString()}`, {
         signal: controller.signal,
       });
@@ -327,9 +379,9 @@ export default function TransactionsClient() {
 
   useEffect(() => {
     if (viewMode === 'detail' && dealType === 'buy') {
-      load(district, months, selectedApt?.id ?? '');
+      load(district, months, apartmentRequestQuery);
     }
-  }, [district, months, viewMode, dealType, selectedApt?.id, load]);
+  }, [district, months, viewMode, dealType, apartmentRequestQuery, load]);
 
   useEffect(() => () => buyAbortRef.current?.abort(), []);
 
@@ -339,14 +391,16 @@ export default function TransactionsClient() {
       viewMode !== 'detail' ||
       (dealType !== 'jeonse' && dealType !== 'monthly')
     ) return;
-    const key = `${district}-${months}-${dealType}`;
+    const key = transactionRequestKey(district, months, dealType, apartmentRequestQuery);
     if (rentFetched === key) return;
     let cancelled = false;
     const controller = new AbortController();
     setRentLoading(true);
     setRentError(false);
     setRentPartial(false);
-    fetch(`/api/transactions/rent?district=${encodeURIComponent(district)}&months=${months}&rentType=${dealType}`, {
+    const params = new URLSearchParams({ district, months: String(months), rentType: dealType });
+    new URLSearchParams(apartmentRequestQuery).forEach((value, name) => params.set(name, value));
+    fetch(`/api/transactions/rent?${params.toString()}`, {
       signal: controller.signal,
     })
       .then(async (response) => {
@@ -374,19 +428,21 @@ export default function TransactionsClient() {
       cancelled = true;
       controller.abort();
     };
-  }, [viewMode, dealType, district, months, rentFetched, rentRetryKey]);
+  }, [viewMode, dealType, district, months, apartmentRequestQuery, rentFetched, rentRetryKey]);
 
   // 분양권 조회 — 매매/전월세와 별개 키 (silv 라우트)
   useEffect(() => {
     if (viewMode !== 'detail' || dealType !== 'bunyang') return;
-    const key = `${district}-${months}`;
+    const key = transactionRequestKey(district, months, 'bunyang', apartmentRequestQuery);
     if (silvFetched === key) return;
     let cancelled = false;
     const controller = new AbortController();
     setSilvLoading(true);
     setSilvError(false);
     setSilvPartial(false);
-    fetch(`/api/transactions/silv?district=${encodeURIComponent(district)}&months=${months}`, {
+    const params = new URLSearchParams({ district, months: String(months) });
+    new URLSearchParams(apartmentRequestQuery).forEach((value, name) => params.set(name, value));
+    fetch(`/api/transactions/silv?${params.toString()}`, {
       signal: controller.signal,
     })
       .then(async (response) => {
@@ -414,7 +470,7 @@ export default function TransactionsClient() {
       cancelled = true;
       controller.abort();
     };
-  }, [viewMode, dealType, district, months, silvFetched, silvRetryKey]);
+  }, [viewMode, dealType, district, months, apartmentRequestQuery, silvFetched, silvRetryKey]);
 
   // 시도별 요약 — 윈도우·유형 선택 반영.
   // 'today'와 'rolling30'은 같은 서버 기본(최근 30일) 응답을 공유하므로
@@ -1190,7 +1246,7 @@ export default function TransactionsClient() {
               <TxErrorState
                 onRetry={() => {
                   setError(null);
-                  load(district, months, selectedApt?.id ?? '', true);
+                  load(district, months, apartmentRequestQuery, true);
                 }}
               />
             )}
@@ -1253,13 +1309,13 @@ export default function TransactionsClient() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
                   {/* 인피드 광고를 6번째 카드 뒤에 끼우기 위한 분할 렌더 (페이지당 인피드 1개 원칙) */}
                   {filtered.slice(0, 6).map((apt) => (
-                    <AptCard key={apt.id} apt={apt} months={months} onClick={() => setActiveApt(apt)} />
+                    <AptCard key={apt.id} apt={apt} months={months} dealType="buy" onClick={() => setActiveApt(apt)} />
                   ))}
                 </div>
                 {filtered.length > 6 && (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px', marginTop: '12px' }}>
                     {filtered.slice(6).map((apt) => (
-                      <AptCard key={apt.id} apt={apt} months={months} onClick={() => setActiveApt(apt)} />
+                      <AptCard key={apt.id} apt={apt} months={months} dealType="buy" onClick={() => setActiveApt(apt)} />
                     ))}
                   </div>
                 )}
@@ -1340,7 +1396,7 @@ export default function TransactionsClient() {
               return (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
                   {silvVisibleGroups.map((apt) => (
-                    <AptCard key={apt.id} apt={apt} months={months} onClick={() => setActiveApt(apt)} />
+                    <AptCard key={apt.id} apt={apt} months={months} dealType="bunyang" onClick={() => setActiveApt(apt)} />
                   ))}
                 </div>
               );
@@ -1358,7 +1414,7 @@ export default function TransactionsClient() {
 
         <p style={{ marginTop: '24px', fontSize: '11px', color: 'var(--text-dim)', lineHeight: 1.8 }}>
           {dealType === 'buy'
-            ? '※ 매매 계약일 기준 · 신고가는 조회 기간 내 동일 면적 종전 최고가를 경신한 거래 · 전고점은 조회 기간 내 대표 면적 최고가'
+            ? '※ 매매 계약일 기준 · 신고가는 조회 기간 내 유사 면적(±6㎡)의 이전 계약 최고가를 경신한 거래 · 비교 거래가 없으면 신고가로 표시하지 않습니다.'
             : dealType === 'bunyang'
             ? '※ 분양권 계약일 기준 · 국토교통부 분양권 전매 신고분 · 가격은 신고 거래금액'
             : '※ 전월세 계약일 기준 · 보증금/월세는 국토교통부 신고 금액 · 신규/갱신은 계약 구분 신고값 (미신고 시 빈칸) · 정렬의 보증금/월세는 조회 기간 내 단지 최고액 기준'}
@@ -1380,9 +1436,11 @@ export default function TransactionsClient() {
       {/* 단지 상세 모달 */}
       {activeApt && (
         <AptDetailModal
+          key={`${routeSelectionKey}:${activeApt.id}`}
           apt={activeApt}
           onClose={() => setActiveApt(null)}
           months={months}
+          dealType={dealType === 'bunyang' ? 'bunyang' : 'buy'}
           initialTx={txParam}
         />
       )}
@@ -1390,6 +1448,7 @@ export default function TransactionsClient() {
       {/* 전월세 상세 모달 (전월세 v2) */}
       {activeRent && (
         <RentAptDetailModal
+          key={`${routeSelectionKey}:${activeRent.id}`}
           apt={activeRent}
           onClose={() => setActiveRent(null)}
           months={months}

@@ -5,20 +5,22 @@ import { Share2 } from 'lucide-react';
 import {
   type AptGroup,
   fmtPrice, fmtPriceFull, fmtContractDate,
-  detectNewHigh, representativeArea, sparkSeries,
+  sparkSeries,
 } from '../types';
 import { smoothPath, type Pt } from '@/lib/svg-smooth';
 import { buildShareImage, shareOrDownloadImage } from '@/lib/share-image';
-import { buildPeakLine, buildTxShareText, pricePerPyeong, txKey } from '@/lib/tx-share-text';
+import { buildTxShareText, fmtMonthsLabel, pricePerPyeong, txKey } from '@/lib/tx-share-text';
+import { buildTransactionShareUrl } from '@/lib/transaction-share-url';
+import { analyzeTransactionPrice, formatTransactionComparisonLine } from '@/lib/transaction-price-comparison';
 
 /**
  * 아실형 단지 카드 — 사이클 W
  *
  * 구성: 단지명·신고가 뱃지 / 면적·평·층·동 / 가격 + 실거래 미니 라인차트 /
- *       전고점·신고가까지 남은 금액 / 계약일·입주연차·세대수·최근 3개월 거래·공유
+ *       조회 기간 내 유사 면적 비교 / 계약일·입주연차·세대수·조회 기간 거래·공유
  *
  * 미니 차트는 recharts 대신 순수 SVG polyline — 카드 60개 동시 렌더 성능 확보.
- * 대표 면적(거래 최다) 거래만 시간순으로 그려 "현실적인" 가격 흐름을 보여준다.
+ * 현재 표시한 거래의 유사 면적(±6㎡)만 시간순으로 그린다.
  */
 
 interface AptCardProps {
@@ -26,11 +28,12 @@ interface AptCardProps {
   onClick: () => void;
   /** 조회 기간 (개월) — 공유 카드의 전고점 기간 캡션용 */
   months:  number;
+  dealType?: 'buy' | 'bunyang';
 }
 
-/** 대표 면적 거래 → 시간축 비례 좌표 (silgga 스타일, sparkSeries 공용) */
-function buildSparkline(apt: AptGroup, width: number, height: number) {
-  const series = sparkSeries(apt);
+/** 현재 표시한 면적 거래 → 시간축 비례 좌표. */
+function buildSparkline(apt: AptGroup, targetArea: number, width: number, height: number) {
+  const series = sparkSeries(apt, targetArea);
   if (!series) return null;
 
   const prices = series.points.map((p) => p.price);
@@ -47,7 +50,7 @@ function buildSparkline(apt: AptGroup, width: number, height: number) {
   return { coords, rising: series.rising, count: coords.length };
 }
 
-export default function AptCard({ apt, onClick, months }: AptCardProps) {
+export default function AptCard({ apt, onClick, months, dealType = 'buy' }: AptCardProps) {
   const [shareOpen, setShareOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const shareRef = useRef<HTMLDivElement>(null);
@@ -62,37 +65,22 @@ export default function AptCard({ apt, onClick, months }: AptCardProps) {
     return () => document.removeEventListener('mousedown', onDown);
   }, [shareOpen]);
 
-  const sorted  = [...apt.transactions].sort((a, b) => b.date.localeCompare(a.date));
-  const latest  = sorted[0];
-  const newHigh = detectNewHigh(apt);
-
-  // 전고점 — 동일 대표면적 기준 기간 최고가
-  const repArea = representativeArea(apt);
-  const samePrices = apt.transactions
-    .filter((t) => Math.abs(t.area - repArea) <= 6)
-    .map((t) => t.price);
-  const peak = samePrices.length ? Math.max(...samePrices) : latest.price;
-  const gapToPeak = peak - latest.price;
-
-  // 공유용 파생값 (공유 강화 2026-07-19) — latest 면적 기준 동일면적(±6㎡) 전고점
-  const sameAsLatest  = apt.transactions.filter((t) => Math.abs(t.area - latest.area) <= 6);
-  const sharePeak     = sameAsLatest.length ? Math.max(...sameAsLatest.map((t) => t.price)) : latest.price;
-  const shareOthers   = sameAsLatest.filter((t) => t !== latest).map((t) => t.price);
-  const sharePrevPeak = shareOthers.length ? Math.max(...shareOthers) : null;
-  const sharePeakLine = buildPeakLine({
-    price: latest.price, peak: sharePeak, prevPeak: sharePrevPeak, months, fmt: fmtPrice,
-  });
+  const comparison = analyzeTransactionPrice(apt.transactions);
+  if (!comparison) return null;
+  const latest = comparison.target;
+  const newHigh = comparison.state === 'new-high';
+  const periodLabel = fmtMonthsLabel(months);
+  // 같은 날 계약의 순서를 추정하지 않고, 확실히 이전인 계약에서 현재 거래로 연결.
+  const chartApt = { ...apt, transactions: [...comparison.prior, latest] };
+  const sharePeakLine = formatTransactionComparisonLine(comparison, months, fmtPrice);
   const sharePerPy = `평당 ${fmtPrice(pricePerPyeong(latest.price, latest.area))}`;
-  // 딥링크 — 받은 사람이 이 계약 건으로 정확히 착지 (months·tx 포함)
-  const shareUrl = () =>
-    `${window.location.origin}/transactions?district=${encodeURIComponent(apt.district)}` +
-    `&q=${encodeURIComponent(apt.name)}&months=${months}&tx=${encodeURIComponent(txKey(latest))}`;
+  // 딥링크 — 단지 식별자·동·거래 유형·계약 건을 공유 채널마다 동일하게 보존
+  const shareUrl = () => buildTransactionShareUrl({
+    origin: window.location.origin, apartment: apt, months, dealType, tx: txKey(latest),
+  });
 
-  // 최근 3개월 거래 수
-  const threeMonthsAgo = new Date();
-  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-  const cutoff = `${threeMonthsAgo.getFullYear()}-${String(threeMonthsAgo.getMonth() + 1).padStart(2, '0')}`;
-  const recentCount = apt.transactions.filter((t) => t.date >= cutoff).length;
+  // API가 반환한 실제 조회 기간의 거래 수 (고정 3개월로 재집계하지 않음).
+  const periodCount = apt.transactions.length;
 
   // 입주 연차
   const nowYear = new Date().getFullYear();
@@ -102,15 +90,15 @@ export default function AptCard({ apt, onClick, months }: AptCardProps) {
 
   const CHART_W = 132;
   const CHART_H = 66;
-  const spark = buildSparkline(apt, CHART_W, CHART_H);
+  const spark = buildSparkline(chartApt, latest.area, CHART_W, CHART_H);
 
   // 이미지 공유 — 브랜드 실거래 카드 PNG (모바일 네이티브 공유 / 데스크톱 다운로드)
   const shareImage = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     try {
-      // 대표 면적 거래열 → 공유 카드 스파크라인(0~100 × 0~56) + 최근 등락
-      const series = sparkSeries(apt);
+      // 카드와 같은 면적·시간 범위의 공유 차트. 같은 날짜 계약 간 등락은 추정하지 않음.
+      const series = sparkSeries(chartApt, latest.area);
       let sparkPts: Pt[] = [];
       let delta = '';
       let up = false;
@@ -120,7 +108,9 @@ export default function AptCard({ apt, onClick, months }: AptCardProps) {
         const max = Math.max(...prices);
         const span = max - min || 1;
         sparkPts = series.points.map((p) => ({ x: p.t * 100, y: (1 - (p.price - min) / span) * 56 }));
-        const diff = prices[prices.length - 1] - prices[prices.length - 2];
+      }
+      if (comparison.previous) {
+        const diff = latest.price - comparison.previous.price;
         up = diff >= 0;
         if (diff !== 0) delta = `${up ? '▲' : '▼'} ${fmtPrice(Math.abs(diff))}`;
       }
@@ -138,7 +128,7 @@ export default function AptCard({ apt, onClick, months }: AptCardProps) {
         peakLine:   sharePeakLine,
       });
       if (!blob) return;
-      await shareOrDownloadImage(blob, `${apt.name}-실거래.png`, apt.name);
+      await shareOrDownloadImage(blob, `${apt.name}-실거래.png`, apt.name, shareUrl());
       setShareOpen(false);
     } catch {
       // 공유 취소 등은 무시
@@ -201,7 +191,7 @@ export default function AptCard({ apt, onClick, months }: AptCardProps) {
               borderRadius: '6px', backgroundColor: 'rgba(201,47,47,0.12)',
               color: 'var(--up-color, #C92F2F)',
             }}>
-              신고가
+              기간 신고가
             </span>
           )}
         </div>
@@ -222,25 +212,27 @@ export default function AptCard({ apt, onClick, months }: AptCardProps) {
             }}>
               {fmtPriceFull(latest.price)}
             </p>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '2px' }}>
-              전고점 {fmtPrice(peak)}
+            <p style={{ fontSize: '11px', color: 'var(--text-dim)', marginBottom: '3px' }}>
+              {latest.area}㎡ 기준 · 유사 면적(±6㎡)
             </p>
-            {gapToPeak > 0 ? (
-              <p style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
-                신고가까지 {fmtPriceFull(gapToPeak)} 남음
-              </p>
-            ) : (
-              <p style={{ fontSize: '12px', fontWeight: 700, color: 'var(--up-color, #C92F2F)' }}>
-                전고점 경신
-              </p>
-            )}
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '2px' }}>
+              {comparison.priorPeak !== null
+                ? `${periodLabel} 내 ${newHigh ? '종전 최고' : '최고'} ${fmtPriceFull(newHigh ? comparison.priorPeak : comparison.periodPeak)}`
+                : `${periodLabel} 조회 기준`}
+            </p>
+            <p style={{ fontSize: '12px', fontWeight: newHigh ? 700 : 400, color: newHigh ? 'var(--up-color, #C92F2F)' : 'var(--text-dim)' }}>
+              {comparison.state === 'insufficient' ? '비교 거래 부족'
+                : comparison.state === 'equal' ? '기간 최고가와 같음'
+                : comparison.state === 'new-high' ? '기간 최고가 경신'
+                : `기간 최고가까지 ${fmtPriceFull(comparison.gapToPeak!)} 남음`}
+            </p>
           </div>
 
           {spark && (
             <svg
               width={CHART_W} height={CHART_H} viewBox={`0 0 ${CHART_W} ${CHART_H}`}
               style={{ flexShrink: 0 }}
-              aria-label={`${apt.name} 가격 추이 (거래 ${spark.count}건)`}
+              aria-label={`${apt.name} ${latest.area}㎡ 기준 유사 면적(±6㎡) 가격 추이 (${periodLabel} 내 거래 ${spark.count}건)`}
             >
               <path
                 d={spark.count >= 5
@@ -273,7 +265,7 @@ export default function AptCard({ apt, onClick, months }: AptCardProps) {
           <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '2px' }}>
             {fmtContractDate(latest.date)} 계약
             <span style={{ marginLeft: '8px', color: 'var(--text-dim)' }}>
-              최근 3개월 <strong style={{ color: 'var(--text-primary)' }}>{recentCount}건</strong>
+              조회 {months}개월 <strong style={{ color: 'var(--text-primary)' }}>{periodCount}건</strong>
             </span>
           </p>
           {(ageLabel || apt.households) && (

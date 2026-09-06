@@ -72,8 +72,14 @@ vi.mock('../components/AptCard', () => ({
 vi.mock('../components/RentAptCard', () => ({
   default: ({ apt }: { apt: { name: string } }) => <div data-testid="rent-card">{apt.name}</div>,
 }));
-vi.mock('../components/AptDetailModal', () => ({ default: () => null }));
-vi.mock('../components/RentAptDetailModal', () => ({ default: () => null }));
+vi.mock('../components/AptDetailModal', () => ({
+  default: ({ apt, dealType, initialTx }: { apt: { name: string; transactions: { date: string }[] }; dealType: string; initialTx: string }) =>
+    <div data-testid="buy-modal" data-deal-type={dealType} data-tx={initialTx} data-contract-dates={apt.transactions.map((transaction) => transaction.date).join(',')}>{apt.name}</div>,
+}));
+vi.mock('../components/RentAptDetailModal', () => ({
+  default: ({ apt, initialTx }: { apt: { name: string; transactions: { date: string }[] }; initialTx: string }) =>
+    <div data-testid="rent-modal" data-tx={initialTx} data-contract-dates={apt.transactions.map((transaction) => transaction.date).join(',')}>{apt.name}</div>,
+}));
 vi.mock('../components/RegionPickerModal', () => ({
   default: ({ initialLabel, onPick }: { initialLabel: string; onPick: (district: string) => void }) => (
     <div role="dialog" aria-label="지역 선택">
@@ -308,6 +314,172 @@ describe('TransactionsClient retry behavior', () => {
 });
 
 describe('TransactionsClient apartment search', () => {
+  it.each(['buy', 'jeonse', 'monthly', 'bunyang'])(
+    '%s 새 기간의 공유 링크는 기존 모달을 닫고 해당 요청의 과거 계약 응답을 기다린다',
+    async (dealType) => {
+      const isRent = dealType === 'jeonse' || dealType === 'monthly';
+      const endpoint = dealType === 'buy' ? '/api/transactions?'
+        : dealType === 'bunyang' ? '/api/transactions/silv?' : '/api/transactions/rent?';
+      const makeGroup = (date: string) => ({
+        ...rentGroup, masterId: 'A-GARAM', name: '가람', dong: '일원동',
+        transactions: [{ ...rentGroup.transactions[0], price: 80_000, date }],
+      });
+      let finishHistorical!: (body: unknown) => void;
+      const historicalResponse = new Promise((resolve) => {
+        finishHistorical = (body) => resolve({ ok: true, json: async () => body });
+      });
+      fetchMock.mockImplementation((input: string | URL | Request) => {
+        const url = String(input);
+        if (url.startsWith(endpoint)) {
+          const months = new URL(url, 'http://localhost').searchParams.get('months');
+          return months === '12' ? historicalResponse : response(true, { data: [makeGroup('2026-09-05')] });
+        }
+        if (url.startsWith('/api/transactions/districts?')) return response(true, { districts: [] });
+        throw new Error(`Unexpected fetch: ${url}`);
+      });
+      const queryFor = (months: number, date: string) =>
+        `district=강남구&q=가람&aptId=A-GARAM&aptDong=일원동&months=${months}&dealType=${dealType}&${isRent ? 'rtx' : 'tx'}=${date}_84_10_80000${isRent ? '_0' : ''}`;
+      const page = await renderClient(queryFor(2, '2026-09-05'));
+      const modalSelector = `[data-testid="${isRent ? 'rent' : 'buy'}-modal"]`;
+      expect(page.querySelector(modalSelector)?.getAttribute('data-contract-dates')).toBe('2026-09-05');
+
+      await act(async () => {
+        routeQuery.value = queryFor(12, '2025-10-01');
+        root!.render(<TransactionsClient />);
+        await settle();
+      });
+      expect(page.querySelector(modalSelector)).toBeNull();
+
+      await act(async () => {
+        finishHistorical({ data: [makeGroup('2025-10-01')] });
+        await settle();
+      });
+      const modal = page.querySelector(modalSelector);
+      expect(modal?.getAttribute('data-contract-dates')).toBe('2025-10-01');
+      expect(modal?.getAttribute('data-tx')).toContain('2025-10-01');
+    },
+  );
+
+  it.each(['buy', 'jeonse', 'monthly', 'bunyang'])(
+    '%s 같은 단지 ID의 별칭 그룹이 여러 개면 공유한 계약이 있는 그룹을 연다',
+    async (dealType) => {
+      const isRent = dealType === 'jeonse' || dealType === 'monthly';
+      const endpoint = dealType === 'buy' ? '/api/transactions?'
+        : dealType === 'bunyang' ? '/api/transactions/silv?' : '/api/transactions/rent?';
+      fetchMock.mockImplementation((input: string | URL | Request) => {
+        const url = String(input);
+        if (url.startsWith(endpoint)) return response(true, { data: [
+          { ...rentGroup, masterId: 'A-GARAM', name: '가람', transactions: [{ ...rentGroup.transactions[0], price: 80_000, date: '2026-09-05' }] },
+          { ...rentGroup, masterId: 'A-GARAM', name: '가람아파트', transactions: [{ ...rentGroup.transactions[0], price: 80_000, date: '2026-08-01' }] },
+        ] });
+        if (url.startsWith('/api/transactions/districts?')) return response(true, { districts: [] });
+        throw new Error(`Unexpected fetch: ${url}`);
+      });
+      const page = await renderClient(
+        `district=강남구&q=가람&aptId=A-GARAM&months=2&dealType=${dealType}&${isRent ? 'rtx' : 'tx'}=2026-08-01_84_10_80000${isRent ? '_0' : ''}`,
+      );
+      expect(page.querySelector(`[data-testid="${isRent ? 'rent' : 'buy'}-modal"]`)?.textContent).toBe('가람아파트');
+    },
+  );
+
+  it.each(['buy', 'jeonse', 'monthly', 'bunyang'])(
+    '%s 공유는 이름 표기가 달라도 단지 ID로 올바른 유형의 계약 모달을 연다',
+    async (dealType) => {
+      const isRent = dealType === 'jeonse' || dealType === 'monthly';
+      const endpoint = dealType === 'buy' ? '/api/transactions?'
+        : dealType === 'bunyang' ? '/api/transactions/silv?' : '/api/transactions/rent?';
+      fetchMock.mockImplementation((input: string | URL | Request) => {
+        const url = String(input);
+        if (url.startsWith(endpoint)) return response(true, { data: [{
+          ...rentGroup, masterId: 'A-GARAM', name: '가람아파트', dong: '일원동',
+        }] });
+        if (url.startsWith('/api/transactions/districts?')) return response(true, { districts: [] });
+        throw new Error(`Unexpected fetch: ${url}`);
+      });
+      const page = await renderClient(
+        `district=강남구&q=등록명&aptId=A-GARAM&aptDong=일원동&dealType=${dealType}&${isRent ? 'rtx' : 'tx'}=contract-key`,
+      );
+      const modal = page.querySelector(`[data-testid="${isRent ? 'rent' : 'buy'}-modal"]`);
+      expect(modal?.textContent).toBe('가람아파트');
+      expect(modal?.getAttribute('data-tx')).toBe('contract-key');
+      if (!isRent) expect(modal?.getAttribute('data-deal-type')).toBe(dealType);
+    },
+  );
+
+  it.each(['jeonse', 'monthly', 'bunyang'])(
+    '%s 탭도 선택 단지를 서버에 전달하고 같은 지역의 다른 단지 선택 시 다시 조회한다',
+    async (dealType) => {
+      const endpoint = dealType === 'bunyang' ? '/api/transactions/silv?' : '/api/transactions/rent?';
+      const requestedIds: (string | null)[] = [];
+      fetchMock.mockImplementation((input: string | URL | Request) => {
+        const url = String(input);
+        if (url.startsWith(endpoint)) {
+          const params = new URL(url, 'http://localhost').searchParams;
+          const id = params.get('aptId');
+          requestedIds.push(id);
+          if (!id) return response(true, { data: [] });
+          return response(true, {
+            data: [{
+              ...rentGroup, id, masterId: id,
+              name: id === 'A-GARAM' ? '가람아파트' : '다음 단지',
+              dong: '일원동',
+            }],
+          });
+        }
+        if (url.startsWith('/api/transactions/districts?')) return response(true, { districts: [] });
+        throw new Error(`Unexpected fetch: ${url}`);
+      });
+      const page = await renderClient(
+        `district=강남구&q=가람&aptId=A-GARAM&aptDong=일원동&months=2&dealType=${dealType}`,
+      );
+      expect(requestedIds).toEqual(['A-GARAM']);
+      expect(page.textContent).toContain('가람아파트');
+      expect(page.textContent).not.toContain('조건에 맞는 실거래가 없어요');
+
+      await act(async () => {
+        routeQuery.value = `district=강남구&q=다음단지&aptId=A-NEXT&aptDong=일원동&months=2&dealType=${dealType}`;
+        root!.render(<TransactionsClient />);
+        await settle();
+      });
+      expect(requestedIds).toEqual(['A-GARAM', 'A-NEXT']);
+      expect(page.textContent).toContain('다음 단지');
+      expect(page.textContent).not.toContain('가람아파트');
+    },
+  );
+
+  it.each(['buy', 'jeonse', 'monthly', 'bunyang'])(
+    '%s 기존 공유 링크도 이름과 법정동을 서버에서 먼저 검색한다',
+    async (dealType) => {
+      const endpoint = dealType === 'buy' ? '/api/transactions?'
+        : dealType === 'bunyang' ? '/api/transactions/silv?' : '/api/transactions/rent?';
+      fetchMock.mockImplementation((input: string | URL | Request) => {
+        const url = String(input);
+        if (url.startsWith(endpoint)) return response(true, { data: [] });
+        if (url.startsWith('/api/transactions/districts?')) return response(true, { districts: [] });
+        throw new Error(`Unexpected fetch: ${url}`);
+      });
+      await renderClient(`district=강남구&q=가람&aptDong=일원동&months=2&dealType=${dealType}`);
+      const call = fetchMock.mock.calls.find(([url]) => String(url).startsWith(endpoint));
+      expect(call).toBeDefined();
+      const params = new URL(String(call![0]), 'http://localhost').searchParams;
+      expect(params.get('aptName')).toBe('가람');
+      expect(params.get('aptDong')).toBe('일원동');
+      expect(params.has('aptId')).toBe(false);
+    },
+  );
+
+  it('선택 단지 확인 실패는 전세 0건이 아닌 조회 오류로 표시한다', async () => {
+    fetchMock.mockImplementation((input: string | URL | Request) => {
+      const url = String(input);
+      if (url.startsWith('/api/transactions/rent?')) return response(false, { error: '단지 기준 데이터 확인 실패' });
+      if (url.startsWith('/api/transactions/districts?')) return response(true, { districts: [] });
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    const page = await renderClient('district=강남구&q=가람&aptId=A-GARAM&aptDong=일원동&dealType=jeonse');
+    expect(page.querySelector('[role="alert"]')).not.toBeNull();
+    expect(page.textContent).not.toContain('조건에 맞는 실거래가 없어요');
+  });
+
   it('요약 상단에서 고른 정확 단지를 URL에 반영하고 상세 조회로 바로 전환한다', async () => {
     fetchMock.mockImplementation((input: string | URL | Request) => {
       const url = String(input);

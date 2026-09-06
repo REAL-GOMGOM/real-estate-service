@@ -63,6 +63,8 @@ export interface TxShareTextInput {
 
 /** 공유 앱에서 한눈에 읽히도록 전고점 비교 문구를 자연어로 다듬는다. */
 function readablePeakLine(peakLine: string): string {
+  if (peakLine.includes('비교 거래 부족')) return `ℹ️ ${peakLine}`;
+  if (peakLine.includes('최고가와 같음')) return `📊 ${peakLine}`;
   const belowPeak = peakLine.match(/^(.*?) 대비 -(.+)$/);
   if (belowPeak) return `📊 ${belowPeak[1]}보다 ${belowPeak[2]} 낮음`;
 

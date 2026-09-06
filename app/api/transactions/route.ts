@@ -207,6 +207,7 @@ async function buildGroupedResponse(
     district: string;
     lawdCd: string;
     resolvedAptName: string;
+    aptDong?: string;
     selectedApartment: ApartmentIdentity | null;
     months: number;
     limit: number;
@@ -320,6 +321,7 @@ async function buildGroupedResponse(
           selectedApartment,
         )
       : !aptName || matchesQuery(apt.name, aptName))
+    .filter((apt) => selectedApartment || !opts.aptDong || apt.dong === opts.aptDong)
     .sort((a, b) => b.transactions.length - a.transactions.length)
     .slice(0, aptName ? 100 : limit);
 
@@ -373,6 +375,7 @@ async function snapshotForDistrict(
     limit: number;
     aptId?: string;
     aptName?: string;
+    aptDong?: string;
     apartmentIndex?: readonly ApartmentIndexItem[];
   },
 ): Promise<NextResponse | null> {
@@ -402,6 +405,7 @@ interface SnapshotFirstResult {
 async function trySnapshotFirst(input: {
   aptId: string;
   aptName: string;
+  aptDong: string;
   districtParam: string;
   directDistrict: string | null;
   directLawdCd: string | null;
@@ -471,6 +475,7 @@ async function trySnapshotFirst(input: {
     months: input.months,
     limit: input.limit,
     ...(input.aptName ? { aptName: input.aptName } : {}),
+    ...(input.aptDong ? { aptDong: input.aptDong } : {}),
   });
   return {
     response,
@@ -486,7 +491,8 @@ async function trySnapshotFirst(input: {
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const aptIdParam   = (searchParams.get('aptId')?.trim() ?? '').slice(0, 200);
-  const aptNameParam = (searchParams.get('aptName')?.trim() ?? '').slice(0, APT_NAME_MAX_LEN);
+  const aptNameParam = (searchParams.get('aptName') ?? searchParams.get('q') ?? '').trim().slice(0, APT_NAME_MAX_LEN);
+  const aptDongParam = (searchParams.get('aptDong') ?? '').trim().slice(0, 100);
   const districtParam = searchParams.get('district')?.trim() ?? '';
   const parsedMonths = parseInt(searchParams.get('months') ?? '3', 10);
   const months       = Number.isFinite(parsedMonths)
@@ -508,6 +514,7 @@ export async function GET(req: NextRequest) {
   const snapshotAttempt = await trySnapshotFirst({
     aptId: aptIdParam,
     aptName: aptNameParam,
+    aptDong: aptDongParam,
     districtParam,
     directDistrict,
     directLawdCd,
@@ -661,6 +668,7 @@ export async function GET(req: NextRequest) {
       district,
       lawdCd,
       resolvedAptName,
+      aptDong: aptDongParam,
       selectedApartment,
       months,
       limit,

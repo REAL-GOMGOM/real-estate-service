@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   fmtPrice, fmtPriceFull, fmtContractDate,
-  detectNewHigh, representativeArea, sparkSeries, peakRecovery,
+  detectNewHigh, representativeArea, sparkSeries, peakRecovery, buildSparkPts,
   type AptGroup, type Transaction,
 } from '../types';
 
@@ -87,6 +87,17 @@ describe('detectNewHigh', () => {
     // 84㎡ 비교군이 1건뿐 → false
     expect(detectNewHigh(g)).toBe(false);
   });
+  it('같은 날짜 거래나 이전의 신고가만으로 현재 거래를 신고가로 표시하지 않는다', () => {
+    expect(detectNewHigh(group([
+      tx({ price: 100000, date: '2026-06-01' }),
+      tx({ price: 110000, date: '2026-06-01' }),
+    ]))).toBe(false);
+    expect(detectNewHigh(group([
+      tx({ price: 100000, date: '2026-04-01' }),
+      tx({ price: 120000, date: '2026-05-01' }),
+      tx({ price: 110000, date: '2026-06-01' }),
+    ]))).toBe(false);
+  });
 });
 
 describe('representativeArea', () => {
@@ -131,6 +142,46 @@ describe('sparkSeries (사이클 Z — silgga 형 시간축 시리즈)', () => {
     ]);
     // 대표면적(84 또는 135 중 다수) 기준 1건뿐 → null
     expect(sparkSeries(g)).toBeNull();
+  });
+  it('명시한 최신 면적을 기준으로 대표 면적과 다른 차트·공유 좌표를 만든다', () => {
+    const g = group([
+      tx({ area: 60, price: 290000, date: '2026-04-01' }),
+      tx({ area: 60, price: 300500, date: '2026-05-01' }),
+      tx({ area: 60, price: 295000, date: '2026-06-01' }),
+      tx({ area: 85, price: 335000, date: '2026-07-01' }),
+      tx({ area: 85, price: 341000, date: '2026-08-01' }),
+    ]);
+    expect(sparkSeries(g)!.points).toHaveLength(3);
+    expect(sparkSeries(g, 85)!.points.map((point) => point.price)).toEqual([335000, 341000]);
+    expect(buildSparkPts(g, 85)!.pts).toEqual([{ x: 3, y: 49 }, { x: 97, y: 7 }]);
+  });
+  it('±6㎡ 끝값을 포함하고 다수 면적으로 다시 중심을 옮기지 않는다', () => {
+    const g = group([
+      tx({ area: 78, price: 100000, date: '2026-04-01' }),
+      tx({ area: 78, price: 110000, date: '2026-05-01' }),
+      tx({ area: 90, price: 120000, date: '2026-06-01' }),
+      tx({ area: 84, price: 130000, date: '2026-07-01' }),
+      tx({ area: 90.01, price: 500000, date: '2026-05-01' }),
+    ]);
+    expect(sparkSeries(g, 84)!.points.map((point) => point.price)).toEqual([100000, 110000, 120000, 130000]);
+  });
+  it('월 단위·일 단위 날짜가 섞여도 좌표가 범위를 벗어나거나 NaN이 되지 않는다', () => {
+    const g = group([
+      tx({ date: '2026-06', price: 100000 }),
+      tx({ date: '2026-06-01', price: 110000 }),
+      tx({ date: '2026-07-01', price: 120000 }),
+      tx({ date: 'invalid', price: 140000 }),
+      tx({ date: '2026-06-01', price: NaN }),
+      tx({ date: '2026-06-01', price: Infinity }),
+    ]);
+    const series = sparkSeries(g, 84)!;
+    expect(series.points).toHaveLength(3);
+    for (const point of series.points) {
+      expect(Number.isFinite(point.t)).toBe(true);
+      expect(point.t).toBeGreaterThanOrEqual(0);
+      expect(point.t).toBeLessThanOrEqual(1);
+    }
+    expect(buildSparkPts(g, 84)!.pts.every((point) => Number.isFinite(point.x) && Number.isFinite(point.y))).toBe(true);
   });
 });
 

@@ -26,6 +26,8 @@ export interface RentTransaction {
 
 export interface RentAptGroup {
   id:           string;
+  /** 정확 단지 조회에서 확인한 마스터 ID — 공유·클라이언트 식별에 사용 */
+  masterId?:    string | null;
   name:         string;
   district:     string;
   dong:         string | null;

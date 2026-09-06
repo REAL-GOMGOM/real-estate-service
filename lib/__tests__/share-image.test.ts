@@ -57,6 +57,25 @@ describe('shareOrDownloadImage', () => {
     expect(createObjectURL).not.toHaveBeenCalled();
   });
 
+  it('includes the canonical transaction URL in a native image share', async () => {
+    const nav = installNavigator({ canShare: vi.fn(() => true) });
+    const url = 'https://www.naezipkorea.com/transactions?aptId=A123&aptDong=%EC%84%B1%EB%B3%B5%EB%8F%99&tx=2026-08-03_84_15_155000';
+    await shareOrDownloadImage(blob, '우리집.png', '우리집', url);
+    expect(nav.share).toHaveBeenCalledExactlyOnceWith({
+      files: [expect.any(File)], title: '우리집', url,
+    });
+    expect(nav.clipboardWrite).not.toHaveBeenCalled();
+    expect(createObjectURL).not.toHaveBeenCalled();
+  });
+
+  it('keeps desktop PNG copy and download fallbacks unchanged when a URL is supplied', async () => {
+    const nav = installNavigator({ canShare: vi.fn(() => false) });
+    await shareOrDownloadImage(blob, '우리집.png', '우리집', 'https://www.naezipkorea.com/transactions?aptId=A123');
+    const clipboardItem = (nav.clipboardWrite as ReturnType<typeof vi.fn>).mock.calls[0][0][0] as TestClipboardItem;
+    expect(clipboardItem.data).toEqual({ 'image/png': blob });
+    expect(anchorClick).toHaveBeenCalledOnce();
+  });
+
   it('treats AbortError as an intentional cancellation without fallback side effects', async () => {
     const abort = Object.assign(new Error('cancelled'), { name: 'AbortError' });
     const nav = installNavigator({ canShare: vi.fn(() => true), share: vi.fn().mockRejectedValue(abort) });

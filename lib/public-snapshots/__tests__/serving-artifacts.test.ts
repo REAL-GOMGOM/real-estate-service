@@ -342,6 +342,101 @@ describe('raw district snapshot response builders', () => {
     expect(presale).toMatchObject({ hit: true, body: { status: 'ok', total: 1 } });
   });
 
+  it.each(['jeonse', 'monthly', 'presale'] as const)('selects %s beyond the district top60 before limiting groups', (kind) => {
+    const selectedIndex: ApartmentIndexItem[] = [{
+      ...apartmentIndex[0], name: '일원동가람아파트', aliases: ['가람'], dong: '일원동',
+    }];
+    const makeRecord = (id: string, aptName: string, dong: string, floor: number) => {
+      const common = {
+        dedupeKey: id, masterId: null, aptName, umdNm: dong, sigungu: '강남구',
+        areaM2: 84, floor, dealDate: '2026-08-10', buildYear: 2000,
+      };
+      return kind === 'presale'
+        ? toPublicPresaleTransaction({ ...common, dealAmount: 90_000, isCanceled: false })
+        : toPublicRentTransaction({ ...common, deposit: 90_000, monthlyRent: kind === 'monthly' ? 120 : 0, contractType: null, prevDeposit: null, prevMonthlyRent: null });
+    };
+    const records = Array.from({ length: 61 }, (_, index) =>
+      Array.from({ length: 3 }, (_, floor) => makeRecord(`busy-${index}-${floor}`, `인기단지${index}`, '대치동', floor + 1)))
+      .flat();
+    records.push(
+      makeRecord('selected-1', '가람', '일원동', 7),
+      makeRecord('selected-2', '가람', '일원동', 8),
+      makeRecord('same-name-other-dong', '가람', '대치동', 9),
+    );
+    const snapshot = createPublicTransactionSnapshot({
+      lawdCd: '11680', district: '강남구', generatedAt: GENERATED_AT,
+      period: { from: '2026-07-01', through: '2026-08-11' }, records,
+    });
+    const query = { months: 2, limit: 60, now: NOW, ...(kind === 'presale' ? {} : { rentType: kind }) };
+    const district = kind === 'presale'
+      ? buildPresaleResponseFromSnapshot(snapshot, query)
+      : buildRentResponseFromSnapshot(snapshot, query);
+    expect(district.hit && district.body.data.some((group) => group.name === '가람')).toBe(false);
+
+    const exactQuery = {
+      ...query, aptId: 'apt-1', apartmentIndex: selectedIndex,
+      aptName: '인기단지', aptDong: '대치동',
+    };
+    const exact = kind === 'presale'
+      ? buildPresaleResponseFromSnapshot(snapshot, exactQuery)
+      : buildRentResponseFromSnapshot(snapshot, exactQuery);
+    expect(exact).toMatchObject({
+      hit: true, body: {
+        selectedAptId: 'apt-1', total: 2, status: 'ok',
+        data: [{ name: '가람', dong: '일원동', masterId: 'apt-1', txCount: 2 }],
+      },
+    });
+    if (exact.hit) expect(exact.body.data).toHaveLength(1);
+  });
+
+  it.each([buildBuyResponseFromSnapshot, buildRentResponseFromSnapshot, buildPresaleResponseFromSnapshot])('filters legacy name/dong snapshots before the group limit', (build) => {
+    const fixture = fixtureSnapshot();
+    const repeated = Array.from({ length: 101 }, (_, index) => fixture.records.map((record) => ({
+      ...record, id: index.toString(16).padStart(22, '0') + record.id.slice(-2),
+      apartmentId: null, aptName: `테스트 ${index}`, dong: '대치동',
+    }))).flat();
+    const snapshot = { ...fixture, records: [...repeated, ...fixture.records], recordCount: repeated.length + fixture.records.length };
+    const result = build(snapshot, { months: 2, limit: 60, aptName: '테스트', aptDong: '역삼동', now: NOW });
+    expect(result.hit).toBe(true);
+    if (result.hit) {
+      expect(result.body.data).toHaveLength(1);
+      expect(result.body.data[0]).toMatchObject({ name: '테스트 아파트', dong: '역삼동' });
+    }
+  });
+
+  it.each([buildRentResponseFromSnapshot, buildPresaleResponseFromSnapshot])('requires a known in-partition apartment ID and preserves selected zero', (build) => {
+    const query = { months: 2, limit: 60, aptId: 'apt-1', now: NOW };
+    expect(build(fixtureSnapshot(), query)).toEqual({ hit: false, reason: 'apartment-index-required' });
+    expect(build(fixtureSnapshot(), { ...query, apartmentIndex: [] })).toEqual({ hit: false, reason: 'apartment-not-found' });
+    expect(build(fixtureSnapshot(), { ...query, apartmentIndex: [{ ...apartmentIndex[0], lawdCd: '11710' }] }))
+      .toEqual({ hit: false, reason: 'apartment-not-found' });
+    const snapshot = fixtureSnapshot();
+    expect(build({ ...snapshot, records: [], recordCount: 0 }, { ...query, apartmentIndex }))
+      .toMatchObject({ hit: true, body: { total: 0, data: [], selectedAptId: 'apt-1', status: 'ok' } });
+  });
+
+  it.each([buildRentResponseFromSnapshot, buildPresaleResponseFromSnapshot])('keeps all scoped contracts but only the latest ten for ordinary district lists', (build) => {
+    const fixture = fixtureSnapshot();
+    const records = Array.from({ length: 12 }, (_, index) => fixture.records
+      .filter((record) => record.kind !== 'sale')
+      .map((record) => ({
+        ...record,
+        id: index.toString(16).padStart(22, '0') + record.id.slice(-2),
+        dealDate: `2026-07-${String(index + 1).padStart(2, '0')}`,
+      }))).flat();
+    const snapshot = { ...fixture, records, recordCount: records.length };
+    for (const scope of [{}, { aptId: 'apt-1' }, { aptName: '테스트' }, { aptDong: '역삼동' }]) {
+      const result = build(snapshot, { months: 2, limit: 60, now: NOW, apartmentIndex, ...scope });
+      expect(result.hit).toBe(true);
+      if (!result.hit) continue;
+      expect(result.body.total).toBe(12);
+      expect(result.body.data[0].txCount).toBe(12);
+      const isScoped = Object.keys(scope).length > 0;
+      expect(result.body.data[0].transactions).toHaveLength(isScoped ? 12 : 10);
+      if (isScoped) expect(result.body.data[0].transactions.at(-1)?.date).toBe('2026-07-01');
+    }
+  });
+
   it('treats a valid zero-row snapshot as a hit for every transaction type', () => {
     const empty = createPublicTransactionSnapshot({
       lawdCd: '11680',

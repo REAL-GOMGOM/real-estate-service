@@ -7,17 +7,18 @@ import { parseRentXml, groupRentTransactions, isJeonse, type RentTransaction } f
 import { getBlogDb } from '@/lib/db/client';
 import { rentTransactions } from '@/lib/db/schema';
 import { txSource } from '@/lib/tx-source';
-import { transactionGroupKey } from '@/lib/transaction-identity';
+import { matchesApartmentIdentity, transactionGroupKey } from '@/lib/transaction-identity';
+import { resolveTransactionApartmentSelection } from '@/lib/transaction-apartment-selection';
 import {
   createPublicSnapshotRuntimeFromEnv,
   isPublicSnapshotConfigured,
 } from '@/lib/public-snapshots/runtime';
-import { buildRentResponseFromSnapshot } from '@/lib/public-snapshots/serving-artifacts';
+import { buildRentResponseFromSnapshot, type ApartmentIndexItem } from '@/lib/public-snapshots/serving-artifacts';
 
 /**
  * 전월세 실거래 API — 사이클 II (전세·월세 탭) + DB 전환 (2026-07-18)
  *
- * GET /api/transactions/rent?district=강남구&months=3&rentType=jeonse|monthly|all&aptName=&limit=
+ * GET /api/transactions/rent?district=강남구&months=3&rentType=jeonse|monthly|all&aptId=&aptName=&aptDong=&limit=
  * 매매(/api/transactions)와 동일한 응답 골격 { data, district, months, total }.
  * TRANSACTIONS_SOURCE=db 면 rent_transactions 원장 우선 조회(미적재 시 live
  * 폴백), 그 외엔 기존 국토부 실시간 프록시. 응답 schema 불변.
@@ -193,17 +194,19 @@ async function fetchDbRentTx(lawdCd: string, district: string, months: number): 
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
-  const district = searchParams.get('district')?.trim() || '강남구';
+  let district = searchParams.get('district')?.trim() || '강남구';
   const parsedMonths = parseInt(searchParams.get('months') ?? '3', 10);
   const months   = Number.isFinite(parsedMonths)
     ? Math.min(Math.max(parsedMonths, 1), 36)
     : 3;
   const rentType = searchParams.get('rentType') ?? 'all';   // all | jeonse | monthly
   const aptName  = (searchParams.get('aptName') ?? searchParams.get('q') ?? '').trim().slice(0, APT_NAME_MAX_LEN);
+  const aptId = (searchParams.get('aptId') ?? '').trim().slice(0, 200);
+  const aptDong = (searchParams.get('aptDong') ?? '').replace(/\s+/g, '').slice(0, 100);
   const limit    = Math.min(Math.max(parseInt(searchParams.get('limit') ?? '60') || 60, 1), 100);
 
-  const lawdCd = DISTRICT_CODE[district];
-  if (!lawdCd) {
+  let lawdCd = DISTRICT_CODE[district];
+  if (!aptId && !lawdCd) {
     return NextResponse.json({ error: '지원하지 않는 구: ' + district }, { status: 400 });
   }
 
@@ -211,16 +214,31 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: '지원하지 않는 전월세 유형입니다' }, { status: 400 });
   }
   const servingMode = isPublicSnapshotConfigured();
+  const runtime = createPublicSnapshotRuntimeFromEnv();
+  let selectedApartment: ApartmentIndexItem | null = null;
+  if (aptId) {
+    const selection = await resolveTransactionApartmentSelection({ aptId, runtime, allowDbFallback: !servingMode });
+    if (!selection.ok) {
+      return NextResponse.json({ error: selection.error }, {
+        status: selection.status, headers: { 'Cache-Control': 'no-store' },
+      });
+    }
+    selectedApartment = selection.apartment;
+    lawdCd = selection.apartment.lawdCd;
+    district = selection.district;
+  }
 
   // Mac mini에서 검증·발행한 직전 스냅샷을 우선 사용한다. 스냅샷이
   // 없거나 손상됐거나 요청 기간을 커버하지 못할 때만 기존 DB/live 경로로 폴백한다.
   try {
-    const snapshot = await createPublicSnapshotRuntimeFromEnv().getDistrictSnapshot(lawdCd);
-    if (snapshot.status === 'success') {
+    const snapshot = await runtime.getDistrictSnapshot(lawdCd);
+    if (snapshot.status === 'success' && snapshot.data.partition.lawdCd === lawdCd) {
       const served = buildRentResponseFromSnapshot(snapshot.data, {
         months,
         limit,
         aptName,
+        aptDong,
+        ...(selectedApartment ? { aptId: selectedApartment.id, apartmentIndex: [selectedApartment] } : {}),
         rentType: rentType as 'all' | 'jeonse' | 'monthly',
       });
       if (served.hit) {
@@ -243,7 +261,7 @@ export async function GET(req: NextRequest) {
 
   try {
     // 고속 경로 — 검색어 없는 목록 조회는 SQL 집계 푸시다운 (실패 시 아래 행 경로로)
-    if (source === 'db' && !aptName) {
+    if (source === 'db' && !aptName && !aptDong && !selectedApartment) {
       const fast = await fetchDbRentGroupsFast(lawdCd, district, months, rentType, limit)
         .catch((e) => {
           console.warn('[transactions/rent API] 푸시다운 실패 — 행 경로 폴백:', e instanceof Error ? e.message : e);
@@ -294,24 +312,30 @@ export async function GET(req: NextRequest) {
 
     if (rentType === 'jeonse')  transactions = transactions.filter(isJeonse);
     if (rentType === 'monthly') transactions = transactions.filter((t) => !isJeonse(t));
+    if (selectedApartment) {
+      transactions = transactions.filter((transaction) => matchesApartmentIdentity(transaction, selectedApartment));
+    } else if (aptDong) {
+      transactions = transactions.filter((transaction) => transaction.dong.replace(/\s+/g, '') === aptDong);
+    }
 
     const result = groupRentTransactions(transactions)
-      .filter((g) => !aptName || matchesQuery(g.name, aptName))
+      .filter((g) => Boolean(selectedApartment) || !aptName || matchesQuery(g.name, aptName))
       .map((g) => {
         g.transactions.sort((a, b) => b.date.localeCompare(a.date));
         g.areas.sort((a, b) => a - b);
         return g;
       })
       .sort((a, b) => b.transactions.length - a.transactions.length)
-      .slice(0, aptName ? 100 : limit)
-      // 페이로드 절감 — 카드는 최근 계약만 사용 (전월세는 거래량이 매매의 2~3배)
+      .slice(0, !selectedApartment && aptName ? 100 : limit)
+      // 지역 목록만 축약한다. 단지 조회는 이전 공유 계약도 찾을 수 있도록 전부 보존한다.
       // maxDeposit/maxMonthlyRent 는 슬라이스 전 전체 거래 기준 — 정렬 정확도 보장 (v2)
       .map((g) => ({
         ...g,
+        ...(selectedApartment ? { masterId: selectedApartment.id } : {}),
         txCount: g.transactions.length,
         maxDeposit:     g.transactions.reduce((m, t) => Math.max(m, t.deposit), 0),
         maxMonthlyRent: g.transactions.reduce((m, t) => Math.max(m, t.monthlyRent), 0),
-        transactions: g.transactions.slice(0, 10),
+        transactions: selectedApartment || aptName || aptDong ? g.transactions : g.transactions.slice(0, 10),
       }));
 
     const isPartial = failedMonths.length > 0;
@@ -322,6 +346,7 @@ export async function GET(req: NextRequest) {
         months,
         rentType,
         total: transactions.length,
+        ...(selectedApartment ? { selectedAptId: selectedApartment.id } : {}),
         status: isPartial ? 'partial' : 'ok',
         ...(isPartial ? { failedMonths } : {}),
       },

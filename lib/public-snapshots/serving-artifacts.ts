@@ -946,6 +946,7 @@ export interface SnapshotTransactionQuery {
   limit: number;
   aptId?: string;
   aptName?: string;
+  aptDong?: string;
   apartmentIndex?: readonly ApartmentIndexItem[];
   now?: Date;
 }
@@ -1003,6 +1004,7 @@ export interface RentTransactionRow {
 export interface RentApartmentGroup {
   id: string;
   name: string;
+  masterId?: string;
   district: string;
   dong: string | null;
   buildYear: number | null;
@@ -1020,6 +1022,7 @@ export interface RentSnapshotResponse {
   rentType: RentType;
   total: number;
   status: 'ok';
+  selectedAptId?: string;
 }
 
 export interface PresaleTransactionRow {
@@ -1037,6 +1040,7 @@ export interface PresaleTransactionRow {
 export interface PresaleApartmentGroup {
   id: string;
   name: string;
+  masterId?: string;
   district: string;
   dong: string | null;
   buildYear: number | null;
@@ -1051,6 +1055,7 @@ export interface PresaleSnapshotResponse {
   months: number;
   total: number;
   status: 'ok';
+  selectedAptId?: string;
 }
 
 function normalizedRequestMonths(value: number): number {
@@ -1087,6 +1092,7 @@ interface PreparedSnapshotQuery {
   months: number;
   limit: number;
   aptName: string;
+  aptDong: string;
   selectedApartment: ApartmentIndexItem | null;
   monthKeys: Set<string>;
   index: readonly ApartmentIndexItem[];
@@ -1109,7 +1115,9 @@ function prepareSnapshotQuery(
   if (query.aptId) {
     if (!query.apartmentIndex) return { hit: false, reason: 'apartment-index-required' };
     selectedApartment = findApartmentIndexById(index, query.aptId);
-    if (!selectedApartment) return { hit: false, reason: 'apartment-not-found' };
+    if (!selectedApartment || selectedApartment.lawdCd !== snapshot.partition.lawdCd) {
+      return { hit: false, reason: 'apartment-not-found' };
+    }
   }
   return {
     hit: true,
@@ -1117,6 +1125,7 @@ function prepareSnapshotQuery(
       months,
       limit: normalizedRequestLimit(query.limit),
       aptName: query.aptId ? '' : (query.aptName ?? '').trim().slice(0, 50),
+      aptDong: query.aptId ? '' : (query.aptDong ?? '').replace(/\s+/g, '').slice(0, 100),
       selectedApartment,
       monthKeys: new Set(keys),
       index,
@@ -1132,6 +1141,7 @@ function recordsForQuery(
   return snapshot.records
     .filter((record) => record.kind === kind && prepared.monthKeys.has(record.dealDate.slice(0, 7)))
     .filter((record) => !prepared.selectedApartment || recordMatchesApartment(record, prepared.selectedApartment))
+    .filter((record) => !prepared.aptDong || record.dong.replace(/\s+/g, '') === prepared.aptDong)
     .sort((left, right) => right.dealDate.localeCompare(left.dealDate) || right.id.localeCompare(left.id));
 }
 
@@ -1263,6 +1273,7 @@ export function buildRentResponseFromSnapshot(
       group = {
         id: `${tx.dong || 'unknown'}-${tx.aptName}`.replace(/\s/g, '-'),
         name: tx.aptName,
+        ...(prepared.selectedApartment ? { masterId: prepared.selectedApartment.id } : {}),
         district: snapshot.partition.district,
         dong: tx.dong || null,
         buildYear: tx.buildYear,
@@ -1286,7 +1297,11 @@ export function buildRentResponseFromSnapshot(
     .map((group) => ({ ...group, areas: [...group.areas].sort((a, b) => a - b) }))
     .sort((left, right) => right.txCount - left.txCount)
     .slice(0, prepared.aptName ? 100 : prepared.limit)
-    .map((group) => ({ ...group, transactions: group.transactions.slice(0, 10) }));
+    .map((group) => ({
+      ...group,
+      transactions: prepared.selectedApartment || prepared.aptName || prepared.aptDong
+        ? group.transactions : group.transactions.slice(0, 10),
+    }));
   return {
     hit: true,
     body: {
@@ -1296,6 +1311,7 @@ export function buildRentResponseFromSnapshot(
       rentType,
       total: records.length,
       status: 'ok',
+      ...(prepared.selectedApartment ? { selectedAptId: prepared.selectedApartment.id } : {}),
     },
   };
 }
@@ -1329,6 +1345,7 @@ export function buildPresaleResponseFromSnapshot(
       group = {
         id: `${tx.dong || 'unknown'}-${tx.aptName}`.replace(/\s/g, '-'),
         name: tx.aptName,
+        ...(prepared.selectedApartment ? { masterId: prepared.selectedApartment.id } : {}),
         district: snapshot.partition.district,
         dong: tx.dong || null,
         buildYear: tx.buildYear,
@@ -1348,7 +1365,11 @@ export function buildPresaleResponseFromSnapshot(
     .map((group) => ({ ...group, areas: [...group.areas].sort((a, b) => a - b) }))
     .sort((left, right) => right.txCount - left.txCount)
     .slice(0, prepared.aptName ? 100 : prepared.limit)
-    .map((group) => ({ ...group, transactions: group.transactions.slice(0, 10) }));
+    .map((group) => ({
+      ...group,
+      transactions: prepared.selectedApartment || prepared.aptName || prepared.aptDong
+        ? group.transactions : group.transactions.slice(0, 10),
+    }));
   return {
     hit: true,
     body: {
@@ -1357,6 +1378,7 @@ export function buildPresaleResponseFromSnapshot(
       months: prepared.months,
       total: records.length,
       status: 'ok',
+      ...(prepared.selectedApartment ? { selectedAptId: prepared.selectedApartment.id } : {}),
     },
   };
 }

@@ -515,14 +515,14 @@ function downloadPng(blob: Blob, filename: string): void {
   }
 }
 
-export async function shareOrDownloadImage(blob: Blob, filename: string, title: string): Promise<void> {
+export async function shareOrDownloadImage(blob: Blob, filename: string, title: string, url?: string): Promise<void> {
   const safeFilename = safePngFilename(filename);
   if (typeof File !== 'undefined' && typeof navigator.share === 'function' && typeof navigator.canShare === 'function') {
     try {
       const file = new File([blob], safeFilename, { type: 'image/png' });
       if (navigator.canShare({ files: [file] })) {
         try {
-          await navigator.share({ files: [file], title });
+          await navigator.share({ files: [file], title, ...(url ? { url } : {}) });
           return;
         } catch (error) {
           // A cancelled native share must not surprise the user with a download.

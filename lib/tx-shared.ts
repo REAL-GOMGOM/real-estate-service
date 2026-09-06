@@ -4,6 +4,7 @@
  * /api/transactions 응답 구조와 1:1. date 는 YYYY-MM-DD (일 단위,
  * 구버전 캐시 데이터는 YYYY-MM 일 수 있어 표기 시 방어 처리).
  */
+import { analyzeTransactionPrice, isComparablePriceTransaction } from '@/lib/transaction-price-comparison';
 
 export interface Transaction {
   aptName:      string;
@@ -76,17 +77,9 @@ export function fmtContractDate(date: string): string {
   return d ? `${yy}.${m}.${d}` : `${yy}.${m}`;
 }
 
-/** 조회 기간 안에서 최신 거래가 동일 면적(±6㎡)의 종전 최고가를 엄격히 경신했는지 판정. */
+/** 조회 기간 안에서 최신 거래가 유사 면적(±6㎡)의 종전 최고가를 엄격히 경신했는지 판정. */
 export function detectNewHigh(apt: AptGroup): boolean {
-  if (apt.transactions.length < 2) return false;
-  const sorted = [...apt.transactions].sort((a, b) => b.date.localeCompare(a.date));
-  const latest = sorted[0];
-  const prior = apt.transactions.filter(
-    (transaction) =>
-      transaction.date < latest.date &&
-      Math.abs(transaction.area - latest.area) <= 6,
-  );
-  return prior.length > 0 && latest.price > Math.max(...prior.map((t) => t.price));
+  return analyzeTransactionPrice(apt.transactions)?.state === 'new-high';
 }
 
 /**
@@ -96,16 +89,17 @@ export function detectNewHigh(apt: AptGroup): boolean {
  */
 export interface SparkPoint { t: number; price: number }
 
-export function sparkSeries(apt: AptGroup): { points: SparkPoint[]; rising: boolean } | null {
-  const repArea = representativeArea(apt);
+export function sparkSeries(apt: AptGroup, targetArea = representativeArea(apt)): { points: SparkPoint[]; rising: boolean } | null {
   const txs = apt.transactions
-    .filter((tr) => Math.abs(tr.area - repArea) <= 6)
+    .filter((tr) => isComparablePriceTransaction(tr) && Math.abs(tr.area - targetArea) <= 6)
     .sort((a, b) => a.date.localeCompare(b.date));
   if (txs.length < 2) return null;
 
   const toTime = (date: string): number => {
     const [y, m, d] = date.split('-').map((v) => parseInt(v));
-    return new Date(y, (m ?? 1) - 1, d ?? 15).getTime();
+    // Month-only legacy dates anchor to their month boundary, never a later
+    // invented day that could put an earlier point outside the chart domain.
+    return Date.UTC(y, (m ?? 1) - 1, d ?? 1);
   };
 
   const t0 = toTime(txs[0].date);
@@ -160,8 +154,8 @@ export function peakRecovery(apt: AptGroup): PeakRecovery | null {
  * 스파크 좌표 빌더 — 공유 카드·피드 썸네일 공용 (0~100 × 0~56 좌표계).
  * sparkSeries(시간축 비례)를 카드 렌더 좌표로 변환한다.
  */
-export function buildSparkPts(apt: AptGroup): { pts: { x: number; y: number }[]; up: boolean } | null {
-  const series = sparkSeries(apt);
+export function buildSparkPts(apt: AptGroup, targetArea?: number): { pts: { x: number; y: number }[]; up: boolean } | null {
+  const series = sparkSeries(apt, targetArea);
   if (!series) return null;
 
   const prices = series.points.map((p) => p.price);
