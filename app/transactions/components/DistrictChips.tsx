@@ -22,11 +22,22 @@ function shortName(district: string): string {
 }
 
 export default function DistrictChips({ districts, stats, active, onPick }: DistrictChipsProps) {
-  // 유효한 통계가 있으면 건수순, 없거나 빈 배열이면 정의 순서
-  const items: { district: string; count: number | null; newHighs: number }[] = stats
-    && stats.length > 0
-    ? stats.map((s) => ({ district: s.district, count: s.count, newHighs: s.newHighs }))
-    : districts.map((d) => ({ district: d, count: null, newHighs: 0 }));
+  // Preserve API ordering for known statistics, but do not hide supported
+  // counties absent from the curated aggregate. Missing counts are unknown,
+  // never synthetic zeroes. Ignore out-of-group/duplicate statistics.
+  const supported = new Set(districts);
+  const seen = new Set<string>();
+  const items: { district: string; count: number | null; newHighs: number }[] = [];
+  for (const stat of stats ?? []) {
+    if (!supported.has(stat.district) || seen.has(stat.district)) continue;
+    seen.add(stat.district);
+    items.push({ district: stat.district, count: stat.count, newHighs: stat.newHighs });
+  }
+  for (const district of districts) {
+    if (seen.has(district)) continue;
+    seen.add(district);
+    items.push({ district, count: null, newHighs: 0 });
+  }
 
   return (
     <div

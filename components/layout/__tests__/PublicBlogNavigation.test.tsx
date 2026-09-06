@@ -46,8 +46,9 @@ describe('public column pause navigation', () => {
   it.each([false, true])('home mobile menu follows the public flag (%s)', async (enabled) => {
     features.blog = enabled;
     await act(async () => root!.render(<MobileNav />));
-    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="메뉴"]')!.click());
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="메뉴 열기"]')!.click());
     expect(host.querySelector('a[href="/blog"]') !== null).toBe(enabled);
+    await act(async () => host.querySelector<HTMLButtonElement>('#mobile-site-navigation button')!.click());
     expect(host.querySelector('a[href="/region"]')).not.toBeNull();
   });
 

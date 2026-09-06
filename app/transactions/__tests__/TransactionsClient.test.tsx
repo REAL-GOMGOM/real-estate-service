@@ -91,8 +91,10 @@ vi.mock('../components/RegionPickerModal', () => ({
   ),
 }));
 vi.mock('../components/DistrictChips', () => ({
-  default: ({ onPick }: { onPick: (district: string) => void }) => (
-    <button type="button" onClick={() => onPick('서초구')}>서초구 칩</button>
+  default: ({ districts, active, onPick }: { districts: string[]; active: string; onPick: (district: string) => void }) => (
+    <div data-testid="district-chips" data-districts={districts.join(',')} data-active={active}>
+      <button type="button" onClick={() => onPick('서초구')}>서초구 칩</button>
+    </div>
   ),
 }));
 vi.mock('../components/GlobalApartmentSearchResults', () => ({ default: () => null }));
@@ -295,6 +297,28 @@ describe('TransactionsClient data freshness', () => {
     expect(label(page).textContent).toContain('2026.08.17 05:20');
     await act(async () => { finish!(await response(true, { summary }, oldSnapshot)); await settle(); });
     expect(label(page).textContent).toContain('2026.08.17 05:20');
+  });
+});
+
+describe('TransactionsClient full district navigation', () => {
+  it('restores a home Hongcheon link in Gangwon, including its stats, chips and picker', async () => {
+    fetchMock.mockImplementation((input) => String(input).startsWith('/api/transactions/districts')
+      ? response(true, { districts: [{ district: '춘천시', count: 5, newHighs: 0 }] })
+      : response(true, { data: [] }));
+    const page = await renderClient(`district=${encodeURIComponent('홍천군')}`);
+
+    expect(page.querySelector('h1')?.textContent).toContain('홍천군');
+    const requests = fetchMock.mock.calls.map(([input]) => String(input));
+    expect(requests).toContain(`/api/transactions/districts?group=${encodeURIComponent('강원')}`);
+    expect(requests).not.toContain(`/api/transactions/districts?group=${encodeURIComponent('서울')}`);
+    expect(requests.some((url) => url.startsWith('/api/transactions?') && url.includes(encodeURIComponent('홍천군')))).toBe(true);
+    const chips = page.querySelector('[data-testid="district-chips"]');
+    expect(chips?.getAttribute('data-active')).toBe('홍천군');
+    expect(chips?.getAttribute('data-districts')?.split(',')).toContain('홍천군');
+    expect(chips?.getAttribute('data-districts')?.split(',')).not.toContain('강남구');
+
+    await act(async () => { page.querySelector<HTMLButtonElement>('button[aria-label="지역 변경"]')!.click(); });
+    expect(page.querySelector('[role="dialog"][aria-label="지역 선택"]')?.textContent).toContain('강원');
   });
 });
 

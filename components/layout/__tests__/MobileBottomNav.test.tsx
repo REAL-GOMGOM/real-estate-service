@@ -125,4 +125,15 @@ describe('MobileBottomNav', () => {
     const page = await renderNavigation('/admin/login');
     expect(page.innerHTML).toBe('');
   });
+
+  it('경로 변경 시 열린 더보기를 닫고 현재 탭 표시를 갱신한다', async () => {
+    const page = await renderNavigation('/transactions');
+    const moreButton = [...page.querySelectorAll('button')].find((button) => button.textContent?.trim() === '더보기')!;
+    await act(async () => moreButton.click());
+    expect(page.querySelector('#mobile-more-navigation')).not.toBeNull();
+    route.pathname = '/subscription';
+    await act(async () => root!.render(<MobileBottomNav />));
+    expect(page.querySelector('#mobile-more-navigation')).toBeNull();
+    expect(page.querySelector('a[href="/subscription"]')?.getAttribute('aria-current')).toBe('page');
+  });
 });

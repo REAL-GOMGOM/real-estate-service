@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
-import { DISTRICT_GROUPS } from '@/lib/district-groups';
+import { SUPPORTED_DISTRICT_GROUPS as DISTRICT_GROUPS } from '@/lib/district-groups';
 
 /**
  * 지역 선택 모달 — 전국화 (2026-07-19).

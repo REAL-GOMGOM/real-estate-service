@@ -1,12 +1,11 @@
 import Link from 'next/link';
-import Image from 'next/image';
 import { Suspense } from 'react';
 import { connection } from 'next/server';
 import {
   BarChart3, TrendingUp, CalendarDays, Target, MapPin, FileText,
 } from 'lucide-react';
 import MarketLive from '@/components/landing/MarketLive';
-import MobileNav from '@/components/landing/MobileNav';
+import Header from '@/components/layout/Header';
 import RecentDealsCard from '@/components/landing/RecentDealsCard';
 import NotableDealsCard from '@/components/landing/NotableDealsCard';
 import HomeCalculator from '@/components/landing/HomeCalculator';
@@ -49,14 +48,6 @@ const NAV = '#3A4453';
 const MUTED = '#8A93A3';
 const MUTED2 = '#98A1B0';
 const BORDER = '#E7EAF0';
-
-const NAV_LINKS = [
-  { label: '부동산 분석', href: '/region' },
-  { label: '청약', href: '/subscription' },
-  { label: '내집마련 도구', href: '/loan' },
-  { label: '시장 동향', href: '/market' },
-  { label: '칼럼', href: '/blog' },
-];
 
 const SHORTCUTS = [
   { title: '실거래 조회', href: '/transactions', Icon: BarChart3 },
@@ -199,8 +190,6 @@ export default function HomePage() {
     <main className="nz-main" style={{ fontFamily: 'Pretendard, system-ui, sans-serif', background: '#FFFFFF', color: INK, overflowX: 'hidden' }}>
       <style>{`
         .nz-main{--font-sg:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
-        .naezip-mobilenav{display:none}
-        @media (max-width:720px){.naezip-navlinks,.naezip-login{display:none!important}.naezip-mobilenav{display:block!important}}
         @keyframes zipPulse{0%,100%{opacity:1}50%{opacity:.35}}
         .nz-band{display:grid;gap:16px;align-items:stretch}
         .nz-band>*{min-width:0}
@@ -239,42 +228,8 @@ export default function HomePage() {
         }
       `}</style>
 
-      {/* ── 내비 ── */}
-      <nav style={{
-        position: 'sticky', top: 0, zIndex: 50,
-        background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(8px)',
-        borderBottom: '1px solid #EEF0F5',
-      }}>
-        <div style={{
-          maxWidth: 1200, margin: '0 auto', padding: '16px 24px',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
-        }}>
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 9, textDecoration: 'none' }}>
-            {/* 기존 이미지 로고 사용 — 시안의 CSS 도형은 프로토타입 대체물 (README Assets 명시) */}
-            <Image src="/logo.png" alt="내집(My.ZIP)" width={32} height={32} style={{ objectFit: 'contain', flexShrink: 0 }} priority />
-            <span style={{ fontSize: 18, fontWeight: 800, color: INK }}>내집</span>
-            <span style={{ fontFamily: 'var(--font-sg)', fontSize: 13, fontWeight: 600, color: MUTED2, letterSpacing: '0.04em' }}>My.ZIP</span>
-          </Link>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 26 }} className="naezip-navlinks">
-            {NAV_LINKS.filter((link) => link.href !== '/blog' || isPublicBlogEnabled()).map((l) => (
-              <Link key={l.href + l.label} href={l.href} style={{ fontSize: 14.5, fontWeight: 500, color: NAV, textDecoration: 'none', whiteSpace: 'nowrap' }}>
-                {l.label}
-              </Link>
-            ))}
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <Link href="/region" style={{
-              padding: '9px 16px', borderRadius: 10, background: BLUE, color: '#FFFFFF',
-              fontSize: 14, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap',
-            }}>
-              지역 둘러보기
-            </Link>
-            <MobileNav />
-          </div>
-        </div>
-      </nav>
+      {/* 홈과 하위 페이지에서 같은 메뉴 동작과 목적지를 제공한다. */}
+      <Header variant="landing" />
 
       {/* ── 슬림 히어로 바 ── */}
       <section style={{ background: 'linear-gradient(180deg, #FBFCFE, #F4F7FC)', borderBottom: '1px solid #EEF0F5' }}>

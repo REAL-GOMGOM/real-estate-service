@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { buildTransactionShareUrl } from '@/lib/transaction-share-url';
 import { txKey } from '@/lib/tx-share-text';
+import { DEFAULT_HOME_DISTRICT, getHomeDistrictSnapshot, saveHomeDistrict, subscribeHomeDistrict } from '@/lib/home-district';
+import HomeDistrictPicker from './HomeDistrictPicker';
 
 /**
  * 최근 실거래 카드 — 홈 대시보드.
@@ -27,8 +29,7 @@ interface Tx {
   href: string;
 }
 
-const REGIONS = ['강남구', '서초구', '송파구', '마포구', '용산구'] as const;
-type Region = (typeof REGIONS)[number];
+const getServerDistrict = () => '';
 
 type DealsView =
   | { kind: 'loading' }
@@ -56,7 +57,7 @@ function fmtDay(date: string): string {
   return date;
 }
 
-function parseTransactions(data: unknown[], requestedRegion: Region): { rows: Tx[]; invalidCount: number } {
+function parseTransactions(data: unknown[], requestedRegion: string): { rows: Tx[]; invalidCount: number } {
   const parsed: Tx[] = [];
   let invalidCount = 0;
 
@@ -136,7 +137,31 @@ function getMessage(value: unknown): string | null {
 }
 
 export default function RecentDealsCard() {
-  const [region, setRegion] = useState<Region>('강남구');
+  const storedRegion = useSyncExternalStore(subscribeHomeDistrict, getHomeDistrictSnapshot, getServerDistrict);
+  const [sessionRegion, setSessionRegion] = useState<string | null>(null);
+  const region = sessionRegion ?? storedRegion;
+
+  return (
+    <div style={{
+      background: '#FFFFFF', border: '1px solid #E7EAF0', borderRadius: 18,
+      padding: 20, display: 'flex', flexDirection: 'column', minWidth: 0,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 999, background: '#12B76A', boxShadow: '0 0 0 4px #E6F7EE', flexShrink: 0 }} />
+        <span style={{ fontWeight: 800, fontSize: 15, color: INK }}>최근 실거래</span>
+      </div>
+      <HomeDistrictPicker district={region || DEFAULT_HOME_DISTRICT} storageFailed={sessionRegion !== null}
+        onSelect={(district) => setSessionRegion(saveHomeDistrict(district) ? null : district)} />
+      {region ? <RecentDealsList key={region} region={region} /> : (
+        <div role="status" style={{ color: '#6B7488', fontSize: 13, padding: '28px 4px' }}>관심 지역의 최근 실거래를 불러오는 중입니다.</div>
+      )}
+    </div>
+  );
+}
+
+// A district change remounts only the list, so old rows cannot appear beneath
+// the new district heading, including storage changes from another tab.
+function RecentDealsList({ region }: { region: string }) {
   const [view, setView] = useState<DealsView>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
 
@@ -217,44 +242,7 @@ export default function RecentDealsCard() {
   };
 
   return (
-    <div style={{
-      background: '#FFFFFF', border: '1px solid #E7EAF0', borderRadius: 18,
-      padding: 20, display: 'flex', flexDirection: 'column', minWidth: 0,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 999, background: '#12B76A', boxShadow: '0 0 0 4px #E6F7EE', flexShrink: 0 }} />
-        <span style={{ fontWeight: 800, fontSize: 15, color: INK, letterSpacing: '-0.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          최근 실거래 · {region}
-        </span>
-      </div>
-
-      <div aria-label="실거래 지역 선택" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-        {REGIONS.map((candidate) => {
-          const active = candidate === region;
-          return (
-            <button
-              key={candidate}
-              type="button"
-              aria-pressed={active}
-              onClick={() => {
-                if (candidate === region) return;
-                setView({ kind: 'loading' });
-                setRegion(candidate);
-              }}
-              style={{
-                padding: '6px 12px', borderRadius: 8, fontSize: 12.5, fontWeight: 600,
-                cursor: 'pointer', transition: '.15s', fontFamily: 'inherit',
-                background: active ? BLUE : '#FFFFFF',
-                color: active ? '#FFFFFF' : '#3A4453',
-                border: `1px solid ${active ? BLUE : '#E2E6EF'}`,
-              }}
-            >
-              {candidate}
-            </button>
-          );
-        })}
-      </div>
-
+    <>
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
         {view.kind === 'loading' && (
           <div role="status" aria-live="polite" style={{ color: '#6B7488', fontSize: 13, padding: '28px 4px', lineHeight: 1.5 }}>
@@ -316,6 +304,6 @@ export default function RecentDealsCard() {
       >
         {region} 실거래 더 보기 →
       </Link>
-    </div>
+    </>
   );
 }

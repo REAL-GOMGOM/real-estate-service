@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { TxErrorState, TxEmptyState } from '@/components/shared/TxStates';
 import { AnalysisPromoBar } from '@/components/shared/AnalysisPromoBar';
 import { findDistrictByLawdCd } from '@/lib/district-codes';
-import { DISTRICT_GROUPS } from '@/lib/district-groups';
+import { SUPPORTED_DISTRICT_GROUPS as DISTRICT_GROUPS, getSupportedRegionIndex } from '@/lib/district-groups';
 import { matchesQuery } from '@/lib/search-utils';
 import { matchesApartmentIdentity } from '@/lib/transaction-identity';
 import { txKey } from '@/lib/tx-share-text';
@@ -37,7 +37,7 @@ import { kstTodayIso } from '@/lib/agg-window';
  */
 
 function findGroupIndexOfDistrict(district: string): number {
-  return DISTRICT_GROUPS.findIndex((g) => g.districts.includes(district));
+  return getSupportedRegionIndex(district);
 }
 
 function groupMatchesSelectedApartment(

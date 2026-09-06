@@ -1,3 +1,5 @@
+import { DISTRICT_CODE } from '@/lib/district-codes';
+
 /**
  * 시도 권역 정의 — 사이클 X (신 디자인 11a 정합)
  *
@@ -128,6 +130,24 @@ export const DISTRICT_GROUPS: { label: string; districts: string[] }[] = [
     ],
   },
 ];
+
+// Public district selection must include every canonical query target, not only
+// the curated high-volume districts used by existing summary/aggregate paths.
+// Keep the curated export unchanged so expanding the picker does not alter API
+// aggregation scope or the published snapshot contract.
+export const SUPPORTED_DISTRICT_GROUPS = DISTRICT_GROUPS.map((group) => {
+  const prefixes = new Set(group.districts.map((district) => DISTRICT_CODE[district]?.slice(0, 2)));
+  return {
+    label: group.label,
+    districts: Object.entries(DISTRICT_CODE)
+      .filter(([, code]) => prefixes.has(code.slice(0, 2)))
+      .map(([district]) => district),
+  };
+});
+
+export function getSupportedRegionIndex(district: string): number {
+  return SUPPORTED_DISTRICT_GROUPS.findIndex((group) => group.districts.includes(district));
+}
 
 // 전체 district 목록 (flat)
 export const ALL_DISTRICTS = DISTRICT_GROUPS.flatMap(g => g.districts);

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { isPublicBlogEnabled } from '@/lib/public-features';
+import { getMobileMoreNavigation, isNavigationActive } from '@/lib/site-navigation';
 import {
   BarChart3,
   Building2,
@@ -41,14 +41,14 @@ const PRIMARY_ITEMS = [
   },
 ] as const;
 
-const MORE_ITEMS = [
-  { label: '주요 거래', href: '/highlights', Icon: BarChart3 },
-  { label: '부동산 지도', href: '/location-map', Icon: Map },
-  { label: '시장 동향', href: '/market', Icon: TrendingUp },
-  { label: '대출 계산기', href: '/loan', Icon: Calculator },
-  { label: '경제 달력', href: '/calendar', Icon: CalendarDays },
-  { label: '부동산 칼럼', href: '/blog', Icon: Newspaper },
-] as const;
+const MORE_ICONS: Record<string, typeof BarChart3> = {
+  '/highlights': BarChart3,
+  '/location-map': Map,
+  '/market': TrendingUp,
+  '/loan': Calculator,
+  '/calendar': CalendarDays,
+  '/blog': Newspaper,
+};
 
 const EXCLUDED_ROUTE_PREFIXES = ['/admin', '/preview'] as const;
 
@@ -125,8 +125,9 @@ function MobileBottomNavContent({ pathname }: { pathname: string }) {
           >
             <p className="nz-mobile-more-title">더 둘러보기</p>
             <div className="nz-mobile-more-grid">
-              {MORE_ITEMS.filter((item) => item.href !== '/blog' || isPublicBlogEnabled()).map(({ label, href, Icon }, index) => {
-                const active = pathname === href || pathname.startsWith(`${href}/`);
+              {getMobileMoreNavigation().map(({ label, href }, index) => {
+                const Icon = MORE_ICONS[href] ?? Building2;
+                const active = isNavigationActive(href, pathname);
                 return (
                   <Link
                     key={href}
