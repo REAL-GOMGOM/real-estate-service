@@ -44,10 +44,11 @@ export function isPublicFieldReport(value: unknown): value is PublicFieldReport 
   if (!value || typeof value !== 'object') return false;
   const report = value as Partial<PublicFieldReport>;
   return typeof report.id === 'string' && report.id.length > 0
-    && typeof report.apartmentId === 'string' && report.apartmentId.length > 0
-    && typeof report.apartmentName === 'string' && report.apartmentName.length > 0
+    && typeof report.apartmentId === 'string' && report.apartmentId.trim().length > 0
+    && report.apartmentId.length <= 160 && !/[\x00-\x1f<>]/.test(report.apartmentId)
+    && typeof report.apartmentName === 'string' && report.apartmentName.trim().length > 0
     && typeof report.sido === 'string'
-    && typeof report.sigungu === 'string'
+    && typeof report.sigungu === 'string' && report.sigungu.trim().length > 0
     && (typeof report.dong === 'string' || report.dong === null)
     && typeof report.area === 'number' && Number.isFinite(report.area) && report.area >= 10 && report.area <= 500
     && (report.tradeType === 'sale' || report.tradeType === 'jeonse' || report.tradeType === 'monthly')

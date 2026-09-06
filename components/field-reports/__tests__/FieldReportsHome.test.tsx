@@ -22,6 +22,7 @@ vi.mock('@/components/search/AptAutocomplete', () => ({
 
 import FieldReportsHome from '../FieldReportsHome';
 import { contractDateBounds, formatReportAmount, formatReportArea, isPublicFieldReport } from '../presentation';
+import styles from '../FieldReports.module.css';
 
 const fetchMock = vi.fn();
 let root: Root | null = null;
@@ -98,6 +99,77 @@ afterEach(async () => {
 });
 
 describe('현장 제보가격 공개 UI', () => {
+  it('홈의 빈 목록은 간결하게 표시하되 제보 CTA와 미확인 안내를 유지한다', async () => {
+    await renderPanel();
+    expect(host.querySelector('section')?.classList.contains(styles.compact)).toBe(true);
+    expect(host.textContent).toContain('아직 공개된 제보가 없습니다');
+    expect(host.textContent).toContain('공식 실거래와 별개인 미확인 정보');
+    expect(host.textContent).toContain('검수 후 공개 · 진위 미보증 · 공식 통계 미반영');
+    expect(button('가격 제보하기').disabled).toBe(false);
+    expect(host.querySelector('details')?.open).toBe(false);
+    expect(host.querySelector('details summary')?.textContent).toBe('제보 이용 안내');
+    expect(host.querySelector('a[href="/privacy#field-reports"]')).not.toBeNull();
+    expect(host.querySelector('[class*="emptyIcon"]')).toBeNull();
+    await click('가격 제보하기');
+    expect(host.querySelector('section')?.classList.contains(styles.compact)).toBe(false);
+    expect(host.querySelector('form')).not.toBeNull();
+    expect(host.textContent).toContain('계약 사실·가격의 진위를 보증하지 않습니다');
+    await click('제보 접기');
+    expect(host.querySelector('section')?.classList.contains(styles.compact)).toBe(true);
+  });
+
+  it('전체 제보 페이지는 빈 목록이어도 기존 상세 안내를 유지한다', async () => {
+    await renderPanel(true);
+    expect(host.querySelector('section')?.classList.contains(styles.compact)).toBe(false);
+    expect(host.querySelector('h1')?.textContent).toBe('현장 제보가격');
+    expect(host.querySelector('details')).toBeNull();
+    expect(host.textContent).toContain('공식 실거래 통계에는 반영하지 않습니다');
+  });
+
+  it.each(['sale', 'jeonse', 'monthly'] as const)('%s 제보는 검증된 단지와 거래 유형만 공식 조회로 전달한다', async (tradeType) => {
+    const item = report({
+      apartmentId: 'A-단지/123+45', apartmentName: '우리집 2차 (A&B)+가든',
+      sigungu: '용인시 수지구', dong: '성복동 1가', tradeType,
+      monthlyRent: tradeType === 'monthly' ? 100 : null,
+    });
+    fetchMock.mockResolvedValue(response({ status: 'ok', submissionsEnabled: true, reports: [item] }));
+    await renderPanel();
+    const link = host.querySelector<HTMLAnchorElement>('article a');
+    expect(link?.textContent).toContain('같은 단지 공식 실거래 비교');
+    expect(link?.getAttribute('href')).toMatch(/^\/transactions\?/);
+    const url = new URL(link!.href);
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      district: item.sigungu, q: item.apartmentName,
+      aptId: item.apartmentId, aptDong: item.dong,
+      months: '2', ...(tradeType === 'sale' ? {} : { dealType: tradeType }),
+    });
+    expect(url.searchParams.has('tx')).toBe(false);
+    expect(url.searchParams.has('rtx')).toBe(false);
+    expect(host.querySelector('article')?.textContent).toContain('미확인 제보');
+  });
+
+  it('이름이 같은 단지의 ID와 동을 섞지 않는다', async () => {
+    fetchMock.mockResolvedValue(response({ status: 'ok', submissionsEnabled: true, reports: [
+      report({ id: 'report-1', apartmentId: 'A111', dong: '잠실동' }),
+      report({ id: 'report-2', apartmentId: 'A222', dong: '신천동' }),
+    ] }));
+    await renderPanel();
+    const links = [...host.querySelectorAll<HTMLAnchorElement>('article a')].map((link) => new URL(link.href));
+    expect(links.map((url) => [url.searchParams.get('aptId'), url.searchParams.get('aptDong')])).toEqual([
+      ['A111', '잠실동'], ['A222', '신천동'],
+    ]);
+  });
+
+  it.each([
+    { apartmentId: '' }, { apartmentId: ' ' }, { apartmentId: '<script>' },
+    { apartmentId: 'A\n123' }, { apartmentName: ' ' }, { sigungu: '' },
+  ])('잘못된 단지 식별 응답 %j로 비교 링크를 만들지 않는다', async (overrides) => {
+    fetchMock.mockResolvedValue(response({ status: 'ok', submissionsEnabled: true, reports: [report(overrides)] }));
+    await renderPanel();
+    expect(host.querySelector('article')).toBeNull();
+    expect(host.textContent).toContain('제보 목록을 잠시 불러오지 못했습니다');
+  });
+
   it('로딩을 표시하고 예시 제보 없이 no-store로 요청한다', async () => {
     fetchMock.mockReturnValue(new Promise(() => {}));
     await renderPanel();

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { buildTransactionShareUrl } from '@/lib/transaction-share-url';
+import { txKey } from '@/lib/tx-share-text';
 
 /**
  * 최근 실거래 카드 — 홈 대시보드.
@@ -11,6 +13,8 @@ import Link from 'next/link';
 
 const BLUE = '#1B4DDB';
 const INK = '#0B1524';
+// URL 조립용 기준점만 사용하며, 렌더링에는 같은 사이트의 경로·쿼리만 전달한다.
+const LINK_BASE = 'https://relative.invalid';
 
 interface Tx {
   name: string;
@@ -19,6 +23,8 @@ interface Tx {
   floor: string;
   price: string;
   date: string;
+  rawDate: string;
+  href: string;
 }
 
 const REGIONS = ['강남구', '서초구', '송파구', '마포구', '용산구'] as const;
@@ -50,8 +56,8 @@ function fmtDay(date: string): string {
   return date;
 }
 
-function parseTransactions(data: unknown[]): { rows: Tx[]; invalidCount: number } {
-  const parsed: Array<Tx & { rawDate: string }> = [];
+function parseTransactions(data: unknown[], requestedRegion: Region): { rows: Tx[]; invalidCount: number } {
+  const parsed: Tx[] = [];
   let invalidCount = 0;
 
   for (const groupValue of data) {
@@ -65,6 +71,9 @@ function parseTransactions(data: unknown[]): { rows: Tx[]; invalidCount: number 
 
     const groupName = groupValue.name.trim();
     const groupDong = typeof groupValue.dong === 'string' ? groupValue.dong.trim() : '';
+    const district = getMessage(groupValue.district) ?? requestedRegion;
+    // 화면용 group.id나 거래 행의 임의 식별자로 마스터 ID를 추정하지 않는다.
+    const masterId = getMessage(groupValue.masterId);
 
     for (const transactionValue of groupValue.transactions) {
       if (!isRecord(transactionValue)) {
@@ -90,21 +99,34 @@ function parseTransactions(data: unknown[]): { rows: Tx[]; invalidCount: number 
       const transactionDong = typeof transactionValue.dong === 'string'
         ? transactionValue.dong.trim()
         : '';
+      const dong = groupDong || transactionDong;
+      const link = new URL(buildTransactionShareUrl({
+        origin: LINK_BASE,
+        apartment: {
+          name: groupName,
+          district,
+          dong,
+          masterId,
+        },
+        months: 2,
+        tx: txKey({ date, area, floor, price }),
+      }));
       parsed.push({
         name: groupName,
-        dong: transactionDong || groupDong,
+        dong,
         area: `${area}㎡`,
         floor: `${floor}층`,
         price: fmtEok(price),
         date: fmtDay(date),
         rawDate: date,
+        href: `${link.pathname}${link.search}`,
       });
     }
   }
 
   parsed.sort((a, b) => b.rawDate.localeCompare(a.rawDate));
   return {
-    rows: parsed.slice(0, 4).map(({ rawDate: _rawDate, ...row }) => row),
+    rows: parsed.slice(0, 4),
     invalidCount,
   };
 }
@@ -156,7 +178,7 @@ export default function RecentDealsCard() {
           throw new Error('실거래 응답 형식이 올바르지 않습니다.');
         }
 
-        const { rows, invalidCount } = parseTransactions(body.data);
+        const { rows, invalidCount } = parseTransactions(body.data, region);
         if (!active) return;
 
         if (apiStatus === 'degraded' || invalidCount > 0) {
@@ -263,10 +285,15 @@ export default function RecentDealsCard() {
         )}
 
         {rows.map((tx) => (
-          <div key={`${tx.name}-${tx.date}-${tx.area}-${tx.floor}-${tx.price}`} style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '11px 0', borderBottom: '1px solid #F1F3F7',
-          }}>
+          <Link
+            key={tx.href}
+            href={tx.href}
+            aria-label={`${tx.name} ${tx.rawDate} 계약 ${tx.area} ${tx.floor} ${tx.price} 실거래 자세히 보기`}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '11px 0', borderBottom: '1px solid #F1F3F7', textDecoration: 'none',
+            }}
+          >
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 700, fontSize: 13.5, color: INK, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {tx.name}
@@ -279,7 +306,7 @@ export default function RecentDealsCard() {
               <div style={{ fontWeight: 800, fontSize: 14, color: BLUE, fontFamily: 'var(--font-sg, ui-monospace, monospace)' }}>{tx.price}</div>
               <div style={{ fontSize: 10.5, color: '#A0A8B5', marginTop: 2 }}>{tx.date}</div>
             </div>
-          </div>
+          </Link>
         ))}
       </div>
 

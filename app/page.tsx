@@ -308,6 +308,9 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* 저장·최근 단지는 검색 직후 이어서 확인. 저장값이 없으면 아무 영역도 만들지 않습니다. */}
+      <SavedApartmentsCard />
+
       {/* ── 퀵 액션 칩 ── */}
       <section style={{ background: '#FFFFFF', borderBottom: '1px solid #EEF0F5' }}>
         <div className="nz-chips" style={{ maxWidth: 1200, margin: '0 auto', padding: '14px 24px' }}>
@@ -405,9 +408,6 @@ export default function HomePage() {
           </div>
         </div>
       </section>
-
-      {/* 로컬 저장값은 수화 뒤 읽으므로 첫 화면 레이아웃에 영향을 주지 않게 본문 아래에 둡니다. */}
-      <SavedApartmentsCard />
 
       {/* ── 홈 화면 바로가기 CTA (2026-07-12) — 미지원·이미 설치 시 자동 숨김 ── */}
       <AddToHomeCta />
