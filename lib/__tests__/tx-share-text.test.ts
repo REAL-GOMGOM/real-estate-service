@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   fmtMonthsLabel, pricePerPyeong, buildPeakLine, buildTxShareText, txKey,
+  PARTIAL_TRANSACTION_NOTICE, type TxShareTextInput,
 } from '../tx-share-text';
 import { fmtPrice } from '../tx-shared';
 
@@ -49,6 +50,14 @@ describe('buildPeakLine — 기간 캡션 필수', () => {
   it('데이터 없으면 빈 문자열', () => {
     expect(buildPeakLine({ price: 0, peak: 0, prevPeak: null, months: 36, fmt })).toBe('');
   });
+  it('일부 월 자료가 빠지면 값이 있어도 최고가 비교를 만들지 않는다', () => {
+    expect(buildPeakLine({ price: 155000, peak: 155000, prevPeak: 149000, months: 36, fmt, dataComplete: false }))
+      .toBe('');
+  });
+  it('완전한 자료임을 명시해도 기존 기본 출력을 바꾸지 않는다', () => {
+    const input = { price: 155000, peak: 155000, prevPeak: 149000, months: 36, fmt };
+    expect(buildPeakLine({ ...input, dataComplete: true })).toBe(buildPeakLine(input));
+  });
 });
 
 describe('buildTxShareText', () => {
@@ -84,6 +93,46 @@ describe('buildTxShareText', () => {
     });
     expect(s).toContain('📊 2개월 내 최고 16.6억보다 1.1억 낮음');
     expect(s).not.toContain('대비 -');
+  });
+
+  const input: TxShareTextInput = {
+    aptName: '우리집 2차 (A&B)', location: '용인시 수지구 성복동 1가',
+    url: 'https://www.naezipkorea.com/transactions?aptId=A123&months=36&tx=2026-07-08_134_9_155000',
+    price: 155000, areaM2: 134, floor: 9, date: '2026-07-08',
+    peakLine: '3년 내 최고가 · 종전 14.9억 +6,000만',
+    fmt: fmtPrice, fmtDate: (d) => d.slice(2).replace(/-/g, '.'),
+  };
+
+  it.each([
+    '3년 내 최고가 · 종전 14.9억 +6,000만',
+    '3년 내 최고 16.6억 대비 -1.1억',
+    '3년 내 최고가와 같음',
+    '🔥 신고가 경신',
+    '',
+  ])('자료가 부분 제공되면 공급된 비교 문구를 버리고 한계를 명시한다 (%s)', (peakLine) => {
+    const text = buildTxShareText({ ...input, peakLine, dataComplete: false });
+    expect(text).toBe([
+      '🏠 우리집 2차 (A&B) 실거래',
+      '💰 15.5억 · 평당 3,824만',
+      '📐 134㎡ (41평) · 9층',
+      '📅 26.07.08 계약',
+      'ℹ️ 일부 월 자료 누락 · 확인된 거래 기준',
+      '📍 용인시 수지구 성복동 1가',
+      '',
+      '🔎 거래 자세히 보기',
+      input.url,
+      '— 내집 My.ZIP',
+    ].join('\n'));
+    expect(text).not.toMatch(/🔥|최고|신고가|경신/);
+    expect(text.split(PARTIAL_TRANSACTION_NOTICE)).toHaveLength(2);
+  });
+
+  it('완전한 자료 옵션은 기존 공유 본문과 딥링크를 그대로 유지한다', () => {
+    const text = buildTxShareText(input);
+    expect(buildTxShareText({ ...input, dataComplete: true })).toBe(text);
+    expect(text).not.toContain(PARTIAL_TRANSACTION_NOTICE);
+    expect(text).toContain('🔥 3년 내 최고가');
+    expect(text).toContain(input.url);
   });
 });
 

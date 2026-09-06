@@ -67,18 +67,20 @@ vi.mock('@/components/ads/CoupangBanner', () => ({
   default: ({ subId }: { subId: string }) => <div data-testid="coupang-banner" data-sub-id={subId} />,
 }));
 vi.mock('../components/AptCard', () => ({
-  default: ({ apt }: { apt: { name: string } }) => <div data-testid="apt-card">{apt.name}</div>,
+  default: ({ apt, dataComplete, onClick }: { apt: { name: string }; dataComplete?: boolean; onClick: () => void }) =>
+    <button data-testid="apt-card" data-complete={dataComplete} onClick={onClick}>{apt.name}</button>,
 }));
 vi.mock('../components/RentAptCard', () => ({
-  default: ({ apt }: { apt: { name: string } }) => <div data-testid="rent-card">{apt.name}</div>,
+  default: ({ apt, dataComplete, onClick }: { apt: { name: string }; dataComplete?: boolean; onClick: () => void }) =>
+    <button data-testid="rent-card" data-complete={dataComplete} onClick={onClick}>{apt.name}</button>,
 }));
 vi.mock('../components/AptDetailModal', () => ({
-  default: ({ apt, dealType, initialTx }: { apt: { name: string; transactions: { date: string }[] }; dealType: string; initialTx: string }) =>
-    <div data-testid="buy-modal" data-deal-type={dealType} data-tx={initialTx} data-contract-dates={apt.transactions.map((transaction) => transaction.date).join(',')}>{apt.name}</div>,
+  default: ({ apt, dealType, initialTx, dataComplete }: { apt: { name: string; transactions: { date: string }[] }; dealType: string; initialTx: string; dataComplete?: boolean }) =>
+    <div data-testid="buy-modal" data-complete={dataComplete} data-deal-type={dealType} data-tx={initialTx} data-contract-dates={apt.transactions.map((transaction) => transaction.date).join(',')}>{apt.name}</div>,
 }));
 vi.mock('../components/RentAptDetailModal', () => ({
-  default: ({ apt, initialTx }: { apt: { name: string; transactions: { date: string }[] }; initialTx: string }) =>
-    <div data-testid="rent-modal" data-tx={initialTx} data-contract-dates={apt.transactions.map((transaction) => transaction.date).join(',')}>{apt.name}</div>,
+  default: ({ apt, initialTx, dataComplete }: { apt: { name: string; transactions: { date: string }[] }; initialTx: string; dataComplete?: boolean }) =>
+    <div data-testid="rent-modal" data-complete={dataComplete} data-tx={initialTx} data-contract-dates={apt.transactions.map((transaction) => transaction.date).join(',')}>{apt.name}</div>,
 }));
 vi.mock('../components/RegionPickerModal', () => ({
   default: ({ initialLabel, onPick }: { initialLabel: string; onPick: (district: string) => void }) => (
@@ -442,6 +444,103 @@ describe('TransactionsClient retry behavior', () => {
     const page = await renderClient('district=강남구&dealType=jeonse');
 
     expect(page.textContent).toContain('현재 목록과 건수는 부분 집계입니다');
+  });
+});
+
+describe('TransactionsClient incomplete history', () => {
+  const types = ['buy', 'jeonse', 'monthly', 'bunyang'] as const;
+  const endpointFor = (type: typeof types[number]) => type === 'buy' ? '/api/transactions?'
+    : type === 'bunyang' ? '/api/transactions/silv?' : '/api/transactions/rent?';
+  const groupFor = (type: typeof types[number]) => type === 'jeonse' || type === 'monthly' ? rentGroup : {
+    ...rentGroup, transactions: [{ ...rentGroup.transactions[0], price: 80_000 }],
+  };
+
+  it.each(types)('%s forwards coverage to cards/modals and retries past a cached partial response', async (type) => {
+    let attempts = 0;
+    fetchMock.mockImplementation((input: string | URL | Request) => {
+      const url = String(input);
+      if (url.startsWith(endpointFor(type))) {
+        attempts++;
+        return response(true, { data: [groupFor(type)], status: attempts === 1 ? 'partial' : 'ok',
+          failedMonths: attempts === 1 ? ['202607', '202608'] : [] });
+      }
+      if (url.startsWith('/api/transactions/districts?')) return response(true, { districts: [] });
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    const page = await renderClient(`district=강남구&months=6&dealType=${type}`);
+    const isRent = type === 'jeonse' || type === 'monthly';
+    const cardSelector = `[data-testid="${isRent ? 'rent-card' : 'apt-card'}"]`;
+    const modalSelector = `[data-testid="${isRent ? 'rent-modal' : 'buy-modal'}"]`;
+    expect(page.textContent).toContain('누락된 월: 2026.08, 2026.07');
+    expect(page.querySelector(cardSelector)?.getAttribute('data-complete')).toBe('false');
+    if (type === 'buy') expect(findButton(page, '신고가')?.disabled).toBe(true);
+    await act(async () => { (page.querySelector(cardSelector) as HTMLButtonElement).click(); await settle(); });
+    expect(page.querySelector(modalSelector)?.getAttribute('data-complete')).toBe('false');
+    await act(async () => { findButton(page, '누락 자료 다시 조회')!.click(); await settle(); });
+    expect(attempts).toBe(2);
+    expect(page.querySelector(modalSelector)).toBeNull();
+    expect(page.textContent).not.toContain('누락된 월:');
+    expect(page.querySelector(cardSelector)?.getAttribute('data-complete')).toBe('true');
+  });
+
+  it.each(types)('%s does not claim no trades when incomplete results are empty', async (type) => {
+    fetchMock.mockImplementation((input: string | URL | Request) => {
+      const url = String(input);
+      if (url.startsWith(endpointFor(type))) return response(true, { data: [], status: 'partial', failedMonths: ['202608'] });
+      if (url.startsWith('/api/transactions/districts?')) return response(true, { districts: [] });
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    const page = await renderClient(`district=강남구&months=6&dealType=${type}`);
+    expect(page.textContent).toContain('거래가 없었다는 뜻은 아닙니다');
+    expect(page.textContent).not.toContain('거래가 없어요');
+    expect(page.textContent).not.toContain('조건에 맞는 거래');
+    expect(findButton(page, '누락 자료 다시 조회')).toBeDefined();
+  });
+
+  it.each(types)('%s restores cached records together with their missing months after a failed query', async (type) => {
+    let attempts = 0;
+    fetchMock.mockImplementation((input: string | URL | Request) => {
+      const url = String(input);
+      if (url.startsWith(endpointFor(type))) {
+        attempts++;
+        return new URL(url, 'http://localhost').searchParams.get('months') === '6'
+          ? response(true, { data: [groupFor(type)], status: 'partial', failedMonths: ['202607'] })
+          : response(false, { error: 'unavailable' });
+      }
+      if (url.startsWith('/api/transactions/districts?')) return response(true, { districts: [] });
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    const page = await renderClient(`district=강남구&months=6&dealType=${type}`);
+    await act(async () => { findButton(page, '1년')!.click(); await settle(); });
+    expect(page.querySelector('[role="alert"]')).not.toBeNull();
+    await act(async () => { findButton(page, '6개월')!.click(); await settle(); });
+    expect(attempts).toBe(2);
+    expect(page.querySelector('[role="alert"]')).toBeNull();
+    expect(page.textContent).toContain('누락된 월: 2026.07');
+    expect(page.querySelector('[data-complete="false"]')).not.toBeNull();
+  });
+
+  it('aborts a pending long buy query on tab change and ignores its late response', async () => {
+    let buySignal: AbortSignal | undefined;
+    let resolveBuy: ((value: Awaited<ReturnType<typeof response>>) => void) | undefined;
+    fetchMock.mockImplementation((input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.startsWith('/api/transactions?')) {
+        buySignal = init?.signal ?? undefined;
+        return new Promise((resolve) => { resolveBuy = resolve; });
+      }
+      if (url.startsWith('/api/transactions/rent?')) return response(true, { data: [rentGroup] });
+      if (url.startsWith('/api/transactions/districts?')) return response(true, { districts: [] });
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    const page = await renderClient('district=강남구&months=36');
+    expect(page.textContent).toContain('과거 월별 자료를 확인하고 있어요');
+    expect(buySignal?.aborted).toBe(false);
+    await act(async () => { findButton(page, '전세')!.click(); await settle(); });
+    expect(buySignal?.aborted).toBe(true);
+    await act(async () => { resolveBuy!(await response(true, { data: [groupFor('buy')], status: 'partial' })); await settle(); });
+    expect(page.querySelector('[data-testid="rent-card"]')?.getAttribute('data-complete')).toBe('true');
+    expect(page.textContent).not.toContain('부분 집계');
   });
 });
 

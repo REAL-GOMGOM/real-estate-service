@@ -8,6 +8,9 @@
 
 const PY_PER_M2 = 3.3058; // 1평 = 3.3058㎡
 
+/** 일부 월 자료가 빠진 실거래 화면·공유 출력에 공통으로 사용하는 한계 안내. */
+export const PARTIAL_TRANSACTION_NOTICE = '일부 월 자료 누락 · 확인된 거래 기준';
+
 /** 12·24·36개월은 년 단위 표기 ("3년"), 그 외 "6개월" */
 export function fmtMonthsLabel(months: number): string {
   return months >= 12 && months % 12 === 0 ? `${months / 12}년` : `${months}개월`;
@@ -29,6 +32,7 @@ export interface PeakLineInput {
   prevPeak: number | null;  // 이 거래 제외 기간 최고가 (경신 폭 표기용)
   months:   number;         // 조회 기간 (기준 캡션)
   fmt:      (n: number) => string; // fmtPrice 주입
+  dataComplete?: boolean;   // false이면 기간 최고가·경신 비교를 만들지 않는다.
 }
 
 /**
@@ -37,8 +41,8 @@ export interface PeakLineInput {
  *   미달:   "3년 내 최고 15.5억 대비 -0.4억"
  *   비교불가(단일 거래 등): "3년 내 최고가"
  */
-export function buildPeakLine({ price, peak, prevPeak, months, fmt }: PeakLineInput): string {
-  if (peak <= 0 || price <= 0) return '';
+export function buildPeakLine({ price, peak, prevPeak, months, fmt, dataComplete = true }: PeakLineInput): string {
+  if (!dataComplete || peak <= 0 || price <= 0) return '';
   const period = fmtMonthsLabel(months);
   if (price >= peak) {
     return prevPeak !== null && prevPeak < price
@@ -59,6 +63,7 @@ export interface TxShareTextInput {
   peakLine: string;              // buildPeakLine 결과 ('' 가능)
   fmt:      (n: number) => string;
   fmtDate:  (d: string) => string;
+  dataComplete?: boolean;        // 기본 true — false이면 최고가 대신 자료 누락 안내.
 }
 
 /** 공유 앱에서 한눈에 읽히도록 전고점 비교 문구를 자연어로 다듬는다. */
@@ -84,8 +89,12 @@ export function buildTxShareText(i: TxShareTextInput): string {
     `📐 ${i.areaM2}㎡ (${py}평) · ${i.floor}층`,
     `📅 ${i.fmtDate(i.date)} 계약`,
   ];
-  const peak = readablePeakLine(i.peakLine);
-  if (peak) lines.push(peak);
+  if (i.dataComplete === false) {
+    lines.push(`ℹ️ ${PARTIAL_TRANSACTION_NOTICE}`);
+  } else {
+    const peak = readablePeakLine(i.peakLine);
+    if (peak) lines.push(peak);
+  }
   lines.push(
     `📍 ${i.location}`,
     '',

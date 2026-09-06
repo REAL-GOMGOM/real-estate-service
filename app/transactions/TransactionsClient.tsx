@@ -24,6 +24,8 @@ import RegionPickerModal from './components/RegionPickerModal';
 import DistrictChips from './components/DistrictChips';
 import GlobalApartmentSearchResults from './components/GlobalApartmentSearchResults';
 import DataFreshness from './components/DataFreshness';
+import PartialDataNotice from './components/PartialDataNotice';
+import { COMPLETE_TRANSACTION_DATA, readTransactionCompleteness, type TransactionCompleteness } from '@/lib/transaction-completeness';
 import { readTransactionFreshness, type TransactionFreshness, type TransactionFreshnessResult } from '@/lib/transaction-freshness';
 import { kstTodayIso } from '@/lib/agg-window';
 
@@ -56,7 +58,7 @@ type DealType = 'buy' | 'jeonse' | 'monthly' | 'bunyang';
 interface TransactionResultCache<T> {
   requestKey: string;
   groups: T[];
-  partial?: boolean;
+  coverage: TransactionCompleteness;
   freshness: TransactionFreshness | null;
 }
 
@@ -183,6 +185,7 @@ export default function TransactionsClient() {
   const [loading,   setLoading]   = useState(false);
   const [error,     setError]     = useState<string | null>(null);
   const [fetched,   setFetched]   = useState('');
+  const [buyCoverage, setBuyCoverage] = useState(COMPLETE_TRANSACTION_DATA);
   const [activeApt, setActiveApt] = useState<AptGroup | null>(null);
   // 자동완성에서 정확히 고른 단지 — 있으면 퍼지 매칭 대신 이 단지만 정확 표시
   const [selectedApt, setSelectedApt] = useState<ApartmentSearchResult | null>(() =>
@@ -214,7 +217,7 @@ export default function TransactionsClient() {
   const [rentGroups,  setRentGroups]  = useState<RentAptGroup[]>([]);
   const [rentLoading, setRentLoading] = useState(false);
   const [rentError,   setRentError]   = useState(false);
-  const [rentPartial, setRentPartial] = useState(false);
+  const [rentCoverage, setRentCoverage] = useState(COMPLETE_TRANSACTION_DATA);
   const [rentFetched, setRentFetched] = useState('');
   const [rentRetryKey, setRentRetryKey] = useState(0);
   const [rentSortKey, setRentSortKey] = useState<RentSortKey>('volume');
@@ -223,7 +226,7 @@ export default function TransactionsClient() {
   const [silvGroups,  setSilvGroups]  = useState<AptGroup[]>([]);
   const [silvLoading, setSilvLoading] = useState(false);
   const [silvError,   setSilvError]   = useState(false);
-  const [silvPartial, setSilvPartial] = useState(false);
+  const [silvCoverage, setSilvCoverage] = useState(COMPLETE_TRANSACTION_DATA);
   const [silvFetched, setSilvFetched] = useState('');
   const [silvRetryKey, setSilvRetryKey] = useState(0);
   const [summaryData, setSummaryData] = useState<SummaryRegion[]>([]);
@@ -355,6 +358,7 @@ export default function TransactionsClient() {
     if (!force && cached?.requestKey === key) {
       buyAbortRef.current = null;
       setGroups(cached.groups);
+      setBuyCoverage(cached.coverage);
       setFetched(key);
       setLoading(false);
       setError(null);
@@ -367,6 +371,7 @@ export default function TransactionsClient() {
     buyAbortRef.current = controller;
     setLoading(true);
     setError(null);
+    setActiveApt(null);
     setDetailFreshness((previous) => ({ ...previous, buy: { requestKey: key, status: 'loading' } }));
     try {
       const params = new URLSearchParams({ months: String(m) });
@@ -380,17 +385,19 @@ export default function TransactionsClient() {
       if (!res.ok || json.error || !Array.isArray(json.data)) {
         throw new Error(json.error || 'transactions unavailable');
       }
-      if (buyAbortRef.current !== controller) return;
+      if (controller.signal.aborted || buyAbortRef.current !== controller) return;
       const freshness = readTransactionFreshness(res.headers);
-      buyCacheRef.current = { requestKey: key, groups: json.data, freshness };
+      const coverage = readTransactionCompleteness(json);
+      buyCacheRef.current = { requestKey: key, groups: json.data, coverage, freshness };
       setGroups(json.data);
+      setBuyCoverage(coverage);
       setFetched(key);
       setDetailFreshness((previous) => ({ ...previous, buy: {
         requestKey: key, status: 'ready', value: freshness,
       } }));
     } catch (loadError: unknown) {
       if ((loadError as { name?: string }).name === 'AbortError') return;
-      if (buyAbortRef.current !== controller) return;
+      if (controller.signal.aborted || buyAbortRef.current !== controller) return;
       setGroups([]);
       setError('데이터 조회에 실패했습니다');
       setDetailFreshness((previous) => ({ ...previous, buy: { requestKey: key, status: 'error' } }));
@@ -402,6 +409,10 @@ export default function TransactionsClient() {
   useEffect(() => {
     if (viewMode === 'detail' && dealType === 'buy') {
       load(district, months, apartmentRequestQuery);
+      return () => {
+        buyAbortRef.current?.abort();
+        buyAbortRef.current = null;
+      };
     }
   }, [district, months, viewMode, dealType, apartmentRequestQuery, load]);
 
@@ -417,7 +428,7 @@ export default function TransactionsClient() {
     const cached = rentCacheRef.current;
     if (cached?.requestKey === key) {
       setRentGroups(cached.groups);
-      setRentPartial(cached.partial ?? false);
+      setRentCoverage(cached.coverage);
       setRentFetched(key);
       setRentLoading(false);
       setRentError(false);
@@ -430,7 +441,7 @@ export default function TransactionsClient() {
     const controller = new AbortController();
     setRentLoading(true);
     setRentError(false);
-    setRentPartial(false);
+    setActiveRent(null);
     setDetailFreshness((previous) => ({ ...previous, [dealType]: { requestKey: key, status: 'loading' } }));
     const params = new URLSearchParams({ district, months: String(months), rentType: dealType });
     new URLSearchParams(apartmentRequestQuery).forEach((value, name) => params.set(name, value));
@@ -446,9 +457,10 @@ export default function TransactionsClient() {
       })
       .then(({ json, freshness }) => {
         if (cancelled) return;
-        rentCacheRef.current = { requestKey: key, groups: json.data, partial: json.status === 'partial', freshness };
+        const coverage = readTransactionCompleteness(json);
+        rentCacheRef.current = { requestKey: key, groups: json.data, coverage, freshness };
         setRentGroups(json.data);
-        setRentPartial(json.status === 'partial');
+        setRentCoverage(coverage);
         setRentFetched(key);
         setRentLoading(false);
         setDetailFreshness((previous) => ({ ...previous, [dealType]: {
@@ -458,7 +470,6 @@ export default function TransactionsClient() {
       .catch((loadError: unknown) => {
         if (cancelled || (loadError as { name?: string }).name === 'AbortError') return;
         setRentGroups([]);
-        setRentPartial(false);
         setRentError(true);
         setRentLoading(false);
         setDetailFreshness((previous) => ({ ...previous, [dealType]: { requestKey: key, status: 'error' } }));
@@ -476,7 +487,7 @@ export default function TransactionsClient() {
     const cached = silvCacheRef.current;
     if (cached?.requestKey === key) {
       setSilvGroups(cached.groups);
-      setSilvPartial(cached.partial ?? false);
+      setSilvCoverage(cached.coverage);
       setSilvFetched(key);
       setSilvLoading(false);
       setSilvError(false);
@@ -489,7 +500,7 @@ export default function TransactionsClient() {
     const controller = new AbortController();
     setSilvLoading(true);
     setSilvError(false);
-    setSilvPartial(false);
+    setActiveApt(null);
     setDetailFreshness((previous) => ({ ...previous, bunyang: { requestKey: key, status: 'loading' } }));
     const params = new URLSearchParams({ district, months: String(months) });
     new URLSearchParams(apartmentRequestQuery).forEach((value, name) => params.set(name, value));
@@ -505,9 +516,10 @@ export default function TransactionsClient() {
       })
       .then(({ json, freshness }) => {
         if (cancelled) return;
-        silvCacheRef.current = { requestKey: key, groups: json.data, partial: json.status === 'partial', freshness };
+        const coverage = readTransactionCompleteness(json);
+        silvCacheRef.current = { requestKey: key, groups: json.data, coverage, freshness };
         setSilvGroups(json.data);
-        setSilvPartial(json.status === 'partial');
+        setSilvCoverage(coverage);
         setSilvFetched(key);
         setSilvLoading(false);
         setDetailFreshness((previous) => ({ ...previous, bunyang: {
@@ -517,7 +529,6 @@ export default function TransactionsClient() {
       .catch((loadError: unknown) => {
         if (cancelled || (loadError as { name?: string }).name === 'AbortError') return;
         setSilvGroups([]);
-        setSilvPartial(false);
         setSilvError(true);
         setSilvLoading(false);
         setDetailFreshness((previous) => ({ ...previous, bunyang: { requestKey: key, status: 'error' } }));
@@ -527,6 +538,15 @@ export default function TransactionsClient() {
       controller.abort();
     };
   }, [viewMode, dealType, district, months, apartmentRequestQuery, silvRetryKey]);
+
+  const retryRent = () => {
+    rentCacheRef.current = null;
+    setRentRetryKey((key) => key + 1);
+  };
+  const retrySilv = () => {
+    silvCacheRef.current = null;
+    setSilvRetryKey((key) => key + 1);
+  };
 
   // 시도별 요약 — 윈도우·유형 선택 반영.
   // 'today'와 'rolling30'은 같은 서버 기본(최근 30일) 응답을 공유하므로
@@ -622,7 +642,7 @@ export default function TransactionsClient() {
       list = groups;
     }
 
-    if (newHighOnly) list = list.filter(detectNewHigh);
+    if (newHighOnly && buyCoverage.complete) list = list.filter(detectNewHigh);
 
     if (areaFilter !== 'all') {
       const target = parseInt(areaFilter);
@@ -641,10 +661,10 @@ export default function TransactionsClient() {
       if (sortKey === 'price') return latestPriceOf(b) - latestPriceOf(a);
       return b.transactions.length - a.transactions.length;
     });
-  }, [groups, query, selectedApt, aptDongParam, newHighOnly, areaFilter, sortKey]);
+  }, [groups, query, selectedApt, aptDongParam, newHighOnly, buyCoverage.complete, areaFilter, sortKey]);
 
   const totalTx    = filtered.reduce((s, g) => s + g.transactions.length, 0);
-  const newHighCnt = filtered.filter(detectNewHigh).length;
+  const newHighCnt = buyCoverage.complete ? filtered.filter(detectNewHigh).length : 0;
 
   // 전월세 파생값 (전월세 v2 — 월세 정렬): 검색 필터 → 정렬. 총 건수는 서버 원본 건수(txCount) 합
   const rentFiltered = selectedApt
@@ -1182,7 +1202,7 @@ export default function TransactionsClient() {
             {!loading && filtered.length > 0 && (
               <>
                 <span style={{ fontSize: '15px', color: 'var(--text-muted)' }}>
-                  총&nbsp;<strong style={{ color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>{totalTx.toLocaleString()}</strong>건
+                  {buyCoverage.complete ? '총' : '확인된'}&nbsp;<strong style={{ color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>{totalTx.toLocaleString()}</strong>건
                 </span>
                 {newHighCnt > 0 && (
                   <span style={{ fontSize: '14px', color: 'var(--text-dim)' }}>
@@ -1220,13 +1240,16 @@ export default function TransactionsClient() {
             </select>
             <button
               onClick={() => setNewHighOnly((v) => !v)}
-              aria-pressed={newHighOnly}
+              aria-pressed={newHighOnly && buyCoverage.complete}
+              disabled={!buyCoverage.complete}
+              title={!buyCoverage.complete ? '일부 월 자료가 누락되어 신고가를 비교할 수 없습니다' : undefined}
               style={{
                 padding: '8px 14px', borderRadius: '10px', fontSize: '13px', fontWeight: 600,
-                backgroundColor: newHighOnly ? 'var(--up-color, #C92F2F)' : 'var(--bg-card)',
-                color: newHighOnly ? '#FFFFFF' : 'var(--text-muted)',
-                border: `1px solid ${newHighOnly ? 'var(--up-color, #C92F2F)' : 'var(--border)'}`,
-                cursor: 'pointer',
+                backgroundColor: newHighOnly && buyCoverage.complete ? 'var(--up-color, #C92F2F)' : 'var(--bg-card)',
+                color: newHighOnly && buyCoverage.complete ? '#FFFFFF' : 'var(--text-muted)',
+                border: `1px solid ${newHighOnly && buyCoverage.complete ? 'var(--up-color, #C92F2F)' : 'var(--border)'}`,
+                cursor: buyCoverage.complete ? 'pointer' : 'not-allowed',
+                opacity: buyCoverage.complete ? 1 : 0.55,
               }}
             >
               신고가
@@ -1242,7 +1265,7 @@ export default function TransactionsClient() {
           gap: '12px', flexWrap: 'wrap', marginBottom: '20px',
         }}>
           <span style={{ fontSize: '15px', color: 'var(--text-muted)' }}>
-            총&nbsp;<strong style={{ color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>{rentTotalTx.toLocaleString()}</strong>건
+            {rentCoverage.complete ? '총' : '확인된'}&nbsp;<strong style={{ color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>{rentTotalTx.toLocaleString()}</strong>건
           </span>
           <select
             value={rentSortKey}
@@ -1290,9 +1313,19 @@ export default function TransactionsClient() {
 
         </div>
 
+        {months > 2 && (dealType === 'buy' ? loading : dealType === 'bunyang' ? silvLoading : rentLoading) && (
+          <p role="status" style={{ marginBottom: '14px', color: 'var(--text-muted)', fontSize: '13px' }}>
+            과거 월별 자료를 확인하고 있어요. 기간이나 거래 유형을 바꾸면 이전 조회는 중단됩니다.
+          </p>
+        )}
+
         {/* 매매 — 에러·스켈레톤·카드 그리드 */}
         {dealType === 'buy' && (
           <>
+            {!buyCoverage.complete && !loading && !error && (
+              <PartialDataNotice coverage={buyCoverage} empty={filtered.length === 0}
+                onRetry={() => load(district, months, apartmentRequestQuery, true)} />
+            )}
             {error && !loading && (
               <TxErrorState
                 onRetry={() => {
@@ -1316,7 +1349,7 @@ export default function TransactionsClient() {
                 <style>{`@keyframes pulse{0%,100%{opacity:.3}50%{opacity:.6}}`}</style>
               </>
             ) : filtered.length === 0 && !error ? (
-              selectedApt ? (
+              !buyCoverage.complete ? null : selectedApt ? (
                 <div style={{
                   textAlign: 'center', padding: '48px 24px',
                   backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-light)',
@@ -1360,13 +1393,13 @@ export default function TransactionsClient() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
                   {/* 인피드 광고를 6번째 카드 뒤에 끼우기 위한 분할 렌더 (페이지당 인피드 1개 원칙) */}
                   {filtered.slice(0, 6).map((apt) => (
-                    <AptCard key={apt.id} apt={apt} months={months} dealType="buy" onClick={() => setActiveApt(apt)} />
+                    <AptCard key={apt.id} apt={apt} months={months} dealType="buy" dataComplete={buyCoverage.complete} onClick={() => setActiveApt(apt)} />
                   ))}
                 </div>
                 {filtered.length > 6 && (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px', marginTop: '12px' }}>
                     {filtered.slice(6).map((apt) => (
-                      <AptCard key={apt.id} apt={apt} months={months} dealType="buy" onClick={() => setActiveApt(apt)} />
+                      <AptCard key={apt.id} apt={apt} months={months} dealType="buy" dataComplete={buyCoverage.complete} onClick={() => setActiveApt(apt)} />
                     ))}
                   </div>
                 )}
@@ -1378,13 +1411,11 @@ export default function TransactionsClient() {
         {/* 전세·월세 — 전용 카드 (사이클 II v1) */}
         {(dealType === 'jeonse' || dealType === 'monthly') && (
           <>
-            {rentPartial && !rentLoading && !rentError && (
-              <p role="status" style={{ margin: '0 0 14px', color: 'var(--text-muted)', fontSize: '13px' }}>
-                일부 월 자료를 불러오지 못해 현재 목록과 건수는 부분 집계입니다.
-              </p>
+            {!rentCoverage.complete && !rentLoading && !rentError && (
+              <PartialDataNotice coverage={rentCoverage} empty={rentSorted.length === 0} onRetry={retryRent} />
             )}
             {rentError && !rentLoading && (
-              <TxErrorState onRetry={() => setRentRetryKey((key) => key + 1)} />
+              <TxErrorState onRetry={retryRent} />
             )}
 
             {rentLoading ? (
@@ -1402,12 +1433,12 @@ export default function TransactionsClient() {
               </>
             ) : (() => {
               if (rentSorted.length === 0 && !rentError) {
-                return <TxEmptyState onReset={resetDetailFilters} />;
+                return rentCoverage.complete ? <TxEmptyState onReset={resetDetailFilters} /> : null;
               }
               return (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
                   {rentSorted.map((apt) => (
-                    <RentAptCard key={apt.id} apt={apt} onClick={() => setActiveRent(apt)} />
+                    <RentAptCard key={apt.id} apt={apt} dataComplete={rentCoverage.complete} onClick={() => setActiveRent(apt)} />
                   ))}
                 </div>
               );
@@ -1418,13 +1449,11 @@ export default function TransactionsClient() {
         {/* 분양권 — 매매 카드·모달 재사용 (AptGroup 동일 구조) */}
         {dealType === 'bunyang' && (
           <>
-            {silvPartial && !silvLoading && !silvError && (
-              <p role="status" style={{ margin: '0 0 14px', color: 'var(--text-muted)', fontSize: '13px' }}>
-                일부 월 자료를 불러오지 못해 현재 목록과 건수는 부분 집계입니다.
-              </p>
+            {!silvCoverage.complete && !silvLoading && !silvError && (
+              <PartialDataNotice coverage={silvCoverage} empty={silvVisibleGroups.length === 0} onRetry={retrySilv} />
             )}
             {silvError && !silvLoading && (
-              <TxErrorState onRetry={() => setSilvRetryKey((key) => key + 1)} />
+              <TxErrorState onRetry={retrySilv} />
             )}
 
             {silvLoading ? (
@@ -1442,12 +1471,12 @@ export default function TransactionsClient() {
               </>
             ) : (() => {
               if (silvVisibleGroups.length === 0 && !silvError) {
-                return <TxEmptyState onReset={resetDetailFilters} />;
+                return silvCoverage.complete ? <TxEmptyState onReset={resetDetailFilters} /> : null;
               }
               return (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
                   {silvVisibleGroups.map((apt) => (
-                    <AptCard key={apt.id} apt={apt} months={months} dealType="bunyang" onClick={() => setActiveApt(apt)} />
+                    <AptCard key={apt.id} apt={apt} months={months} dealType="bunyang" dataComplete={silvCoverage.complete} onClick={() => setActiveApt(apt)} />
                   ))}
                 </div>
               );
@@ -1465,10 +1494,12 @@ export default function TransactionsClient() {
 
         <p style={{ marginTop: '24px', fontSize: '11px', color: 'var(--text-dim)', lineHeight: 1.8 }}>
           {dealType === 'buy'
-            ? '※ 매매 계약일 기준 · 신고가는 조회 기간 내 유사 면적(±6㎡)의 이전 계약 최고가를 경신한 거래 · 비교 거래가 없으면 신고가로 표시하지 않습니다.'
+            ? buyCoverage.complete
+              ? '※ 매매 계약일 기준 · 신고가는 조회 기간 내 유사 면적(±6㎡)의 이전 계약 최고가를 경신한 거래 · 비교 거래가 없으면 신고가로 표시하지 않습니다.'
+              : '※ 매매 계약일 기준 · 일부 월 자료 누락으로 확인된 거래만 표시하며 신고가·고점 대비 비교를 제공하지 않습니다.'
             : dealType === 'bunyang'
             ? '※ 분양권 계약일 기준 · 국토교통부 분양권 전매 신고분 · 가격은 신고 거래금액'
-            : '※ 전월세 계약일 기준 · 보증금/월세는 국토교통부 신고 금액 · 신규/갱신은 계약 구분 신고값 (미신고 시 빈칸) · 정렬의 보증금/월세는 조회 기간 내 단지 최고액 기준'}
+            : `※ 전월세 계약일 기준 · 보증금/월세는 국토교통부 신고 금액 · 신규/갱신은 계약 구분 신고값 (미신고 시 빈칸) · 정렬의 보증금/월세는 ${rentCoverage.complete ? '조회 기간 내' : '확인된 거래의'} 단지 최고액 기준`}
         </p>
           </>
         )}
@@ -1492,6 +1523,7 @@ export default function TransactionsClient() {
           onClose={() => setActiveApt(null)}
           months={months}
           dealType={dealType === 'bunyang' ? 'bunyang' : 'buy'}
+          dataComplete={dealType === 'bunyang' ? silvCoverage.complete : buyCoverage.complete}
           initialTx={txParam}
         />
       )}
@@ -1503,6 +1535,7 @@ export default function TransactionsClient() {
           apt={activeRent}
           onClose={() => setActiveRent(null)}
           months={months}
+          dataComplete={rentCoverage.complete}
           initialTx={rtxParam}
         />
       )}

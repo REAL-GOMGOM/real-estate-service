@@ -9,7 +9,7 @@ import {
 } from '../types';
 import { smoothPath, type Pt } from '@/lib/svg-smooth';
 import { buildShareImage, shareOrDownloadImage } from '@/lib/share-image';
-import { buildTxShareText, fmtMonthsLabel, pricePerPyeong, txKey } from '@/lib/tx-share-text';
+import { buildTxShareText, fmtMonthsLabel, PARTIAL_TRANSACTION_NOTICE, pricePerPyeong, txKey } from '@/lib/tx-share-text';
 import { buildTransactionShareUrl } from '@/lib/transaction-share-url';
 import { analyzeTransactionPrice, formatTransactionComparisonLine } from '@/lib/transaction-price-comparison';
 
@@ -29,6 +29,7 @@ interface AptCardProps {
   /** 조회 기간 (개월) — 공유 카드의 전고점 기간 캡션용 */
   months:  number;
   dealType?: 'buy' | 'bunyang';
+  dataComplete?: boolean;
 }
 
 /** 현재 표시한 면적 거래 → 시간축 비례 좌표. */
@@ -50,7 +51,7 @@ function buildSparkline(apt: AptGroup, targetArea: number, width: number, height
   return { coords, rising: series.rising, count: coords.length };
 }
 
-export default function AptCard({ apt, onClick, months, dealType = 'buy' }: AptCardProps) {
+export default function AptCard({ apt, onClick, months, dealType = 'buy', dataComplete = true }: AptCardProps) {
   const [shareOpen, setShareOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const shareRef = useRef<HTMLDivElement>(null);
@@ -68,11 +69,13 @@ export default function AptCard({ apt, onClick, months, dealType = 'buy' }: AptC
   const comparison = analyzeTransactionPrice(apt.transactions);
   if (!comparison) return null;
   const latest = comparison.target;
-  const newHigh = comparison.state === 'new-high';
+  const newHigh = dataComplete && comparison.state === 'new-high';
   const periodLabel = fmtMonthsLabel(months);
   // 같은 날 계약의 순서를 추정하지 않고, 확실히 이전인 계약에서 현재 거래로 연결.
   const chartApt = { ...apt, transactions: [...comparison.prior, latest] };
-  const sharePeakLine = formatTransactionComparisonLine(comparison, months, fmtPrice);
+  const sharePeakLine = dataComplete
+    ? formatTransactionComparisonLine(comparison, months, fmtPrice)
+    : PARTIAL_TRANSACTION_NOTICE;
   const sharePerPy = `평당 ${fmtPrice(pricePerPyeong(latest.price, latest.area))}`;
   // 딥링크 — 단지 식별자·동·거래 유형·계약 건을 공유 채널마다 동일하게 보존
   const shareUrl = () => buildTransactionShareUrl({
@@ -109,7 +112,7 @@ export default function AptCard({ apt, onClick, months, dealType = 'buy' }: AptC
         const span = max - min || 1;
         sparkPts = series.points.map((p) => ({ x: p.t * 100, y: (1 - (p.price - min) / span) * 56 }));
       }
-      if (comparison.previous) {
+      if (dataComplete && comparison.previous) {
         const diff = latest.price - comparison.previous.price;
         up = diff >= 0;
         if (diff !== 0) delta = `${up ? '▲' : '▼'} ${fmtPrice(Math.abs(diff))}`;
@@ -126,6 +129,7 @@ export default function AptCard({ apt, onClick, months, dealType = 'buy' }: AptC
         high:     newHigh,
         pricePerPy: sharePerPy,
         peakLine:   sharePeakLine,
+        dataComplete,
       });
       if (!blob) return;
       await shareOrDownloadImage(blob, `${apt.name}-실거래.png`, apt.name, shareUrl());
@@ -146,6 +150,7 @@ export default function AptCard({ apt, onClick, months, dealType = 'buy' }: AptC
       url,
       price: latest.price, areaM2: latest.area, floor: latest.floor, date: latest.date,
       peakLine: sharePeakLine, fmt: fmtPrice, fmtDate: fmtContractDate,
+      dataComplete,
     });
     try {
       if (navigator.share) {
@@ -216,12 +221,12 @@ export default function AptCard({ apt, onClick, months, dealType = 'buy' }: AptC
               {latest.area}㎡ 기준 · 유사 면적(±6㎡)
             </p>
             <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '2px' }}>
-              {comparison.priorPeak !== null
+              {!dataComplete ? `확인된 거래 최고 ${fmtPriceFull(comparison.periodPeak)}` : comparison.priorPeak !== null
                 ? `${periodLabel} 내 ${newHigh ? '종전 최고' : '최고'} ${fmtPriceFull(newHigh ? comparison.priorPeak : comparison.periodPeak)}`
                 : `${periodLabel} 조회 기준`}
             </p>
             <p style={{ fontSize: '12px', fontWeight: newHigh ? 700 : 400, color: newHigh ? 'var(--up-color, #C92F2F)' : 'var(--text-dim)' }}>
-              {comparison.state === 'insufficient' ? '비교 거래 부족'
+              {!dataComplete ? PARTIAL_TRANSACTION_NOTICE : comparison.state === 'insufficient' ? '비교 거래 부족'
                 : comparison.state === 'equal' ? '기간 최고가와 같음'
                 : comparison.state === 'new-high' ? '기간 최고가 경신'
                 : `기간 최고가까지 ${fmtPriceFull(comparison.gapToPeak!)} 남음`}
@@ -232,7 +237,7 @@ export default function AptCard({ apt, onClick, months, dealType = 'buy' }: AptC
             <svg
               width={CHART_W} height={CHART_H} viewBox={`0 0 ${CHART_W} ${CHART_H}`}
               style={{ flexShrink: 0 }}
-              aria-label={`${apt.name} ${latest.area}㎡ 기준 유사 면적(±6㎡) 가격 추이 (${periodLabel} 내 거래 ${spark.count}건)`}
+              aria-label={`${apt.name} ${latest.area}㎡ 기준 유사 면적(±6㎡) 가격 추이 (${periodLabel} 내 ${dataComplete ? '' : '확인된 '}거래 ${spark.count}건)`}
             >
               <path
                 d={spark.count >= 5
@@ -265,7 +270,7 @@ export default function AptCard({ apt, onClick, months, dealType = 'buy' }: AptC
           <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '2px' }}>
             {fmtContractDate(latest.date)} 계약
             <span style={{ marginLeft: '8px', color: 'var(--text-dim)' }}>
-              조회 {months}개월 <strong style={{ color: 'var(--text-primary)' }}>{periodCount}건</strong>
+              조회 {months}개월 {dataComplete ? '' : '확인 '}<strong style={{ color: 'var(--text-primary)' }}>{periodCount}건</strong>
             </span>
           </p>
           {(ageLabel || apt.households) && (

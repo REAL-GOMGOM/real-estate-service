@@ -2,6 +2,7 @@
 
 import { fmtPrice, fmtContractDate } from '../types';
 import { type RentAptGroup, fmtRentPrice } from '@/lib/rent-shared';
+import { PARTIAL_TRANSACTION_NOTICE } from '@/lib/tx-share-text';
 
 /**
  * 전월세 단지 카드 — 사이클 II (전세·월세 탭 v1).
@@ -10,7 +11,7 @@ import { type RentAptGroup, fmtRentPrice } from '@/lib/rent-shared';
  * 전월세 상세 모달·차트는 v2 백로그 — v1 은 카드 안에서 완결.
  */
 
-export default function RentAptCard({ apt, onClick }: { apt: RentAptGroup; onClick?: () => void }) {
+export default function RentAptCard({ apt, onClick, dataComplete = true }: { apt: RentAptGroup; onClick?: () => void; dataComplete?: boolean }) {
   const latest = apt.transactions[0]; // 호출부(API)가 최신순 정렬
   if (!latest) return null;
 
@@ -39,8 +40,9 @@ export default function RentAptCard({ apt, onClick }: { apt: RentAptGroup; onCli
       <p style={{ margin: '3px 0 12px', fontSize: '12px', color: 'var(--text-dim)' }}>
         {apt.district}{apt.dong ? ` ${apt.dong}` : ''}
         {apt.buildYear ? ` · ${apt.buildYear}년` : ''}
-        {' · '}{(apt.txCount ?? apt.transactions.length).toLocaleString()}건
+        {' · '}{dataComplete ? '' : '확인 '}{(apt.txCount ?? apt.transactions.length).toLocaleString()}건
       </p>
+      {!dataComplete && <p style={{ margin: '0 0 12px', fontSize: '12px', color: 'var(--text-muted)' }}>{PARTIAL_TRANSACTION_NOTICE}</p>}
 
       {/* 최근 계약 헤드라인 */}
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '12px' }}>

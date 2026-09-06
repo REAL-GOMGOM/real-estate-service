@@ -15,6 +15,7 @@ interface PriceComboChartProps {
   transactions: Transaction[];   // 정렬 무관 (내부에서 시간순 정렬)
   maxPrice:     number;          // 기간 내 최고가 (점선 기준선, 0이면 생략)
   height?:      number;
+  dataComplete?: boolean;
 }
 
 function toTimestamp(date: string): number {
@@ -37,7 +38,7 @@ interface TooltipPayloadItem {
   };
 }
 
-function ChartTooltip({ active, payload }: { active?: boolean; payload?: TooltipPayloadItem[] }) {
+function ChartTooltip({ active, payload, dataComplete = true }: { active?: boolean; payload?: TooltipPayloadItem[]; dataComplete?: boolean }) {
   if (!active || !payload?.length) return null;
   const d = (payload.find((p) => p.payload?.kind === 'deal')?.payload ?? payload[0].payload)!;
   return (
@@ -53,7 +54,7 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: Tooltip
         </>
       ) : (
         <>
-          <p style={{ color: 'var(--text-muted)', marginBottom: '2px' }}>{fmtTick(d.ts)} 월평균</p>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '2px' }}>{fmtTick(d.ts)} {dataComplete ? '월평균' : '확인된 거래 월평균'}</p>
           <p style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{fmtPrice(d.avg ?? 0)}</p>
         </>
       )}
@@ -61,7 +62,7 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: Tooltip
   );
 }
 
-export default function PriceComboChart({ transactions, maxPrice, height = 190 }: PriceComboChartProps) {
+export default function PriceComboChart({ transactions, maxPrice, height = 190, dataComplete = true }: PriceComboChartProps) {
   const asc = [...transactions].sort((a, b) => a.date.localeCompare(b.date));
 
   const dealDots = asc.map((t) => ({
@@ -113,8 +114,8 @@ export default function PriceComboChart({ transactions, maxPrice, height = 190 }
               axisLine={false}
               tickLine={false}
             />
-            <Tooltip content={<ChartTooltip />} />
-            {maxPrice > 0 && (
+            <Tooltip content={<ChartTooltip dataComplete={dataComplete} />} />
+            {dataComplete && maxPrice > 0 && (
               <ReferenceLine
                 y={maxPrice}
                 stroke="rgba(201,47,47,0.35)"
@@ -144,7 +145,7 @@ export default function PriceComboChart({ transactions, maxPrice, height = 190 }
         </ResponsiveContainer>
       </div>
       <p style={{ marginTop: '6px', fontSize: '11px', color: 'var(--text-dim)' }}>
-        선 = 월평균 · 점 = 개별 거래 · 점선 = 기간 내 최고가
+        {dataComplete ? '선 = 월평균 · 점 = 개별 거래 · 점선 = 기간 내 최고가' : '선 = 확인된 거래 월평균 · 점 = 확인된 개별 거래 · 일부 월 자료 누락'}
       </p>
     </div>
   );

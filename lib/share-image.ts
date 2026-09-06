@@ -1,4 +1,5 @@
 import type { Pt } from '@/lib/svg-smooth';
+import { PARTIAL_TRANSACTION_NOTICE } from '@/lib/tx-share-text';
 
 /**
  * 실거래 공유 이미지 생성 — 사이클 Z4 (의존성 없는 canvas 렌더)
@@ -19,12 +20,14 @@ export interface ShareCardData {
   /** 공유 강화 (2026-07-19) — 옵션. 미전달 시 기존 카드 그대로 (회귀 0) */
   pricePerPy?: string; // "평당 3,824만"
   peakLine?:   string; // "3년 내 최고가 · 종전 14.9억 +6,000만" (기간 캡션 필수)
+  dataComplete?: boolean; // 기본 true — false이면 비교 주장을 숨기고 자료 누락을 명시.
 }
 
 const W = 900;
 const H = 470;
 
 export async function buildShareImage(data: ShareCardData): Promise<Blob | null> {
+  const dataComplete = data.dataComplete !== false;
   const canvas = document.createElement('canvas');
   const scale = 2; // 레티나
   canvas.width = W * scale;
@@ -54,7 +57,7 @@ export async function buildShareImage(data: ShareCardData): Promise<Blob | null>
   ctx.fillText('My.ZIP · 실거래 알림', 106, 66);
 
   // 신고가 뱃지
-  if (data.high) {
+  if (dataComplete && data.high) {
     ctx.fillStyle = '#FDECEC';
     const bw = 86;
     roundRect(ctx, W - 48 - bw, 42, bw, 34, 17);
@@ -77,7 +80,7 @@ export async function buildShareImage(data: ShareCardData): Promise<Blob | null>
   ctx.font = font(800, 64);
   const priceW = ctx.measureText(data.price).width;
   ctx.fillText(data.price, 48, 268);
-  if (data.delta) {
+  if (dataComplete && data.delta) {
     ctx.fillStyle = data.up ? '#C92F2F' : '#1636A8';
     ctx.font = font(700, 26);
     ctx.fillText(data.delta, 48 + priceW + 16, 262);
@@ -89,11 +92,18 @@ export async function buildShareImage(data: ShareCardData): Promise<Blob | null>
   ctx.fillText(data.meta, 48, 306);
 
   // 평당가 · 전고점 라인 (공유 강화 2026-07-19) — 긴 문구는 truncate
-  const subLine = [data.pricePerPy, data.peakLine].filter(Boolean).join('  ·  ');
+  const subLine = [data.pricePerPy, dataComplete ? data.peakLine : ''].filter(Boolean).join('  ·  ');
   if (subLine) {
     ctx.fillStyle = '#3D4E6E';
     ctx.font = font(700, 18);
     ctx.fillText(truncate(ctx, subLine, W - 96), 48, 342);
+  }
+
+  // 평당가가 길어 잘리더라도 자료 누락 안내는 별도 행에 항상 온전히 표시한다.
+  if (!dataComplete) {
+    ctx.fillStyle = '#76551A';
+    ctx.font = font(600, 16);
+    ctx.fillText(PARTIAL_TRANSACTION_NOTICE, 48, 370);
   }
 
   // 스파크라인 (우측 상단 영역)

@@ -5,7 +5,7 @@ import { X } from 'lucide-react';
 import { fmtPrice, fmtContractDate, type Transaction } from '../types';
 import { type RentAptGroup, type RentTransaction, fmtRentPrice, buildRentShareCard, isJeonse } from '@/lib/rent-shared';
 import { buildShareImage, shareOrDownloadImage } from '@/lib/share-image';
-import { pricePerPyeong } from '@/lib/tx-share-text';
+import { PARTIAL_TRANSACTION_NOTICE, pricePerPyeong } from '@/lib/tx-share-text';
 import { rentTxKey, buildRentPeakLine, buildRentTxShareText } from '@/lib/rent-share-text';
 import { buildTransactionShareUrl } from '@/lib/transaction-share-url';
 import PriceComboChart from '@/components/apt/PriceComboChart';
@@ -22,6 +22,7 @@ interface RentAptDetailModalProps {
   apt:     RentAptGroup;
   onClose: () => void;
   months:  number;
+  dataComplete?: boolean;
   /** 딥링크 착지 — 공유 URL 의 rtx 식별자 (해당 계약 행 자동 확장·스크롤) */
   initialTx?: string | null;
 }
@@ -46,7 +47,7 @@ function renewalDepositPct(tx: RentTransaction): number | null {
   return Math.round(((tx.deposit - tx.prevDeposit) / tx.prevDeposit) * 1000) / 10;
 }
 
-export default function RentAptDetailModal({ apt, onClose, months, initialTx }: RentAptDetailModalProps) {
+export default function RentAptDetailModal({ apt, onClose, months, initialTx, dataComplete = true }: RentAptDetailModalProps) {
   const [selArea, setSelArea] = useState<number | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
   const [imageSaving, setImageSaving] = useState(false);
@@ -105,7 +106,7 @@ export default function RentAptDetailModal({ apt, onClose, months, initialTx }: 
       : null;
     return {
       jeonse, prev,
-      peakLine: jeonse ? buildRentPeakLine({ deposit: tx.deposit, peak, prevPeak, months, fmt: fmtPrice }) : '',
+      peakLine: !dataComplete ? PARTIAL_TRANSACTION_NOTICE : jeonse ? buildRentPeakLine({ deposit: tx.deposit, peak, prevPeak, months, fmt: fmtPrice }) : '',
       perPy:    jeonse ? pricePerPyeong(tx.deposit, tx.area) : null,
     };
   };
@@ -130,6 +131,8 @@ export default function RentAptDetailModal({ apt, onClose, months, initialTx }: 
         const d = rentTxDerived(tx);
         const blob = await buildShareImage({
           ...data,
+          delta: dataComplete ? data.delta : '',
+          dataComplete,
           pricePerPy: d.perPy ? `평당 보증금 ${fmtPrice(d.perPy)}` : undefined,
           peakLine:   d.peakLine || undefined,
         });
@@ -146,6 +149,7 @@ export default function RentAptDetailModal({ apt, onClose, months, initialTx }: 
       aptName: apt.name,
       location: `${apt.district}${apt.dong ? ' ' + apt.dong : ''}`,
       tx, peakLine: d.peakLine, fmt: fmtPrice, fmtDate: fmtContractDate,
+      dataComplete,
     });
     const url = deepLinkUrl(tx);
     try {
@@ -192,7 +196,7 @@ export default function RentAptDetailModal({ apt, onClose, months, initialTx }: 
         fmtDate: fmtContractDate,
       });
       if (data) {
-        const blob = await buildShareImage(data);
+        const blob = await buildShareImage({ ...data, delta: dataComplete ? data.delta : '', dataComplete });
         if (blob) await shareOrDownloadImage(blob, `${apt.name}-전월세.png`, apt.name, deepLinkUrl(latest));
       }
     } catch { /* 공유 취소 무시 */ }
@@ -245,8 +249,9 @@ export default function RentAptDetailModal({ apt, onClose, months, initialTx }: 
             <p style={{ fontSize: '13px', color: 'var(--text-dim)' }}>
               {apt.district}{apt.dong ? ` ${apt.dong}` : ''}
               {apt.buildYear ? ` · ${apt.buildYear}년 입주` : ''}
-              {' · '}{(apt.txCount ?? apt.transactions.length).toLocaleString()}건
+              {' · '}{dataComplete ? '' : '확인 '}{(apt.txCount ?? apt.transactions.length).toLocaleString()}건
             </p>
+            {!dataComplete && <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>{PARTIAL_TRANSACTION_NOTICE}</p>}
           </div>
           <button
             onClick={onClose}
@@ -289,14 +294,14 @@ export default function RentAptDetailModal({ apt, onClose, months, initialTx }: 
         {/* 통계 카드 4개 — 보증금 기준 + 갱신 평균 인상률 */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', padding: '0 24px 20px' }}>
           <StatCard
-            label="최근 계약"
+            label={dataComplete ? '최근 계약' : '확인된 최근 계약'}
             value={latest ? fmtRentPrice(latest, fmtPrice) : '—'}
             sub={latest ? fmtContractDate(latest.date) : undefined}
           />
-          <StatCard label={`${months}개월 평균 보증금`} value={filtered.length ? fmtPrice(avgDeposit) : '—'} />
-          <StatCard label="최고 보증금" value={maxDeposit > 0 ? fmtPrice(maxDeposit) : '—'} />
+          <StatCard label={dataComplete ? `${months}개월 평균 보증금` : '확인된 거래 평균 보증금'} value={filtered.length ? fmtPrice(avgDeposit) : '—'} />
+          <StatCard label={dataComplete ? '최고 보증금' : '확인된 거래 최고 보증금'} value={maxDeposit > 0 ? fmtPrice(maxDeposit) : '—'} />
           <StatCard
-            label="갱신 평균 인상률"
+            label={dataComplete ? '갱신 평균 인상률' : '확인된 갱신 평균 인상률'}
             value={avgRenewalPct !== null ? `${avgRenewalPct > 0 ? '+' : ''}${avgRenewalPct}%` : '—'}
             sub={renewalPcts.length ? `갱신 ${renewalPcts.length}건 평균` : '종전 보증금 신고분 없음'}
           />
@@ -305,7 +310,7 @@ export default function RentAptDetailModal({ apt, onClose, months, initialTx }: 
         {/* 보증금 추이 차트 — 월평균 라인 + 개별 거래 도트 (공용 PriceComboChart) */}
         {chartTx.length > 1 && (
           <div style={{ padding: '0 24px 20px' }}>
-            <PriceComboChart transactions={chartTx} maxPrice={maxDeposit} />
+            <PriceComboChart transactions={chartTx} maxPrice={maxDeposit} dataComplete={dataComplete} />
           </div>
         )}
 
@@ -400,7 +405,7 @@ export default function RentAptDetailModal({ apt, onClose, months, initialTx }: 
                               <span>평당 보증금 <strong style={{ color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>{fmtPrice(d.perPy)}</strong></span>
                             )}
                             <span>
-                              직전 동일조건 대비{' '}
+                              {dataComplete ? '직전 동일조건 대비' : '확인된 이전 유사 면적(±6㎡) 거래 대비'}{' '}
                               {depositDelta !== null ? (
                                 <strong style={{ color: depositDelta >= 0 ? 'var(--up-color, #C92F2F)' : '#1636A8' }}>
                                   {depositDelta === 0 ? '보증금 보합' : `보증금 ${depositDelta > 0 ? '▲' : '▼'} ${fmtPrice(Math.abs(depositDelta))}`}
@@ -499,8 +504,9 @@ export default function RentAptDetailModal({ apt, onClose, months, initialTx }: 
                       location: `${apt.district}${apt.dong ? ' ' + apt.dong : ''}`,
                       tx: latest, peakLine: rentTxDerived(latest).peakLine,
                       fmt: fmtPrice, fmtDate: fmtContractDate,
+                      dataComplete,
                     })
-                  : `${apt.name} · 내집 My.ZIP`;
+                  : `${apt.name}${dataComplete ? '' : `\nℹ️ ${PARTIAL_TRANSACTION_NOTICE}`} · 내집 My.ZIP`;
                 try {
                   if (navigator.share) {
                     await navigator.share({ title: apt.name, text, url });

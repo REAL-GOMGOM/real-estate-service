@@ -8,7 +8,7 @@ import {
   fmtPrice, fmtContractDate, buildSparkPts, scoreGradeLabel,
 } from '../types';
 import { buildShareImage, shareOrDownloadImage } from '@/lib/share-image';
-import { buildTxShareText, pricePerPyeong, txKey, fmtMonthsLabel } from '@/lib/tx-share-text';
+import { buildTxShareText, pricePerPyeong, txKey, fmtMonthsLabel, PARTIAL_TRANSACTION_NOTICE } from '@/lib/tx-share-text';
 import { buildTransactionShareUrl } from '@/lib/transaction-share-url';
 import { analyzeTransactionPrice, formatTransactionComparisonLine } from '@/lib/transaction-price-comparison';
 import PriceComboChart from '@/components/apt/PriceComboChart';
@@ -26,6 +26,7 @@ interface AptDetailModalProps {
   onClose: () => void;
   months:  number;
   dealType?: 'buy' | 'bunyang';
+  dataComplete?: boolean;
   /** 딥링크 착지 — 공유 URL 의 tx 식별자 (해당 계약 행 자동 확장·스크롤) */
   initialTx?: string | null;
 }
@@ -44,7 +45,7 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-export default function AptDetailModal({ apt, onClose, months, initialTx, dealType = 'buy' }: AptDetailModalProps) {
+export default function AptDetailModal({ apt, onClose, months, initialTx, dealType = 'buy', dataComplete = true }: AptDetailModalProps) {
   const [selArea, setSelArea] = useState<number | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
   const [imageSaving, setImageSaving] = useState(false);
@@ -81,10 +82,10 @@ export default function AptDetailModal({ apt, onClose, months, initialTx, dealTy
   const maxTx    = filtered.reduce<Transaction | null>((m, t) => (!m || t.price > m.price ? t : m), null);
   const maxPrice = maxTx?.price ?? 0;
   const comparison = latest ? comparisons.get(latest) ?? null : null;
-  const newHigh = comparison?.state === 'new-high';
+  const newHigh = dataComplete && comparison?.state === 'new-high';
 
   // 최신 표시 거래와 유사 면적의 기간 최고가만 비교한다. 100%는 경신의 증거가 아니다.
-  const recoveryPct = comparison && comparison.prior.length > 0 && comparison.periodPeak > 0
+  const recoveryPct = dataComplete && comparison && comparison.prior.length > 0 && comparison.periodPeak > 0
     ? Math.round((comparison.target.price / comparison.periodPeak) * 1000) / 10
     : null;
 
@@ -94,9 +95,9 @@ export default function AptDetailModal({ apt, onClose, months, initialTx, dealTy
     return {
       sameArea: analysis?.sameArea ?? [tx],
       prev: analysis?.previous ?? null,
-      peakLine: formatTransactionComparisonLine(analysis, months, fmtPrice),
+      peakLine: dataComplete ? formatTransactionComparisonLine(analysis, months, fmtPrice) : PARTIAL_TRANSACTION_NOTICE,
       perPy: pricePerPyeong(tx.price, tx.area),
-      isPeak: analysis?.state === 'new-high',
+      isPeak: dataComplete && analysis?.state === 'new-high',
     };
   };
 
@@ -111,7 +112,7 @@ export default function AptDetailModal({ apt, onClose, months, initialTx, dealTy
     setTxSaving(true);
     try {
       const d = txDerived(tx);
-      const delta = d.prev ? tx.price - d.prev.price : null;
+      const delta = dataComplete && d.prev ? tx.price - d.prev.price : null;
       const spark = buildSparkPts({ ...apt, transactions: d.sameArea }, tx.area);
       const blob = await buildShareImage({
         apt: apt.name,
@@ -124,6 +125,7 @@ export default function AptDetailModal({ apt, onClose, months, initialTx, dealTy
         high: d.isPeak,
         pricePerPy: `평당 ${fmtPrice(d.perPy)}`,
         peakLine: d.peakLine,
+        dataComplete,
       });
       if (blob) await shareOrDownloadImage(blob, `${apt.name}-${tx.date}-실거래.png`, apt.name, deepLinkUrl(tx));
     } catch { /* 공유 취소 무시 */ }
@@ -140,6 +142,7 @@ export default function AptDetailModal({ apt, onClose, months, initialTx, dealTy
       url,
       price: tx.price, areaM2: tx.area, floor: tx.floor, date: tx.date,
       peakLine: d.peakLine, fmt: fmtPrice, fmtDate: fmtContractDate,
+      dataComplete,
     });
     try {
       if (navigator.share) {
@@ -174,8 +177,9 @@ export default function AptDetailModal({ apt, onClose, months, initialTx, dealTy
           url,
           price: latest.price, areaM2: latest.area, floor: latest.floor, date: latest.date,
           peakLine: txDerived(latest).peakLine, fmt: fmtPrice, fmtDate: fmtContractDate,
+          dataComplete,
         })
-      : `🏠 ${apt.name} 실거래\n\n🔎 거래 자세히 보기\n${url}\n— 내집 My.ZIP`;
+      : `🏠 ${apt.name} 실거래\n${dataComplete ? '' : `\nℹ️ ${PARTIAL_TRANSACTION_NOTICE}\n`}\n🔎 거래 자세히 보기\n${url}\n— 내집 My.ZIP`;
     try {
       if (navigator.share) {
         await navigator.share({ title: apt.name, text });
@@ -194,7 +198,7 @@ export default function AptDetailModal({ apt, onClose, months, initialTx, dealTy
     try {
       const d = txDerived(latest);
       const prev = d.prev;
-      const delta = prev ? latest.price - prev.price : null;
+      const delta = dataComplete && prev ? latest.price - prev.price : null;
       const spark = buildSparkPts({ ...apt, transactions: d.sameArea }, latest.area);
 
       const blob = await buildShareImage({
@@ -208,6 +212,7 @@ export default function AptDetailModal({ apt, onClose, months, initialTx, dealTy
         high: newHigh,
         pricePerPy: `평당 ${fmtPrice(pricePerPyeong(latest.price, latest.area))}`,
         peakLine: d.peakLine,
+        dataComplete,
       });
       if (blob) await shareOrDownloadImage(blob, `${apt.name}-실거래.png`, apt.name, deepLinkUrl(latest));
     } catch { /* 공유 취소 무시 */ }
@@ -284,6 +289,7 @@ export default function AptDetailModal({ apt, onClose, months, initialTx, dealTy
               {apt.buildYear ? ` · ${apt.buildYear}년 입주` : ''}
               {apt.households ? ` · ${apt.households.toLocaleString()}세대` : ''}
             </p>
+            {!dataComplete && <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>{PARTIAL_TRANSACTION_NOTICE}</p>}
           </div>
           {/* 상단 액션 — 공유 2종 + 닫기 (공유 상단 배치 2026-07-19, 하단 버튼도 유지) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
@@ -355,13 +361,13 @@ export default function AptDetailModal({ apt, onClose, months, initialTx, dealTy
 
         {/* 통계 카드 4개 — 전고점 회복률 포함 (사이클 BB) */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', padding: '0 24px 20px' }}>
-          <StatCard label="최근 실거래가" value={latest ? fmtPrice(latest.price) : '—'} sub={latest ? `${latest.area}㎡ · ${fmtContractDate(latest.date)}` : undefined} />
-          <StatCard label={`${fmtMonthsLabel(months)} 평균`} value={filtered.length ? fmtPrice(avgPrice) : '—'} sub={`${selArea === null ? '전체 면적' : `${selArea}㎡ ±6㎡`} · ${filtered.length}건`} />
-          <StatCard label={`${fmtMonthsLabel(months)} 최고 실거래가`} value={maxTx ? fmtPrice(maxPrice) : '—'} sub={maxTx ? `${maxTx.area}㎡ · ${fmtContractDate(maxTx.date)}` : undefined} />
+          <StatCard label={dataComplete ? '최근 실거래가' : '확인된 최근 실거래가'} value={latest ? fmtPrice(latest.price) : '—'} sub={latest ? `${latest.area}㎡ · ${fmtContractDate(latest.date)}` : undefined} />
+          <StatCard label={dataComplete ? `${fmtMonthsLabel(months)} 평균` : '확인된 거래 평균'} value={filtered.length ? fmtPrice(avgPrice) : '—'} sub={`${selArea === null ? '전체 면적' : `${selArea}㎡ ±6㎡`} · ${dataComplete ? '' : '확인 '}${filtered.length}건`} />
+          <StatCard label={dataComplete ? `${fmtMonthsLabel(months)} 최고 실거래가` : '확인된 거래 최고'} value={maxTx ? fmtPrice(maxPrice) : '—'} sub={maxTx ? `${maxTx.area}㎡ · ${fmtContractDate(maxTx.date)}` : undefined} />
           <StatCard
-            label={`${fmtMonthsLabel(months)} 최고가 대비`}
+            label={dataComplete ? `${fmtMonthsLabel(months)} 최고가 대비` : '기간 비교 제한'}
             value={recoveryPct !== null ? `${recoveryPct}%` : '—'}
-            sub={recoveryPct !== null
+            sub={!dataComplete ? '일부 월 자료 누락' : recoveryPct !== null
               ? `${latest.area}㎡ 유사 면적(±6㎡) 기준`
               : '비교 거래 부족'}
           />
@@ -371,9 +377,9 @@ export default function AptDetailModal({ apt, onClose, months, initialTx, dealTy
         {comparison && comparison.sameArea.length > 1 && (
           <div style={{ padding: '0 24px 20px' }}>
             <p style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 8 }}>
-              {comparison.target.area}㎡ 유사 면적(±6㎡) 가격 흐름 · 조회 {fmtMonthsLabel(months)}
+              {comparison.target.area}㎡ 유사 면적(±6㎡) {dataComplete ? '' : '확인된 거래 '}가격 흐름 · 조회 {fmtMonthsLabel(months)}
             </p>
-            <PriceComboChart transactions={comparison.sameArea} maxPrice={comparison.periodPeak} />
+            <PriceComboChart transactions={comparison.sameArea} maxPrice={comparison.periodPeak} dataComplete={dataComplete} />
           </div>
         )}
 
@@ -390,7 +396,7 @@ export default function AptDetailModal({ apt, onClose, months, initialTx, dealTy
             </colgroup>
             <thead>
               <tr style={{ backgroundColor: 'var(--bg-tertiary)' }}>
-                {['계약일', '면적', '층', '거래가', '당시 고점대비', '평당가'].map((h) => (
+                {['계약일', '면적', '층', '거래가', dataComplete ? '당시 고점대비' : '기간 비교 제한', '평당가'].map((h) => (
                   <th key={h} style={{
                     padding: '10px 12px', fontSize: '11px', fontWeight: 700,
                     color: 'var(--text-strong)', textAlign: 'left', whiteSpace: 'nowrap',
@@ -403,9 +409,9 @@ export default function AptDetailModal({ apt, onClose, months, initialTx, dealTy
             <tbody>
               {filtered.map((tx, i) => {
                 const rowComparison = comparisons.get(tx);
-                const ratio = rowComparison && rowComparison.prior.length > 0
+                const ratio = dataComplete && rowComparison && rowComparison.prior.length > 0
                   ? (tx.price / rowComparison.periodPeak) * 100 : null;
-                const isMax = rowComparison?.state === 'new-high';
+                const isMax = dataComplete && rowComparison?.state === 'new-high';
                 const isOpen = expandedIdx === i;
                 const d = isOpen ? txDerived(tx) : null;
                 const prevDelta = d?.prev ? tx.price - d.prev.price : null;
@@ -471,7 +477,7 @@ export default function AptDetailModal({ apt, onClose, months, initialTx, dealTy
                             <span>평당 <strong style={{ color: 'var(--text-primary)', fontFamily: 'Roboto Mono, monospace' }}>{fmtPrice(d.perPy)}</strong></span>
                             {ratio !== null && <span>당시 유사 면적 고점대비 <strong style={{ color: ratio >= 100 ? 'var(--up-color, #C92F2F)' : 'var(--text-primary)' }}>{ratio.toFixed(1)}%</strong></span>}
                             <span>
-                              직전 유사 면적(±6㎡) 대비{' '}
+                              {dataComplete ? '직전 유사 면적(±6㎡) 대비' : '확인된 이전 유사 면적(±6㎡) 거래 대비'}{' '}
                               {prevDelta !== null ? (
                                 <strong style={{ color: prevDelta >= 0 ? 'var(--up-color, #C92F2F)' : '#1636A8' }}>
                                   {prevDelta === 0 ? '보합' : `${prevDelta > 0 ? '▲' : '▼'} ${fmtPrice(Math.abs(prevDelta))}`}
