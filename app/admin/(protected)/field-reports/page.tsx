@@ -18,11 +18,11 @@ export default function AdminFieldReportsPage() {
         </Link>
       </div>
       <p className="mt-2 text-sm leading-6 text-slate-600">
-        검수 대기·신고된 제보를 먼저 확인합니다. 개인정보, 중복, 허위 의심 내용을 살펴본 뒤 처리해주세요.
+        새 제보는 관리자 승인 후 공개됩니다. 검수 대기·신고된 제보의 개인정보, 중복, 허위 의심 내용을 살펴본 뒤 처리해주세요.
       </p>
       <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
         게시 승인은 내용 검수를 뜻하며, 거래 사실을 인증하거나 국토교통부 실거래가에 반영하는 절차가 아닙니다.
-        반려·숨김은 공개 목록에서 제외되며, 만료된 제보는 다시 게시할 수 없습니다.
+        반려·숨김은 공개 목록에서 제외됩니다. 전체 목록에서 신고가 없고 공개 기한이 남은 숨김 제보만 다시 게시할 수 있습니다.
       </div>
 
       <Suspense fallback={<p role="status" className="mt-8 text-sm text-slate-500">제보 검수 목록을 확인하고 있습니다.</p>}>

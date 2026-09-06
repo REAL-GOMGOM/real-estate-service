@@ -33,6 +33,12 @@ export interface AdminFieldReport extends Omit<PublicFieldReport, 'publishedAt'>
   flagReason: FieldReportFlagReason | null;
 }
 
+/** Legacy records may omit nullable metadata. Missing is not a complaint;
+ * any present complaint metadata still requires review, even if malformed. */
+export function hasFieldReportFlag(report: Pick<AdminFieldReport, 'flaggedAt' | 'flagReason'>): boolean {
+  return report.flaggedAt != null || report.flagReason != null;
+}
+
 export type FieldReportActionState =
   | { status: 'idle' }
   | { status: 'success'; receipt: string; message: string }

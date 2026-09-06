@@ -1,4 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+// @vitest-environment jsdom
+
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ModerationQueue } from '../ModerationQueue';
 import type { AdminFieldReport } from '@/lib/field-reports/types';
@@ -6,6 +10,26 @@ import type { AdminFieldReport } from '@/lib/field-reports/types';
 vi.mock('../actions', () => ({ moderateFieldReportAction: vi.fn() }));
 
 const CHECKED_AT = Date.parse('2026-08-31T12:00:00.000Z');
+let root: Root | undefined;
+let host: HTMLDivElement | undefined;
+
+afterEach(async () => {
+  if (root) await act(async () => root!.unmount());
+  host?.remove();
+  root = undefined;
+  host = undefined;
+});
+
+async function renderAllReports(reports: AdminFieldReport[]) {
+  (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  host = document.createElement('div');
+  document.body.appendChild(host);
+  root = createRoot(host);
+  await act(async () => root!.render(<ModerationQueue reports={reports} checkedAt={CHECKED_AT} />));
+  const allButton = [...host.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === `전체 ${reports.length}`)!;
+  await act(async () => allButton.click());
+  return host;
+}
 
 function reportFixture(overrides: Partial<AdminFieldReport> = {}): AdminFieldReport {
   return {
@@ -93,5 +117,70 @@ describe('moderation queue rendering', () => {
     const html = renderToStaticMarkup(<ModerationQueue checkedAt={CHECKED_AT} reports={[reportFixture({ apartmentName: '<script>private()</script>' })]} />);
     expect(html).toContain('&lt;script&gt;private()&lt;/script&gt;');
     expect(html).not.toContain('<script>private()');
+  });
+
+  it('does not mislabel missing flag fields on a pending report as a received complaint', () => {
+    const report = reportFixture({ flaggedAt: undefined, flagReason: undefined });
+    const html = renderToStaticMarkup(<ModerationQueue checkedAt={CHECKED_AT} reports={[report]} />);
+    expect(html).not.toContain('신고 접수');
+    expect(html).not.toContain('신고 사유:');
+    expect(html).not.toContain('신고 시각:');
+    expect(html.match(/<button[^>]*value="published"[^>]*>/)?.[0]).not.toContain('disabled=""');
+  });
+
+  it('does not add a published report with missing flags to the review queue', () => {
+    const html = renderToStaticMarkup(<ModerationQueue checkedAt={CHECKED_AT} reports={[
+      reportFixture({ status: 'published', flaggedAt: undefined, flagReason: undefined }),
+    ]} />);
+    expect(html).toContain('현재 검수 대기 또는 신고된 제보가 없습니다.');
+    expect(html).not.toContain('<article');
+  });
+
+  it('keeps a reason-only complaint in the queue and disables publication', () => {
+    const html = renderToStaticMarkup(<ModerationQueue checkedAt={CHECKED_AT} reports={[
+      reportFixture({ status: 'published', flaggedAt: undefined, flagReason: 'duplicate' }),
+    ]} />);
+    expect(html).toContain('신고 접수');
+    expect(html).toContain('신고 사유: 중복 제보');
+    expect(html).toContain('신고 시각: 확인 필요');
+    expect(html).not.toContain('1970');
+    expect(html.match(/<button[^>]*value="published"[^>]*>/)?.[0]).toContain('disabled=""');
+  });
+
+  it.each([
+    { flaggedAt: null, flagReason: null },
+    { flaggedAt: undefined, flagReason: undefined },
+  ])('allows an unflagged hidden report to be explicitly republished from all reports: %j', async (flags) => {
+    const report = reportFixture({ status: 'hidden', ...flags });
+    const html = renderToStaticMarkup(<ModerationQueue checkedAt={CHECKED_AT} reports={[report]} />);
+    expect(html).not.toContain('<article');
+
+    const content = await renderAllReports([report]);
+    const publicationButton = content.querySelector<HTMLButtonElement>('button[name="status"][value="published"]')!;
+    expect(publicationButton.textContent).toBe('다시 게시');
+    expect(publicationButton.disabled).toBe(false);
+    expect(content.textContent).not.toContain('신고 접수');
+    expect(content.querySelector<HTMLButtonElement>('button[value="rejected"]')!.disabled).toBe(true);
+    expect(content.querySelector<HTMLButtonElement>('button[value="hidden"]')!.disabled).toBe(true);
+
+    const queueButton = [...content.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === '검수 대기·신고 0')!;
+    await act(async () => queueButton.click());
+    expect(content.querySelector('article')).toBeNull();
+  });
+
+  it.each([
+    { status: 'hidden', flaggedAt: '2026-08-31T01:00:00.000Z', flagReason: 'duplicate' },
+    { status: 'hidden', flaggedAt: undefined, flagReason: 'personal_information' },
+    { status: 'hidden', flaggedAt: 'invalid-timestamp', flagReason: null },
+    { status: 'hidden', expiresAt: '2026-08-31T12:00:00.000Z' },
+    { status: 'rejected' },
+  ] satisfies Partial<AdminFieldReport>[])('keeps unsafe or final-state republication disabled: %j', async (overrides) => {
+    const content = await renderAllReports([reportFixture(overrides)]);
+    expect(content.querySelector<HTMLButtonElement>('button[value="published"]')!.disabled).toBe(true);
+  });
+
+  it('does not allow rejection to be bypassed by hiding and then republishing', async () => {
+    const content = await renderAllReports([reportFixture({ status: 'rejected' })]);
+    expect(content.querySelector<HTMLButtonElement>('button[value="hidden"]')!.disabled).toBe(true);
   });
 });

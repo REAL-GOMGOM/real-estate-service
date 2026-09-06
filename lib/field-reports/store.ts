@@ -1,7 +1,7 @@
 import 'server-only';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
 import type { Redis } from '@upstash/redis';
-import { FIELD_REPORT_PUBLIC_DAYS, FIELD_REPORT_RETENTION_DAYS, isFieldReportSource, type AdminFieldReport, type FieldReportFlagReason, type PublicFieldReport } from './types';
+import { FIELD_REPORT_PUBLIC_DAYS, FIELD_REPORT_RETENTION_DAYS, hasFieldReportFlag, isFieldReportSource, type AdminFieldReport, type FieldReportFlagReason, type PublicFieldReport } from './types';
 import type { FieldReportInput } from './validation';
 import { REPORT_ID_PATTERN, kstDate } from './validation';
 
@@ -27,16 +27,19 @@ export const MODERATE_REPORT_SCRIPT = `
 local raw = redis.call('GET', KEYS[1])
 if not raw then return 0 end
 local item = cjson.decode(raw)
+local flagged = (item.flaggedAt ~= nil and item.flaggedAt ~= cjson.null)
+  or (item.flagReason ~= nil and item.flagReason ~= cjson.null)
 if ARGV[1] == 'published' then
   redis.call('ZREMRANGEBYSCORE', KEYS[2], '-inf', ARGV[5])
-  if item.expiresAt <= ARGV[2] or item.flaggedAt ~= cjson.null then return 0 end
+  if item.expiresAt <= ARGV[2] or flagged then return 0 end
   if item.status == 'published' then return 1 end
-  if item.status ~= 'pending' then return 0 end
+  if item.status ~= 'pending' and item.status ~= 'hidden' then return 0 end
   item.publishedAt = ARGV[2]
   redis.call('ZADD', KEYS[2], ARGV[3], item.id)
   redis.call('EXPIRE', KEYS[2], ARGV[4])
 else
   if ARGV[1] == 'rejected' and item.status ~= 'pending' then return 0 end
+  if ARGV[1] == 'hidden' and item.status == 'rejected' then return 0 end
   redis.call('ZREM', KEYS[2], item.id)
 end
 item.status = ARGV[1]
@@ -49,7 +52,8 @@ local raw = redis.call('GET', KEYS[1])
 if not raw then return 0 end
 local item = cjson.decode(raw)
 if item.status ~= 'published' or item.expiresAt <= ARGV[2] then return 0 end
-if item.flaggedAt == cjson.null then
+if (item.flaggedAt == nil or item.flaggedAt == cjson.null)
+  and (item.flagReason == nil or item.flagReason == cjson.null) then
   item.flaggedAt = ARGV[2]
   item.flagReason = ARGV[1]
   redis.call('SET', KEYS[1], cjson.encode(item), 'KEEPTTL')
@@ -92,7 +96,16 @@ function parseStored(value: unknown): AdminFieldReport | null {
   if (typeof item.area !== 'number' || !Number.isFinite(item.area) || typeof item.price !== 'number' || !Number.isSafeInteger(item.price)) return null;
   if (!['sale', 'jeonse', 'monthly'].includes(item.tradeType) || !isFieldReportSource(item.source)) return null;
   if (![item.createdAt, item.expiresAt].every((date) => typeof date === 'string' && Number.isFinite(Date.parse(date)))) return null;
-  return item;
+  // Old nullable fields can be absent after serialization. Normalize absence,
+  // not malformed or actual complaint values; never clear a real complaint.
+  return {
+    ...item,
+    dong: item.dong ?? null,
+    monthlyRent: item.monthlyRent ?? null,
+    publishedAt: item.publishedAt ?? null,
+    flaggedAt: item.flaggedAt ?? null,
+    flagReason: item.flagReason ?? null,
+  };
 }
 
 export function createFieldReportStore(redis: Redis, prefix: string) {
@@ -115,7 +128,7 @@ export function createFieldReportStore(redis: Redis, prefix: string) {
       // public feed cannot silently bury an older report needing review.
       const rows = await readIndex(`${prefix}:all`, MAX_RECORDS);
       return rows.sort((a, b) => {
-        const priority = (item: AdminFieldReport) => item.flaggedAt && item.status === 'published' ? 2 : item.status === 'pending' ? 1 : 0;
+        const priority = (item: AdminFieldReport) => hasFieldReportFlag(item) && item.status === 'published' ? 2 : item.status === 'pending' ? 1 : 0;
         return priority(b) - priority(a) || b.createdAt.localeCompare(a.createdAt);
       }).slice(0, 100);
     },

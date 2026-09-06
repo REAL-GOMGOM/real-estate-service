@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Redis } from '@upstash/redis';
-import { MODERATE_REPORT_SCRIPT, createFieldReportStore, reportDeduplicationKey, toPublicFieldReport } from '../store';
+import { CREATE_REPORT_SCRIPT, FLAG_REPORT_SCRIPT, MODERATE_REPORT_SCRIPT, createFieldReportStore, reportDeduplicationKey, toPublicFieldReport } from '../store';
 import { fieldReportConfig } from '../config';
 import type { AdminFieldReport } from '../types';
 
@@ -34,6 +34,47 @@ describe('private moderated field report store', () => {
     const { redis, store } = fake();
     redis.mget.mockResolvedValue([{ ...item, source }]);
     expect((await store.listPublic(now))[0]?.source).toBe(source);
+  });
+  it('normalizes absent nullable metadata without inventing a complaint or changing hidden status', async () => {
+    const { redis, store } = fake();
+    const legacy: Record<string, unknown> = { ...item, status: 'hidden' };
+    for (const key of ['dong', 'monthlyRent', 'publishedAt', 'flaggedAt', 'flagReason']) delete legacy[key];
+    redis.mget.mockResolvedValue([legacy]);
+    expect((await store.listAdmin())[0]).toMatchObject({
+      status: 'hidden', dong: null, monthlyRent: null, publishedAt: null,
+      flaggedAt: null, flagReason: null,
+    });
+    expect(await store.listPublic(now)).toEqual([]);
+    expect(redis.eval).not.toHaveBeenCalled();
+  });
+  it('preserves actual or malformed complaint metadata instead of treating it as absent', async () => {
+    const { redis, store } = fake();
+    redis.mget.mockResolvedValue([
+      { ...item, flaggedAt: undefined, flagReason: 'personal_information' },
+      { ...item, flaggedAt: 'invalid-date', flagReason: null },
+    ]);
+    expect(await store.listAdmin()).toEqual([
+      { ...item, flaggedAt: null, flagReason: 'personal_information' },
+      { ...item, flaggedAt: 'invalid-date', flagReason: null },
+    ]);
+  });
+  it('supports authorized restoration of unflagged hidden reports without changing expiry or record TTL', () => {
+    expect(MODERATE_REPORT_SCRIPT).toContain("item.status ~= 'pending' and item.status ~= 'hidden'");
+    expect(MODERATE_REPORT_SCRIPT).toContain("if ARGV[1] == 'hidden' and item.status == 'rejected' then return 0 end");
+    expect(MODERATE_REPORT_SCRIPT).toContain('item.flaggedAt ~= nil and item.flaggedAt ~= cjson.null');
+    expect(MODERATE_REPORT_SCRIPT).toContain('item.flagReason ~= nil and item.flagReason ~= cjson.null');
+    expect(MODERATE_REPORT_SCRIPT).toContain('if item.expiresAt <= ARGV[2] or flagged then return 0 end');
+    expect(MODERATE_REPORT_SCRIPT).toContain("redis.call('SET', KEYS[1], cjson.encode(item), 'KEEPTTL')");
+    expect(MODERATE_REPORT_SCRIPT).not.toContain('item.expiresAt =');
+    expect(MODERATE_REPORT_SCRIPT).not.toContain('item.flaggedAt =');
+  });
+  it('accepts the first actual complaint when old nullable fields are missing and preserves existing complaint reasons', () => {
+    expect(FLAG_REPORT_SCRIPT).toContain('(item.flaggedAt == nil or item.flaggedAt == cjson.null)');
+    expect(FLAG_REPORT_SCRIPT).toContain('(item.flagReason == nil or item.flagReason == cjson.null)');
+  });
+  it('never republishes a hidden report through anonymous duplicate submission', () => {
+    expect(CREATE_REPORT_SCRIPT.trimStart()).toMatch(/^local prior = redis.call\('GET', KEYS\[3\]\)\nif prior then return prior end/);
+    expect(CREATE_REPORT_SCRIPT).not.toContain(':published');
   });
   it('inserts an immutable pending record with 90-day TTL via one atomic operation', async () => {
     const { redis, store } = fake(); redis.eval.mockResolvedValue(id);
